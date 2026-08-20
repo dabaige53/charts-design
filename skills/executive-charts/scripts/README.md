@@ -1,9 +1,32 @@
 # Executive Charts & Dashboard Generator Suite (图表与看板生成脚本套件)
 
-本目录提供了麦肯锡咨询级数据可视化组件与完整高管看板的 **自动化生成脚本库**，包含两大核心生产力工具：
+本目录提供麦肯锡咨询级数据可视化组件与高管看板生成工具。Dashboard 的默认工作流是积木式 workspace：小组件独立维护、逐步验证、最终编译。
 
-1. **`generate_chart.py`（单图表生成引擎）**：用于快速生成 52 种分类的独立 ECharts 咨询级图表组件 HTML / 代码片段 / 数据抽样。
-2. **`generate_dashboard.py`（完整网页与高管看板生成引擎）**：用于组装生成包含全局多维联动筛选器、智能搜索提示、4 大 KPI 指标卡、响应式图表网格、交互式数据透视表及业务口径弹窗的完整生产级 HTML 看板。
+1. **`dashboard_workspace.py`**：创建、检查、验证和编译可组合 workspace。
+2. **`generate_chart.py`**：生成独立图表组件、短名单预览或代码片段。
+3. **`generate_dashboard.py`**：底层 HTML 编译器，并保留旧版单 JSON/preset 入口。
+
+## 0. 积木式 Dashboard Workspace（推荐）
+
+```bash
+charts-design dashboard init ./board --title "经营决策看板"
+charts-design dashboard add kpi ./board revenue \
+  --label "营业收入" --value 224 --unit "万元"
+charts-design dashboard add chart ./board regional-sales \
+  --code c01 --title "各区域营业收入" --unit "万元" \
+  --data-file ./regional-sales.json
+charts-design dashboard inspect ./board --json
+charts-design dashboard validate ./board --strict --json
+charts-design dashboard build ./board --output ./dist/board.html
+```
+
+CSV 自动推断先生成可审查草稿，不直接作为最终图表证据：
+
+```bash
+charts-design dashboard import-csv ./board --csv ./data.csv
+```
+
+组件 schema 与稳定 JSON 输出约定见 [`../references/dashboard-workspace.md`](../references/dashboard-workspace.md)。
 
 ---
 
@@ -34,9 +57,9 @@ python scripts/generate_chart.py --code r01 --snippet
 
 ---
 
-## 2. 高管看板与完整网页生成引擎 (`generate_dashboard.py`)
+## 2. 旧版整页入口 (`generate_dashboard.py`)
 
-### 核心功能
+### 兼容能力
 - 一键生成 7 大标准业务场景预设看板（零售连锁与电商、SaaS 产品分析、财务边际归因、民航综合研判、战略业务四象限、全景大满贯、月度决算）；
 - 支持通过 `--config <file.json>` 传入 100% 自定义业务数据（标题、多维筛选器、4大KPI、图表矩阵、数据透视表）；
 - 支持自由按图表编号任意拼装（如 `--charts "c01,t06,r01,fn01,m01,k04"`）；

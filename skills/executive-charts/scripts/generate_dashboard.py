@@ -467,13 +467,20 @@ def serialize_chart_object(c):
     """Serializes a chart dict to JS object, unquoting JS functions."""
     if isinstance(c, str):
         return c
+    code = str(c.get("code", "")).lower()
+    uses_catalog_builder = code in CHARTS_MAP and "optionBuilder" not in c
     js_props = []
     for k, v in c.items():
         if k in ['optionBuilder', 'tableDataExtractor'] and isinstance(v, str) and (v.strip().startswith('(') or v.strip().startswith('function') or '=>' in v):
             js_props.append(f"{k}: {v}")
         else:
             js_props.append(f"{k}: {json.dumps(v, ensure_ascii=False)}")
-    return "{\n            " + ",\n            ".join(js_props) + "\n        }"
+    overrides = "{\n            " + ",\n            ".join(js_props) + "\n        }"
+    if uses_catalog_builder:
+        # Keep chart components small: reuse the catalog renderer while replacing
+        # its demo title/data/id with the explicit workspace component fields.
+        return "{\n            ...(\n" + CHARTS_MAP[code] + "\n            ),\n            ..." + overrides + "\n        }"
+    return overrides
 
 def generate_dashboard(
     preset_name="executive_report",
@@ -484,7 +491,8 @@ def generate_dashboard(
     auto_open=False,
     config_file=None,
     config_dict=None,
-    from_csv=None
+    from_csv=None,
+    allow_preset_fallback=True
 ):
     """
     Compiles a complete McKinsey-grade HTML executive dashboard.
@@ -504,7 +512,7 @@ def generate_dashboard(
     elif config_dict:
         custom_cfg = config_dict
 
-    preset = PRESET_CONFIGS.get(preset_name, PRESET_CONFIGS["executive_report"]).copy()
+    preset = PRESET_CONFIGS.get(preset_name, PRESET_CONFIGS["executive_report"]).copy() if allow_preset_fallback else {}
 
     # Merge meta
     custom_meta = custom_cfg.get("meta", {})
@@ -523,10 +531,13 @@ def generate_dashboard(
     }
 
     # Filters
-    filters_config = custom_cfg.get("filters") or preset.get("filters") or AIRLINE_FILTERS_CONFIG
+    if "filters" in custom_cfg:
+        filters_config = custom_cfg["filters"]
+    else:
+        filters_config = preset.get("filters") or (AIRLINE_FILTERS_CONFIG if allow_preset_fallback else [])
 
     # KPIs
-    kpis_config = custom_cfg.get("kpis") or preset.get("kpis", [])
+    kpis_config = custom_cfg["kpis"] if "kpis" in custom_cfg else preset.get("kpis", [])
 
     # Charts
     if "charts" in custom_cfg and isinstance(custom_cfg["charts"], list):
@@ -557,15 +568,22 @@ def generate_dashboard(
         charts_combined_js = ",\n        ".join(charts_js_list)
 
     # Table
-    table_config = custom_cfg.get("table") or preset.get("table") or {
-        "title": "全要素业务运营效能透视表",
-        "explainKey": "table_main",
-        "columns": TABLE_COLUMNS,
-        "rows": TABLE_ROWS
-    }
+    if "table" in custom_cfg:
+        table_config = custom_cfg["table"]
+    elif preset.get("table"):
+        table_config = preset["table"]
+    elif allow_preset_fallback:
+        table_config = {
+            "title": "全要素业务运营效能透视表",
+            "explainKey": "table_main",
+            "columns": TABLE_COLUMNS,
+            "rows": TABLE_ROWS
+        }
+    else:
+        table_config = {"title": "数据明细", "columns": [], "rows": []}
 
     # Explanations
-    explanations_str = EXPLANATIONS_JSON_STRING
+    explanations_str = EXPLANATIONS_JSON_STRING if allow_preset_fallback else "{}"
     if "explanations" in custom_cfg:
         explanations_str = json.dumps(custom_cfg["explanations"], ensure_ascii=False)
 

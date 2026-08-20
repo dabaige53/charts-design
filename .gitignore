@@ -28,6 +28,7 @@ __pycache__/
 *$py.class
 dist/test_*
 dist/*verified*
+tests/test_output/
 
 # System files
 .DS_Store

@@ -5,10 +5,17 @@
   "bin": {
     "charts-design": "./bin/cli.js"
   },
+  "scripts": {
+    "test": "python3 tests/test_generation.py",
+    "check": "node --check bin/cli.js && python3 -m py_compile skills/executive-charts/scripts/dashboard_workspace.py skills/executive-charts/scripts/generate_dashboard.py"
+  },
   "files": [
     "bin/",
-    "skills/executive-charts/",
-    "examples/",
+    "skills/executive-charts/SKILL.md",
+    "skills/executive-charts/references/",
+    "skills/executive-charts/scripts/*.py",
+    "skills/executive-charts/scripts/core/*.py",
+    "skills/executive-charts/scripts/README.md",
     "README.md"
   ],
   "keywords": [

@@ -6,9 +6,33 @@ Enterprise-grade, McKinsey/Bloomberg/FT-caliber business charts, KPI decision ca
 
 ---
 
-## 核心看板快速体验 (Executive Dashboards)
+## 推荐：积木式构建 Dashboard
 
-所有标准高管决策看板与全谱系画廊已归档至 [**`examples/`**](examples/) 目录，直接在浏览器中打开即可沉浸研判：
+CLI workspace 将筛选器、KPI、图表和表格拆成独立小文件。Agent 可以逐块添加、检查和验证，只在 `build` 阶段于内存中合并完整配置。
+
+```bash
+# 1. 创建空 workspace，不注入行业案例数据
+npx charts-design dashboard init ./sales-board \
+  --title "销售经营看板" --org "经营分析部"
+
+# 2. 每次添加一个指标或图表
+npx charts-design dashboard add kpi ./sales-board revenue \
+  --label "营业收入" --value 224 --unit "万元"
+npx charts-design dashboard add chart ./sales-board regional-sales \
+  --code c01 --title "各区域营业收入" --unit "万元" \
+  --data-file ./regional-sales.json
+
+# 3. 有界检查、严格校验，再生成 HTML
+npx charts-design dashboard inspect ./sales-board --json
+npx charts-design dashboard validate ./sales-board --strict --json
+npx charts-design dashboard build ./sales-board --output ./dist/sales.html
+```
+
+运行 `npx charts-design doctor --json` 可检查 Node、Python 和 workspace 工具。完整命令与组件 schema 见 [`skills/executive-charts/references/dashboard-workspace.md`](skills/executive-charts/references/dashboard-workspace.md)。
+
+## 人工视觉展示 (Human Showcase)
+
+`examples/` 用于人工浏览视觉效果，不是 Agent 的配置模板或源码输入。生成新看板时优先使用 CLI workspace 与图表目录元数据。
 
 | 看板文件 | 业务场景分类 | 核心图表与分析重点 |
 | :--- | :--- | :--- |
@@ -25,7 +49,7 @@ Enterprise-grade, McKinsey/Bloomberg/FT-caliber business charts, KPI decision ca
 
 ### 方式一：npx 零安装直接运行（推荐）
 
-无需 clone 仓库，一行命令即可生成高管看板（需本机已安装 Python 3.10+）：
+无需 clone 仓库即可运行 CLI（需本机已安装 Python 3.10+）。真实业务看板优先使用上面的 workspace 流程；以下命令保留用于单图、结构预览和旧版兼容：
 
 ```bash
 # 安装并运行
@@ -63,6 +87,8 @@ python skills/executive-charts/scripts/generate_chart.py --code t06 --output ./c
 
 | 子命令 | 说明 | 示例 |
 | :--- | :--- | :--- |
+| `doctor` | 检查本地运行时与脚本完整性 | `npx charts-design doctor --json` |
+| `dashboard init/add/inspect/validate/build` | 分步组装并严格编译 dashboard workspace | `npx charts-design dashboard init ./board` |
 | `dashboard` | 生成完整高管看板（筛选栏 + KPI 卡 + 图表矩阵 + 透视表） | `npx charts-design dashboard --preset executive_monthly -o report.html` |
 | `chart` | 生成独立图表组件（带 5+1 工具栏） | `npx charts-design chart --code t06 -o chart.html` |
 | `list` | 终端打印 52 款图表编号与分类 | `npx charts-design list` |

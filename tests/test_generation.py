@@ -6,6 +6,8 @@ Automation test suite for McKinsey-grade executive charts and dashboards.
 import os
 import sys
 import subprocess
+import json
+import tempfile
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "skills", "executive-charts", "scripts")
@@ -113,6 +115,54 @@ def test_from_csv_generation():
         assert "民航" not in html, "Aviation mock leaked into retail CSV dashboard"
     print("✓ CSV automated generation test passed!")
 
+def run_cli(*args):
+    cmd = ["node", os.path.join(PROJECT_ROOT, "bin", "cli.js"), *args]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    return res
+
+def test_workspace_generation():
+    print("Testing composable dashboard workspace...")
+    with tempfile.TemporaryDirectory(prefix="charts-design-workspace-") as tmp:
+        workspace = os.path.join(tmp, "board")
+        data_file = os.path.join(tmp, "regional-sales.json")
+        output_file = os.path.join(tmp, "board.html")
+        with open(data_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "categories": ["华东", "华南"],
+                "values": [128, 96],
+                "unit": "万元"
+            }, f, ensure_ascii=False)
+
+        commands = [
+            ("dashboard", "init", workspace, "--title", "销售经营看板", "--org", "经营分析部", "--json"),
+            ("dashboard", "add", "kpi", workspace, "revenue", "--label", "营业收入", "--value", "224", "--unit", "万元", "--json"),
+            ("dashboard", "add", "chart", workspace, "regional-sales", "--code", "c01", "--title", "各区域营业收入", "--unit", "万元", "--data-file", data_file, "--json"),
+            ("dashboard", "validate", workspace, "--strict", "--json"),
+            ("dashboard", "build", workspace, "--output", output_file, "--json"),
+        ]
+        for args in commands:
+            res = run_cli(*args)
+            assert res.returncode == 0, f"CLI {' '.join(args)} failed: {res.stdout}\n{res.stderr}"
+            payload = json.loads(res.stdout)
+            assert payload["ok"] is True, payload
+
+        inspect_res = run_cli("dashboard", "inspect", workspace, "--json")
+        inspect_payload = json.loads(inspect_res.stdout)
+        assert inspect_payload["summary"]["counts"] == {
+            "filters": 0,
+            "kpis": 1,
+            "charts": 1,
+            "tableRows": 0,
+        }
+        assert "values" not in inspect_res.stdout, "inspect should not dump chart data"
+        assert os.path.exists(output_file), "Workspace build did not create HTML"
+        with open(output_file, "r", encoding="utf-8") as f:
+            html = f.read()
+            assert "销售经营看板" in html
+            assert "各区域营业收入" in html
+            assert 'filters: []' in html, "Explicit zero filters should not fall back to a preset"
+    print("✓ Composable workspace test passed!")
+
 if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     test_chart_generation()
@@ -120,4 +170,5 @@ if __name__ == "__main__":
     test_preset_generation()
     test_config_generation()
     test_from_csv_generation()
+    test_workspace_generation()
     print("All tests successfully completed!")
