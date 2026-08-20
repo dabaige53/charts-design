@@ -37,28 +37,30 @@ python scripts/generate_chart.py --code r01 --snippet
 ## 2. 高管看板与完整网页生成引擎 (`generate_dashboard.py`)
 
 ### 核心功能
-- 一键生成 6 大标准业务场景预设看板（民航综合研判、SaaS 产品分析、财务边际归因、战略业务四象限、全景大满贯、月度决算）；
+- 一键生成 7 大标准业务场景预设看板（零售连锁与电商、SaaS 产品分析、财务边际归因、民航综合研判、战略业务四象限、全景大满贯、月度决算）；
+- 支持通过 `--config <file.json>` 传入 100% 自定义业务数据（标题、多维筛选器、4大KPI、图表矩阵、数据透视表）；
 - 支持自由按图表编号任意拼装（如 `--charts "c01,t06,r01,fn01,m01,k04"`）；
-- 标配 **吸顶多维筛选栏**（带智能搜索建议面板、航季/基地/机型/航网互斥下拉、Active 胶囊标签）、**数据透视表**（列拖拽排序、列显隐配置、单行防折行、左右流畅滑动、分页、单元格复制与 CSV 导出）与 **咨询级指标说明词典**。
+- 标配 **吸顶多维筛选栏**（带智能搜索建议面板、互斥下拉、Active 胶囊标签）、**数据透视表**（列拖拽排序、列显隐配置、单行防折行、左右流畅滑动、分页、单元格复制与 CSV 导出）与 **咨询级指标说明词典**。
 
 ### 常用命令示例
 ```bash
-# 1. 生成 6 大预设高管看板之一并立即在浏览器中打开
-python scripts/generate_dashboard.py --preset executive_report --output ./dist/executive_report.html --open
+# 1. 生成 7 大预设高管看板之一并立即在浏览器中打开
+python scripts/generate_dashboard.py --preset retail_ecommerce --output ./dist/retail.html --open
 python scripts/generate_dashboard.py --preset saas_product --output ./dist/saas_product.html
 python scripts/generate_dashboard.py --preset financial_attribution --output ./dist/financial.html
+python scripts/generate_dashboard.py --preset executive_report --output ./dist/executive_report.html
 python scripts/generate_dashboard.py --preset strategic_matrix --output ./dist/strategic.html
 
-# 2. 自由选择图表编号组合生成专属高管看板
+# 2. 传入自定义业务数据 JSON 配置文件 (100% 任意行业定制)
+python scripts/generate_dashboard.py --config ./custom_retail.json --output ./dist/my_retail.html --open
+
+# 3. 自由选择图表编号组合生成专属高管看板
 python scripts/generate_dashboard.py \
   --charts "c01,t06,k01,r01,fn01,m01,k04,c06" \
-  --title "集团核心航线运营效能与战略财务研判看板" \
-  --org "中国国际航空集团 · 战略财务部" \
+  --title "集团核心运营效能与战略财务研判看板" \
+  --org "商业智能与运营决算中心" \
   --output ./dist/custom_board.html \
   --open
-
-# 3. 批量生成全套 6 大标准高管看板
-python scripts/generate_dashboard.py --batch --outdir ./dist/all_dashboards/
 ```
 
 ---

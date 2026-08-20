@@ -1,6 +1,6 @@
 {
   "name": "charts-design",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "McKinsey-grade executive charts, KPI metric cards, interactive pivot tables, and dashboard generator. 麦肯锡风格图表设计与高管决策看板套件。",
   "bin": {
     "charts-design": "./bin/cli.js"

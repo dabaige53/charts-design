@@ -40,8 +40,45 @@ def test_dashboard_generation():
     assert os.path.exists(out_file), "Output file was not created"
     print("✓ Dashboard composition test passed!")
 
+def test_preset_generation():
+    print("Testing retail_ecommerce preset...")
+    out_file = os.path.join(OUTPUT_DIR, "test_retail_preset.html")
+    cmd = [
+        sys.executable,
+        os.path.join(SCRIPTS_DIR, "generate_dashboard.py"),
+        "--preset", "retail_ecommerce",
+        "--output", out_file
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    assert res.returncode == 0, f"generate_dashboard.py preset failed: {res.stderr}"
+    assert os.path.exists(out_file), "Output file was not created"
+    print("✓ Retail preset test passed!")
+
+def test_config_generation():
+    import json
+    print("Testing custom JSON config generation...")
+    cfg_file = os.path.join(OUTPUT_DIR, "sample_cfg.json")
+    out_file = os.path.join(OUTPUT_DIR, "test_config_dashboard.html")
+    with open(cfg_file, "w", encoding="utf-8") as f:
+        json.dump({
+            "meta": {"title": "自定义测试看板", "org": "测试部"},
+            "charts": ["c01", "t06", "k01"]
+        }, f)
+    cmd = [
+        sys.executable,
+        os.path.join(SCRIPTS_DIR, "generate_dashboard.py"),
+        "--config", cfg_file,
+        "--output", out_file
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    assert res.returncode == 0, f"generate_dashboard.py --config failed: {res.stderr}"
+    assert os.path.exists(out_file), "Output file was not created"
+    print("✓ Custom JSON config test passed!")
+
 if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     test_chart_generation()
     test_dashboard_generation()
+    test_preset_generation()
+    test_config_generation()
     print("All tests successfully completed!")

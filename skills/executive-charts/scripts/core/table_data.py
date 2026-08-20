@@ -203,3 +203,104 @@ TABLE_ROWS = [
         "rask": "¥0.4750", "rawRask": 0.4750, "cask": "¥0.3400", "rawCask": 0.3400, "otp": "90.5%", "rawOtp": 90.5, "rating": "B 级", "pax": 12.0
     }
 ]
+
+AIRLINE_TABLE_COLUMNS = TABLE_COLUMNS
+AIRLINE_TABLE_ROWS = TABLE_ROWS
+
+# =============================================================================
+# 零售连锁与电商行业全要素数据集 (Retail & E-Commerce Dataset)
+# =============================================================================
+RETAIL_TABLE_COLUMNS = [
+    {"key": "code", "title": "门店编码", "align": "left", "sortable": True, "visible": True},
+    {"key": "name", "title": "门店/大区名称", "align": "left", "sortable": True, "visible": True},
+    {"key": "region", "title": "所属大区", "align": "left", "sortable": True, "visible": True},
+    {"key": "format", "title": "门店业态", "align": "left", "sortable": True, "visible": True},
+    {"key": "manager", "title": "店长/负责人", "align": "left", "sortable": True, "visible": True},
+    {"key": "traffic", "title": "周进店客流", "align": "right", "sortable": True, "visible": True},
+    {"key": "gmv", "title": "当期GMV", "align": "right", "sortable": True, "visible": True},
+    {"key": "yoy", "title": "GMV同比", "align": "right", "sortable": True, "visible": True},
+    {"key": "salesPerSqm", "title": "日均坪效", "align": "right", "sortable": True, "visible": True},
+    {"key": "conversion", "title": "客流转化率", "align": "right", "sortable": True, "visible": True},
+    {"key": "basketSize", "title": "平均客单价", "align": "right", "sortable": True, "visible": True},
+    {"key": "repurchase", "title": "会员复购率", "align": "right", "sortable": True, "visible": True},
+    {"key": "margin", "title": "经营利润率", "align": "right", "sortable": True, "visible": True},
+    {"key": "rating", "title": "运营评级", "align": "center", "sortable": True, "visible": True}
+]
+
+RETAIL_TABLE_ROWS = [
+    # 华东大区
+    {"code": "SH001", "name": "上海陆家嘴旗舰超级店", "region": "华东大区", "format": "大型综合超市", "manager": "陈晓东", "traffic": "12.8 万人", "gmv": "¥8,450 万", "rawRevenue": 0.845, "yoy": "+18.2%", "rawYoy": 18.2, "salesPerSqm": "¥142/㎡/天", "conversion": "68.5%", "rawPlf": 68.5, "basketSize": "¥186.5", "rawRask": 186.5, "repurchase": "62.4%", "margin": "24.8%", "rating": "S 级"},
+    {"code": "SH002", "name": "上海静安南京西路精品店", "region": "华东大区", "format": "精品超市", "manager": "王梓萌", "traffic": "8.5 万人", "gmv": "¥5,920 万", "rawRevenue": 0.592, "yoy": "+14.6%", "rawYoy": 14.6, "salesPerSqm": "¥198/㎡/天", "conversion": "74.2%", "rawPlf": 74.2, "basketSize": "¥245.0", "rawRask": 245.0, "repurchase": "71.0%", "margin": "28.5%", "rating": "S 级"},
+    {"code": "HZ001", "name": "杭州西湖湖滨银泰店", "region": "华东大区", "format": "标准超市", "manager": "刘阳", "traffic": "9.2 万人", "gmv": "¥4,860 万", "rawRevenue": 0.486, "yoy": "+12.8%", "rawYoy": 12.8, "salesPerSqm": "¥125/㎡/天", "conversion": "62.0%", "rawPlf": 62.0, "basketSize": "¥152.0", "rawRask": 152.0, "repurchase": "58.6%", "margin": "21.4%", "rating": "A 级"},
+    {"code": "NJ001", "name": "南京新街口中心商业店", "region": "华东大区", "format": "大型综合超市", "manager": "张伟", "traffic": "10.4 万人", "gmv": "¥5,340 万", "rawRevenue": 0.534, "yoy": "+9.5%", "rawYoy": 9.5, "salesPerSqm": "¥118/㎡/天", "conversion": "59.8%", "rawPlf": 59.8, "basketSize": "¥138.0", "rawRask": 138.0, "repurchase": "54.2%", "margin": "19.5%", "rating": "A 级"},
+    {"code": "SZ001", "name": "苏州园区时代广场社区店", "region": "华东大区", "format": "便利店/社区店", "manager": "李敏", "traffic": "4.2 万人", "gmv": "¥1,850 万", "rawRevenue": 0.185, "yoy": "+22.4%", "rawYoy": 22.4, "salesPerSqm": "¥165/㎡/天", "conversion": "82.5%", "rawPlf": 82.5, "basketSize": "¥42.5", "rawRask": 42.5, "repurchase": "78.2%", "margin": "23.0%", "rating": "S 级"},
+    # 华北大区
+    {"code": "BJ001", "name": "北京国贸CBD核心旗舰店", "region": "华北大区", "format": "精品超市", "manager": "赵一鸣", "traffic": "9.8 万人", "gmv": "¥7,200 万", "rawRevenue": 0.720, "yoy": "+16.5%", "rawYoy": 16.5, "salesPerSqm": "¥210/㎡/天", "conversion": "71.5%", "rawPlf": 71.5, "basketSize": "¥268.0", "rawRask": 268.0, "repurchase": "69.4%", "margin": "27.2%", "rating": "S 级"},
+    {"code": "BJ002", "name": "北京中关村科技园区店", "region": "华北大区", "format": "标准超市", "manager": "周航", "traffic": "11.2 万人", "gmv": "¥6,100 万", "rawRevenue": 0.610, "yoy": "+13.2%", "rawYoy": 13.2, "salesPerSqm": "¥135/㎡/天", "conversion": "64.0%", "rawPlf": 64.0, "basketSize": "¥160.0", "rawRask": 160.0, "repurchase": "61.5%", "margin": "22.0%", "rating": "A 级"},
+    {"code": "TJ001", "name": "天津和平金街购物中心店", "region": "华北大区", "format": "大型综合超市", "manager": "吴大勇", "traffic": "8.6 万人", "gmv": "¥3,950 万", "rawRevenue": 0.395, "yoy": "+6.8%", "rawYoy": 6.8, "salesPerSqm": "¥95/㎡/天", "conversion": "56.0%", "rawPlf": 56.0, "basketSize": "¥122.0", "rawRask": 122.0, "repurchase": "51.0%", "margin": "17.8%", "rating": "B 级"},
+    {"code": "QD001", "name": "青岛市南万象城海景店", "region": "华北大区", "format": "标准超市", "manager": "孙悦", "traffic": "7.8 万人", "gmv": "¥4,200 万", "rawRevenue": 0.420, "yoy": "+11.0%", "rawYoy": 11.0, "salesPerSqm": "¥112/㎡/天", "conversion": "60.5%", "rawPlf": 60.5, "basketSize": "¥145.0", "rawRask": 145.0, "repurchase": "55.8%", "margin": "20.5%", "rating": "A 级"},
+    # 华南大区
+    {"code": "GZ001", "name": "广州天河城全渠道体验店", "region": "华南大区", "format": "大型综合超市", "manager": "郭栋", "traffic": "13.5 万人", "gmv": "¥8,100 万", "rawRevenue": 0.810, "yoy": "+15.0%", "rawYoy": 15.0, "salesPerSqm": "¥138/㎡/天", "conversion": "66.0%", "rawPlf": 66.0, "basketSize": "¥175.0", "rawRask": 175.0, "repurchase": "64.0%", "margin": "23.5%", "rating": "S 级"},
+    {"code": "SZ002", "name": "深圳南山万象天地智能店", "region": "华南大区", "format": "精品超市", "manager": "郑凯", "traffic": "10.6 万人", "gmv": "¥7,650 万", "rawRevenue": 0.765, "yoy": "+21.4%", "rawYoy": 21.4, "salesPerSqm": "¥225/㎡/天", "conversion": "76.0%", "rawPlf": 76.0, "basketSize": "¥255.0", "rawRask": 255.0, "repurchase": "73.5%", "margin": "29.0%", "rating": "S 级"},
+    {"code": "FS001", "name": "佛山千灯湖商圈社区店", "region": "华南大区", "format": "便利店/社区店", "manager": "何俊", "traffic": "5.1 万人", "gmv": "¥2,100 万", "rawRevenue": 0.210, "yoy": "+19.0%", "rawYoy": 19.0, "salesPerSqm": "¥158/㎡/天", "conversion": "80.0%", "rawPlf": 80.0, "basketSize": "¥38.5", "rawRask": 38.5, "repurchase": "76.0%", "margin": "22.5%", "rating": "A 级"},
+    # 西南大区
+    {"code": "CD001", "name": "成都春熙路太古里概念店", "region": "西南大区", "format": "大型综合超市", "manager": "杨帆", "traffic": "14.2 万人", "gmv": "¥7,800 万", "rawRevenue": 0.780, "yoy": "+17.5%", "rawYoy": 17.5, "salesPerSqm": "¥140/㎡/天", "conversion": "67.2%", "rawPlf": 67.2, "basketSize": "¥168.0", "rawRask": 168.0, "repurchase": "65.0%", "margin": "24.0%", "rating": "S 级"},
+    {"code": "CQ001", "name": "重庆解放碑步行街旗舰店", "region": "西南大区", "format": "大型综合超市", "manager": "梁博", "traffic": "11.8 万人", "gmv": "¥5,800 万", "rawRevenue": 0.580, "yoy": "+10.2%", "rawYoy": 10.2, "salesPerSqm": "¥115/㎡/天", "conversion": "61.0%", "rawPlf": 61.0, "basketSize": "¥142.0", "rawRask": 142.0, "repurchase": "57.5%", "margin": "20.0%", "rating": "A 级"},
+    {"code": "KM001", "name": "昆明顺城购物中心生鲜店", "region": "西南大区", "format": "标准超市", "manager": "许峰", "traffic": "6.9 万人", "gmv": "¥3,200 万", "rawRevenue": 0.320, "yoy": "+8.4%", "rawYoy": 8.4, "salesPerSqm": "¥98/㎡/天", "conversion": "58.0%", "rawPlf": 58.0, "basketSize": "¥115.0", "rawRask": 115.0, "repurchase": "53.0%", "margin": "18.5%", "rating": "B 级"}
+]
+
+# =============================================================================
+# SaaS 业务分析全要素数据集 (SaaS & Cloud Dataset)
+# =============================================================================
+SAAS_TABLE_COLUMNS = [
+    {"key": "code", "title": "租户ID", "align": "left", "sortable": True, "visible": True},
+    {"key": "name", "title": "企业租户名称", "align": "left", "sortable": True, "visible": True},
+    {"key": "segment", "title": "客户层级", "align": "left", "sortable": True, "visible": True},
+    {"key": "tier", "title": "订阅版本", "align": "left", "sortable": True, "visible": True},
+    {"key": "csm", "title": "客户成功顾问", "align": "left", "sortable": True, "visible": True},
+    {"key": "mau", "title": "活跃席位(MAU)", "align": "right", "sortable": True, "visible": True},
+    {"key": "arr", "title": "当期ARR", "align": "right", "sortable": True, "visible": True},
+    {"key": "yoy", "title": "ARR增速", "align": "right", "sortable": True, "visible": True},
+    {"key": "ndr", "title": "净留存率(NDR)", "align": "right", "sortable": True, "visible": True},
+    {"key": "cacPayback", "title": "CAC回收期", "align": "right", "sortable": True, "visible": True},
+    {"key": "ltvCac", "title": "LTV/CAC", "align": "right", "sortable": True, "visible": True},
+    {"key": "nps", "title": "NPS推荐值", "align": "right", "sortable": True, "visible": True},
+    {"key": "health", "title": "健康度评级", "align": "center", "sortable": True, "visible": True}
+]
+
+SAAS_TABLE_ROWS = [
+    {"code": "CUST-1001", "name": "字节跳动科技云中心", "segment": "头部战略 KA", "tier": "企业私有化/旗舰版", "csm": "张文浩", "mau": "12,500 席", "arr": "¥1,850 万", "rawRevenue": 0.185, "yoy": "+45.0%", "rawYoy": 45.0, "ndr": "138.5%", "rawPlf": 138.5, "cacPayback": "4.2 个月", "rawRask": 4.2, "ltvCac": "8.5x", "nps": "+82", "health": "S 级"},
+    {"code": "CUST-1002", "name": "招商银行金融科技部", "segment": "头部战略 KA", "tier": "金融合规专有版", "csm": "刘慧玲", "mau": "8,200 席", "arr": "¥1,420 万", "rawRevenue": 0.142, "yoy": "+28.0%", "rawYoy": 28.0, "ndr": "124.0%", "rawPlf": 124.0, "cacPayback": "5.8 个月", "rawRask": 5.8, "ltvCac": "6.2x", "nps": "+78", "health": "S 级"},
+    {"code": "CUST-1003", "name": "理想汽车智能制造链", "segment": "腰部行业成长", "tier": "高级专业版", "csm": "王明阳", "mau": "3,400 席", "arr": "¥680 万", "rawRevenue": 0.068, "yoy": "+32.5%", "rawYoy": 32.5, "ndr": "118.0%", "rawPlf": 118.0, "cacPayback": "7.1 个月", "rawRask": 7.1, "ltvCac": "5.0x", "nps": "+68", "health": "A 级"},
+    {"code": "CUST-1004", "name": "喜茶全渠道运营总部", "segment": "腰部行业成长", "tier": "高级专业版", "csm": "陈静", "mau": "2,100 席", "arr": "¥450 万", "rawRevenue": 0.045, "yoy": "+22.0%", "rawYoy": 22.0, "ndr": "112.5%", "rawPlf": 112.5, "cacPayback": "8.4 个月", "rawRask": 8.4, "ltvCac": "4.2x", "nps": "+64", "health": "A 级"},
+    {"code": "CUST-1005", "name": "极客时间数字教育网", "segment": "标准 SMB 客户", "tier": "标准团队版", "csm": "赵磊", "mau": "650 席", "arr": "¥120 万", "rawRevenue": 0.012, "yoy": "+12.0%", "rawYoy": 12.0, "ndr": "96.5%", "rawPlf": 96.5, "cacPayback": "11.2 个月", "rawRask": 11.2, "ltvCac": "2.8x", "nps": "+45", "health": "B 级"},
+    {"code": "CUST-1006", "name": "元气森林数字营销部", "segment": "腰部行业成长", "tier": "高级专业版", "csm": "王明阳", "mau": "1,800 席", "arr": "¥380 万", "rawRevenue": 0.038, "yoy": "+18.5%", "rawYoy": 18.5, "ndr": "108.0%", "rawPlf": 108.0, "cacPayback": "9.0 个月", "rawRask": 9.0, "ltvCac": "3.8x", "nps": "+58", "health": "A 级"}
+]
+
+# =============================================================================
+# 财务分析与经营归因数据集 (Financial & Management Dataset)
+# =============================================================================
+FINANCIAL_TABLE_COLUMNS = [
+    {"key": "code", "title": "事业部代码", "align": "left", "sortable": True, "visible": True},
+    {"key": "name", "title": "事业部/核算单元", "align": "left", "sortable": True, "visible": True},
+    {"key": "segment", "title": "业务板块", "align": "left", "sortable": True, "visible": True},
+    {"key": "costCenter", "title": "成本中心代码", "align": "left", "sortable": True, "visible": True},
+    {"key": "cfo", "title": "财务负责人", "align": "left", "sortable": True, "visible": True},
+    {"key": "revenue", "title": "当期营收", "align": "right", "sortable": True, "visible": True},
+    {"key": "yoy", "title": "营收YoY", "align": "right", "sortable": True, "visible": True},
+    {"key": "grossMargin", "title": "毛利率", "align": "right", "sortable": True, "visible": True},
+    {"key": "opex", "title": "运营费用(OPEX)", "align": "right", "sortable": True, "visible": True},
+    {"key": "ebitdaMargin", "title": "EBITDA利润率", "align": "right", "sortable": True, "visible": True},
+    {"key": "fcf", "title": "自由现金流", "align": "right", "sortable": True, "visible": True},
+    {"key": "roic", "title": "资本回报率(ROIC)", "align": "right", "sortable": True, "visible": True},
+    {"key": "budgetAchieve", "title": "预算达成率", "align": "right", "sortable": True, "visible": True},
+    {"key": "auditRating", "title": "风控评级", "align": "center", "sortable": True, "visible": True}
+]
+
+FINANCIAL_TABLE_ROWS = [
+    {"code": "BU-01", "name": "数字化智能与云服务部", "segment": "核心科技主营", "costCenter": "CC-101-TECH", "cfo": "周立新 (CPA)", "revenue": "¥42.50 亿", "rawRevenue": 42.50, "yoy": "+28.4%", "rawYoy": 28.4, "grossMargin": "68.5%", "opex": "¥12.80 亿", "ebitdaMargin": "34.2%", "rawPlf": 34.2, "fcf": "¥11.50 亿", "rawRask": 11.50, "roic": "24.8%", "budgetAchieve": "112.5%", "auditRating": "A+ 优秀"},
+    {"code": "BU-02", "name": "消费电子与智能终端部", "segment": "高端硬件制造", "costCenter": "CC-201-HW", "cfo": "钱雪梅 (CPA)", "revenue": "¥68.20 亿", "rawRevenue": 68.20, "yoy": "+12.0%", "rawYoy": 12.0, "grossMargin": "32.0%", "opex": "¥9.60 亿", "ebitdaMargin": "18.5%", "rawPlf": 18.5, "fcf": "¥8.20 亿", "rawRask": 8.20, "roic": "16.4%", "budgetAchieve": "104.0%", "auditRating": "A 良好"},
+    {"code": "BU-03", "name": "全球供应链与智能物流", "segment": "基础设施运营", "costCenter": "CC-301-LOG", "cfo": "孙志刚", "revenue": "¥24.80 亿", "rawRevenue": 24.80, "yoy": "+18.6%", "rawYoy": 18.6, "grossMargin": "22.4%", "opex": "¥4.20 亿", "ebitdaMargin": "14.2%", "rawPlf": 14.2, "fcf": "¥3.10 亿", "rawRask": 3.10, "roic": "12.8%", "budgetAchieve": "98.5%", "auditRating": "A 良好"},
+    {"code": "BU-04", "name": "新零售与智慧全渠道", "segment": "消费与零售板块", "costCenter": "CC-401-RET", "cfo": "李宏图", "revenue": "¥35.60 亿", "rawRevenue": 35.60, "yoy": "+21.5%", "rawYoy": 21.5, "grossMargin": "29.8%", "opex": "¥6.10 亿", "ebitdaMargin": "16.8%", "rawPlf": 16.8, "fcf": "¥4.80 亿", "rawRask": 4.80, "roic": "15.2%", "budgetAchieve": "106.8%", "auditRating": "A 良好"}
+]
+

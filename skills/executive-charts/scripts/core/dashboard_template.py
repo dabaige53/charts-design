@@ -2,20 +2,12 @@
 import os
 import re
 
-try:
-    from .explanations import EXPLANATIONS_JSON_STRING as EXPLANATIONS_JSON_STR
-except ImportError:
-    try:
-        from explanations import EXPLANATIONS_JSON_STRING as EXPLANATIONS_JSON_STR
-    except ImportError:
-        EXPLANATIONS_JSON_STR = "{}"
-
 TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>__PAGE_TITLE__ - 麦肯锡级民航高管决策看板</title>
+    <title>__PAGE_TITLE__</title>
     <!-- Tailwind CSS with Forms & Container Queries -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script>

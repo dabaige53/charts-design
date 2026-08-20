@@ -33,9 +33,11 @@ function printHelp() {
     npx charts-design list                     List all 52 chart codes
 
   Dashboard Options:
+    --preset, -p <name>     Preset: retail_ecommerce | saas_product |
+                            financial_attribution | executive_report |
+                            executive_monthly | strategic_matrix | comprehensive
+    --config, -f <path>     Custom JSON configuration file (100% custom data)
     --charts, -c <codes>    Comma-separated chart codes (e.g. "c01,t06,r01,fn01")
-    --preset, -p <name>     Preset: executive_report | executive_monthly |
-                            financial_attribution | saas_product | strategic_matrix
     --title,  -t <title>    Custom dashboard title
     --org     <name>        Organization / department name
     --output, -o <path>     Output HTML file path
@@ -49,7 +51,8 @@ function printHelp() {
     --open                  Auto-open in default browser after generation
 
   Examples:
-    npx charts-design dashboard --preset executive_monthly --output ./dist/monthly.html --open
+    npx charts-design dashboard --preset retail_ecommerce --output ./dist/retail.html --open
+    npx charts-design dashboard --config ./custom.json --output ./dist/custom.html --open
     npx charts-design dashboard --charts "c01,t06,r01,fn01" --title "经营研判看板" --output ./dist/report.html
     npx charts-design chart --code t06 --output ./dist/chart_t06.html --open
     npx charts-design chart --code r01 --snippet

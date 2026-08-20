@@ -3,35 +3,56 @@ name: executive-charts
 description: Generate McKinsey-grade executive business charts, KPI metric cards, interactive pivot tables, and filters. Use when creating standalone business charts, data tables, or invoking component generation scripts.
 ---
 
-# 麦肯锡风格图表设计规范与高管看板生成指南
+# 咨询级高管商业图表设计规范与看板生成指南
 
 本技能为企业高管经营分析看板（Dashboard）、决策指标卡、交互式数据透视表及多维筛选器组件提供统一的设计标准、ECharts 配置库与看板生成工具。
 
 > [!IMPORTANT]
-> **核心原则：UI / 风格 / 表格结构 / 代码结构 强制遵循技能规范，业务内容与页面布局 自由灵活定制**：
-> - **必须遵循（刚性标准）**：UI 视觉调色盘、咨询级设计风格、表格结构与交互、图表卡片 5+1 工具栏与代码结构必须 100% 遵循本技能规范；
-> - **自由定制（业务灵活）**：页面布局形式（网格/分栏/单卡）、业务主题（金融/SaaS/电商/制造等）与数据指标内容可根据用户需求随意更改。
+> **核心原则与执行铁律**：
+> 1. **【技能只读】**：`.agents/skills/` 目录下的所有脚本与模板为**只读基础设施**，在执行任何用户任务时**严禁修改技能源码**；
+> 2. **【禁止套娃】**：严禁为了生成图表或看板而派生 `invoke_subagent`，必须在当前步骤直接通过 CLI 或 Python 脚本生成目标 HTML 文件；
+> 3. **【UI 规范强制遵循】**：UI 视觉调色盘、咨询级设计风格、表格结构与交互、图表卡片 5+1 工具栏与代码结构必须 100% 遵循本技能规范；
+> 4. **【业务数据自由定制】**：行业主题（零售电商/SaaS/金融财务/供应链/民航等）、KPI、图表数据与透视表内容通过 `--preset <name>` 或 `--config <custom.json>` 自由定义。
 
 ---
 
 ## 核心看板与图表生成指令 (Dashboard & Component CLI)
 
 ### 1. 组合生成高管看板 (Dashboard) - `scripts/generate_dashboard.py`
-根据业务分析目标，自由指定图表代号列表（从 52 款图表库中任意挑选组合），一键生成包含 **顶部多维筛选栏 + 4 大 KPI 决策卡 + 核心图表矩阵 + 交互式数据透视表 + 业务口径字典** 的完整看板 HTML：
 
+#### 方式 A：按行业预设一键生成（内置 7 大主流业务场景）
 ```bash
-# 自由组合图表生成自定义高管看板 (支持自定义标题与所属机构)
+# 零售连锁与电商运营看板 (GMV/客单价/坪效/复购率/门店透视表)
+python scripts/generate_dashboard.py --preset retail_ecommerce --output ./dist/retail.html --open
+
+# SaaS 产品与客户生命周期看板 (ARR/CAC/NDR/留存漏斗/客户透视表)
+python scripts/generate_dashboard.py --preset saas_product --output ./dist/saas.html --open
+
+# 财务边际贡献与成本穿透看板 (营收/EBITDA/资金桑基图/事业部透视表)
+python scripts/generate_dashboard.py --preset financial_attribution --output ./dist/financial.html --open
+
+# 航空机队与航线运营效能看板
+python scripts/generate_dashboard.py --preset executive_report --output ./dist/executive_report.html --open
+
+# 战略四象限与风险矩阵 / 全要素全景大满贯 / 月度决算看板
+python scripts/generate_dashboard.py --preset strategic_matrix --output ./dist/strategic.html
+python scripts/generate_dashboard.py --preset comprehensive --output ./dist/comprehensive.html
+python scripts/generate_dashboard.py --preset executive_monthly --output ./dist/monthly.html
+```
+
+#### 方式 B：自定义业务数据配置文件 (100% 自由定制任何行业)
+编写 `custom_data.json`（支持自定义 `meta`、`filters`、`kpis`、`charts`、`table`）并一键生成：
+```bash
+python scripts/generate_dashboard.py --config ./custom_data.json --output ./dist/my_dashboard.html --open
+```
+
+#### 方式 C：自由组合 52 款图表代号
+```bash
 python scripts/generate_dashboard.py \
     --charts "c01,t06,k01,r01,fn01,m01,k04,c06" \
     --title "集团核心运营效能与财务战略研判看板" \
     --org "管理委员会 · 商业智能与决算中心" \
     --output ./dist/custom_dashboard.html --open
-
-# 按预设业务主题一键生成标准看板
-python scripts/generate_dashboard.py --preset executive_monthly --output ./dist/monthly.html --open
-python scripts/generate_dashboard.py --preset financial_attribution --output ./dist/financial.html
-python scripts/generate_dashboard.py --preset saas_product --output ./dist/saas_dashboard.html
-python scripts/generate_dashboard.py --preset strategic_matrix --output ./dist/strategic.html
 ```
 
 ### 2. 按需生成单图表组件与代码片段 - `scripts/generate_chart.py`
@@ -51,9 +72,10 @@ python scripts/generate_chart.py --list
 #### 看板生成参数 (`scripts/generate_dashboard.py`)
 | 参数 | 简写 | 说明 | 使用示例 |
 | :--- | :--- | :--- | :--- |
+| `--preset` | `-p` | 预设行业主题（`retail_ecommerce`, `saas_product`, `financial_attribution`, `executive_report` 等） | `--preset retail_ecommerce` |
+| `--config` | `-f` | 自定义 JSON 配置文件路径（完全覆盖或扩展业务数据与结构） | `--config ./my_data.json` |
 | `--charts` | `-c` | 组合图表代号逗号分隔列表（如 `"c01,t06,r01,m01"`） | `--charts "c01,t06,r01"` |
-| `--preset` | `-p` | 预设看板主题（`executive_monthly`, `financial_attribution`, `saas_product` 等） | `--preset executive_monthly` |
-| `--title` | `-t` | 看板主标题 | `--title "月度经营早报"` |
+| `--title` | `-t` | 看板主标题 | `--title "零售连锁经营看板"` |
 | `--org` | - | 机构/部门署名 | `--org "集团战略决算中心"` |
 | `--output` | `-o` | 目标 HTML 文件路径 | `--output ./dist/report.html` |
 | `--open` | - | 生成后自动在默认浏览器中打开预览 | `--open` |
