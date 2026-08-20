@@ -62,6 +62,20 @@ def test_config_generation():
     with open(cfg_file, "w", encoding="utf-8") as f:
         json.dump({
             "meta": {"title": "自定义测试看板", "org": "测试部"},
+            "filters": [
+                {
+                    "key": "month",
+                    "label": "统计月份",
+                    "type": "select",
+                    "options": [{"value": "2026-07", "label": "2026年7月", "default": True}]
+                },
+                {
+                    "key": "region",
+                    "label": "大区",
+                    "type": "multi-select",
+                    "options": [{"value": "华东", "label": "华东", "default": True}, {"value": "华南", "label": "华南", "default": True}]
+                }
+            ],
             "charts": ["c01", "t06", "k01"]
         }, f)
     cmd = [
@@ -75,10 +89,35 @@ def test_config_generation():
     assert os.path.exists(out_file), "Output file was not created"
     print("✓ Custom JSON config test passed!")
 
+def test_from_csv_generation():
+    print("Testing --from-csv automated generation...")
+    sample_csv = os.path.join(OUTPUT_DIR, "sample_sales.csv")
+    out_file = os.path.join(OUTPUT_DIR, "test_csv_dashboard.html")
+    with open(sample_csv, "w", encoding="utf-8") as f:
+        f.write('"门店","大区","销售额","同比","毛利率"\n')
+        f.write('"上海旗舰店","华东","¥4,500 万","+16.2%","35.4%"\n')
+        f.write('"北京国贸店","华北","¥3,800 万","+11.5%","31.8%"\n')
+        f.write('"深圳湾店","华南","¥3,600 万","+8.4%","29.6%"\n')
+    cmd = [
+        sys.executable,
+        os.path.join(SCRIPTS_DIR, "generate_dashboard.py"),
+        "--from-csv", sample_csv,
+        "--output", out_file
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    assert res.returncode == 0, f"generate_dashboard.py --from-csv failed: {res.stderr}"
+    assert os.path.exists(out_file), "Output file was not created"
+    with open(out_file, "r", encoding="utf-8") as f:
+        html = f.read()
+        assert "上海旗舰店" in html, "Store name not in generated HTML"
+        assert "民航" not in html, "Aviation mock leaked into retail CSV dashboard"
+    print("✓ CSV automated generation test passed!")
+
 if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     test_chart_generation()
     test_dashboard_generation()
     test_preset_generation()
     test_config_generation()
+    test_from_csv_generation()
     print("All tests successfully completed!")

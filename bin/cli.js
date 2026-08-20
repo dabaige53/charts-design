@@ -28,34 +28,38 @@ function printHelp() {
   ================================================
 
   Usage:
-    npx charts-design dashboard [options]     Generate executive dashboard
+    npx charts-design from-csv <file.csv>      Generate dashboard directly from CSV data (100% Data-Driven)
+    npx charts-design dashboard [options]      Generate executive dashboard
     npx charts-design chart [options]          Generate standalone chart component
     npx charts-design list                     List all 52 chart codes
 
+  CSV Automation:
+    npx charts-design from-csv <file.csv> --output ./dist/report.html --open
+
   Dashboard Options:
-    --preset, -p <name>     Preset: retail_ecommerce | saas_product |
-                            financial_attribution | executive_report |
-                            executive_monthly | strategic_matrix | comprehensive
-    --config, -f <path>     Custom JSON configuration file (100% custom data)
-    --charts, -c <codes>    Comma-separated chart codes (e.g. "c01,t06,r01,fn01")
-    --title,  -t <title>    Custom dashboard title
-    --org     <name>        Organization / department name
-    --output, -o <path>     Output HTML file path
-    --open                  Auto-open in default browser after generation
+    --from-csv, --csv <path>  Path to business CSV file to automatically profile
+    --preset, -p <name>       Preset: retail_ecommerce | saas_product |
+                              financial_attribution | executive_report |
+                              executive_monthly | strategic_matrix | comprehensive
+    --config, -f <path>       Custom JSON configuration file (100% custom data)
+    --charts, -c <codes>      Comma-separated chart codes (e.g. "c01,t06,r01,fn01")
+    --title,  -t <title>      Custom dashboard title
+    --org     <name>          Organization / department name
+    --output, -o <path>       Output HTML file path
+    --open                    Auto-open in default browser after generation
 
   Chart Options:
-    --code,   -c <code>     Chart taxonomy code (e.g. c01, t06, r01, fn01)
-    --output, -o <path>     Output HTML file path
-    --title,  -t <title>    Custom chart title
-    --snippet               Print raw JS ECharts option snippet (no file output)
-    --open                  Auto-open in default browser after generation
+    --code,   -c <code>       Chart taxonomy code (e.g. c01, t06, r01, fn01)
+    --output, -o <path>       Output HTML file path
+    --title,  -t <title>      Custom chart title
+    --snippet                 Print raw JS ECharts option snippet (no file output)
+    --open                    Auto-open in default browser after generation
 
   Examples:
+    npx charts-design from-csv ./sales_data.csv --output ./dist/sales.html --open
     npx charts-design dashboard --preset retail_ecommerce --output ./dist/retail.html --open
     npx charts-design dashboard --config ./custom.json --output ./dist/custom.html --open
-    npx charts-design dashboard --charts "c01,t06,r01,fn01" --title "经营研判看板" --output ./dist/report.html
     npx charts-design chart --code t06 --output ./dist/chart_t06.html --open
-    npx charts-design chart --code r01 --snippet
     npx charts-design list
 `);
 }
@@ -82,6 +86,14 @@ function main() {
   let targetScript;
 
   switch (subcommand) {
+    case "from-csv":
+    case "csv":
+      targetScript = DASHBOARD_PY;
+      if (restArgs.length > 0 && !restArgs[0].startsWith("-")) {
+        const csvPath = restArgs.shift();
+        restArgs.unshift("--from-csv", csvPath);
+      }
+      break;
     case "dashboard":
     case "dash":
       targetScript = DASHBOARD_PY;

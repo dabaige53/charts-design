@@ -60,6 +60,7 @@ from core.chart_builders import CHARTS_JS_DEFINITIONS
 from core.chart_catalog import ALL_CHARTS
 from core.dashboard_template import generate_dashboard_html
 from core.explanations import EXPLANATIONS_JSON_STRING
+from core.csv_profiler import profile_csv
 
 CHARTS_MAP = {**CHARTS_JS_DEFINITIONS, **ALL_CHARTS}
 
@@ -470,7 +471,8 @@ def generate_dashboard(
     output_path=None,
     auto_open=False,
     config_file=None,
-    config_dict=None
+    config_dict=None,
+    from_csv=None
 ):
     """
     Compiles a complete McKinsey-grade HTML executive dashboard.
@@ -480,9 +482,11 @@ def generate_dashboard(
     2. Custom config file (JSON) or config dict with custom meta, filters, kpis, charts, table.
     3. Custom chart codes list.
     """
-    # 1. Load from custom config if provided
+    # 1. Load from custom config or CSV if provided
     custom_cfg = {}
-    if config_file:
+    if from_csv:
+        custom_cfg = profile_csv(from_csv, custom_title=title)
+    elif config_file:
         with open(config_file, 'r', encoding='utf-8') as f:
             custom_cfg = json.load(f)
     elif config_dict:
@@ -516,6 +520,10 @@ def generate_dashboard(
     if "charts" in custom_cfg and isinstance(custom_cfg["charts"], list):
         if len(custom_cfg["charts"]) > 0 and isinstance(custom_cfg["charts"][0], str) and custom_cfg["charts"][0] in CHARTS_MAP:
             selected_codes = custom_cfg["charts"]
+        elif len(custom_cfg["charts"]) > 0 and isinstance(custom_cfg["charts"][0], str) and custom_cfg["charts"][0].strip().startswith('{'):
+            # Raw JS strings from csv_profiler or direct code
+            charts_combined_js = ",\n        ".join(custom_cfg["charts"])
+            selected_codes = None
         elif len(custom_cfg["charts"]) > 0 and isinstance(custom_cfg["charts"][0], dict):
             charts_combined_js = ",\n        ".join([json.dumps(c, ensure_ascii=False) for c in custom_cfg["charts"]])
             selected_codes = None
@@ -585,6 +593,7 @@ def main():
     parser = argparse.ArgumentParser(description="McKinsey-Grade Executive Dashboard Generator")
     parser.add_argument("--preset", "-p", type=str, choices=list(PRESET_CONFIGS.keys()), default="executive_report",
                         help=f"Preset dashboard style: {', '.join(PRESET_CONFIGS.keys())}")
+    parser.add_argument("--from-csv", "--csv", type=str, help="Path to business CSV file to automatically profile and synthesize dashboard")
     parser.add_argument("--config", "-f", type=str, help="Path to custom JSON configuration file (Overrides meta, filters, kpis, table, charts)")
     parser.add_argument("--charts", "-c", type=str, help="Comma-separated chart codes (e.g. c01,t06,r01,fn01,m01,k04)")
     parser.add_argument("--title", "-t", type=str, help="Custom dashboard header title")
@@ -601,7 +610,8 @@ def main():
         org=args.org,
         output_path=args.output,
         auto_open=args.open,
-        config_file=args.config
+        config_file=args.config,
+        from_csv=args.from_csv
     )
 
 if __name__ == "__main__":

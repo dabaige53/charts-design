@@ -566,48 +566,113 @@ __DASHBOARD_CONFIG_CODE__
             }
         }
 
-        // 3. Global State Management
+        // 3. Global State Management (100% Dynamic & Zero-Data BI Engine)
         class StateStore {
             constructor(config) {
-                this.config = config;
-                const f = config.filters || {};
-                const labels = f.labels || {};
-                this.filterLabels = {
-                    time: labels.time || '统计周期',
-                    hub: labels.hub || '所属区域',
-                    fleet: labels.fleet || '业务业态',
-                    route: labels.route || '业务渠道'
-                };
-                const defaultSeason = (f.seasons || []).find(s => s.default || s.active) || f.seasons?.[0] || {};
-                this.defaultFilters = {
-                    time: defaultSeason.value || defaultSeason.val || 'CURRENT',
-                    timeLabel: defaultSeason.label || '全周期',
-                    hubs: new Set((f.hubs || []).map(h => h.value || h.val || h.name)),
-                    fleet: 'ALL',
-                    fleetLabel: `全部${this.filterLabels.fleet}`,
-                    route: 'ALL',
-                    routeLabel: `全部${this.filterLabels.route}`,
-                    keyword: '',
-                    chartCrossFilter: null
-                };
+                this.config = config || {};
+                
+                // 1. Normalize Dynamic Filters Array
+                let rawFilters = this.config.filters || [];
+                let filterDefs = [];
+
+                if (Array.isArray(rawFilters)) {
+                    filterDefs = rawFilters.map((f, idx) => ({
+                        id: f.id || f.key || `filter_${idx}`,
+                        key: f.key || f.id || `filter_${idx}`,
+                        label: f.label || `维度 ${idx + 1}`,
+                        type: f.type || (f.options?.length > 0 && f.options[0]?.default !== undefined ? 'select' : 'select'),
+                        options: (f.options || []).map(opt => ({
+                            value: opt.value ?? opt.val ?? opt.name ?? '',
+                            label: opt.label ?? opt.name ?? opt.val ?? '',
+                            default: opt.default ?? opt.active ?? false
+                        }))
+                    }));
+                } else if (typeof rawFilters === 'object') {
+                    // Legacy Object Format Normalization
+                    const labels = rawFilters.labels || {};
+                    if (rawFilters.seasons && rawFilters.seasons.length) {
+                        filterDefs.push({
+                            key: 'period',
+                            label: labels.time || '统计周期',
+                            type: 'select',
+                            options: rawFilters.seasons.map(s => ({ value: s.value || s.val, label: s.label, default: s.default || s.active }))
+                        });
+                    }
+                    if (rawFilters.hubs && rawFilters.hubs.length) {
+                        filterDefs.push({
+                            key: 'hub',
+                            label: labels.hub || '所属区域',
+                            type: 'multi-select',
+                            options: rawFilters.hubs.map(h => ({ value: h.value || h.val || h.name, label: h.label || h.name || h.val, default: h.default !== false }))
+                        });
+                    }
+                    if (rawFilters.fleets && rawFilters.fleets.length) {
+                        filterDefs.push({
+                            key: 'fleet',
+                            label: labels.fleet || '业务业态',
+                            type: 'select',
+                            options: rawFilters.fleets.map(fl => ({ value: fl.value || fl.val, label: fl.label, default: fl.val === 'ALL' || fl.value === 'ALL' }))
+                        });
+                    }
+                    if (rawFilters.routes && rawFilters.routes.length) {
+                        filterDefs.push({
+                            key: 'route',
+                            label: labels.route || '业务渠道',
+                            type: 'select',
+                            options: rawFilters.routes.map(r => ({ value: r.value || r.val, label: r.label, default: r.val === 'ALL' || r.value === 'ALL' }))
+                        });
+                    }
+                }
+
+                this.filterDefs = filterDefs;
+
+                // 2. Initialize Filter States & Defaults
+                this.filterValues = {};
+                this.filterLabels = {};
+                this.defaultFilterValues = {};
+                this.defaultFilterLabels = {};
+
+                filterDefs.forEach(f => {
+                    if (f.type === 'multi-select') {
+                        const defSelected = f.options.filter(o => o.default).map(o => o.value);
+                        const allVals = f.options.map(o => o.value);
+                        const initialSet = new Set(defSelected.length > 0 ? defSelected : allVals);
+                        this.filterValues[f.key] = initialSet;
+                        this.defaultFilterValues[f.key] = new Set(initialSet);
+                        this.filterLabels[f.key] = initialSet.size === allVals.length ? `全部${f.label}` : `已选 ${initialSet.size} 项`;
+                        this.defaultFilterLabels[f.key] = this.filterLabels[f.key];
+                    } else {
+                        const defOpt = f.options.find(o => o.default) || f.options[0] || { value: 'ALL', label: `全部${f.label}` };
+                        this.filterValues[f.key] = defOpt.value;
+                        this.defaultFilterValues[f.key] = defOpt.value;
+                        this.filterLabels[f.key] = defOpt.label;
+                        this.defaultFilterLabels[f.key] = defOpt.label;
+                    }
+                });
+
+                this.keyword = '';
+                this.chartCrossFilter = null;
+
+                // Backward-compatible filters proxy
                 this.filters = {
-                    time: this.defaultFilters.time,
-                    timeLabel: this.defaultFilters.timeLabel,
-                    hubs: new Set(this.defaultFilters.hubs),
-                    fleet: 'ALL',
-                    fleetLabel: this.defaultFilters.fleetLabel,
-                    route: 'ALL',
-                    routeLabel: this.defaultFilters.routeLabel,
+                    time: this.filterValues['period'] || 'CURRENT',
+                    timeLabel: this.filterLabels['period'] || '全周期',
+                    hubs: this.filterValues['hub'] || new Set(),
+                    fleet: this.filterValues['fleet'] || 'ALL',
+                    fleetLabel: this.filterLabels['fleet'] || '全部',
+                    route: this.filterValues['route'] || 'ALL',
+                    routeLabel: this.filterLabels['route'] || '全部',
                     keyword: '',
                     chartCrossFilter: null
                 };
+
                 this.table = {
                     page: 1,
                     pageSize: 10,
                     sortCol: null,
                     sortDir: 'asc',
-                    orderedColumns: [...(config.table?.columns || [])],
-                    visibleCols: new Set((config.table?.columns || []).map(c => c.key))
+                    orderedColumns: [...(this.config.table?.columns || [])],
+                    visibleCols: new Set((this.config.table?.columns || []).map(c => c.key))
                 };
                 this.chartInstances = {};
                 this.chartGranularities = {};
@@ -656,44 +721,80 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             renderFilters() {
-                const f = this.config.filters || {};
-                const labels = this.state.filterLabels;
+                const defs = this.state.filterDefs;
                 const container = document.getElementById('app-filters');
                 if (!container) return;
 
-                const seasonsList = (f.seasons || []).map(s => `
-                    <div onclick="window.App.selectGlobalTime('${s.value || s.val}', '${s.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between">
-                        <span>${s.label}</span>
-                        ${(s.active || s.default) ? '<span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono font-semibold">当前</span>' : ''}
-                    </div>
-                `).join('');
+                let filterControlsHtml = '';
+                defs.forEach(f => {
+                    if (f.type === 'multi-select') {
+                        const curSet = this.state.filterValues[f.key] || new Set();
+                        const curLabel = this.state.filterLabels[f.key] || `全部${f.label}`;
+                        const badgeCount = curSet.size;
 
-                const hubsList = (f.hubs || []).map(h => {
-                    const hVal = h.value || h.val || h.name;
-                    const hName = h.name || h.label || h.val;
-                    return `
-                    <label class="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs hub-opt-row" data-label="${hName}">
-                        <span class="flex items-center gap-2">
-                            <input type="checkbox" value="${hVal}" checked onchange="window.App.onGlobalFilterChange()" class="rounded text-primary focus:ring-0">
-                            <span class="font-medium">${hName}</span>
-                        </span>
-                        <span class="text-[10px] text-ink-subtle font-mono">${h.count || ''}</span>
-                    </label>
-                `;}).join('');
+                        const optionsHtml = f.options.map(opt => `
+                            <label class="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs filter-opt-row" data-label="${opt.label}">
+                                <span class="flex items-center gap-2">
+                                    <input type="checkbox" value="${opt.value}" ${curSet.has(opt.value) ? 'checked' : ''} onchange="window.App.onMultiFilterChange('${f.key}')" class="rounded text-primary focus:ring-0">
+                                    <span class="font-medium">${opt.label}</span>
+                                </span>
+                            </label>
+                        `).join('');
 
-                const fleetsList = (f.fleets || []).map(fl => `
-                    <div onclick="window.App.selectGlobalFleet('${fl.value || fl.val}', '${fl.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between font-medium">
-                        <span>${fl.label}</span>
-                    </div>
-                `).join('');
+                        filterControlsHtml += `
+                            <div class="relative" id="filterWrap_${f.key}">
+                                <button onclick="window.App.toggleDropdown('filterMenu_${f.key}', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
+                                    <span class="text-ink-subtle">${f.label}:</span>
+                                    <span id="selectedLabel_${f.key}" class="font-semibold text-primary truncate max-w-[130px]">${curLabel}</span>
+                                    <span id="countBadge_${f.key}" class="bg-primary text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">${badgeCount}</span>
+                                    ${LUCIDE_ICONS.chevronDown}
+                                </button>
+                                <div id="filterMenu_${f.key}" class="hidden absolute top-full left-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-2.5 z-50 space-y-2">
+                                    <div class="relative">
+                                        <input type="text" oninput="window.App.filterMultiDropdown('${f.key}', this.value)" placeholder="搜索${f.label}..." class="w-full text-xs pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 rounded text-ink focus:outline-none focus:border-primary focus:bg-white">
+                                        <svg class="w-3.5 h-3.5 text-ink-subtle absolute left-2 top-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[11px] text-ink-subtle pb-1 border-b border-slate-100">
+                                        <button onclick="window.App.setAllMultiOptions('${f.key}', true)" class="hover:text-primary font-medium">全选</button>
+                                        <span class="text-slate-300">|</span>
+                                        <button onclick="window.App.setAllMultiOptions('${f.key}', false)" class="hover:text-primary font-medium">清空</button>
+                                        <span class="ml-auto text-[10px] text-ink-subtle">多选过滤</span>
+                                    </div>
+                                    <div class="space-y-1 max-h-44 overflow-y-auto custom-scrollbar" id="multiOptionsContainer_${f.key}">
+                                        ${optionsHtml}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // Single Select Dropdown
+                        const curVal = this.state.filterValues[f.key];
+                        const curLabel = this.state.filterLabels[f.key] || f.options[0]?.label || `全部${f.label}`;
 
-                const routesList = (f.routes || []).map(r => `
-                    <div onclick="window.App.selectGlobalRoute('${r.value || r.val}', '${r.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between font-medium">
-                        <span>${r.label}</span>
-                    </div>
-                `).join('');
+                        const optionsHtml = f.options.map(opt => `
+                            <div onclick="window.App.selectFilterOption('${f.key}', '${opt.value}', '${opt.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between font-medium">
+                                <span>${opt.label}</span>
+                                ${opt.value === curVal ? '<span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono font-semibold">当前</span>' : ''}
+                            </div>
+                        `).join('');
 
-                const sampleCols = (this.config.table?.columns || []).slice(0, 3).map(c => c.title);
+                        filterControlsHtml += `
+                            <div class="relative" id="filterWrap_${f.key}">
+                                <button onclick="window.App.toggleDropdown('filterMenu_${f.key}', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
+                                    <span class="text-ink-subtle">${f.label}:</span>
+                                    <span id="selectedLabel_${f.key}" class="font-semibold text-primary truncate max-w-[130px]">${curLabel}</span>
+                                    ${LUCIDE_ICONS.chevronDown}
+                                </button>
+                                <div id="filterMenu_${f.key}" class="hidden absolute top-full left-0 mt-1.5 min-w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+                                    <div class="px-2.5 py-1 text-[10px] font-bold text-ink-subtle uppercase border-b border-slate-100">选择${f.label}</div>
+                                    ${optionsHtml}
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+
+                const sampleCols = (this.config.table?.columns || []).filter(c => c.align !== 'right').slice(0, 3).map(c => c.title);
                 const searchPh = sampleCols.length > 0 ? `检索${sampleCols.join('、')}...` : '输入关键词全局检索...';
 
                 container.innerHTML = `
@@ -701,69 +802,9 @@ __DASHBOARD_CONFIG_CODE__
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <!-- Left Controls -->
                             <div class="flex flex-wrap items-center gap-2.5">
-                                <!-- 1. 时间周期 -->
-                                <div class="relative" id="filterTimeWrap">
-                                    <button onclick="window.App.toggleDropdown('timeDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">${labels.time}:</span>
-                                        <span id="selectedTimeLabel" class="font-semibold text-primary">${this.state.filters.timeLabel}</span>
-                                        ${LUCIDE_ICONS.chevronDown}
-                                    </button>
-                                    <div id="timeDropdownMenu" class="hidden absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
-                                        <div class="px-2.5 py-1 text-[10px] font-bold text-ink-subtle uppercase border-b border-slate-100">选择${labels.time}</div>
-                                        ${seasonsList}
-                                    </div>
-                                </div>
+                                ${filterControlsHtml}
 
-                                <!-- 2. 所属区域 -->
-                                <div class="relative" id="filterHubWrap">
-                                    <button onclick="window.App.toggleDropdown('hubDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">${labels.hub}:</span>
-                                        <span id="selectedHubLabel" class="font-semibold text-primary truncate max-w-[130px]">全部${labels.hub}</span>
-                                        <span id="hubCountBadge" class="bg-primary text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">${f.hubs?.length || 4}</span>
-                                        ${LUCIDE_ICONS.chevronDown}
-                                    </button>
-                                    <div id="hubDropdownMenu" class="hidden absolute top-full left-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-2.5 z-50 space-y-2">
-                                        <div class="relative">
-                                            <input type="text" id="hubSearchInput" oninput="window.App.filterHubDropdownList()" placeholder="搜索${labels.hub}..." class="w-full text-xs pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 rounded text-ink focus:outline-none focus:border-primary focus:bg-white">
-                                            <svg class="w-3.5 h-3.5 text-ink-subtle absolute left-2 top-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                        </div>
-                                        <div class="flex items-center justify-between text-[11px] text-ink-subtle pb-1 border-b border-slate-100">
-                                            <button onclick="window.App.setAllHubs(true)" class="hover:text-primary font-medium">全选</button>
-                                            <span class="text-slate-300">|</span>
-                                            <button onclick="window.App.setAllHubs(false)" class="hover:text-primary font-medium">清空</button>
-                                            <span class="ml-auto text-[10px] text-ink-subtle">多维区域</span>
-                                        </div>
-                                        <div class="space-y-1 max-h-44 overflow-y-auto custom-scrollbar" id="hubOptionsContainer">
-                                            ${hubsList}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 3. 业务业态 -->
-                                <div class="relative" id="filterFleetWrap">
-                                    <button onclick="window.App.toggleDropdown('fleetDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">${labels.fleet}:</span>
-                                        <span id="selectedFleetLabel" class="font-semibold text-primary truncate max-w-[120px]">${this.state.filters.fleetLabel}</span>
-                                        ${LUCIDE_ICONS.chevronDown}
-                                    </button>
-                                    <div id="fleetDropdownMenu" class="hidden absolute top-full left-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
-                                        ${fleetsList}
-                                    </div>
-                                </div>
-
-                                <!-- 4. 业务渠道/品类 -->
-                                <div class="relative" id="filterRouteWrap">
-                                    <button onclick="window.App.toggleDropdown('routeDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">${labels.route}:</span>
-                                        <span id="selectedRouteLabel" class="font-semibold text-primary truncate max-w-[120px]">${this.state.filters.routeLabel}</span>
-                                        ${LUCIDE_ICONS.chevronDown}
-                                    </button>
-                                    <div id="routeDropdownMenu" class="hidden absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
-                                        ${routesList}
-                                    </div>
-                                </div>
-
-                                <!-- 5. 关键词搜索 (带智能推荐下拉面板) -->
+                                <!-- Global Keyword Search -->
                                 <div class="relative" id="globalSearchWrap">
                                     <div class="relative flex items-center">
                                         <input type="text" id="globalKeywordSearch" onfocus="window.App.showSearchSuggestions()" oninput="window.App.onSearchInput(this.value)" onkeydown="window.App.onSearchKeyDown(event)" placeholder="${searchPh}" class="h-[32px] w-48 text-xs pl-7 pr-7 bg-slate-50 border border-slate-200 rounded-md text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary focus:bg-white focus:w-64 transition-all" autocomplete="off">
@@ -1698,16 +1739,71 @@ __DASHBOARD_CONFIG_CODE__
                 }
             }
 
-            // Filter Handlers
+            // Filter Handlers (100% Dynamic)
             toggleDropdown(id, event) {
                 if (event) event.stopPropagation();
                 const el = document.getElementById(id);
                 if (!el) return;
                 const isHidden = el.classList.contains('hidden');
-                document.querySelectorAll('[id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
+                document.querySelectorAll('[id^="filterMenu_"], [id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
                 document.getElementById('colDrawerMenu')?.classList.add('hidden');
                 document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
                 if (isHidden) el.classList.remove('hidden');
+            }
+
+            selectFilterOption(key, val, label) {
+                this.state.filterValues[key] = val;
+                this.state.filterLabels[key] = label;
+                const labelEl = document.getElementById(`selectedLabel_${key}`);
+                if (labelEl) labelEl.textContent = label;
+                document.getElementById(`filterMenu_${key}`)?.classList.add('hidden');
+                this.onGlobalFilterChange();
+            }
+
+            filterMultiDropdown(key, query) {
+                const q = query.toLowerCase();
+                const container = document.getElementById(`multiOptionsContainer_${key}`);
+                if (!container) return;
+                container.querySelectorAll('.filter-opt-row').forEach(row => {
+                    const label = row.getAttribute('data-label').toLowerCase();
+                    row.style.display = (!q || label.includes(q)) ? 'flex' : 'none';
+                });
+            }
+
+            setAllMultiOptions(key, check) {
+                const container = document.getElementById(`multiOptionsContainer_${key}`);
+                if (container) {
+                    container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = check);
+                }
+                this.onMultiFilterChange(key);
+            }
+
+            onMultiFilterChange(key) {
+                const container = document.getElementById(`multiOptionsContainer_${key}`);
+                const checkedVals = Array.from(container?.querySelectorAll('input[type="checkbox"]:checked') || []).map(cb => cb.value);
+                const f = this.state.filterDefs.find(d => d.key === key);
+                const totalCount = f?.options?.length || 0;
+
+                this.state.filterValues[key] = new Set(checkedVals);
+                const labelText = checkedVals.length === totalCount ? `全部${f?.label || ''}` : (checkedVals.length === 0 ? `未选${f?.label || ''} (0)` : `已选 ${checkedVals.length} 项`);
+                this.state.filterLabels[key] = labelText;
+
+                const labelEl = document.getElementById(`selectedLabel_${key}`);
+                if (labelEl) labelEl.textContent = labelText;
+                const badgeEl = document.getElementById(`countBadge_${key}`);
+                if (badgeEl) badgeEl.textContent = checkedVals.length;
+
+                this.onGlobalFilterChange();
+            }
+
+            // Legacy Shims
+            selectGlobalTime(val, label) { this.selectFilterOption('period', val, label); }
+            selectGlobalFleet(val, label) { this.selectFilterOption('fleet', val, label); }
+            selectGlobalRoute(val, label) { this.selectFilterOption('route', val, label); }
+            setAllHubs(check) { this.setAllMultiOptions('hub', check); }
+            filterHubDropdownList() {
+                const inp = document.getElementById('hubSearchInput');
+                if (inp) this.filterMultiDropdown('hub', inp.value);
             }
 
             // Search Autocomplete Suggestions
@@ -1717,7 +1813,7 @@ __DASHBOARD_CONFIG_CODE__
                 const content = document.getElementById('searchSuggestionsContent');
                 if (!dropdown || !content) return;
 
-                document.querySelectorAll('[id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
+                document.querySelectorAll('[id^="filterMenu_"], [id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
                 document.getElementById('colDrawerMenu')?.classList.add('hidden');
 
                 if (!query) {
@@ -1841,53 +1937,8 @@ __DASHBOARD_CONFIG_CODE__
                 this.showToast('已清空关键词检索');
             }
 
-            selectGlobalTime(val, label) {
-                this.state.filters.time = val;
-                this.state.filters.timeLabel = label;
-                document.getElementById('selectedTimeLabel').textContent = label;
-                document.getElementById('timeDropdownMenu').classList.add('hidden');
-                this.onGlobalFilterChange();
-            }
-
-            selectGlobalFleet(val, label) {
-                this.state.filters.fleet = val;
-                this.state.filters.fleetLabel = label;
-                document.getElementById('selectedFleetLabel').textContent = label;
-                document.getElementById('fleetDropdownMenu').classList.add('hidden');
-                this.onGlobalFilterChange();
-            }
-
-            selectGlobalRoute(val, label) {
-                this.state.filters.route = val;
-                this.state.filters.routeLabel = label;
-                document.getElementById('selectedRouteLabel').textContent = label;
-                document.getElementById('routeDropdownMenu').classList.add('hidden');
-                this.onGlobalFilterChange();
-            }
-
-            filterHubDropdownList() {
-                const q = document.getElementById('hubSearchInput').value.toLowerCase();
-                document.querySelectorAll('.hub-opt-row').forEach(row => {
-                    const label = row.getAttribute('data-label').toLowerCase();
-                    row.style.display = (!q || label.includes(q)) ? 'flex' : 'none';
-                });
-            }
-
-            setAllHubs(check) {
-                document.querySelectorAll('#hubOptionsContainer input[type="checkbox"]').forEach(cb => cb.checked = check);
-                this.onGlobalFilterChange();
-            }
-
             onGlobalFilterChange() {
-                const checkedHubs = Array.from(document.querySelectorAll('#hubOptionsContainer input[type="checkbox"]:checked')).map(c => c.value);
-                this.state.filters.hubs = new Set(checkedHubs);
-                this.state.filters.keyword = document.getElementById('globalKeywordSearch')?.value.trim() || '';
-
-                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
-                const hubLabelText = this.state.filterLabels.hub;
-                document.getElementById('hubCountBadge').textContent = checkedHubs.length;
-                document.getElementById('selectedHubLabel').textContent = checkedHubs.length === totalHubCount ? `全部${hubLabelText}` : (checkedHubs.length === 0 ? `未选${hubLabelText} (0)` : `已选 ${checkedHubs.length} 个`);
-
+                this.state.keyword = document.getElementById('globalKeywordSearch')?.value.trim() || '';
                 this.updateActiveChips();
                 this.state.table.page = 1;
                 this.renderTableEngine();
@@ -1949,26 +2000,28 @@ __DASHBOARD_CONFIG_CODE__
                 const badge = document.getElementById('activeFilterBadgeCount');
                 if (!tray || !container) return;
 
-                const labels = this.state.filterLabels;
-                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
                 let chips = [];
-                if (this.state.filters.time !== this.state.defaultFilters.time) {
-                    chips.push({ key: 'time', label: `${labels.time}: ${this.state.filters.timeLabel}` });
-                }
-                if (this.state.filters.hubs.size > 0 && this.state.filters.hubs.size < totalHubCount) {
-                    chips.push({ key: 'hub', label: `${labels.hub}: ${Array.from(this.state.filters.hubs).join(', ')}` });
-                }
-                if (this.state.filters.fleet !== 'ALL') {
-                    chips.push({ key: 'fleet', label: `${labels.fleet}: ${this.state.filters.fleetLabel}` });
-                }
-                if (this.state.filters.route !== 'ALL') {
-                    chips.push({ key: 'route', label: `${labels.route}: ${this.state.filters.routeLabel}` });
-                }
-                if (this.state.filters.keyword) {
-                    chips.push({ key: 'kw', label: `关键词: "${this.state.filters.keyword}"` });
+                this.state.filterDefs.forEach(f => {
+                    const curVal = this.state.filterValues[f.key];
+                    const defVal = this.state.defaultFilterValues[f.key];
+
+                    if (f.type === 'multi-select') {
+                        if (curVal instanceof Set && curVal.size < f.options.length) {
+                            const selectedLabels = f.options.filter(o => curVal.has(o.value)).map(o => o.label);
+                            chips.push({ key: f.key, label: `${f.label}: ${selectedLabels.join(', ')}` });
+                        }
+                    } else {
+                        if (curVal !== defVal && curVal !== 'ALL' && curVal !== '') {
+                            chips.push({ key: f.key, label: `${f.label}: ${this.state.filterLabels[f.key]}` });
+                        }
+                    }
+                });
+
+                if (this.state.keyword) {
+                    chips.push({ key: '_kw', label: `关键词: "${this.state.keyword}"` });
                 }
 
-                badge.textContent = chips.length;
+                if (badge) badge.textContent = chips.length;
                 if (chips.length > 0) {
                     tray.classList.remove('hidden');
                     container.innerHTML = chips.map(c => `
@@ -1983,40 +2036,53 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             removeFilterChip(key) {
-                const def = this.state.defaultFilters;
-                if (key === 'time') this.selectGlobalTime(def.time, def.timeLabel);
-                if (key === 'hub') this.setAllHubs(true);
-                if (key === 'fleet') this.selectGlobalFleet('ALL', def.fleetLabel);
-                if (key === 'route') this.selectGlobalRoute('ALL', def.routeLabel);
-                if (key === 'kw') { document.getElementById('globalKeywordSearch').value = ''; this.onGlobalFilterChange(); }
+                if (key === '_kw') {
+                    const inp = document.getElementById('globalKeywordSearch');
+                    if (inp) inp.value = '';
+                    this.state.keyword = '';
+                    this.onGlobalFilterChange();
+                    return;
+                }
+                const f = this.state.filterDefs.find(d => d.key === key);
+                if (!f) return;
+                if (f.type === 'multi-select') {
+                    this.setAllMultiOptions(key, true);
+                } else {
+                    const defVal = this.state.defaultFilterValues[key];
+                    const defLabel = this.state.defaultFilterLabels[key];
+                    this.selectFilterOption(key, defVal, defLabel);
+                }
             }
 
             resetAllGlobalFilters() {
-                const def = this.state.defaultFilters;
-                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
-                const isTimeDefault = this.state.filters.time === def.time;
-                const isFleetDefault = this.state.filters.fleet === 'ALL';
-                const isRouteDefault = this.state.filters.route === 'ALL';
-                const isSearchDefault = !document.getElementById('globalKeywordSearch')?.value?.trim();
-                const isHubsAll = (!this.state.filters.hubs || this.state.filters.hubs.size === totalHubCount);
-                const isCrossFilterEmpty = !this.state.filters.chartCrossFilter;
+                this.state.filterDefs.forEach(f => {
+                    if (f.type === 'multi-select') {
+                        const allVals = f.options.map(o => o.value);
+                        this.state.filterValues[f.key] = new Set(allVals);
+                        this.state.filterLabels[f.key] = `全部${f.label}`;
+                        const container = document.getElementById(`multiOptionsContainer_${f.key}`);
+                        if (container) container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+                        const labelEl = document.getElementById(`selectedLabel_${f.key}`);
+                        if (labelEl) labelEl.textContent = `全部${f.label}`;
+                        const badgeEl = document.getElementById(`countBadge_${f.key}`);
+                        if (badgeEl) badgeEl.textContent = allVals.length;
+                    } else {
+                        const defVal = this.state.defaultFilterValues[f.key];
+                        const defLabel = this.state.defaultFilterLabels[f.key];
+                        this.state.filterValues[f.key] = defVal;
+                        this.state.filterLabels[f.key] = defLabel;
+                        const labelEl = document.getElementById(`selectedLabel_${f.key}`);
+                        if (labelEl) labelEl.textContent = defLabel;
+                    }
+                });
 
-                const isAlreadyDefault = isTimeDefault && isFleetDefault && isRouteDefault && isSearchDefault && isHubsAll && isCrossFilterEmpty;
-
-                if (isAlreadyDefault) {
-                    this.showToast('当前已处于全局基准视图');
-                    return;
-                }
-
-                this.selectGlobalTime(def.time, def.timeLabel);
-                this.selectGlobalFleet('ALL', def.fleetLabel);
-                this.selectGlobalRoute('ALL', def.routeLabel);
-                if (document.getElementById('globalKeywordSearch')) document.getElementById('globalKeywordSearch').value = '';
-                this.setAllHubs(true);
-                this.state.filters.chartCrossFilter = null;
+                const searchInput = document.getElementById('globalKeywordSearch');
+                if (searchInput) searchInput.value = '';
+                this.state.keyword = '';
+                this.state.chartCrossFilter = null;
                 document.getElementById('tableCrossFilterTray')?.classList.add('hidden');
-                this.updateKPIsAndChartsFromFilters();
-                this.showToast('已重置恢复全局基准视图');
+                this.onGlobalFilterChange();
+                this.showToast('已重置恢复全部基准筛选');
             }
 
             // Cross Filtering
@@ -2181,50 +2247,46 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             getFilteredTableRows() {
-                let rows = [...(this.config.table.rows || [])];
-                const f = this.state.filters;
+                let rows = [...(this.config.table?.rows || [])];
 
-                // Hubs / Region filter
-                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
-                if (f.hubs.size > 0 && f.hubs.size < totalHubCount) {
-                    rows = rows.filter(r => {
-                        const hubVal = r.hub || r.region || r.area || r.zone || r.location || r.segment;
-                        if (hubVal && f.hubs.has(hubVal)) return true;
-                        return Object.values(r).some(v => typeof v === 'string' && f.hubs.has(v));
-                    });
+                // 1. Dynamic Attribute Filtering
+                this.state.filterDefs.forEach(f => {
+                    const curVal = this.state.filterValues[f.key];
+                    if (f.type === 'multi-select') {
+                        if (curVal instanceof Set && curVal.size > 0 && curVal.size < f.options.length) {
+                            rows = rows.filter(r => {
+                                const directVal = r[f.key];
+                                if (directVal !== undefined && curVal.has(String(directVal))) return true;
+                                return Object.entries(r).some(([k, v]) => !k.startsWith('raw') && !k.startsWith('_') && curVal.has(String(v)));
+                            });
+                        }
+                    } else {
+                        if (curVal !== undefined && curVal !== 'ALL' && curVal !== 'all' && curVal !== '') {
+                            const curLabel = this.state.filterLabels[f.key] || '';
+                            rows = rows.filter(r => {
+                                const directVal = r[f.key];
+                                if (directVal !== undefined) {
+                                    return String(directVal).includes(String(curVal)) || (curLabel && String(directVal).includes(curLabel));
+                                }
+                                return Object.entries(r).some(([k, v]) => !k.startsWith('raw') && !k.startsWith('_') && (String(v).includes(String(curVal)) || (curLabel && String(v).includes(curLabel))));
+                            });
+                        }
+                    }
+                });
+
+                // 2. Keyword Filter
+                if (this.state.keyword) {
+                    const q = this.state.keyword.toLowerCase();
+                    rows = rows.filter(r => Object.entries(r).some(([k, v]) => !k.startsWith('raw') && !k.startsWith('_') && String(v).toLowerCase().includes(q)));
                 }
 
-                // Fleet / Format / Segment filter
-                if (f.fleet !== 'ALL') {
-                    rows = rows.filter(r => {
-                        const rowVal = r.fleet || r.format || r.type || r.segment || r.tier || r.category || '';
-                        if (String(rowVal).includes(f.fleet) || (f.fleetLabel && String(rowVal).includes(f.fleetLabel))) return true;
-                        return Object.values(r).some(v => typeof v === 'string' && (v.includes(f.fleet) || (f.fleetLabel && v.includes(f.fleetLabel))));
-                    });
+                // 3. Chart Cross Filter
+                if (this.state.chartCrossFilter) {
+                    const cf = this.state.chartCrossFilter.toLowerCase();
+                    rows = rows.filter(r => Object.entries(r).some(([k, v]) => !k.startsWith('raw') && !k.startsWith('_') && String(v).toLowerCase().includes(cf)));
                 }
 
-                // Route / Category / Channel filter
-                if (f.route !== 'ALL') {
-                    rows = rows.filter(r => {
-                        const rowVal = r.route || r.routeType || r.channel || r.category || r.product || '';
-                        if (String(rowVal).includes(f.route) || (f.routeLabel && String(rowVal).includes(f.routeLabel))) return true;
-                        return Object.values(r).some(v => typeof v === 'string' && (v.includes(f.route) || (f.routeLabel && v.includes(f.routeLabel))));
-                    });
-                }
-
-                // Keyword filter
-                if (f.keyword) {
-                    const q = f.keyword.toLowerCase();
-                    rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
-                }
-
-                // Chart Cross filter
-                if (f.chartCrossFilter) {
-                    const cf = f.chartCrossFilter.toLowerCase();
-                    rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(cf)));
-                }
-
-                // Sort
+                // 4. Table Column Sorting
                 if (this.state.table.sortCol) {
                     const key = this.state.table.sortCol;
                     const dir = this.state.table.sortDir === 'asc' ? 1 : -1;
@@ -2342,8 +2404,8 @@ __DASHBOARD_CONFIG_CODE__
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
-                const exportTitle = (this.config.table?.title || this.config.meta?.title || '业务运营透视表').replace(/[\s/\\:]+/g, '_');\n                a.download = `${exportTitle}_${new Date().toISOString().slice(0,10)}.csv`;
+                const exportTitle = (this.config.table?.title || this.config.meta?.title || '业务运营透视表').replace(/[^a-zA-Z0-9_\\u4e00-\\u9fa5]+/g, '_');
+                a.download = `${exportTitle}_${new Date().toISOString().slice(0,10)}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
                 this.showToast(`已成功导出 ${allRows.length} 条记录至 Excel (CSV)`);
