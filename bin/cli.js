@@ -30,17 +30,17 @@ function printHelp() {
   ================================================
 
   Usage:
-    npx charts-design doctor [--json]                     Verify the local CLI runtime
-    npx charts-design chart --code <code> [options]        Generate single standalone chart component
-    npx charts-design batch "<codes>" [options]           Batch generate chart components for AI assembly
-    npx charts-design dashboard init <dir> [options]       Start an empty composable dashboard workspace
-    npx charts-design dashboard add <kind> <dir> <id> ...  Add one filter, KPI, or chart component
-    npx charts-design dashboard inspect <dir> [--json]     Show a bounded workspace summary
-    npx charts-design dashboard validate <dir> [--strict]  Validate components without rendering
-    npx charts-design dashboard build <dir> -o <file>      Strictly compile the workspace to HTML
-    npx charts-design dashboard --config <config.json>    Assemble full executive dashboard from AI config
-    npx charts-design from-csv <file.csv> [options]        Legacy one-step CSV generation
-    npx charts-design list                                 List all 52 chart taxonomy codes
+    charts-design doctor [--json]                     Verify the local CLI runtime
+    charts-design chart --code <code> [options]        Generate single standalone chart component
+    charts-design batch "<codes>" [options]           Batch generate chart components for AI assembly
+    charts-design dashboard init <dir> [options]       Start an empty composable dashboard workspace
+    charts-design dashboard add <kind> <dir> <id> ...  Add one filter, KPI, or chart component
+    charts-design dashboard inspect <dir> [--json]     Show a bounded workspace summary
+    charts-design dashboard validate <dir> [--strict]  Validate components without rendering
+    charts-design dashboard build <dir> -o <file>      Strictly compile the workspace to HTML
+    charts-design dashboard --config <config.json>    Assemble full executive dashboard from AI config
+    charts-design from-csv <file.csv> [options]        Legacy one-step CSV generation
+    charts-design list                                 List all 52 chart taxonomy codes
 
   Chart Component Options:
     --code,   -c <code>       Chart taxonomy code (e.g. c01, t06, r01, fn01)
@@ -72,22 +72,22 @@ function printHelp() {
 
   Examples:
     # 1. Start small and add one reviewed component at a time
-    npx charts-design dashboard init ./sales-board --title "销售经营看板"
-    npx charts-design dashboard add chart ./sales-board regional-sales --code c01 --title "各区域销售额" --unit "万元" --data-file ./regional-sales.json
-    npx charts-design dashboard validate ./sales-board --strict --json
-    npx charts-design dashboard build ./sales-board --output ./dist/sales.html
+    charts-design dashboard init ./sales-board --title "销售经营看板"
+    charts-design dashboard add chart ./sales-board regional-sales --code c01 --title "各区域销售额" --unit "万元" --data-file ./regional-sales.json
+    charts-design dashboard validate ./sales-board --strict --json
+    charts-design dashboard build ./sales-board --output ./dist/sales.html
 
     # 2. Generate standalone chart
-    npx charts-design chart --code t06 --output ./dist/chart_t06.html --open
+    charts-design chart --code t06 --output ./dist/chart_t06.html --open
 
     # 3. Batch generate atomic charts for visual selection
-    npx charts-design batch "c01,t06,r01,k01" --output ./dist/charts/
+    charts-design batch "c01,t06,r01,k01" --output ./dist/charts/
 
     # 4. Legacy full-config build
-    npx charts-design dashboard --config ./my_analysis.json --output ./dist/report.html --open
+    charts-design dashboard --config ./my_analysis.json --output ./dist/report.html --open
 
     # 5. List all 52 chart taxonomy codes
-    npx charts-design list
+    charts-design list
 `);
 }
 

@@ -9,21 +9,21 @@
 ## 0. 积木式 Dashboard Workspace（推荐）
 
 ```bash
-charts-design dashboard init ./board --title "经营决策看板"
-charts-design dashboard add kpi ./board revenue \
+python3 skills/executive-charts/scripts/dashboard_workspace.py init ./board --title "经营决策看板"
+python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./board revenue \
   --label "营业收入" --value 224 --unit "万元"
-charts-design dashboard add chart ./board regional-sales \
+python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./board regional-sales \
   --code c01 --title "各区域营业收入" --unit "万元" \
   --data-file ./regional-sales.json
-charts-design dashboard inspect ./board --json
-charts-design dashboard validate ./board --strict --json
-charts-design dashboard build ./board --output ./dist/board.html
+python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./board --json
+python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./board --strict --json
+python3 skills/executive-charts/scripts/dashboard_workspace.py build ./board --output ./dist/board.html
 ```
 
 CSV 自动推断先生成可审查草稿，不直接作为最终图表证据：
 
 ```bash
-charts-design dashboard import-csv ./board --csv ./data.csv
+python3 skills/executive-charts/scripts/dashboard_workspace.py import-csv ./board --csv ./data.csv
 ```
 
 组件 schema 与稳定 JSON 输出约定见 [`../references/dashboard-workspace.md`](../references/dashboard-workspace.md)。
@@ -40,19 +40,19 @@ charts-design dashboard import-csv ./board --csv ./data.csv
 ### 常用命令示例
 ```bash
 # 1. 查看全部 52 款图表编号及中文释义
-python scripts/generate_chart.py --list
+python3 skills/executive-charts/scripts/generate_chart.py --list
 
 # 2. 生成单个独立图表 HTML
-python scripts/generate_chart.py --code c01 --output ./dist/chart_c01.html
+python3 skills/executive-charts/scripts/generate_chart.py --code c01 --output ./dist/chart_c01.html
 
 # 3. 自定义图表标题并生成后自动在浏览器中打开
-python scripts/generate_chart.py --code t06 --title "2026年客运总收入与客公里收益走势" --output ./dist/my_t06.html --open
+python3 skills/executive-charts/scripts/generate_chart.py --code t06 --title "2026年客运总收入与客公里收益走势" --output ./dist/my_t06.html --open
 
 # 4. 批量生成全部 52 款独立图表 HTML
-python scripts/generate_chart.py --batch --outdir ./dist/all_charts/
+python3 skills/executive-charts/scripts/generate_chart.py --batch --outdir ./dist/all_charts/
 
 # 5. 打印指定图表的原始 JavaScript ECharts 配置代码片段
-python scripts/generate_chart.py --code r01 --snippet
+python3 skills/executive-charts/scripts/generate_chart.py --code r01 --snippet
 ```
 
 ---
@@ -68,17 +68,17 @@ python scripts/generate_chart.py --code r01 --snippet
 ### 常用命令示例
 ```bash
 # 1. 生成 7 大预设高管看板之一并立即在浏览器中打开
-python scripts/generate_dashboard.py --preset retail_ecommerce --output ./dist/retail.html --open
-python scripts/generate_dashboard.py --preset saas_product --output ./dist/saas_product.html
-python scripts/generate_dashboard.py --preset financial_attribution --output ./dist/financial.html
-python scripts/generate_dashboard.py --preset executive_report --output ./dist/executive_report.html
-python scripts/generate_dashboard.py --preset strategic_matrix --output ./dist/strategic.html
+python3 skills/executive-charts/scripts/generate_dashboard.py --preset retail_ecommerce --output ./dist/retail.html --open
+python3 skills/executive-charts/scripts/generate_dashboard.py --preset saas_product --output ./dist/saas_product.html
+python3 skills/executive-charts/scripts/generate_dashboard.py --preset financial_attribution --output ./dist/financial.html
+python3 skills/executive-charts/scripts/generate_dashboard.py --preset executive_report --output ./dist/executive_report.html
+python3 skills/executive-charts/scripts/generate_dashboard.py --preset strategic_matrix --output ./dist/strategic.html
 
 # 2. 传入自定义业务数据 JSON 配置文件 (100% 任意行业定制)
-python scripts/generate_dashboard.py --config ./custom_retail.json --output ./dist/my_retail.html --open
+python3 skills/executive-charts/scripts/generate_dashboard.py --config ./custom_retail.json --output ./dist/my_retail.html --open
 
 # 3. 自由选择图表编号组合生成专属高管看板
-python scripts/generate_dashboard.py \
+python3 skills/executive-charts/scripts/generate_dashboard.py \
   --charts "c01,t06,k01,r01,fn01,m01,k04,c06" \
   --title "集团核心运营效能与战略财务研判看板" \
   --org "商业智能与运营决算中心" \

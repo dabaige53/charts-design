@@ -20,34 +20,38 @@ board/
 ## Commands
 
 ```bash
-charts-design dashboard init ./board --title "经营决策看板" --org "经营分析部"
+WORKSPACE_SCRIPT="skills/executive-charts/scripts/dashboard_workspace.py"
 
-charts-design dashboard import-csv ./board --csv ./data.csv --title "渠道经营看板"
+python3 "$WORKSPACE_SCRIPT" init ./board --title "经营决策看板" --org "经营分析部"
 
-charts-design dashboard meta set ./board --subtitle "2026 年 7 月" --system "月度经营复盘"
+python3 "$WORKSPACE_SCRIPT" import-csv ./board --csv ./data.csv --title "渠道经营看板"
 
-charts-design dashboard add filter ./board region \
+python3 "$WORKSPACE_SCRIPT" meta set ./board --subtitle "2026 年 7 月" --system "月度经营复盘"
+
+python3 "$WORKSPACE_SCRIPT" add filter ./board region \
   --label "大区" --type multi-select \
   --option east=华东 --option south=华南 \
   --default east --default south
 
-charts-design dashboard add kpi ./board revenue \
+python3 "$WORKSPACE_SCRIPT" add kpi ./board revenue \
   --label "营业收入" --value 224 --unit "万元" --yoy "+12.6% YoY"
 
-charts-design dashboard add kpi ./board gross-margin --from ./gross-margin.json
+python3 "$WORKSPACE_SCRIPT" add kpi ./board gross-margin --from ./gross-margin.json
 
-charts-design dashboard add chart ./board regional-sales \
+python3 "$WORKSPACE_SCRIPT" add chart ./board regional-sales \
   --code c01 --title "各区域营业收入" --unit "万元" \
   --data-file ./regional-sales-data.json
 
-charts-design dashboard add chart ./board revenue-trend --from ./revenue-trend.json
+python3 "$WORKSPACE_SCRIPT" add chart ./board revenue-trend --from ./revenue-trend.json
 
-charts-design dashboard table set ./board --from ./store-table.json
+python3 "$WORKSPACE_SCRIPT" table set ./board --from ./store-table.json
 
-charts-design dashboard inspect ./board --json
-charts-design dashboard validate ./board --strict --json
-charts-design dashboard build ./board --output ./dist/board.html --json
+python3 "$WORKSPACE_SCRIPT" inspect ./board --json
+python3 "$WORKSPACE_SCRIPT" validate ./board --strict --json
+python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html --json
 ```
+
+When the skill is installed outside this repository, set `WORKSPACE_SCRIPT` to the `scripts/dashboard_workspace.py` beside the active `SKILL.md`.
 
 Use `--replace` only when intentionally replacing an existing KPI or chart with the same id.
 

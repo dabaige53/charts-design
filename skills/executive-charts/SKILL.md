@@ -1,58 +1,58 @@
 ---
 name: executive-charts
-description: Build executive business charts and dashboards with the charts-design CLI. Use for chart selection, KPI cards, filters, pivot tables, or dashboard assembly from business data; prefer incremental workspace components and bounded inspection over generated HTML or monolithic configuration.
+description: Build executive business charts and dashboards with the bundled Python scripts. Use for chart selection, KPI cards, filters, pivot tables, or dashboard assembly from business data; prefer incremental workspace components and bounded inspection over generated HTML or monolithic configuration.
 ---
 
 # Executive Charts
 
-Turn business evidence into a restrained executive dashboard. Use the CLI as the command layer and compose the result from small, reviewable building blocks.
+Turn business evidence into a restrained executive dashboard. Run the scripts bundled beside this file and compose the result from small, reviewable building blocks.
 
 ## Route the task
 
-- For one chart, use `charts-design chart` and deliver the generated component.
-- For several candidate charts, use `charts-design batch` only to compare a bounded shortlist.
-- For a dashboard, use the workspace loop below.
-- For an existing workspace, start with `dashboard inspect` and `dashboard validate`.
-- For CSV input, use `dashboard import-csv` as a draft, then review the inferred fields before adding charts.
+- For one chart, run `scripts/generate_chart.py` and deliver the generated component.
+- For several candidate charts, use its bounded batch mode only to compare a shortlist.
+- For a dashboard, run `scripts/dashboard_workspace.py` and use the workspace loop below.
+- For an existing workspace, start with `inspect` and `validate`.
+- For CSV input, use `import-csv` as a draft, then review the inferred fields before adding charts.
 
-Run `npx charts-design ...` when the command is not installed on `PATH`.
+Resolve the directory containing this `SKILL.md` once, then invoke its sibling scripts with `python3`. The bundled scripts are the execution interface; package-manager wrappers are unnecessary.
 
 ## Dashboard workspace loop
 
-1. Verify the tool and discover chart codes:
+1. Discover chart codes without loading generator source or example HTML:
 
    ```bash
-   npx charts-design doctor --json
-   npx charts-design list
+   python3 skills/executive-charts/scripts/generate_chart.py --list
    ```
 
-   Continue when the runtime is ready and the selected code matches the business question.
+   Continue when the selected code matches the business question.
 
 2. Create an empty workspace outside this skill directory:
 
    ```bash
-   npx charts-design dashboard init ./board --title "经营决策看板" --org "经营分析部"
+   python3 skills/executive-charts/scripts/dashboard_workspace.py init ./board \
+     --title "经营决策看板" --org "经营分析部"
    ```
 
-   The workspace is ready when `dashboard inspect --json` reports zero or the intended starting components and no missing files.
+   The workspace is ready when `inspect --json` reports zero or the intended starting components and no missing files.
 
 3. Add one evidence block at a time. Keep each KPI, chart, or table in its own small JSON file; keep filters in the dynamic array managed by the CLI.
 
    ```bash
-   npx charts-design dashboard add kpi ./board revenue \
+   python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./board revenue \
      --label "营业收入" --value 224 --unit "万元"
-   npx charts-design dashboard add chart ./board regional-sales \
+   python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./board regional-sales \
      --code c01 --title "各区域营业收入" --unit "万元" \
      --data-file ./regional-sales.json
    ```
 
-   After each meaningful block, run `dashboard inspect --json`. Add the next block only when the current title, code, data and unit are correct.
+   After each meaningful block, run `inspect --json`. Add the next block only when the current title, code, data and unit are correct.
 
 4. Validate early and build thin slices:
 
    ```bash
-   npx charts-design dashboard validate ./board --strict --json
-   npx charts-design dashboard build ./board --output ./dist/board.html
+   python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./board --strict --json
+   python3 skills/executive-charts/scripts/dashboard_workspace.py build ./board --output ./dist/board.html
    ```
 
    Build after the first useful KPI or chart, then iterate. A dashboard is complete when strict validation passes and every rendered block supports a stated management question.

@@ -12,23 +12,23 @@ CLI workspace 将筛选器、KPI、图表和表格拆成独立小文件。Agent 
 
 ```bash
 # 1. 创建空 workspace，不注入行业案例数据
-npx charts-design dashboard init ./sales-board \
+python3 skills/executive-charts/scripts/dashboard_workspace.py init ./sales-board \
   --title "销售经营看板" --org "经营分析部"
 
 # 2. 每次添加一个指标或图表
-npx charts-design dashboard add kpi ./sales-board revenue \
+python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./sales-board revenue \
   --label "营业收入" --value 224 --unit "万元"
-npx charts-design dashboard add chart ./sales-board regional-sales \
+python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./sales-board regional-sales \
   --code c01 --title "各区域营业收入" --unit "万元" \
   --data-file ./regional-sales.json
 
 # 3. 有界检查、严格校验，再生成 HTML
-npx charts-design dashboard inspect ./sales-board --json
-npx charts-design dashboard validate ./sales-board --strict --json
-npx charts-design dashboard build ./sales-board --output ./dist/sales.html
+python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./sales-board --json
+python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./sales-board --strict --json
+python3 skills/executive-charts/scripts/dashboard_workspace.py build ./sales-board --output ./dist/sales.html
 ```
 
-运行 `npx charts-design doctor --json` 可检查 Node、Python 和 workspace 工具。完整命令与组件 schema 见 [`skills/executive-charts/references/dashboard-workspace.md`](skills/executive-charts/references/dashboard-workspace.md)。
+脚本随 Skill 一起提供，直接由本机 `python3` 运行，无需安装 npm 包。完整命令与组件 schema 见 [`skills/executive-charts/references/dashboard-workspace.md`](skills/executive-charts/references/dashboard-workspace.md)。
 
 ## 人工视觉展示 (Human Showcase)
 
@@ -45,53 +45,30 @@ npx charts-design dashboard build ./sales-board --output ./dist/sales.html
 
 ---
 
-## 安装与使用 (Installation & Usage)
+## 本地脚本使用 (Local Scripts)
 
-### 方式一：npx 零安装直接运行（推荐）
-
-无需 clone 仓库即可运行 CLI（需本机已安装 Python 3.10+）。真实业务看板优先使用上面的 workspace 流程；以下命令保留用于单图、结构预览和旧版兼容：
-
-```bash
-# 安装并运行
-npx charts-design dashboard --preset executive_monthly --output ./monthly.html --open
-
-# 自由组合图表生成自定义看板
-npx charts-design dashboard --charts "c01,t06,k01,r01,fn01,m01" \
-    --title "集团核心运营效能研判看板" --output ./report.html --open
-
-# 生成单图表组件
-npx charts-design chart --code t06 --output ./chart_t06.html --open
-
-# 提取纯 JS ECharts Option 代码片段（直接嵌入 React/Vue）
-npx charts-design chart --code r01 --snippet
-
-# 查看全部 52 款图表编号
-npx charts-design list
-```
-
-### 方式二：Clone 仓库本地使用
+Skill 内置生成脚本，使用本机 Python 直接运行。真实业务看板优先使用上面的 workspace 流程；`generate_dashboard.py` 仅保留整页 preset/config 兼容入口。
 
 ```bash
 git clone https://github.com/dabaige53/charts-design.git
 cd charts-design
 
 # 生成看板
-python skills/executive-charts/scripts/generate_dashboard.py \
+python3 skills/executive-charts/scripts/generate_dashboard.py \
     --preset executive_report --output ./examples/report.html --open
 
 # 生成单图表
-python skills/executive-charts/scripts/generate_chart.py --code t06 --output ./chart_t06.html
+python3 skills/executive-charts/scripts/generate_chart.py --code t06 --output ./chart_t06.html
 ```
 
-### CLI 子命令速查
+### 脚本速查
 
-| 子命令 | 说明 | 示例 |
+| 脚本 / 子命令 | 说明 | 示例 |
 | :--- | :--- | :--- |
-| `doctor` | 检查本地运行时与脚本完整性 | `npx charts-design doctor --json` |
-| `dashboard init/add/inspect/validate/build` | 分步组装并严格编译 dashboard workspace | `npx charts-design dashboard init ./board` |
-| `dashboard` | 生成完整高管看板（筛选栏 + KPI 卡 + 图表矩阵 + 透视表） | `npx charts-design dashboard --preset executive_monthly -o report.html` |
-| `chart` | 生成独立图表组件（带 5+1 工具栏） | `npx charts-design chart --code t06 -o chart.html` |
-| `list` | 终端打印 52 款图表编号与分类 | `npx charts-design list` |
+| `dashboard_workspace.py init/add/inspect/validate/build` | 分步组装并严格编译 dashboard workspace | `python3 skills/executive-charts/scripts/dashboard_workspace.py init ./board` |
+| `generate_dashboard.py` | 兼容生成整页 preset/config 看板 | `python3 skills/executive-charts/scripts/generate_dashboard.py --preset executive_monthly -o report.html` |
+| `generate_chart.py --code` | 生成独立图表组件（带 5+1 工具栏） | `python3 skills/executive-charts/scripts/generate_chart.py --code t06 -o chart.html` |
+| `generate_chart.py --list` | 终端打印 52 款图表编号与分类 | `python3 skills/executive-charts/scripts/generate_chart.py --list` |
 
 ---
 
@@ -119,8 +96,8 @@ python skills/executive-charts/scripts/generate_chart.py --code t06 --output ./c
 
 ```
 charts-design/
-├── bin/                                # npx CLI 入口 (Node.js 薄壳封装)
-│   └── cli.js                         # 自动检测 Python 3 并委派至生成脚本
+├── bin/                                # 可选 Node.js 兼容薄壳
+│   └── cli.js                         # 委派至 Skill 内置 Python 脚本
 ├── skills/                             # 技能库 (包含核心 executive-charts)
 │   └── executive-charts/               # 麦肯锡高管商业图表技能包
 │       ├── SKILL.md                    # 技能标准与强制遵循规范
@@ -138,7 +115,7 @@ charts-design/
 │   └── index.html                      # 案例总览
 ├── tests/                              # 自动化测试代码
 │   └── test_generation.py              # 看板与图表生成回归测试脚本
-├── package.json                        # npm 包配置 (支持 npx charts-design)
+├── package.json                        # npm 包元数据（非推荐运行入口）
 ├── README.md                           # 根目录唯独文档说明
 └── .gitignore
 ```
