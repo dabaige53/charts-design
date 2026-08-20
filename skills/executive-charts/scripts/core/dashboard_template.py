@@ -570,14 +570,34 @@ __DASHBOARD_CONFIG_CODE__
         class StateStore {
             constructor(config) {
                 this.config = config;
-                this.filters = {
-                    time: config.filters.seasons?.[0]?.value || '2026S',
-                    timeLabel: config.filters.seasons?.[0]?.label || '2026夏秋航季',
-                    hubs: new Set((config.filters.hubs || []).map(h => h.value)),
+                const f = config.filters || {};
+                const labels = f.labels || {};
+                this.filterLabels = {
+                    time: labels.time || '统计周期',
+                    hub: labels.hub || '所属区域',
+                    fleet: labels.fleet || '业务业态',
+                    route: labels.route || '业务渠道'
+                };
+                const defaultSeason = (f.seasons || []).find(s => s.default || s.active) || f.seasons?.[0] || {};
+                this.defaultFilters = {
+                    time: defaultSeason.value || defaultSeason.val || 'CURRENT',
+                    timeLabel: defaultSeason.label || '全周期',
+                    hubs: new Set((f.hubs || []).map(h => h.value || h.val || h.name)),
                     fleet: 'ALL',
-                    fleetLabel: '全部机型',
+                    fleetLabel: `全部${this.filterLabels.fleet}`,
                     route: 'ALL',
-                    routeLabel: '全部航线',
+                    routeLabel: `全部${this.filterLabels.route}`,
+                    keyword: '',
+                    chartCrossFilter: null
+                };
+                this.filters = {
+                    time: this.defaultFilters.time,
+                    timeLabel: this.defaultFilters.timeLabel,
+                    hubs: new Set(this.defaultFilters.hubs),
+                    fleet: 'ALL',
+                    fleetLabel: this.defaultFilters.fleetLabel,
+                    route: 'ALL',
+                    routeLabel: this.defaultFilters.routeLabel,
                     keyword: '',
                     chartCrossFilter: null
                 };
@@ -586,8 +606,8 @@ __DASHBOARD_CONFIG_CODE__
                     pageSize: 10,
                     sortCol: null,
                     sortDir: 'asc',
-                    orderedColumns: [...config.table.columns],
-                    visibleCols: new Set(config.table.columns.map(c => c.key))
+                    orderedColumns: [...(config.table?.columns || [])],
+                    visibleCols: new Set((config.table?.columns || []).map(c => c.key))
                 };
                 this.chartInstances = {};
                 this.chartGranularities = {};
@@ -636,75 +656,82 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             renderFilters() {
-                const f = this.config.filters;
+                const f = this.config.filters || {};
+                const labels = this.state.filterLabels;
                 const container = document.getElementById('app-filters');
                 if (!container) return;
 
                 const seasonsList = (f.seasons || []).map(s => `
-                    <div onclick="window.App.selectGlobalTime('${s.value}', '${s.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between">
+                    <div onclick="window.App.selectGlobalTime('${s.value || s.val}', '${s.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between">
                         <span>${s.label}</span>
-                        ${s.active ? '<span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono font-semibold">当前</span>' : ''}
+                        ${(s.active || s.default) ? '<span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono font-semibold">当前</span>' : ''}
                     </div>
                 `).join('');
 
-                const hubsList = (f.hubs || []).map(h => `
-                    <label class="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs hub-opt-row" data-label="${h.name}">
+                const hubsList = (f.hubs || []).map(h => {
+                    const hVal = h.value || h.val || h.name;
+                    const hName = h.name || h.label || h.val;
+                    return `
+                    <label class="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs hub-opt-row" data-label="${hName}">
                         <span class="flex items-center gap-2">
-                            <input type="checkbox" value="${h.value}" checked onchange="window.App.onGlobalFilterChange()" class="rounded text-primary focus:ring-0">
-                            <span class="font-medium">${h.name}</span>
+                            <input type="checkbox" value="${hVal}" checked onchange="window.App.onGlobalFilterChange()" class="rounded text-primary focus:ring-0">
+                            <span class="font-medium">${hName}</span>
                         </span>
                         <span class="text-[10px] text-ink-subtle font-mono">${h.count || ''}</span>
                     </label>
-                `).join('');
+                `;}).join('');
 
                 const fleetsList = (f.fleets || []).map(fl => `
-                    <div onclick="window.App.selectGlobalFleet('${fl.value}', '${fl.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between font-medium">
+                    <div onclick="window.App.selectGlobalFleet('${fl.value || fl.val}', '${fl.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between font-medium">
                         <span>${fl.label}</span>
                     </div>
                 `).join('');
 
                 const routesList = (f.routes || []).map(r => `
-                    <div onclick="window.App.selectGlobalRoute('${r.value}', '${r.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between font-medium">
+                    <div onclick="window.App.selectGlobalRoute('${r.value || r.val}', '${r.label}')" class="px-3 py-2 text-xs text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between font-medium">
                         <span>${r.label}</span>
                     </div>
                 `).join('');
+
+                const sampleCols = (this.config.table?.columns || []).slice(0, 3).map(c => c.title);
+                const searchPh = sampleCols.length > 0 ? `检索${sampleCols.join('、')}...` : '输入关键词全局检索...';
 
                 container.innerHTML = `
                     <div class="max-w-[1600px] mx-auto px-6 py-3">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <!-- Left Controls -->
                             <div class="flex flex-wrap items-center gap-2.5">
-                                <!-- 1. 航季时段 -->
+                                <!-- 1. 时间周期 -->
                                 <div class="relative" id="filterTimeWrap">
                                     <button onclick="window.App.toggleDropdown('timeDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">航季时段:</span>
+                                        <span class="text-ink-subtle">${labels.time}:</span>
                                         <span id="selectedTimeLabel" class="font-semibold text-primary">${this.state.filters.timeLabel}</span>
                                         ${LUCIDE_ICONS.chevronDown}
                                     </button>
                                     <div id="timeDropdownMenu" class="hidden absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
-                                        <div class="px-2.5 py-1 text-[10px] font-bold text-ink-subtle uppercase border-b border-slate-100">选择计划与统计航季</div>
+                                        <div class="px-2.5 py-1 text-[10px] font-bold text-ink-subtle uppercase border-b border-slate-100">选择${labels.time}</div>
                                         ${seasonsList}
                                     </div>
                                 </div>
 
-                                <!-- 2. 枢纽基地 -->
+                                <!-- 2. 所属区域 -->
                                 <div class="relative" id="filterHubWrap">
                                     <button onclick="window.App.toggleDropdown('hubDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">枢纽基地:</span>
-                                        <span id="selectedHubLabel" class="font-semibold text-primary truncate max-w-[130px]">全网基地 (全部)</span>
+                                        <span class="text-ink-subtle">${labels.hub}:</span>
+                                        <span id="selectedHubLabel" class="font-semibold text-primary truncate max-w-[130px]">全部${labels.hub}</span>
                                         <span id="hubCountBadge" class="bg-primary text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">${f.hubs?.length || 4}</span>
                                         ${LUCIDE_ICONS.chevronDown}
                                     </button>
                                     <div id="hubDropdownMenu" class="hidden absolute top-full left-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-2.5 z-50 space-y-2">
                                         <div class="relative">
-                                            <input type="text" id="hubSearchInput" oninput="window.App.filterHubDropdownList()" placeholder="搜索枢纽基地/机场..." class="w-full text-xs pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 rounded text-ink focus:outline-none focus:border-primary focus:bg-white">
+                                            <input type="text" id="hubSearchInput" oninput="window.App.filterHubDropdownList()" placeholder="搜索${labels.hub}..." class="w-full text-xs pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 rounded text-ink focus:outline-none focus:border-primary focus:bg-white">
                                             <svg class="w-3.5 h-3.5 text-ink-subtle absolute left-2 top-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                         </div>
                                         <div class="flex items-center justify-between text-[11px] text-ink-subtle pb-1 border-b border-slate-100">
                                             <button onclick="window.App.setAllHubs(true)" class="hover:text-primary font-medium">全选</button>
                                             <span class="text-slate-300">|</span>
                                             <button onclick="window.App.setAllHubs(false)" class="hover:text-primary font-medium">清空</button>
-                                            <span class="ml-auto text-[10px] text-ink-subtle">四大地理区</span>
+                                            <span class="ml-auto text-[10px] text-ink-subtle">多维区域</span>
                                         </div>
                                         <div class="space-y-1 max-h-44 overflow-y-auto custom-scrollbar" id="hubOptionsContainer">
                                             ${hubsList}
@@ -712,10 +739,10 @@ __DASHBOARD_CONFIG_CODE__
                                     </div>
                                 </div>
 
-                                <!-- 3. 机队机型 -->
+                                <!-- 3. 业务业态 -->
                                 <div class="relative" id="filterFleetWrap">
                                     <button onclick="window.App.toggleDropdown('fleetDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">机队机型:</span>
+                                        <span class="text-ink-subtle">${labels.fleet}:</span>
                                         <span id="selectedFleetLabel" class="font-semibold text-primary truncate max-w-[120px]">${this.state.filters.fleetLabel}</span>
                                         ${LUCIDE_ICONS.chevronDown}
                                     </button>
@@ -724,10 +751,10 @@ __DASHBOARD_CONFIG_CODE__
                                     </div>
                                 </div>
 
-                                <!-- 4. 航线网络 -->
+                                <!-- 4. 业务渠道/品类 -->
                                 <div class="relative" id="filterRouteWrap">
                                     <button onclick="window.App.toggleDropdown('routeDropdownMenu', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
-                                        <span class="text-ink-subtle">航线网络:</span>
+                                        <span class="text-ink-subtle">${labels.route}:</span>
                                         <span id="selectedRouteLabel" class="font-semibold text-primary truncate max-w-[120px]">${this.state.filters.routeLabel}</span>
                                         ${LUCIDE_ICONS.chevronDown}
                                     </button>
@@ -739,7 +766,7 @@ __DASHBOARD_CONFIG_CODE__
                                 <!-- 5. 关键词搜索 (带智能推荐下拉面板) -->
                                 <div class="relative" id="globalSearchWrap">
                                     <div class="relative flex items-center">
-                                        <input type="text" id="globalKeywordSearch" onfocus="window.App.showSearchSuggestions()" oninput="window.App.onSearchInput(this.value)" onkeydown="window.App.onSearchKeyDown(event)" placeholder="检索航线、代码、机长..." class="h-[32px] w-48 text-xs pl-7 pr-7 bg-slate-50 border border-slate-200 rounded-md text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary focus:bg-white focus:w-64 transition-all" autocomplete="off">
+                                        <input type="text" id="globalKeywordSearch" onfocus="window.App.showSearchSuggestions()" oninput="window.App.onSearchInput(this.value)" onkeydown="window.App.onSearchKeyDown(event)" placeholder="${searchPh}" class="h-[32px] w-48 text-xs pl-7 pr-7 bg-slate-50 border border-slate-200 rounded-md text-ink placeholder:text-ink-subtle focus:outline-none focus:border-primary focus:bg-white focus:w-64 transition-all" autocomplete="off">
                                         ${LUCIDE_ICONS.search}
                                         <button id="clearSearchBtn" onclick="window.App.clearSearchKeyword(event)" class="hidden absolute right-2 w-4 h-4 rounded-full bg-slate-200 hover:bg-slate-300 text-ink text-[10px] font-bold flex items-center justify-center transition-colors">✕</button>
                                     </div>
@@ -1091,7 +1118,7 @@ __DASHBOARD_CONFIG_CODE__
                     <div class="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
                         <div class="flex items-center gap-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0"></span>
-                            <h3 class="text-sm font-bold text-primary-strong tracking-tight">${tableCfg.title || '全网核心航线与机队运营效能多维透视表'}</h3>
+                            <h3 class="text-sm font-bold text-primary-strong tracking-tight">${tableCfg.title || '全要素业务运营效能多维透视表'}</h3>
                             
                         </div>
                         <div class="flex items-center gap-2">
@@ -1172,23 +1199,37 @@ __DASHBOARD_CONFIG_CODE__
 
             renderExplanationDialogContent(chartKey, explanations) {
                 const cardEl = document.querySelector(`[data-explain-chart="${chartKey}"]`)?.closest('.section-card');
-                const defaultTitle = cardEl?.querySelector('h3')?.textContent || cardEl?.querySelector('.text-ink-muted')?.textContent || '民航业务运营指标说明';
+                const defaultTitle = cardEl?.querySelector('h3')?.textContent || cardEl?.querySelector('.text-ink-muted')?.textContent || '业务经营分析指标说明';
 
-                const exp = explanations?.[chartKey] || {
-                    title: defaultTitle,
-                    overview: "反映民航航空集团核心业务运营及财务决算多维指标，辅助管理层开展战略研判与精细化运营决策。",
-                    type: "咨询级高管指标",
-                    period: "当前决算考核周期",
-                    comparison: "按集团统一管理会计口径",
-                    structure: {
-                        xAxis: { name: "统计维度", meaning: "业务时间或分类维度", range: "全网范围" },
-                        yAxis: { name: "指标量纲", meaning: "绝对金额或比率", range: "自适应区间" },
-                        series: [{ name: "实际执行序列", desc: "业务实际经营数据" }]
-                    },
-                    metrics: [
-                        { name: "核心业务指标", definition: "衡量该运营维度的关键量化指标。", formula: "∑ 各航段实际值 ÷ 目标基准数 × 100%", rule: "遵循中国民航总局与管理会计决算标准。" }
-                    ]
-                };
+                const chartCfg = (this.config.charts || []).find(c => c.code === chartKey || c.id === chartKey || c.explainKey === chartKey);
+                const rawExp = explanations?.[chartKey] || (chartCfg ? explanations?.[chartCfg.code] : null) || {};
+
+                const expTitle = rawExp.title || chartCfg?.title || defaultTitle;
+                const expOverview = rawExp.overview || chartCfg?.desc || `${expTitle}：聚焦业务关键量化指标的多维演变、构成分布与核心效能，辅助管理层开展战略研判与运营决算。`;
+                const expType = rawExp.type || "高管经营分析图表";
+                const expPeriod = rawExp.period || this.state.filters.timeLabel || "报告考核期";
+                const expComparison = rawExp.comparison || "按企业统一经营管理会计口径";
+
+                let structure = rawExp.structure;
+                if (!structure || !structure.xAxis || !structure.yAxis) {
+                    structure = {
+                        xAxis: { name: "统计维度", meaning: "业务时间序列、分类层级或组织架构单元", range: "全量口径范围" },
+                        yAxis: { name: "核心量纲", meaning: "业务结算金额 (万元/亿元) 或比率指标 (%)", range: "自适应区间" },
+                        series: [{ name: "执行数据序列", desc: "业务实际经营核算结果" }]
+                    };
+                }
+
+                let metrics = rawExp.metrics;
+                if (!metrics || metrics.length === 0) {
+                    metrics = [
+                        {
+                            name: expTitle,
+                            definition: expOverview,
+                            formula: "∑ 各业务单元实际发生值 ÷ 考核基准数 × 100%",
+                            rule: "遵循企业经营管理会计与统计决算标准规范，定期开展异常波动核验。"
+                        }
+                    ];
+                }
 
                 let html = `
                     <header class="exp-dialog-topbar">
@@ -1196,25 +1237,22 @@ __DASHBOARD_CONFIG_CODE__
                             <span class="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
                                 ${LUCIDE_ICONS.info}
                             </span>
-                            <h3 class="text-sm font-bold text-primary-strong truncate">${exp.title || defaultTitle}</h3>
+                            <h3 class="text-sm font-bold text-primary-strong truncate">${expTitle}</h3>
                         </div>
                         <button id="closeExplainModalBtn" class="dialog-close w-7 h-7 rounded-md flex items-center justify-center text-ink-subtle hover:bg-slate-100 hover:text-ink cursor-pointer transition-colors" aria-label="关闭">
                             ${LUCIDE_ICONS.close}
                         </button>
                     </header>
-                    <div class="exp-dialog-body custom-scrollbar">
+                    <div class="exp-dialog-body custom-scrollbar space-y-3">
                         <div class="exp-overview-box">
-                            <p class="text-xs text-ink-muted leading-relaxed m-0">${exp.overview || ""}</p>
+                            <p class="text-xs text-ink leading-relaxed m-0">${expOverview}</p>
                             <div class="exp-specs-strip">
-                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">指标/图表类型:</strong>${exp.type || "分析图表"}</span>
-                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">统计分析周期:</strong>${exp.period || "报告期"}</span>
-                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">对标决策基准:</strong>${exp.comparison || "按业务口径"}</span>
+                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">指标/图表类型:</strong>${expType}</span>
+                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">统计分析周期:</strong>${expPeriod}</span>
+                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">对标决策基准:</strong>${expComparison}</span>
                             </div>
                         </div>
-                `;
 
-                if (exp.structure && exp.structure.xAxis && exp.structure.yAxis) {
-                    html += `
                         <div class="border border-slate-200 rounded-lg p-3.5 bg-white space-y-2.5">
                             <div class="text-xs font-bold text-primary flex items-center gap-1.5">
                                 <span class="w-4 h-4 text-primary inline-flex items-center justify-center">${LUCIDE_ICONS.layers}</span>
@@ -1222,19 +1260,19 @@ __DASHBOARD_CONFIG_CODE__
                             </div>
                             <div class="exp-axis-grid">
                                 <div class="exp-axis-cell">
-                                    <div class="font-bold text-primary-strong mb-1">X 轴 · ${exp.structure.xAxis.name}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">业务含义:</span>${exp.structure.xAxis.meaning}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">覆盖范围:</span>${exp.structure.xAxis.range}</div>
+                                    <div class="font-bold text-primary-strong mb-1">X 轴 · ${structure.xAxis.name}</div>
+                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">业务含义:</span>${structure.xAxis.meaning}</div>
+                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">覆盖范围:</span>${structure.xAxis.range}</div>
                                 </div>
                                 <div class="exp-axis-cell">
-                                    <div class="font-bold text-primary-strong mb-1">Y 轴 · ${exp.structure.yAxis.name}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">业务含义:</span>${exp.structure.yAxis.meaning}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">量纲刻度:</span>${exp.structure.yAxis.range}</div>
+                                    <div class="font-bold text-primary-strong mb-1">Y 轴 · ${structure.yAxis.name}</div>
+                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">业务含义:</span>${structure.yAxis.meaning}</div>
+                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">量纲刻度:</span>${structure.yAxis.range}</div>
                                 </div>
                             </div>
-                            ${exp.structure.series && exp.structure.series.length ? `
+                            ${structure.series && structure.series.length ? `
                                 <div class="flex flex-wrap gap-2 pt-1">
-                                    ${exp.structure.series.map(s => `
+                                    ${structure.series.map(s => `
                                         <div class="inline-flex items-center gap-1 text-[11px] bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
                                             <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
                                             <span class="font-semibold text-ink">${s.name}</span>
@@ -1244,18 +1282,14 @@ __DASHBOARD_CONFIG_CODE__
                                 </div>
                             ` : ""}
                         </div>
-                    `;
-                }
 
-                if (exp.metrics && exp.metrics.length) {
-                    html += `
                         <div class="space-y-2">
                             <div class="text-xs font-bold text-primary flex items-center gap-1.5">
                                 <span class="w-4 h-4 text-primary inline-flex items-center justify-center">${LUCIDE_ICONS.calculator}</span>
                                 <span>核心指标业务口径与数学公式</span>
                             </div>
                             <div class="space-y-2">
-                                ${exp.metrics.map(m => `
+                                ${metrics.map(m => `
                                     <div class="exp-metric-card space-y-1.5">
                                         <div class="flex items-center justify-between">
                                             <span class="text-xs font-bold text-primary-strong">${m.name}</span>
@@ -1270,7 +1304,7 @@ __DASHBOARD_CONFIG_CODE__
                                         </div>
                                         ${m.rule ? `
                                             <div class="text-xs flex items-baseline gap-2">
-                                                <span class="text-ink-subtle w-16 shrink-0 text-[11px]">判定规则</span>
+                                                <span class="text-ink-subtle w-16 shrink-0 text-[11px]">治理规则</span>
                                                 <span class="text-ink-muted text-[11.5px] leading-relaxed">${m.rule}</span>
                                             </div>
                                         ` : ""}
@@ -1278,10 +1312,6 @@ __DASHBOARD_CONFIG_CODE__
                                 `).join("")}
                             </div>
                         </div>
-                    `;
-                }
-
-                html += `
                     </div>
                     <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
                         <button id="closeExplainModalFooterBtn" type="button" class="px-4 py-1.5 bg-primary text-white text-xs font-semibold rounded-md hover:bg-primary-strong transition-colors cursor-pointer shadow-xs">我知道了</button>
@@ -1682,7 +1712,7 @@ __DASHBOARD_CONFIG_CODE__
 
             // Search Autocomplete Suggestions
             showSearchSuggestions() {
-                const query = (document.getElementById('globalKeywordSearch')?.value || '').trim();
+                const query = document.getElementById('globalKeywordSearch')?.value.trim();
                 const dropdown = document.getElementById('searchSuggestionsDropdown');
                 const content = document.getElementById('searchSuggestionsContent');
                 if (!dropdown || !content) return;
@@ -1691,71 +1721,59 @@ __DASHBOARD_CONFIG_CODE__
                 document.getElementById('colDrawerMenu')?.classList.add('hidden');
 
                 if (!query) {
+                    const rows = this.config.table?.rows || [];
+                    const cols = this.config.table?.columns || [];
+                    const catCols = cols.filter(c => ['left', 'center'].includes(c.align || 'left') && !c.key.includes('id') && !c.key.includes('time')).slice(0, 4);
+
+                    let sectionsHtml = '';
+                    catCols.forEach(col => {
+                        const vals = Array.from(new Set(rows.map(r => String(r[col.key] || '')).filter(v => v && v.length < 25))).slice(0, 6);
+                        if (vals.length > 0) {
+                            sectionsHtml += `
+                                <div>
+                                    <div class="text-[10px] text-ink-subtle font-medium mb-1">🏷️ ${col.title}</div>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        ${vals.map(item => `
+                                            <button type="button" onclick="window.App.applySearchKeyword('${item.replace(/'/g, "\\'")}')" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-primary hover:text-white text-ink transition-colors text-[11px]">${item}</button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+
                     content.innerHTML = `
                         <div class="space-y-2.5">
                             <div class="text-[11px] font-bold text-primary flex items-center justify-between pb-1 border-b border-slate-100">
-                                <span class="flex items-center gap-1"><span>🔥</span> 热门快捷检索推荐</span>
+                                <span class="flex items-center gap-1"><span>🔥</span> 快捷维度检索推荐</span>
                                 <span class="text-[10px] text-ink-subtle font-normal">点击即刻筛选</span>
                             </div>
-                            <div>
-                                <div class="text-[10px] text-ink-subtle font-medium mb-1">🛫 标杆商务/国际航线</div>
-                                <div class="flex flex-wrap gap-1.5">
-                                    ${['京沪黄金快线', '京广商务线', '上海纽约', '上海巴黎', '成都洛杉矶', '沪深商务快线', '沪穗国产大飞机'].map(item => `
-                                        <button type="button" onclick="window.App.applySearchKeyword('${item}')" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-primary hover:text-white text-ink transition-colors text-[11px]">${item}</button>
-                                    `).join('')}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-[10px] text-ink-subtle font-medium mb-1">✈️ 执飞机型</div>
-                                <div class="flex flex-wrap gap-1.5">
-                                    ${['A350-900', 'B787-9', 'C919', 'B777-300ER', 'A321neo'].map(item => `
-                                        <button type="button" onclick="window.App.applySearchKeyword('${item}')" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-primary hover:text-white text-ink transition-colors text-[11px]">${item}</button>
-                                    `).join('')}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-[10px] text-ink-subtle font-medium mb-1">👨‍✈️ 标杆机长</div>
-                                <div class="flex flex-wrap gap-1.5">
-                                    ${['张建国', '沈伟', '林海', '钱程', '吴航', '许峰'].map(item => `
-                                        <button type="button" onclick="window.App.applySearchKeyword('${item}')" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-primary hover:text-white text-ink transition-colors text-[11px]">${item}</button>
-                                    `).join('')}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-[10px] text-ink-subtle font-medium mb-1">📍 基地 & 评级</div>
-                                <div class="flex flex-wrap gap-1.5">
-                                    ${['华东基地', '北方基地', '华南基地', '西南基地', 'S 级', 'A 级'].map(item => `
-                                        <button type="button" onclick="window.App.applySearchKeyword('${item}')" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-primary hover:text-white text-ink transition-colors text-[11px]">${item}</button>
-                                    `).join('')}
-                                </div>
-                            </div>
+                            ${sectionsHtml || '<div class="text-xs text-ink-subtle py-2 text-center">输入任意关键词进行多维全局过滤</div>'}
                         </div>
                     `;
                 } else {
                     const q = query.toLowerCase();
-                    const allRows = this.config.table.rows || [];
+                    const allRows = this.config.table?.rows || [];
+                    const cols = this.config.table?.columns || [];
+                    const colMap = {};
+                    cols.forEach(c => { colMap[c.key] = c.title; });
                     const matchedItems = [];
                     const seen = new Set();
 
                     allRows.forEach(r => {
-                        ['name', 'code', 'captain', 'fleet', 'hub', 'routeType', 'rating'].forEach(key => {
+                        Object.keys(r).forEach(key => {
+                            if (key.startsWith('raw') || key.startsWith('_')) return;
                             const val = String(r[key] || '');
-                            if (val.toLowerCase().includes(q) && !seen.has(val)) {
+                            if (val && val.toLowerCase().includes(q) && !seen.has(val)) {
                                 seen.add(val);
-                                let tag = '航线';
-                                if (key === 'code') tag = '代码';
-                                else if (key === 'captain') tag = '机长';
-                                else if (key === 'fleet') tag = '机型';
-                                else if (key === 'hub') tag = '基地';
-                                else if (key === 'routeType') tag = '航网';
-                                else if (key === 'rating') tag = '评级';
-                                matchedItems.push({ val, tag, routeName: r.name });
+                                const tag = colMap[key] || '维度';
+                                matchedItems.push({ val, tag, rowName: r.name || r.title || r.code || '' });
                             }
                         });
                     });
 
                     if (matchedItems.length === 0) {
-                        content.innerHTML = `<div class="py-4 text-center text-ink-subtle text-xs">未找到匹配「${query}」的航线或指标</div>`;
+                        content.innerHTML = `<div class="py-4 text-center text-ink-subtle text-xs">未找到匹配「${query}」的数据记录</div>`;
                     } else {
                         content.innerHTML = `
                             <div class="space-y-1">
@@ -1865,8 +1883,10 @@ __DASHBOARD_CONFIG_CODE__
                 this.state.filters.hubs = new Set(checkedHubs);
                 this.state.filters.keyword = document.getElementById('globalKeywordSearch')?.value.trim() || '';
 
+                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
+                const hubLabelText = this.state.filterLabels.hub;
                 document.getElementById('hubCountBadge').textContent = checkedHubs.length;
-                document.getElementById('selectedHubLabel').textContent = checkedHubs.length === 4 ? '全网基地 (全部)' : (checkedHubs.length === 0 ? '未选基地 (0)' : `已选 ${checkedHubs.length} 个基地`);
+                document.getElementById('selectedHubLabel').textContent = checkedHubs.length === totalHubCount ? `全部${hubLabelText}` : (checkedHubs.length === 0 ? `未选${hubLabelText} (0)` : `已选 ${checkedHubs.length} 个`);
 
                 this.updateActiveChips();
                 this.state.table.page = 1;
@@ -1877,15 +1897,9 @@ __DASHBOARD_CONFIG_CODE__
             updateKPIsAndChartsFromFilters() {
                 const rows = this.getFilteredTableRows();
                 const allRows = this.config.table?.rows || [];
-                const totalRev = rows.reduce((sum, r) => sum + (parseFloat(r.rawRevenue) || parseFloat(r.revenue) || 0), 0);
-                const allRev = allRows.reduce((sum, r) => sum + (parseFloat(r.rawRevenue) || parseFloat(r.revenue) || 0), 0);
-                const revScale = allRev > 0 ? (totalRev / allRev) : 1.0;
-                const avgPlf = rows.length > 0 ? (rows.reduce((sum, r) => sum + (parseFloat(r.rawPlf) || 0), 0) / rows.length) : 86.8;
-                const avgRask = rows.length > 0 ? (rows.reduce((sum, r) => sum + (parseFloat(r.rawRask) || 0), 0) / rows.length) : 0.5420;
-                const totalPax = rows.reduce((sum, r) => sum + (parseFloat(r.pax) || 0), 0);
                 const isFiltered = rows.length < allRows.length;
 
-                // 1. Dynamically update KPI Cards in the DOM
+                // 1. Dynamically update KPI Cards
                 if (rows.length > 0) {
                     (this.config.kpis || []).forEach(kpi => {
                         const kpiCard = document.querySelector(`[data-explain-chart="${kpi.explainKey}"]`)?.closest('.section-card');
@@ -1895,58 +1909,13 @@ __DASHBOARD_CONFIG_CODE__
                         if (!valEl) return;
 
                         if (!kpi._origValue) kpi._origValue = kpi.value;
-
                         if (!isFiltered) {
                             valEl.textContent = kpi._origValue;
-                        } else {
-                            if (kpi.id.includes('rev') || kpi.id.includes('ebitda') || kpi.id.includes('cost') || kpi.id.includes('ancillary')) {
-                                valEl.textContent = `¥${totalRev.toFixed(2)} 亿`;
-                            } else if (kpi.id.includes('plf') || kpi.id.includes('otp') || kpi.id.includes('rate') || kpi.id.includes('ratio')) {
-                                valEl.textContent = `${avgPlf.toFixed(1)}%`;
-                            } else if (kpi.id.includes('rask') || kpi.id.includes('cask')) {
-                                valEl.textContent = `¥${avgRask.toFixed(4)}`;
-                            } else if (kpi.id.includes('flights') || kpi.id.includes('pax') || kpi.id.includes('members')) {
-                                valEl.textContent = `${Math.round(totalPax * 10).toLocaleString()} 架次`;
-                            }
                         }
-                    });
-
-                    // Dynamic Sparkline scaling for mc03
-                    (this.config.kpis || []).forEach(kpi => {
-                        if (kpi.type === 'mc03') {
-                            const inst = this.state.chartInstances[`kpi-spark-${kpi.id}`];
-                            if (inst && kpi.sparkData) {
-                                const factor = isFiltered ? (avgPlf / 86.8) : 1.0;
-                                const updatedData = kpi.sparkData.map(v => +(v * factor).toFixed(1));
-                                inst.setOption({
-                                    yAxis: {
-                                        min: Math.floor(Math.min(...updatedData) * 0.95),
-                                        max: Math.ceil(Math.max(...updatedData) * 1.05)
-                                    },
-                                    series: [{ data: updatedData }]
-                                });
-                            }
-                        }
-                        if (kpi.type === 'mc05') {
-                            const inst = this.state.chartInstances[`kpi-gauge-${kpi.id}`];
-                            if (inst) {
-                                const otpVal = rows.length > 0 ? +(rows.reduce((sum, r) => sum + (parseFloat(r.rawOtp) || 92.4), 0) / rows.length).toFixed(1) : 92.4;
-                                inst.setOption({
-                                    series: [{ data: [{ value: isFiltered ? otpVal : (parseFloat(kpi.value) || 92.4) }] }]
-                                });
-                            }
-                        }
-                    });
-                } else {
-                    // No matching records
-                    (this.config.kpis || []).forEach(kpi => {
-                        const kpiCard = document.querySelector(`[data-explain-chart="${kpi.explainKey}"]`)?.closest('.section-card');
-                        const valEl = kpiCard?.querySelector('.font-mono.tabular-nums');
-                        if (valEl) valEl.textContent = '¥0.00 亿';
                     });
                 }
 
-                // 2. Dynamically re-compute and re-render data for ALL charts
+                // 2. Dynamically update Charts (Generic & Clean)
                 const charts = this.config.charts || [];
                 charts.forEach(chartCfg => {
                     const code = chartCfg.code;
@@ -1955,236 +1924,10 @@ __DASHBOARD_CONFIG_CODE__
                     const gran = this.state.chartGranularities[code] || 'month';
 
                     try {
-                        if (code === 'c01') {
-                            // 基地枢纽对比 (Hub Column)
-                            const hubMap = { '华东基地': 0, '华南基地': 0, '北方基地': 0, '西南基地': 0 };
-                            rows.forEach(r => {
-                                const h = r.hub || '华东基地';
-                                if (hubMap[h] !== undefined) hubMap[h] += (parseFloat(r.rawRevenue) || 0);
-                            });
-                            const hubCategories = ['华东基地', '华南基地', '北方基地', '西南基地'].filter(h => !isFiltered || hubMap[h] > 0);
-                            const hubValues = hubCategories.map(h => +hubMap[h].toFixed(2));
-                            inst.setOption({
-                                xAxis: { data: hubCategories.length > 0 ? hubCategories : ['无匹配基地'] },
-                                yAxis: { max: Math.max(1.5, Math.ceil(Math.max(...hubValues, 1) * 1.25)) },
-                                series: [{ data: hubValues.length > 0 ? hubValues : [0] }]
-                            });
-                        } else if (code === 'c02') {
-                            // 机型创收排行 (Fleet Bar)
-                            const fleetMap = {};
-                            rows.forEach(r => {
-                                const f = r.fleet.split(' ')[0];
-                                fleetMap[f] = (fleetMap[f] || 0) + (parseFloat(r.rawRevenue) || 0);
-                            });
-                            const sortedFleets = Object.keys(fleetMap).sort((a, b) => fleetMap[a] - fleetMap[b]);
-                            const fleetRevs = sortedFleets.map(f => +fleetMap[f].toFixed(2));
-                            inst.setOption({
-                                yAxis: { data: sortedFleets.length > 0 ? sortedFleets : ['无匹配机型'] },
-                                xAxis: { max: Math.max(1.0, Math.ceil(Math.max(...fleetRevs, 0.5) * 1.25)) },
-                                series: [{ data: fleetRevs.length > 0 ? fleetRevs : [0] }]
-                            });
-                        } else if (code === 'c08') {
-                            // 国内 vs 国际基地对比 (Butterfly Bar)
-                            const hubDomestic = { '华东基地': 0, '华南基地': 0, '北方基地': 0, '西南基地': 0 };
-                            const hubIntl = { '华东基地': 0, '华南基地': 0, '北方基地': 0, '西南基地': 0 };
-                            rows.forEach(r => {
-                                const h = r.hub;
-                                if (r.routeType.includes('国际')) {
-                                    if (hubIntl[h] !== undefined) hubIntl[h] += (parseFloat(r.rawRevenue) || 0);
-                                } else {
-                                    if (hubDomestic[h] !== undefined) hubDomestic[h] += (parseFloat(r.rawRevenue) || 0);
-                                }
-                            });
-                            const activeH = ['华东基地', '华南基地', '北方基地', '西南基地'].filter(h => !isFiltered || (hubDomestic[h] + hubIntl[h]) > 0);
-                            inst.setOption({
-                                yAxis: [{ data: activeH }, { data: activeH }],
-                                series: [
-                                    { data: activeH.map(h => +hubDomestic[h].toFixed(2)) },
-                                    { data: activeH.map(h => +hubIntl[h].toFixed(2)) }
-                                ]
-                            });
-                        } else if (code === 't06') {
-                            // 季度/月度总收入与收益走势 (Combo Chart)
-                            const origData = chartCfg.data[gran] || chartCfg.data.month;
-                            const scale = isFiltered ? Math.max(0.15, revScale) : 1.0;
-                            const revData = origData.revenue.map(v => +(v * scale).toFixed(2));
-                            const maxVal = Math.max(...revData);
-                            inst.setOption({
-                                yAxis: [
-                                    { max: Math.max(0.4, Math.ceil(maxVal * 1.25 * 10) / 10) },
-                                    { max: 40 }
-                                ],
-                                series: [
-                                    { data: revData },
-                                    { data: origData.yieldGrowth }
-                                ]
-                            });
-                        } else if (code === 't01') {
-                            // RPK 月度周转量 (Line Chart)
-                            const origData = chartCfg.data[gran] || chartCfg.data.month;
-                            const scale = isFiltered ? Math.max(0.2, revScale) : 1.0;
-                            const rpkData = origData.rpk.map(v => +(v * scale).toFixed(1));
-                            inst.setOption({
-                                yAxis: { max: Math.ceil(Math.max(...rpkData, 10) * 1.15) },
-                                series: [{ data: rpkData }]
-                            });
-                        } else if (code === 't04') {
-                            // 业务收入结构演进 (Stacked Area)
-                            const origData = chartCfg.data[gran] || chartCfg.data.month;
-                            const factor = isFiltered ? Math.max(0.2, revScale) : 1.0;
-                            inst.setOption({
-                                series: [
-                                    { data: origData.ancillary.map(v => +(v * factor).toFixed(2)) },
-                                    { data: origData.cargo.map(v => +(v * factor).toFixed(2)) },
-                                    { data: origData.paxMain.map(v => +(v * factor).toFixed(2)) }
-                                ]
-                            });
-                        } else if (code === 'r01') {
-                            // 航线战略四象限 (Quadrant Scatter)
-                            const scatterData = rows.map(r => {
-                                const growth = r.rawYoy || 12.0;
-                                const margin = +(((r.rawRask - r.rawCask) / r.rawCask) * 100).toFixed(1);
-                                return [growth, margin, r.name.split(' ')[0]];
-                            });
-                            inst.setOption({
-                                series: [{ data: scatterData }]
-                            });
-                        } else if (code === 'c06') {
-                            // 重点航线客座率跃升跨度 (Dumbbell)
-                            const targetRoutes = rows.slice(0, 6);
-                            const names = targetRoutes.map(r => r.name.split(' ')[0]);
-                            const basePlf = targetRoutes.map(r => +(r.rawPlf * 0.88).toFixed(1));
-                            const currPlf = targetRoutes.map(r => r.rawPlf);
-                            inst.setOption({
-                                yAxis: { data: names.length > 0 ? names : ['无航线'] },
-                                series: [
-                                    { data: basePlf },
-                                    { data: currPlf }
-                                ]
-                            });
-                        } else if (code === 'k01') {
-                            // 客群分类占比 (Donut)
-                            const totalP = Math.max(1, totalPax);
-                            const bz = +(totalP * 0.42).toFixed(1);
-                            const ls = +(totalP * 0.28).toFixed(1);
-                            const fm = +(totalP * 0.18).toFixed(1);
-                            const gv = +(totalP * 0.12).toFixed(1);
-                            inst.setOption({
-                                series: [{
-                                    data: [
-                                        { value: bz, name: '公商务出行' },
-                                        { value: ls, name: '休闲度假' },
-                                        { value: fm, name: '探亲求学' },
-                                        { value: gv, name: '团队政务' }
-                                    ]
-                                }]
-                            });
-                        } else if (code === 'k05') {
-                            // 国内 vs 国际占比 (Pie)
-                            let domR = 0, intlR = 0;
-                            rows.forEach(r => {
-                                if (r.routeType.includes('国际')) intlR += (parseFloat(r.rawRevenue) || 0);
-                                else domR += (parseFloat(r.rawRevenue) || 0);
-                            });
-                            if (domR === 0 && intlR === 0) { domR = 34.9; intlR = 13.6; }
-                            inst.setOption({
-                                series: [{
-                                    data: [
-                                        { value: +domR.toFixed(2), name: '国内干支线' },
-                                        { value: +intlR.toFixed(2), name: '国际及地区' }
-                                    ]
-                                }]
-                            });
-                        } else if (code === 'fn01') {
-                            // EBITDA 利润瀑布图 (Waterfall)
-                            const scale = isFiltered ? Math.max(0.2, revScale) : 1.0;
-                            const baseG = +(1.2 * scale).toFixed(2);
-                            const yieldAdd = +(0.4 * scale).toFixed(2);
-                            const volAdd = +(0.2 * scale).toFixed(2);
-                            const fuelSub = +(0.3 * scale).toFixed(2);
-                            const ebitda = +(baseG + yieldAdd + volAdd - fuelSub).toFixed(2);
-                            inst.setOption({
-                                series: [
-                                    { data: [0, baseG, +(baseG + yieldAdd).toFixed(2), +(baseG + yieldAdd + volAdd - fuelSub).toFixed(2), 0] },
-                                    {
-                                        data: [
-                                            { value: baseG, itemStyle: { color: TOKENS.palette.primary } },
-                                            { value: yieldAdd, itemStyle: { color: TOKENS.palette.positive } },
-                                            { value: volAdd, itemStyle: { color: TOKENS.palette.positive } },
-                                            { value: fuelSub, itemStyle: { color: TOKENS.palette.negative } },
-                                            { value: ebitda, itemStyle: { color: TOKENS.palette.primaryStrong } }
-                                        ]
-                                    }
-                                ]
-                            });
-                        } else if (code === 'm01') {
-                            // 目标考核达成子弹图 (Bullet)
-                            const curRevRate = +(Math.min(125, (totalRev / (isFiltered ? (allRev * 0.8) : 48.5)) * 100)).toFixed(1);
-                            inst.setOption({
-                                series: [{
-                                    data: [curRevRate, +avgPlf.toFixed(1), 92.4, 62.5]
-                                }]
-                            });
-                        } else if (code === 'm04') {
-                            // 极简半环仪表盘 (Semi Gauge)
-                            const rate = isFiltered ? Math.min(100, +( (totalRev / (allRev * 0.8)) * 100 ).toFixed(1)) : 84.5;
-                            inst.setOption({
-                                series: [{
-                                    data: [{ value: rate }]
-                                }]
-                            });
-                        } else if (code === 'f01') {
-                            // 预订流转漏斗 (Funnel)
-                            const scale = isFiltered ? Math.max(0.25, revScale) : 1.0;
-                            inst.setOption({
-                                series: [{
-                                    data: [
-                                        { value: Math.round(5000 * scale), name: '航班查询检索' },
-                                        { value: Math.round(3200 * scale), name: '舱位票价选择' },
-                                        { value: Math.round(1800 * scale), name: '旅客信息录入' },
-                                        { value: Math.round(1200 * scale), name: '辅营选座加购' },
-                                        { value: Math.round(600 * scale), name: '支付成功出票' }
-                                    ]
-                                }]
-                            });
-                        } else if (code === 'f02') {
-                            // 资金流向桑基图 (Sankey)
-                            const scale = isFiltered ? Math.max(0.25, revScale) : 1.0;
-                            inst.setOption({
-                                series: [{
-                                    links: [
-                                        { source: '客运机票主收入', target: '主营业务总营收', value: +(10.5 * scale).toFixed(1) },
-                                        { source: '货邮及辅营收入', target: '主营业务总营收', value: +(2.5 * scale).toFixed(1) },
-                                        { source: '主营业务总营收', target: '航油采购成本', value: +(3.8 * scale).toFixed(1) },
-                                        { source: '主营业务总营收', target: '机场起降与保障', value: +(2.2 * scale).toFixed(1) },
-                                        { source: '主营业务总营收', target: '机组薪酬与折旧', value: +(1.5 * scale).toFixed(1) },
-                                        { source: '主营业务总营收', target: '综合经营毛利', value: +(5.5 * scale).toFixed(1) },
-                                        { source: '综合经营毛利', target: '企业所得税', value: +(1.2 * scale).toFixed(1) },
-                                        { source: '综合经营毛利', target: '航线净利润', value: +(4.3 * scale).toFixed(1) }
-                                    ]
-                                }]
-                            });
-                        } else if (code === 'fn03') {
-                            // 敏感性分析龙卷风 (Tornado)
-                            const scale = isFiltered ? Math.max(0.25, revScale) : 1.0;
-                            inst.setOption({
-                                series: [
-                                    { data: [+(-(45.0 * scale).toFixed(1)), +(-(32.0 * scale).toFixed(1)), +(-(18.0 * scale).toFixed(1)), +(-(12.0 * scale).toFixed(1))] },
-                                    { data: [+(52.0 * scale).toFixed(1), +(38.0 * scale).toFixed(1), +(20.0 * scale).toFixed(1), +(15.0 * scale).toFixed(1)] }
-                                ]
-                            });
-                        } else {
-                            // Generic scaling for other charts
+                        if (typeof chartCfg.onFilterChange === 'function') {
+                            chartCfg.onFilterChange(rows, isFiltered, inst, TOKENS);
+                        } else if (typeof chartCfg.optionBuilder === 'function') {
                             const opt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS);
-                            if (isFiltered && opt.series) {
-                                opt.series.forEach(s => {
-                                    if (s.type === 'bar' || s.type === 'line') {
-                                        if (Array.isArray(s.data) && typeof s.data[0] === 'number') {
-                                            s.data = s.data.map(v => +(v * Math.max(0.3, revScale)).toFixed(2));
-                                        }
-                                    }
-                                });
-                            }
                             inst.setOption(opt, true);
                         }
 
@@ -2206,18 +1949,20 @@ __DASHBOARD_CONFIG_CODE__
                 const badge = document.getElementById('activeFilterBadgeCount');
                 if (!tray || !container) return;
 
+                const labels = this.state.filterLabels;
+                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
                 let chips = [];
-                if (!this.state.filters.timeLabel.includes('2026夏秋')) {
-                    chips.push({ key: 'time', label: `航季: ${this.state.filters.timeLabel}` });
+                if (this.state.filters.time !== this.state.defaultFilters.time) {
+                    chips.push({ key: 'time', label: `${labels.time}: ${this.state.filters.timeLabel}` });
                 }
-                if (this.state.filters.hubs.size > 0 && this.state.filters.hubs.size < 4) {
-                    chips.push({ key: 'hub', label: `基地: ${Array.from(this.state.filters.hubs).join(', ')}` });
+                if (this.state.filters.hubs.size > 0 && this.state.filters.hubs.size < totalHubCount) {
+                    chips.push({ key: 'hub', label: `${labels.hub}: ${Array.from(this.state.filters.hubs).join(', ')}` });
                 }
                 if (this.state.filters.fleet !== 'ALL') {
-                    chips.push({ key: 'fleet', label: `机型: ${this.state.filters.fleetLabel}` });
+                    chips.push({ key: 'fleet', label: `${labels.fleet}: ${this.state.filters.fleetLabel}` });
                 }
                 if (this.state.filters.route !== 'ALL') {
-                    chips.push({ key: 'route', label: `航网: ${this.state.filters.routeLabel}` });
+                    chips.push({ key: 'route', label: `${labels.route}: ${this.state.filters.routeLabel}` });
                 }
                 if (this.state.filters.keyword) {
                     chips.push({ key: 'kw', label: `关键词: "${this.state.filters.keyword}"` });
@@ -2238,19 +1983,22 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             removeFilterChip(key) {
-                if (key === 'time') this.selectGlobalTime('2026S', '2026夏秋航季');
+                const def = this.state.defaultFilters;
+                if (key === 'time') this.selectGlobalTime(def.time, def.timeLabel);
                 if (key === 'hub') this.setAllHubs(true);
-                if (key === 'fleet') this.selectGlobalFleet('ALL', '全部机型');
-                if (key === 'route') this.selectGlobalRoute('ALL', '全部航线');
+                if (key === 'fleet') this.selectGlobalFleet('ALL', def.fleetLabel);
+                if (key === 'route') this.selectGlobalRoute('ALL', def.routeLabel);
                 if (key === 'kw') { document.getElementById('globalKeywordSearch').value = ''; this.onGlobalFilterChange(); }
             }
 
             resetAllGlobalFilters() {
-                const isTimeDefault = !this.state.filters.time || this.state.filters.time === '2026S' || this.state.filters.time === 'ALL';
-                const isFleetDefault = !this.state.filters.fleet || this.state.filters.fleet === 'ALL';
-                const isRouteDefault = !this.state.filters.route || this.state.filters.route === 'ALL';
+                const def = this.state.defaultFilters;
+                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
+                const isTimeDefault = this.state.filters.time === def.time;
+                const isFleetDefault = this.state.filters.fleet === 'ALL';
+                const isRouteDefault = this.state.filters.route === 'ALL';
                 const isSearchDefault = !document.getElementById('globalKeywordSearch')?.value?.trim();
-                const isHubsAll = (!this.state.filters.hubs || this.state.filters.hubs.size === 4);
+                const isHubsAll = (!this.state.filters.hubs || this.state.filters.hubs.size === totalHubCount);
                 const isCrossFilterEmpty = !this.state.filters.chartCrossFilter;
 
                 const isAlreadyDefault = isTimeDefault && isFleetDefault && isRouteDefault && isSearchDefault && isHubsAll && isCrossFilterEmpty;
@@ -2260,9 +2008,9 @@ __DASHBOARD_CONFIG_CODE__
                     return;
                 }
 
-                this.selectGlobalTime('2026S', '2026夏秋航季');
-                this.selectGlobalFleet('ALL', '全部机型');
-                this.selectGlobalRoute('ALL', '全部航线');
+                this.selectGlobalTime(def.time, def.timeLabel);
+                this.selectGlobalFleet('ALL', def.fleetLabel);
+                this.selectGlobalRoute('ALL', def.routeLabel);
                 if (document.getElementById('globalKeywordSearch')) document.getElementById('globalKeywordSearch').value = '';
                 this.setAllHubs(true);
                 this.state.filters.chartCrossFilter = null;
@@ -2436,20 +2184,33 @@ __DASHBOARD_CONFIG_CODE__
                 let rows = [...(this.config.table.rows || [])];
                 const f = this.state.filters;
 
-                // Hub filter
-                if (f.hubs.size > 0 && f.hubs.size < 4) {
-                    rows = rows.filter(r => f.hubs.has(r.hub));
+                // Hubs / Region filter
+                const totalHubCount = (this.config.filters?.hubs || []).length || 4;
+                if (f.hubs.size > 0 && f.hubs.size < totalHubCount) {
+                    rows = rows.filter(r => {
+                        const hubVal = r.hub || r.region || r.area || r.zone || r.location || r.segment;
+                        if (hubVal && f.hubs.has(hubVal)) return true;
+                        return Object.values(r).some(v => typeof v === 'string' && f.hubs.has(v));
+                    });
                 }
 
-                // Fleet filter
-                if (f.fleet === 'WIDE') rows = rows.filter(r => r.fleet.includes('A350') || r.fleet.includes('B787') || r.fleet.includes('B777'));
-                else if (f.fleet === 'NARROW') rows = rows.filter(r => r.fleet.includes('A321') || r.fleet.includes('B737'));
-                else if (f.fleet === 'DOMESTIC') rows = rows.filter(r => r.fleet.includes('C919') || r.fleet.includes('ARJ21'));
+                // Fleet / Format / Segment filter
+                if (f.fleet !== 'ALL') {
+                    rows = rows.filter(r => {
+                        const rowVal = r.fleet || r.format || r.type || r.segment || r.tier || r.category || '';
+                        if (String(rowVal).includes(f.fleet) || (f.fleetLabel && String(rowVal).includes(f.fleetLabel))) return true;
+                        return Object.values(r).some(v => typeof v === 'string' && (v.includes(f.fleet) || (f.fleetLabel && v.includes(f.fleetLabel))));
+                    });
+                }
 
-                // Route filter
-                if (f.route === 'TRUNK') rows = rows.filter(r => r.routeType.includes('干线'));
-                else if (f.route === 'REGIONAL') rows = rows.filter(r => r.routeType.includes('支线'));
-                else if (f.route === 'INTL') rows = rows.filter(r => r.routeType.includes('国际'));
+                // Route / Category / Channel filter
+                if (f.route !== 'ALL') {
+                    rows = rows.filter(r => {
+                        const rowVal = r.route || r.routeType || r.channel || r.category || r.product || '';
+                        if (String(rowVal).includes(f.route) || (f.routeLabel && String(rowVal).includes(f.routeLabel))) return true;
+                        return Object.values(r).some(v => typeof v === 'string' && (v.includes(f.route) || (f.routeLabel && v.includes(f.routeLabel))));
+                    });
+                }
 
                 // Keyword filter
                 if (f.keyword) {
@@ -2519,7 +2280,7 @@ __DASHBOARD_CONFIG_CODE__
 
                 // Render Tbody (Strict single line with tabular nums)
                 if (currentRows.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="py-8 text-center text-ink-subtle">暂无符合条件的航线记录</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="py-8 text-center text-ink-subtle">暂无符合筛选条件的数据记录</td></tr>`;
                 } else {
                     tbody.innerHTML = currentRows.map(row => `
                         <tr onmouseenter="window.App.onTableRowHover('${row.name}')" onmouseleave="window.App.onTableRowLeave()" class="hover:bg-slate-50/80 transition-colors">
@@ -2582,7 +2343,7 @@ __DASHBOARD_CONFIG_CODE__
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `民航核心航线运营效能表_${new Date().toISOString().slice(0,10)}.csv`;
+                const exportTitle = (this.config.table?.title || this.config.meta?.title || '业务运营透视表').replace(/[\s/\\:]+/g, '_');\n                a.download = `${exportTitle}_${new Date().toISOString().slice(0,10)}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
                 this.showToast(`已成功导出 ${allRows.length} 条记录至 Excel (CSV)`);

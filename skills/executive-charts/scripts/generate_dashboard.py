@@ -67,6 +67,12 @@ CHARTS_MAP = {**CHARTS_JS_DEFINITIONS, **ALL_CHARTS}
 # 行业多维筛选栏配置库 (Industry Filter Configurations)
 # =============================================================================
 AIRLINE_FILTERS_CONFIG = {
+    "labels": {
+        "time": "航季时段",
+        "hub": "枢纽基地",
+        "fleet": "机队机型",
+        "route": "航线网络"
+    },
     "seasons": [
         {"val": "2026S", "label": "2026夏秋航季"},
         {"val": "2025W", "label": "2025冬春航季"},
@@ -94,6 +100,12 @@ AIRLINE_FILTERS_CONFIG = {
 }
 
 RETAIL_FILTERS_CONFIG = {
+    "labels": {
+        "time": "考核周期",
+        "hub": "所属大区",
+        "fleet": "门店业态",
+        "route": "商品品类"
+    },
     "seasons": [
         {"val": "2026Q2", "label": "2026年Q2 (4-6月)", "default": True},
         {"val": "2026Q1", "label": "2026年Q1 (1-3月)"},
@@ -121,6 +133,12 @@ RETAIL_FILTERS_CONFIG = {
 }
 
 SAAS_FILTERS_CONFIG = {
+    "labels": {
+        "time": "财年季度",
+        "hub": "全球战区",
+        "fleet": "客户梯队",
+        "route": "产品矩阵"
+    },
     "seasons": [
         {"val": "2026Q1", "label": "2026财年 Q1", "default": True},
         {"val": "2025Q4", "label": "2025财年 Q4"},
@@ -148,6 +166,12 @@ SAAS_FILTERS_CONFIG = {
 }
 
 FINANCIAL_FILTERS_CONFIG = {
+    "labels": {
+        "time": "决算周期",
+        "hub": "业务板块",
+        "fleet": "成本中心",
+        "route": "核算口径"
+    },
     "seasons": [
         {"val": "2025FY", "label": "2025全年度决算", "default": True},
         {"val": "2026Q1", "label": "2026年Q1管理决算"},
@@ -168,7 +192,7 @@ FINANCIAL_FILTERS_CONFIG = {
     ],
     "routes": [
         {"val": "ALL", "label": "全部核算口径 (综合)"},
-        {"val": "GAAP", "label": "中国企业会计准则 (CAS/GAAP)"},
+        {"val": "CAS", "label": "中国企业会计准则 (CAS/GAAP)"},
         {"val": "MGMT", "label": "管理会计归因口径 (Management)"},
         {"val": "TAX", "label": "税务与合规审计口径 (Tax Audit)"}
     ]
