@@ -61,7 +61,8 @@ def profile_csv(file_path: str, custom_title: str = None) -> Dict[str, Any]:
     if clean_name.endswith("明细"):
         clean_name = clean_name[:-2]
         
-    title = custom_title or f"{period_str}{clean_name}经营效能决算研判看板".strip()
+    suffix = "效能决算研判看板" if clean_name.endswith("经营") else "经营效能决算研判看板"
+    title = custom_title or f"{period_str}{clean_name}{suffix}".strip()
     if not title.endswith("看板") and not title.endswith("报告"):
         title += "决策看板"
 
