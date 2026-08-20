@@ -1,0 +1,33 @@
+{
+  "name": "charts-design",
+  "version": "1.0.0",
+  "description": "McKinsey-grade executive charts, KPI metric cards, interactive pivot tables, and dashboard generator. 麦肯锡风格图表设计与高管决策看板套件。",
+  "bin": {
+    "charts-design": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "skills/executive-charts/",
+    "examples/",
+    "README.md"
+  ],
+  "keywords": [
+    "mckinsey",
+    "charts",
+    "dashboard",
+    "echarts",
+    "executive",
+    "kpi",
+    "tailwindcss",
+    "data-visualization",
+    "business-intelligence",
+    "pivot-table"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dabaige53/charts-design.git"
+  },
+  "author": "dabaige53",
+  "license": "MIT",
+  "homepage": "https://github.com/dabaige53/charts-design#readme"
+}

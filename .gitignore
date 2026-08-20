@@ -1,0 +1,34 @@
+# Ignore all dotfiles and dot directories
+.*
+!.gitignore
+
+# Explicitly ignore common agent/IDE/Stitch dotdirs
+.agents/
+.claude/
+.codex/
+.cursor/
+.stitch/
+.tempmediaStorage/
+.system_generated/
+.gemini/
+
+# Ignore environments & secrets
+*.env
+*.env.*
+.env*
+*secret*
+*token*
+*.key
+*.pem
+*.pfx
+
+# Python caches and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+dist/test_*
+dist/*verified*
+
+# System files
+.DS_Store
+Thumbs.db
