@@ -348,19 +348,24 @@ __DASHBOARD_CONFIG_CODE__
         // 1. McKinsey / Bloomberg Design Tokens
         const TOKENS = {
             palette: {
-                primary: '#123B5D',
-                primaryStrong: '#0B2A42',
-                primarySoft: '#DCE8F0',
-                ink: '#0F172A',
-                inkMuted: '#52606D',
-                inkSubtle: '#7B8794',
-                positive: '#A4453C',   // 咨询深红 (增长/上升)
-                negative: '#2F6B55',   // 咨询墨绿 (稳健/达标/成本节约)
-                attention: '#9A6A18',  // 咨询暗琥珀 (预警/关注)
+                primary: '#123B5D',        // 旗舰深海蓝 (主序列/核心强调)
+                primaryStrong: '#0B2A42',  // 墨蓝黑 (高对比主标题/关键标签)
+                primarySoft: '#DCE8F0',    // 冰川淡蓝 (辅助对比/背景底槽)
+                secondary: '#2C6485',      // 钢蓝 (次级对比序列)
+                tertiary: '#628EA8',       // 浅灰蓝 (第三对比序列)
+                slate: '#8C9DAE',          // 雾板岩灰 (第四对比序列)
+                ink: '#0F172A',            // 炭黑正文
+                inkMuted: '#52606D',       // 板岩深灰 (副标题/坐标刻度)
+                inkSubtle: '#7B8794',      // 板岩淡灰 (注脚/量纲)
+                positive: '#2F6B55',       // 咨询墨绿 (正向增长/达标/盈利)
+                negative: '#A4453C',       // 咨询绯红 (负向承压/收缩/预警)
+                attention: '#9A6A18',      // 咨询琥珀金 (重点关注/待研判)
                 gridline: '#E2E8F0',
-                rule: '#CBD5E1'
+                rule: '#CBD5E1',
+                categorical: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC']
             },
             commonOption: {
+                color: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC'],
                 animation: true,
                 animationDuration: 350,
                 grid: { top: 40, bottom: 40, left: 12, right: 24, containLabel: true },
@@ -707,7 +712,7 @@ __DASHBOARD_CONFIG_CODE__
                             </div>
                             <div>
                                 <h1 class="text-base font-bold text-primary-strong tracking-tight">${meta.title}</h1>
-                                <p class="text-[11px] text-ink-subtle">${meta.org} · ${meta.system}</p>
+                                <p class="text-[11px] text-ink-subtle">${[meta.org, meta.system].filter(Boolean).join(' · ') || '商业智能与运营决策中心 · 决策支持系统'}</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-3 text-xs">
@@ -856,7 +861,7 @@ __DASHBOARD_CONFIG_CODE__
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
                                     <div class="flex items-center gap-1.5">
                                         <span class="inline-flex items-center gap-1.5 text-[10px] text-[#2F6B55] bg-[#2F6B55]/8 border border-[#2F6B55]/20 px-2 py-0.5 rounded font-medium">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-[#2F6B55]"></span>${kpi.statusBadge || '正常核算'}
+                                            <span class="w-1.5 h-1.5 rounded-full bg-[#2F6B55]"></span>${kpi.statusBadge || '核算中'}
                                         </span>
                                         <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc01'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                     </div>
@@ -866,7 +871,7 @@ __DASHBOARD_CONFIG_CODE__
                                     <span class="text-xs font-semibold ${kpi.isPositive ? 'text-positive' : 'text-negative'} font-mono">${kpi.yoy}</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
-                                    <span>${kpi.subLabel || '基期参考'}</span>
+                                    <span>${kpi.subLabel || '统计口径'}</span>
                                     <span class="text-primary font-semibold">${kpi.subVal || '-'}</span>
                                 </div>
                             </div>
@@ -890,7 +895,7 @@ __DASHBOARD_CONFIG_CODE__
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '同比增量'}</span>
-                                    <span class="text-positive font-semibold">${kpi.subVal || '+¥0.0248'}</span>
+                                    <span class="text-positive font-semibold">${kpi.subVal || '-'}</span>
                                 </div>
                             </div>
                         `;
@@ -913,8 +918,8 @@ __DASHBOARD_CONFIG_CODE__
                                 </div>
                                 <div id="kpi-spark-${kpi.id}" class="w-full h-11 my-1"></div>
                                 <div class="pt-1.5 border-t border-slate-100 text-[10px] text-ink-subtle flex items-center justify-between font-mono">
-                                    <span>${kpi.subLabel || '12M 均值: 84.5%'}</span>
-                                    <span class="text-ink-muted font-semibold">${kpi.subVal || '峰值: 91.2%'}</span>
+                                    <span>${kpi.subLabel || '周期均值'}</span>
+                                    <span class="text-ink-muted font-semibold">${kpi.subVal || '-'}</span>
                                 </div>
                             </div>
                         `;
@@ -938,8 +943,8 @@ __DASHBOARD_CONFIG_CODE__
                                     <div class="bg-primary h-full rounded-full transition-all" style="width: ${barWidth}%;"></div>
                                 </div>
                                 <div class="pt-1.5 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
-                                    <span>${kpi.subLabel || '计划 52.0亿ASK'}</span>
-                                    <span class="text-positive font-bold">${kpi.subVal || '实际 54.2亿ASK'}</span>
+                                    <span>${kpi.subLabel || '考核目标'}</span>
+                                    <span class="text-positive font-bold">${kpi.subVal || '-'}</span>
                                 </div>
                             </div>
                         `;
@@ -961,8 +966,8 @@ __DASHBOARD_CONFIG_CODE__
                                 </div>
                                 <div id="kpi-gauge-${kpi.id}" class="w-full h-11 my-1"></div>
                                 <div class="pt-1.5 border-t border-slate-100 text-[10px] text-ink-subtle flex items-center justify-between font-mono">
-                                    <span>${kpi.subLabel || '行业五星基准: 90.0%'}</span>
-                                    <span class="text-negative font-semibold">${kpi.subVal || '超标 +2.4pp'}</span>
+                                    <span>${kpi.subLabel || '行业基准'}</span>
+                                    <span class="text-negative font-semibold">${kpi.subVal || '-'}</span>
                                 </div>
                             </div>
                         `;
@@ -978,13 +983,13 @@ __DASHBOARD_CONFIG_CODE__
                                 </div>
                                 <div class="grid grid-cols-2 gap-2 divide-x divide-slate-100 my-1">
                                     <div>
-                                        <span class="text-[10px] text-ink-subtle block">${kpi.leftTitle || '供给 ASK'}</span>
-                                        <div class="text-lg font-extrabold text-primary-strong font-mono tabular-nums">${kpi.leftVal || '54.2亿'}</div>
+                                        <span class="text-[10px] text-ink-subtle block">${kpi.leftTitle || '规模指标'}</span>
+                                        <div class="text-lg font-extrabold text-primary-strong font-mono tabular-nums">${kpi.leftVal || '-'}</div>
                                         <span class="text-[10px] text-positive font-bold font-mono">${kpi.leftYoy || '+12.4%'}</span>
                                     </div>
                                     <div class="pl-2">
-                                        <span class="text-[10px] text-ink-subtle block">${kpi.rightTitle || '周转 RPK'}</span>
-                                        <div class="text-lg font-extrabold text-primary font-mono tabular-nums">${kpi.rightVal || '47.0亿'}</div>
+                                        <span class="text-[10px] text-ink-subtle block">${kpi.rightTitle || '效能指标'}</span>
+                                        <div class="text-lg font-extrabold text-primary font-mono tabular-nums">${kpi.rightVal || '-'}</div>
                                         <span class="text-[10px] text-positive font-bold font-mono">${kpi.rightYoy || '+18.2%'}</span>
                                     </div>
                                 </div>
@@ -1040,8 +1045,8 @@ __DASHBOARD_CONFIG_CODE__
                                     <span class="px-2 py-0.5 rounded bg-[#9A6A18]/15 border border-[#9A6A18]/30 text-[#9A6A18] text-[10px] font-bold font-mono">预算红线 5%</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-[#9A6A18]/20 text-[11px] text-ink-muted flex items-center justify-between font-mono">
-                                    <span>${kpi.subLabel || '占总成本 29.3%'}</span>
-                                    <span class="font-bold text-[#9A6A18]">${kpi.subVal || '套保收益 +¥0.8亿'}</span>
+                                    <span>${kpi.subLabel || '成本占比'}</span>
+                                    <span class="font-bold text-[#9A6A18]">${kpi.subVal || '-'}</span>
                                 </div>
                             </div>
                         `;
@@ -1110,11 +1115,11 @@ __DASHBOARD_CONFIG_CODE__
                             <!-- Card Header -->
                             <div class="card-header-wrap flex flex-wrap items-start justify-between gap-3 mb-3" id="header-${chart.code}">
                                 <div class="min-w-0 max-w-[65%]">
-                                    
-                                    <div class="min-w-0">
+                                    <div class="flex items-center gap-2">
                                         <h3 class="text-sm font-bold text-primary-strong tracking-tight truncate">${chart.title}</h3>
-                                        <p class="text-xs text-ink-muted mt-0.5">${chart.subtitle}</p>
+                                        ${chart.code ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200 flex-shrink-0">${chart.code.toUpperCase()}</span>` : ''}
                                     </div>
+                                    <p class="text-xs text-ink-muted mt-0.5 leading-relaxed truncate">${chart.subtitle || ''}</p>
                                 </div>
                                 <div class="flex items-center gap-1.5 flex-shrink-0">
                                     ${granTabs}

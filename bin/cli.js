@@ -28,38 +28,41 @@ function printHelp() {
   ================================================
 
   Usage:
-    npx charts-design from-csv <file.csv>      Generate dashboard directly from CSV data (100% Data-Driven)
-    npx charts-design dashboard [options]      Generate executive dashboard
-    npx charts-design chart [options]          Generate standalone chart component
-    npx charts-design list                     List all 52 chart codes
+    npx charts-design chart --code <code> [options]        Generate single standalone chart component
+    npx charts-design batch "<codes>" [options]           Batch generate chart components for AI assembly
+    npx charts-design dashboard --config <config.json>    Assemble full executive dashboard from AI config
+    npx charts-design list                                 List all 52 chart taxonomy codes
 
-  CSV Automation:
-    npx charts-design from-csv <file.csv> --output ./dist/report.html --open
+  Chart Component Options:
+    --code,   -c <code>       Chart taxonomy code (e.g. c01, t06, r01, fn01)
+    --batch,  -b <codes>      Batch comma-separated codes (e.g. "c01,t06,r01,k01")
+    --output, -o <path>       Output HTML file path (or output directory if --batch)
+    --title,  -t <title>      Custom chart title
+    --snippet                 Print raw JS ECharts option snippet (no file output)
+    --open                    Auto-open in default browser after generation
 
-  Dashboard Options:
-    --from-csv, --csv <path>  Path to business CSV file to automatically profile
+  Dashboard Assembly Options:
+    --config, -f <path>       Custom JSON configuration file (AI-assembled KPIs, charts, filters, table)
     --preset, -p <name>       Preset: retail_ecommerce | saas_product |
                               financial_attribution | executive_report |
                               executive_monthly | strategic_matrix | comprehensive
-    --config, -f <path>       Custom JSON configuration file (100% custom data)
     --charts, -c <codes>      Comma-separated chart codes (e.g. "c01,t06,r01,fn01")
     --title,  -t <title>      Custom dashboard title
     --org     <name>          Organization / department name
     --output, -o <path>       Output HTML file path
     --open                    Auto-open in default browser after generation
 
-  Chart Options:
-    --code,   -c <code>       Chart taxonomy code (e.g. c01, t06, r01, fn01)
-    --output, -o <path>       Output HTML file path
-    --title,  -t <title>      Custom chart title
-    --snippet                 Print raw JS ECharts option snippet (no file output)
-    --open                    Auto-open in default browser after generation
-
   Examples:
-    npx charts-design from-csv ./sales_data.csv --output ./dist/sales.html --open
-    npx charts-design dashboard --preset retail_ecommerce --output ./dist/retail.html --open
-    npx charts-design dashboard --config ./custom.json --output ./dist/custom.html --open
+    # 1. Generate standalone chart
     npx charts-design chart --code t06 --output ./dist/chart_t06.html --open
+
+    # 2. Batch generate atomic charts for AI inspection and selection
+    npx charts-design batch "c01,t06,r01,k01" --output ./dist/charts/
+
+    # 3. Assemble AI-crafted full dashboard (0 Dirty Data, 100% Deterministic)
+    npx charts-design dashboard --config ./my_analysis.json --output ./dist/report.html --open
+
+    # 4. List all 52 chart taxonomy codes
     npx charts-design list
 `);
 }
@@ -86,6 +89,20 @@ function main() {
   let targetScript;
 
   switch (subcommand) {
+    case "batch":
+      targetScript = CHART_PY;
+      if (restArgs.length > 0 && !restArgs[0].startsWith("-")) {
+        const codes = restArgs.shift();
+        restArgs.unshift("--batch", codes);
+      }
+      break;
+    case "chart":
+      targetScript = CHART_PY;
+      break;
+    case "dashboard":
+    case "dash":
+      targetScript = DASHBOARD_PY;
+      break;
     case "from-csv":
     case "csv":
       targetScript = DASHBOARD_PY;
@@ -93,13 +110,6 @@ function main() {
         const csvPath = restArgs.shift();
         restArgs.unshift("--from-csv", csvPath);
       }
-      break;
-    case "dashboard":
-    case "dash":
-      targetScript = DASHBOARD_PY;
-      break;
-    case "chart":
-      targetScript = CHART_PY;
       break;
     case "list":
       targetScript = CHART_PY;

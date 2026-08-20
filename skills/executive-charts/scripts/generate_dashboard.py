@@ -463,6 +463,18 @@ PRESET_CONFIGS = {
     }
 }
 
+def serialize_chart_object(c):
+    """Serializes a chart dict to JS object, unquoting JS functions."""
+    if isinstance(c, str):
+        return c
+    js_props = []
+    for k, v in c.items():
+        if k in ['optionBuilder', 'tableDataExtractor'] and isinstance(v, str) and (v.strip().startswith('(') or v.strip().startswith('function') or '=>' in v):
+            js_props.append(f"{k}: {v}")
+        else:
+            js_props.append(f"{k}: {json.dumps(v, ensure_ascii=False)}")
+    return "{\n            " + ",\n            ".join(js_props) + "\n        }"
+
 def generate_dashboard(
     preset_name="executive_report",
     chart_codes=None,
@@ -525,7 +537,7 @@ def generate_dashboard(
             charts_combined_js = ",\n        ".join(custom_cfg["charts"])
             selected_codes = None
         elif len(custom_cfg["charts"]) > 0 and isinstance(custom_cfg["charts"][0], dict):
-            charts_combined_js = ",\n        ".join([json.dumps(c, ensure_ascii=False) for c in custom_cfg["charts"]])
+            charts_combined_js = ",\n        ".join([serialize_chart_object(c) for c in custom_cfg["charts"]])
             selected_codes = None
         else:
             selected_codes = custom_cfg["charts"]

@@ -283,20 +283,45 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
     <script>
         const TOKENS = {
             palette: {
-                primary: '#123B5D',
-                primaryStrong: '#0B2A42',
-                primarySoft: '#DCE8F0',
-                ink: '#17212B',
-                inkMuted: '#52606D',
-                inkSubtle: '#7B8794',
-                positive: '#A4453C',
-                negative: '#2F6B55',
-                attention: '#9A6A18',
+                primary: '#123B5D',        // 旗舰深海蓝 (主序列/核心强调)
+                primaryStrong: '#0B2A42',  // 墨蓝黑 (高对比主标题/关键标签)
+                primarySoft: '#DCE8F0',    // 冰川淡蓝 (辅助对比/背景底槽)
+                secondary: '#2C6485',      // 钢蓝 (次级对比序列)
+                tertiary: '#628EA8',       // 浅灰蓝 (第三对比序列)
+                slate: '#8C9DAE',          // 雾板岩灰 (第四对比序列)
+                ink: '#0F172A',            // 炭黑正文
+                inkMuted: '#52606D',       // 板岩深灰 (副标题/坐标刻度)
+                inkSubtle: '#7B8794',      // 板岩淡灰 (注脚/量纲)
+                positive: '#2F6B55',       // 咨询墨绿 (正向增长/达标/盈利)
+                negative: '#A4453C',       // 咨询绯红 (负向承压/收缩/预警)
+                attention: '#9A6A18',      // 咨询琥珀金 (重点关注/待研判)
                 canvas: '#FFFFFF',
                 surfaceGround: '#F8FAFC',
-                gridline: '#E6EAED',
-                rule: '#C9D1D8'
-            }
+                gridline: '#E2E8F0',
+                rule: '#CBD5E1',
+                categorical: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC']
+            },
+            commonOption: {
+                color: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC'],
+                animation: true,
+                animationDuration: 350,
+                grid: { top: 40, bottom: 40, left: 12, right: 24, containLabel: true },
+                textStyle: { fontFamily: 'Inter, -apple-system, sans-serif', color: '#0F172A' },
+                xAxis: {
+                    axisLabel: { color: '#1E293B', fontSize: 11, fontWeight: 600 },
+                    axisLine: { lineStyle: { color: '#94A3B8', width: 1.2 } },
+                    axisTick: { lineStyle: { color: '#94A3B8' } },
+                    splitLine: { lineStyle: { color: '#E2E8F0', type: 'dashed' } }
+                },
+                yAxis: {
+                    axisLabel: { color: '#1E293B', fontSize: 11, fontWeight: 600 },
+                    axisLine: { lineStyle: { color: '#94A3B8', width: 1.2 } },
+                    axisTick: { lineStyle: { color: '#94A3B8' } },
+                    splitLine: { lineStyle: { color: '#E2E8F0', type: 'dashed' } }
+                }
+            },
+            axisTitleStyleY: { color: '#0B2A42', fontSize: 11, fontWeight: 700, align: 'left', padding: [0, 0, 6, 0] },
+            axisTitleStyleX: { color: '#0B2A42', fontSize: 11, fontWeight: 700, align: 'center', padding: [8, 0, 0, 0] }
         };
 
         const chartBuilderFunc = __CHART_CONFIG_JS__;
@@ -614,10 +639,31 @@ def list_all_charts():
         print(f"  • [{code.upper():<5}] {title:<36} ({chart_type})")
     print("=" * 80)
 
+
+def generate_batch_charts(codes_str, output_dir="./dist/charts", auto_open=False):
+    """Generates multiple standalone charts in batch for AI inspection and selection."""
+    codes = [c.strip().lower() for c in codes_str.split(',') if c.strip()]
+    os.makedirs(output_dir, exist_ok=True)
+    generated = []
+    print(f"📦 Batch generating {len(codes)} chart components into: {output_dir}")
+    for code in codes:
+        if code in ALL_CHART_BUILDERS:
+            out_file = os.path.join(output_dir, f"chart_{code}.html")
+            generate_standalone_chart(code, output_path=out_file, auto_open=False)
+            generated.append(out_file)
+        else:
+            print(f"⚠️ Warning: Chart code '{code}' not found in 52 taxonomy, skipping.")
+    print(f"✅ Successfully generated {len(generated)} charts in batch.")
+    if auto_open and generated:
+        subprocess.run(["open", generated[0]])
+    return generated
+
 def main():
     parser = argparse.ArgumentParser(description="McKinsey-Grade Frontend Component & Chart Generator")
     parser.add_argument("--code", "-c", type=str, help="Chart taxonomy code (e.g. c01, t06, r01, fn01, m01)")
-    parser.add_argument("--output", "-o", type=str, help="Target HTML output path")
+    parser.add_argument("--batch", "-b", type=str, help="Batch comma-separated chart codes (e.g. 'c01,t06,r01,k01')")
+    parser.add_argument("--output", "-o", type=str, help="Target HTML output path (or output directory if --batch)")
+    parser.add_argument("--output-dir", type=str, default="./dist/charts", help="Directory for batch generated charts")
     parser.add_argument("--title", "-t", type=str, help="Custom chart title")
     parser.add_argument("--list", "-l", action="store_true", help="List all 52 available chart codes")
     parser.add_argument("--open", action="store_true", help="Automatically open generated chart in browser")
@@ -630,9 +676,15 @@ def main():
         return
 
 
+    if args.batch:
+        target_dir = args.output or args.output_dir
+        generate_batch_charts(args.batch, output_dir=target_dir, auto_open=args.open)
+        return
+
     if not args.code:
         parser.print_help()
         print("\nExample: python generate_chart.py --code c01 --output chart_c01.html --open")
+        print("Batch Example: python generate_chart.py --batch 'c01,t06,r01,k01' --output-dir ./dist/charts/")
         return
 
     if args.snippet:
