@@ -13,7 +13,7 @@ Turn business evidence into a restrained executive dashboard. Run the scripts bu
 - For several candidate charts, use its bounded batch mode only to compare a shortlist.
 - For a dashboard, run `scripts/dashboard_workspace.py` and use the workspace loop below.
 - For an existing workspace, start with `inspect` and `validate`.
-- For an existing HTML dashboard, inventory its DOM ids, visible text, assets and component regions before changing styles. Record the non-negotiable items in a Preservation Manifest, then use `compare-html` after migration.
+- For an existing HTML dashboard or frontend project, read [references/existing-project-checklist.md](references/existing-project-checklist.md) before mapping components, changing styles, or accepting migrated output.
 - For CSV input, use `import-csv` as a draft, then review the inferred fields before adding charts.
 
 Resolve the directory containing this `SKILL.md` once, then invoke its sibling scripts with `python3`. The bundled scripts are the execution interface; package-manager wrappers are unnecessary.
@@ -61,13 +61,6 @@ Resolve the directory containing this `SKILL.md` once, then invoke its sibling s
    ```
 
    Every build runs the static Generated HTML Inspector. Build after the first useful KPI or chart, then iterate. A dashboard is complete when strict validation and HTML inspection pass and every rendered block supports a stated management question.
-
-## Existing HTML migration loop
-
-1. Run `inventory-html <before.html> --output preservation.json --json`, edit its generated baseline down to the business-critical ids, text and assets, then run `inspect-html <before.html> --strict --manifest preservation.json --json`.
-2. Map each existing region to a supported component contract. Preserve its business content and stable id; change presentation through shared tokens, the card shell and runtime capabilities rather than copying showcase markup.
-3. Generate or update the candidate HTML, then run both `inspect-html <after.html> --manifest preservation.json --strict --json` and `compare-html <before.html> <after.html> --manifest preservation.json --json`.
-4. Stop on any missing id, text, asset, broken reference or duplicate id. Run `inspect-html <after.html> --runtime --strict --json` when Playwright and Chrome are available to verify rendered component DOM, card actions, runtime errors and cleanup.
 
 For command shapes and component schemas, read [references/dashboard-workspace.md](references/dashboard-workspace.md) when assembling a dashboard.
 
