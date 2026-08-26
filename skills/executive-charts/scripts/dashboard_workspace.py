@@ -15,6 +15,8 @@ from typing import Any
 
 from generate_dashboard import CHARTS_MAP, generate_dashboard
 from core.csv_profiler import profile_csv
+from core.component_schemas import CHART_SCHEMA_REGISTRY, KPI_TYPES, validate_chart_data
+from core.html_inspector import compare_html, inspect_html
 
 
 SCHEMA_VERSION = 1
@@ -207,6 +209,8 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
         for field in ("label", "value"):
             if item.get(field) in (None, ""):
                 error("KPI_FIELD_MISSING", f"{path}.{field}", f"KPI {field} is required")
+        if item.get("type") not in KPI_TYPES:
+            error("KPI_TYPE_INVALID", f"{path}.type", "KPI type must be one of mc01 through mc09")
         if strict and not item.get("unit"):
             error("KPI_UNIT_MISSING", f"{path}.unit", "Declare a unit for the KPI")
 
@@ -221,12 +225,14 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
         else:
             seen_ids.add(item_id)
         code = str(item.get("code", "")).lower()
-        if code not in CHARTS_MAP:
+        if code not in CHARTS_MAP or code not in CHART_SCHEMA_REGISTRY:
             error("CHART_CODE_UNKNOWN", f"{path}.code", f"Unknown chart code: {code or '<missing>'}")
         if not item.get("title"):
             error("CHART_TITLE_MISSING", f"{path}.title", "Chart title is required")
         if "data" not in item:
             error("CHART_DATA_MISSING", f"{path}.data", "Chart data is required; catalog demo data is not used in workspace builds")
+        else:
+            errors.extend(validate_chart_data(item.get("data"), f"{path}.data"))
         if strict and not item.get("unit") and not (isinstance(item.get("data"), dict) and item["data"].get("unit")):
             error("CHART_UNIT_MISSING", f"{path}.unit", "Declare the metric unit in the chart or its data")
 
@@ -498,6 +504,14 @@ def cmd_build(args: argparse.Namespace) -> None:
             auto_open=args.open,
             allow_preset_fallback=False,
         )
+    inspection = None
+    if args.inspect_html:
+        inspection = inspect_html(output, strict=True, manifest_path=Path(args.manifest) if args.manifest else None)
+        if not inspection["ok"]:
+            raise WorkspaceError("HTML_INSPECTION_FAILED", json.dumps({
+                "workspace": str(root), "output": str(output), "inspection": inspection,
+                "errors": inspection["errors"], "warnings": inspection["warnings"],
+            }, ensure_ascii=False))
     emit(
         "dashboard.build",
         {
@@ -506,9 +520,37 @@ def cmd_build(args: argparse.Namespace) -> None:
             "bytes": output.stat().st_size,
             "summary": summary(root, manifest, resolved),
             "warnings": warnings,
+            **({"inspection": inspection} if inspection is not None else {}),
         },
         args.json,
     )
+
+
+def emit_html_result(result: dict[str, Any], json_mode: bool) -> None:
+    if json_mode:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(f"{'✓' if result['ok'] else '✗'} {result['command']}")
+        print(f"  html: {result.get('html') or result.get('after')}")
+        for issue in [*result["errors"], *result["warnings"]]:
+            print(f"  {issue['code']} {issue['path']}: {issue['message']}")
+    if not result["ok"]:
+        raise SystemExit(2)
+
+
+def cmd_inspect_html(args: argparse.Namespace) -> None:
+    emit_html_result(inspect_html(
+        Path(args.html), strict=args.strict,
+        manifest_path=Path(args.manifest) if args.manifest else None,
+        runtime=args.runtime,
+    ), args.json)
+
+
+def cmd_compare_html(args: argparse.Namespace) -> None:
+    emit_html_result(compare_html(
+        Path(args.before), Path(args.after),
+        manifest_path=Path(args.manifest) if args.manifest else None,
+    ), args.json)
 
 
 def add_json_flag(parser: argparse.ArgumentParser) -> None:
@@ -548,6 +590,21 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--strict", action="store_true")
     add_json_flag(validate_parser)
     validate_parser.set_defaults(func=cmd_validate)
+
+    inspect_html_parser = subparsers.add_parser("inspect-html", help="Inspect a generated dashboard HTML contract")
+    inspect_html_parser.add_argument("html")
+    inspect_html_parser.add_argument("--strict", action="store_true")
+    inspect_html_parser.add_argument("--manifest", help="Preservation Manifest JSON path")
+    inspect_html_parser.add_argument("--runtime", action="store_true", help="Request browser-backed runtime checks")
+    add_json_flag(inspect_html_parser)
+    inspect_html_parser.set_defaults(func=cmd_inspect_html)
+
+    compare_html_parser = subparsers.add_parser("compare-html", help="Compare generated HTML against its baseline")
+    compare_html_parser.add_argument("before")
+    compare_html_parser.add_argument("after")
+    compare_html_parser.add_argument("--manifest", help="Preservation Manifest JSON path")
+    add_json_flag(compare_html_parser)
+    compare_html_parser.set_defaults(func=cmd_compare_html)
 
     meta_parser = subparsers.add_parser("meta", help="Update dashboard metadata")
     meta_subparsers = meta_parser.add_subparsers(dest="meta_command", required=True)
@@ -614,6 +671,8 @@ def build_parser() -> argparse.ArgumentParser:
     build_cmd.add_argument("workspace")
     build_cmd.add_argument("--output", "-o", required=True)
     build_cmd.add_argument("--open", action="store_true")
+    build_cmd.add_argument("--inspect-html", action="store_true", help="Fail the build when generated HTML inspection fails")
+    build_cmd.add_argument("--manifest", help="Preservation Manifest used by --inspect-html")
     add_json_flag(build_cmd)
     build_cmd.set_defaults(func=cmd_build)
 
@@ -632,7 +691,8 @@ def main() -> None:
             details = json.loads(exc.message)
         except json.JSONDecodeError:
             details = {"errors": [{"code": exc.code, "path": exc.path, "message": exc.message}]}
-        envelope = {"ok": False, "command": getattr(args, "command", "dashboard"), **details}
+        command = getattr(args, "command", "dashboard")
+        envelope = {"ok": False, "command": f"dashboard.{command}", **details}
         if json_mode:
             print(json.dumps(envelope, ensure_ascii=False))
         else:

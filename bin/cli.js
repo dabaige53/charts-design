@@ -38,6 +38,8 @@ function printHelp() {
     charts-design dashboard inspect <dir> [--json]     Show a bounded workspace summary
     charts-design dashboard validate <dir> [--strict]  Validate components without rendering
     charts-design dashboard build <dir> -o <file>      Strictly compile the workspace to HTML
+    charts-design dashboard inspect-html <file>         Inspect generated HTML contracts
+    charts-design dashboard compare-html <a> <b>        Compare preservation against a baseline
     charts-design dashboard --config <config.json>    Assemble full executive dashboard from AI config
     charts-design from-csv <file.csv> [options]        Legacy one-step CSV generation
     charts-design list                                 List all 52 chart taxonomy codes
@@ -158,7 +160,7 @@ function main() {
       break;
     case "dashboard":
     case "dash":
-      if (["init", "import-csv", "inspect", "validate", "meta", "add", "table", "build"].includes(restArgs[0])) {
+      if (["init", "import-csv", "inspect", "inspect-html", "compare-html", "validate", "meta", "add", "table", "build"].includes(restArgs[0])) {
         targetScript = WORKSPACE_PY;
       } else {
         targetScript = DASHBOARD_PY;
