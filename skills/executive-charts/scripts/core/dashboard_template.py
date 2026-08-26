@@ -2,6 +2,8 @@
 import os
 import re
 
+from .runtime_bundle import render_runtime_bundle
+
 TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -575,6 +577,17 @@ __DASHBOARD_CONFIG_CODE__
         class StateStore {
             constructor(config) {
                 this.config = config || {};
+                const usedChartInstanceIds = new Set();
+                this.config.charts = (this.config.charts || []).map((chart, index) => {
+                    const rawIdentity = chart.instanceId || chart.id || chart.code || `component-${index + 1}`;
+                    const safeIdentity = String(rawIdentity).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+                    const requestedId = chart.instanceId || chart.id || `chart-${safeIdentity || 'component'}-${index + 1}`;
+                    let instanceId = requestedId;
+                    let duplicateIndex = 2;
+                    while (usedChartInstanceIds.has(instanceId)) instanceId = `${requestedId}-${duplicateIndex++}`;
+                    usedChartInstanceIds.add(instanceId);
+                    return { ...chart, instanceId, id: instanceId };
+                });
                 
                 // 1. Normalize Dynamic Filters Array
                 let rawFilters = this.config.filters || [];
@@ -586,6 +599,8 @@ __DASHBOARD_CONFIG_CODE__
                         key: f.key || f.id || `filter_${idx}`,
                         label: f.label || `维度 ${idx + 1}`,
                         type: f.type || (f.options?.length > 0 && f.options[0]?.default !== undefined ? 'select' : 'select'),
+                        fields: Array.isArray(f.fields) ? [...f.fields] : [],
+                        componentIds: Array.isArray(f.componentIds) ? [...f.componentIds] : [],
                         options: (f.options || []).map(opt => ({
                             value: opt.value ?? opt.val ?? opt.name ?? '',
                             label: opt.label ?? opt.name ?? opt.val ?? '',
@@ -747,7 +762,7 @@ __DASHBOARD_CONFIG_CODE__
                         `).join('');
 
                         filterControlsHtml += `
-                            <div class="relative" id="filterWrap_${f.key}">
+                            <div class="relative" id="filterWrap_${f.key}" data-component-id="${f.id}">
                                 <button onclick="window.App.toggleDropdown('filterMenu_${f.key}', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
                                     <span class="text-ink-subtle">${f.label}:</span>
                                     <span id="selectedLabel_${f.key}" class="font-semibold text-primary truncate max-w-[130px]">${curLabel}</span>
@@ -784,7 +799,7 @@ __DASHBOARD_CONFIG_CODE__
                         `).join('');
 
                         filterControlsHtml += `
-                            <div class="relative" id="filterWrap_${f.key}">
+                            <div class="relative" id="filterWrap_${f.key}" data-component-id="${f.id}">
                                 <button onclick="window.App.toggleDropdown('filterMenu_${f.key}', event)" class="h-[32px] px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary">
                                     <span class="text-ink-subtle">${f.label}:</span>
                                     <span id="selectedLabel_${f.key}" class="font-semibold text-primary truncate max-w-[130px]">${curLabel}</span>
@@ -1094,6 +1109,11 @@ __DASHBOARD_CONFIG_CODE__
                         </div>
                     `;
                 }).join('');
+                Array.from(container.children).forEach((card, index) => {
+                    const componentId = kpis[index]?.id || `kpi-${index + 1}`;
+                    card.id = componentId;
+                    card.dataset.componentId = componentId;
+                });
             }
 
             renderChartsGrid() {
@@ -1105,15 +1125,15 @@ __DASHBOARD_CONFIG_CODE__
                     const colClass = chart.colSpan === 2 ? 'lg:col-span-2' : '';
                     const granTabs = chart.hasGranularity ? `
                         <div class="inline-flex bg-slate-100/90 p-0.5 rounded-md text-[11px]">
-                            <button type="button" class="granularity-tab-btn px-2 py-0.5 rounded bg-white text-primary-strong font-semibold shadow-xs" data-card-code="${chart.code}" data-granularity="month">月度</button>
-                            <button type="button" class="granularity-tab-btn px-2 py-0.5 rounded text-ink-muted hover:text-ink font-medium" data-card-code="${chart.code}" data-granularity="quarter">季度</button>
+                            <button type="button" class="granularity-tab-btn px-2 py-0.5 rounded bg-white text-primary-strong font-semibold shadow-xs" data-component-id="${chart.instanceId}" data-granularity="month">月度</button>
+                            <button type="button" class="granularity-tab-btn px-2 py-0.5 rounded text-ink-muted hover:text-ink font-medium" data-component-id="${chart.instanceId}" data-granularity="quarter">季度</button>
                         </div>
                     ` : '';
 
                     return `
-                        <div class="section-card p-5 flex flex-col justify-between ${colClass}">
+                        <div class="section-card p-5 flex flex-col justify-between ${colClass}" data-component-id="${chart.instanceId}">
                             <!-- Card Header -->
-                            <div class="card-header-wrap flex flex-wrap items-start justify-between gap-3 mb-3" id="header-${chart.code}">
+                            <div class="card-header-wrap flex flex-wrap items-start justify-between gap-3 mb-3" id="header-${chart.instanceId}">
                                 <div class="min-w-0 max-w-[65%]">
                                     <div class="flex items-center gap-2">
                                         <h3 class="text-sm font-bold text-primary-strong tracking-tight truncate">${chart.title}</h3>
@@ -1124,19 +1144,19 @@ __DASHBOARD_CONFIG_CODE__
                                 <div class="flex items-center gap-1.5 flex-shrink-0">
                                     ${granTabs}
                                     <!-- View Toggle (Chart ↔ Table) -->
-                                    <button type="button" class="chart-action-btn view-toggle-btn" data-card-code="${chart.code}" aria-label="切换图表/数据表视图" title="切换图表/动态数据表视图">
+                                    <button type="button" class="chart-action-btn view-toggle-btn" data-component-id="${chart.instanceId}" aria-label="切换图表/数据表视图" title="切换图表/动态数据表视图">
                                         ${LUCIDE_ICONS.viewToggle}
                                     </button>
                                     <!-- Export Chart CSV -->
-                                    <button type="button" class="chart-action-btn export-chart-btn" data-card-code="${chart.code}" data-chart-title="${chart.title}" aria-label="导出图表数据为 CSV / Excel" title="导出图表当前结构化数据 (CSV / Excel)">
+                                    <button type="button" class="chart-action-btn export-chart-btn" data-component-id="${chart.instanceId}" data-chart-title="${chart.title}" aria-label="导出图表数据为 CSV / Excel" title="导出图表当前结构化数据 (CSV / Excel)">
                                         ${LUCIDE_ICONS.export}
                                     </button>
                                     <!-- Copy Chart PNG -->
-                                    <button type="button" class="chart-action-btn copy-chart-btn" data-card-code="${chart.code}" data-chart-title="${chart.title}" aria-label="复制高清图表至剪贴板" title="复制高清图表至剪贴板 (可直接粘贴入 PPT)">
+                                    <button type="button" class="chart-action-btn copy-chart-btn" data-component-id="${chart.instanceId}" data-chart-title="${chart.title}" aria-label="复制高清图表至剪贴板" title="复制高清图表至剪贴板 (可直接粘贴入 PPT)">
                                         ${LUCIDE_ICONS.copy}
                                     </button>
                                     <!-- Fullscreen Focus -->
-                                    <button type="button" class="chart-action-btn fullscreen-btn" data-card-code="${chart.code}" aria-label="全屏沉浸研判" title="全屏沉浸研判 (Esc退出)">
+                                    <button type="button" class="chart-action-btn fullscreen-btn" data-component-id="${chart.instanceId}" aria-label="全屏沉浸研判" title="全屏沉浸研判 (Esc退出)">
                                         ${LUCIDE_ICONS.maximize}
                                     </button>
                                     <!-- Info Dialog -->
@@ -1148,7 +1168,7 @@ __DASHBOARD_CONFIG_CODE__
                             <!-- Card Body Pane -->
                             <div class="card-body-wrap relative w-full h-[270px] overflow-hidden">
                                 <div id="${chart.id}" class="card-chart-pane w-full h-full"></div>
-                                <div id="table-pane-${chart.code}" class="card-table-pane hidden w-full h-full"></div>
+                                <div id="table-pane-${chart.instanceId}" class="card-table-pane hidden w-full h-full"></div>
                             </div>
                         </div>
                     `;
@@ -1159,6 +1179,7 @@ __DASHBOARD_CONFIG_CODE__
                 const tableCfg = this.config.table;
                 const container = document.getElementById('app-table-section');
                 if (!container) return;
+                container.dataset.componentId = tableCfg.id || 'table';
 
                 container.innerHTML = `
                     <div class="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
@@ -1373,11 +1394,18 @@ __DASHBOARD_CONFIG_CODE__
             constructor(config) {
                 this.config = config;
                 this.state = new StateStore(config);
+                this.config = this.state.config;
                 this.renderer = new DashboardRenderer(this.state);
                 this.draggedColKey = null;
+                this._mounted = false;
+                this._eventController = null;
+                this._resizeObserver = null;
             }
 
             init() {
+                if (this._mounted) return this;
+                this._mounted = true;
+                this._eventController = new AbortController();
                 // Render DOM structure
                 this.renderer.renderHeader();
                 this.renderer.renderFilters();
@@ -1396,6 +1424,7 @@ __DASHBOARD_CONFIG_CODE__
 
                 // Bind Global Event Listeners
                 this.bindEvents();
+                return this;
             }
 
             initKPIWidgets() {
@@ -1486,11 +1515,11 @@ __DASHBOARD_CONFIG_CODE__
                     const dom = document.getElementById(chartCfg.id);
                     if (!dom) return;
                     const inst = echarts.init(dom);
-                    this.state.chartInstances[chartCfg.code] = inst;
-                    this.state.chartGranularities[chartCfg.code] = chartCfg.defaultGranularity || 'month';
+                    this.state.chartInstances[chartCfg.instanceId] = inst;
+                    this.state.chartGranularities[chartCfg.instanceId] = chartCfg.defaultGranularity || 'month';
 
                     // Build and set option
-                    const opt = chartCfg.optionBuilder(chartCfg.data, this.state.chartGranularities[chartCfg.code], TOKENS);
+                    const opt = chartCfg.optionBuilder(chartCfg.data, this.state.chartGranularities[chartCfg.instanceId], TOKENS);
                     inst.setOption(opt);
 
                     // Bind Cross Filtering
@@ -1512,15 +1541,17 @@ __DASHBOARD_CONFIG_CODE__
                             }
                         }
                     });
+                    this._resizeObserver = observer;
                     document.querySelectorAll('.card-chart-pane, .section-card div[id^="kpi-spark-"], .section-card div[id^="kpi-gauge-"]').forEach(el => observer.observe(el));
                 }
 
                 window.addEventListener('resize', () => {
                     Object.values(this.state.chartInstances).forEach(inst => inst?.resize());
-                });
+                }, { signal: this._eventController.signal });
             }
 
             bindEvents() {
+                const eventOptions = { signal: this._eventController.signal };
                 // Dropdown dismiss on outside click
                 document.addEventListener('click', (e) => {
                     if (!e.target.closest('[id^="filter"]') && !e.target.closest('[id$="DropdownMenu"]') && !e.target.closest('#colDrawerWrap') && !e.target.closest('#globalSearchWrap')) {
@@ -1528,7 +1559,7 @@ __DASHBOARD_CONFIG_CODE__
                         document.getElementById('colDrawerMenu')?.classList.add('hidden');
                         document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
                     }
-                });
+                }, eventOptions);
 
                 // Explain Modal Trigger
                 const modal = document.getElementById('app-explain-dialog');
@@ -1539,8 +1570,8 @@ __DASHBOARD_CONFIG_CODE__
                         const htmlContent = this.renderer.renderExplanationDialogContent(code, this.config.explanations);
                         modal.innerHTML = htmlContent;
 
-                        document.getElementById('closeExplainModalBtn')?.addEventListener('click', () => modal?.close());
-                        document.getElementById('closeExplainModalFooterBtn')?.addEventListener('click', () => modal?.close());
+                        document.getElementById('closeExplainModalBtn')?.addEventListener('click', () => modal?.close(), eventOptions);
+                        document.getElementById('closeExplainModalFooterBtn')?.addEventListener('click', () => modal?.close(), eventOptions);
 
                         if (typeof modal.showModal === 'function') {
                             modal.showModal();
@@ -1548,20 +1579,20 @@ __DASHBOARD_CONFIG_CODE__
                             modal.setAttribute('open', '');
                         }
                     }
-                });
+                }, eventOptions);
 
                 modal?.addEventListener('click', (e) => {
                     const rect = modal.getBoundingClientRect();
                     if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
                         modal.close();
                     }
-                });
+                }, eventOptions);
 
                 // Granularity Switcher
                 document.addEventListener('click', (e) => {
                     const tabBtn = e.target.closest('.granularity-tab-btn');
                     if (tabBtn) {
-                        const code = tabBtn.getAttribute('data-card-code');
+                        const code = tabBtn.getAttribute('data-component-id');
                         const gran = tabBtn.getAttribute('data-granularity');
                         const parent = tabBtn.parentElement;
                         parent.querySelectorAll('.granularity-tab-btn').forEach(b => {
@@ -1571,7 +1602,7 @@ __DASHBOARD_CONFIG_CODE__
                         tabBtn.classList.remove('text-ink-muted');
                         tabBtn.classList.add('bg-white', 'text-primary-strong', 'font-semibold', 'shadow-xs');
 
-                        const chartCfg = (this.config.charts || []).find(c => c.code === code);
+                        const chartCfg = (this.config.charts || []).find(c => c.instanceId === code);
                         const inst = this.state.chartInstances[code];
                         if (chartCfg && inst) {
                             this.state.chartGranularities[code] = gran;
@@ -1588,13 +1619,13 @@ __DASHBOARD_CONFIG_CODE__
                             this.showToast(`已切换为${gran === 'month' ? '月度' : '季度'}统计口径`);
                         }
                     }
-                });
+                }, eventOptions);
 
                 // View Toggle (Chart ↔ Dynamic Auto-Converted Table)
                 document.addEventListener('click', (e) => {
                     const btn = e.target.closest('.view-toggle-btn');
                     if (btn) {
-                        const code = btn.getAttribute('data-card-code');
+                        const code = btn.getAttribute('data-component-id');
                         const card = btn.closest('.section-card');
                         const chartPane = card.querySelector('.card-chart-pane');
                         const tablePane = card.querySelector('.card-table-pane');
@@ -1618,16 +1649,16 @@ __DASHBOARD_CONFIG_CODE__
                             }
                         }
                     }
-                });
+                }, eventOptions);
 
                 // Export Chart CSV Data (One Click per Chart)
                 document.addEventListener('click', (e) => {
                     const btn = e.target.closest('.export-chart-btn');
                     if (btn) {
-                        const code = btn.getAttribute('data-card-code');
+                        const code = btn.getAttribute('data-component-id');
                         const title = btn.getAttribute('data-chart-title') || '图表数据';
                         const inst = this.state.chartInstances[code];
-                        const chartCfg = (this.config.charts || []).find(c => c.code === code);
+                        const chartCfg = (this.config.charts || []).find(c => c.instanceId === code);
                         
                         const tdata = ChartDataToTableConverter.convert(inst, chartCfg);
                         if (tdata && tdata.headers && tdata.rows) {
@@ -1648,13 +1679,13 @@ __DASHBOARD_CONFIG_CODE__
                             this.showToast('图表数据提取失败，请检查图表配置');
                         }
                     }
-                });
+                }, eventOptions);
 
                 // Copy Chart to Clipboard
                 document.addEventListener('click', (e) => {
                     const btn = e.target.closest('.copy-chart-btn');
                     if (btn) {
-                        const code = btn.getAttribute('data-card-code');
+                        const code = btn.getAttribute('data-component-id');
                         const inst = this.state.chartInstances[code];
                         if (inst) {
                             try {
@@ -1669,13 +1700,13 @@ __DASHBOARD_CONFIG_CODE__
                             }
                         }
                     }
-                });
+                }, eventOptions);
 
                 // Fullscreen Focus Mode
                 document.addEventListener('click', (e) => {
                     const btn = e.target.closest('.fullscreen-btn');
                     if (btn) {
-                        const code = btn.getAttribute('data-card-code');
+                        const code = btn.getAttribute('data-component-id');
                         const card = btn.closest('.section-card');
                         const isFull = card.classList.contains('card-fullscreen');
                         if (!isFull) {
@@ -1692,7 +1723,7 @@ __DASHBOARD_CONFIG_CODE__
                         setTimeout(() => this.state.chartInstances[code]?.resize(), 100);
                         setTimeout(() => this.state.chartInstances[code]?.resize(), 300);
                     }
-                });
+                }, eventOptions);
 
                 // Esc to exit fullscreen
                 window.addEventListener('keydown', (e) => {
@@ -1707,12 +1738,12 @@ __DASHBOARD_CONFIG_CODE__
                         });
                         Object.values(this.state.chartInstances).forEach(i => i?.resize());
                     }
-                });
+                }, eventOptions);
             }
 
             renderDynamicChartTable(code, tablePane) {
                 const inst = this.state.chartInstances[code];
-                const chartCfg = (this.config.charts || []).find(c => c.code === code);
+                const chartCfg = (this.config.charts || []).find(c => c.instanceId === code);
                 const tdata = ChartDataToTableConverter.convert(inst, chartCfg);
                 if (tdata && tdata.headers && tdata.rows) {
                     tablePane.innerHTML = `
@@ -1954,10 +1985,14 @@ __DASHBOARD_CONFIG_CODE__
                 const rows = this.getFilteredTableRows();
                 const allRows = this.config.table?.rows || [];
                 const isFiltered = rows.length < allRows.length;
+                const scopedConsumerIds = new Set(
+                    this.state.filterDefs.flatMap(filter => Array.isArray(filter.componentIds) ? filter.componentIds : [])
+                );
 
                 // 1. Dynamically update KPI Cards
                 if (rows.length > 0) {
                     (this.config.kpis || []).forEach(kpi => {
+                        if (scopedConsumerIds.size > 0 && !scopedConsumerIds.has(kpi.id)) return;
                         const kpiCard = document.querySelector(`[data-explain-chart="${kpi.explainKey}"]`)?.closest('.section-card');
                         if (!kpiCard) return;
 
@@ -1974,10 +2009,11 @@ __DASHBOARD_CONFIG_CODE__
                 // 2. Dynamically update Charts (Generic & Clean)
                 const charts = this.config.charts || [];
                 charts.forEach(chartCfg => {
-                    const code = chartCfg.code;
-                    const inst = this.state.chartInstances[code];
+                    const instanceId = chartCfg.instanceId;
+                    if (scopedConsumerIds.size > 0 && !scopedConsumerIds.has(instanceId)) return;
+                    const inst = this.state.chartInstances[instanceId];
                     if (!inst) return;
-                    const gran = this.state.chartGranularities[code] || 'month';
+                    const gran = this.state.chartGranularities[instanceId] || 'month';
 
                     try {
                         if (typeof chartCfg.onFilterChange === 'function') {
@@ -1991,10 +2027,10 @@ __DASHBOARD_CONFIG_CODE__
                         const cardEl = document.getElementById(chartCfg.id)?.closest('.section-card');
                         const tablePane = cardEl?.querySelector('.card-table-pane');
                         if (tablePane && !tablePane.classList.contains('hidden')) {
-                            this.renderDynamicChartTable(code, tablePane);
+                            this.renderDynamicChartTable(instanceId, tablePane);
                         }
                     } catch (err) {
-                        console.error('Error updating chart ' + code, err);
+                        console.error('Error updating chart ' + instanceId, err);
                     }
                 });
             }
@@ -2092,7 +2128,7 @@ __DASHBOARD_CONFIG_CODE__
 
             // Cross Filtering
             setTableCrossFilter(val) {
-                this.state.filters.chartCrossFilter = val;
+                this.state.chartCrossFilter = val;
                 const tray = document.getElementById('tableCrossFilterTray');
                 const txt = document.getElementById('tableCrossFilterText');
                 if (tray && txt) {
@@ -2106,7 +2142,7 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             clearTableCrossFilter() {
-                this.state.filters.chartCrossFilter = null;
+                this.state.chartCrossFilter = null;
                 document.getElementById('tableCrossFilterTray')?.classList.add('hidden');
                 this.state.table.page = 1;
                 this.renderTableEngine();
@@ -2257,23 +2293,21 @@ __DASHBOARD_CONFIG_CODE__
                 // 1. Dynamic Attribute Filtering
                 this.state.filterDefs.forEach(f => {
                     const curVal = this.state.filterValues[f.key];
+                    const declaredFields = Array.isArray(f.fields) && f.fields.length > 0 ? f.fields : null;
+                    const candidateEntries = row => declaredFields
+                        ? declaredFields.map(field => [field, row[field]]).filter(([, value]) => value !== undefined)
+                        : Object.entries(row).filter(([key]) => !key.startsWith('raw') && !key.startsWith('_'));
                     if (f.type === 'multi-select') {
                         if (curVal instanceof Set && curVal.size > 0 && curVal.size < f.options.length) {
                             rows = rows.filter(r => {
-                                const directVal = r[f.key];
-                                if (directVal !== undefined && curVal.has(String(directVal))) return true;
-                                return Object.entries(r).some(([k, v]) => !k.startsWith('raw') && !k.startsWith('_') && curVal.has(String(v)));
+                                return candidateEntries(r).some(([, value]) => curVal.has(String(value)));
                             });
                         }
                     } else {
                         if (curVal !== undefined && curVal !== 'ALL' && curVal !== 'all' && curVal !== '') {
                             const curLabel = this.state.filterLabels[f.key] || '';
                             rows = rows.filter(r => {
-                                const directVal = r[f.key];
-                                if (directVal !== undefined) {
-                                    return String(directVal).includes(String(curVal)) || (curLabel && String(directVal).includes(curLabel));
-                                }
-                                return Object.entries(r).some(([k, v]) => !k.startsWith('raw') && !k.startsWith('_') && (String(v).includes(String(curVal)) || (curLabel && String(v).includes(curLabel))));
+                                return candidateEntries(r).some(([, value]) => String(value).includes(String(curVal)) || (curLabel && String(value).includes(curLabel)));
                             });
                         }
                     }
@@ -2416,6 +2450,18 @@ __DASHBOARD_CONFIG_CODE__
                 this.showToast(`已成功导出 ${allRows.length} 条记录至 Excel (CSV)`);
             }
 
+            destroy() {
+                if (!this._mounted) return;
+                this._mounted = false;
+                this._eventController?.abort();
+                this._eventController = null;
+                this._resizeObserver?.disconnect();
+                this._resizeObserver = null;
+                Object.values(this.state.chartInstances).forEach(inst => inst?.dispose());
+                this.state.chartInstances = {};
+                if (window.App === this) window.App = null;
+            }
+
             showToast(msg) {
                 const container = document.getElementById('app-toast-container');
                 if (!container) return;
@@ -2431,19 +2477,7 @@ __DASHBOARD_CONFIG_CODE__
             }
         }
 
-        // Robust App Bootstrapping (Supports both early & deferred execution)
-        function bootApp() {
-            if (window.DASHBOARD_CONFIG && !window.App) {
-                window.App = new DashboardApp(window.DASHBOARD_CONFIG);
-                window.App.init();
-            }
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', bootApp);
-        } else {
-            bootApp();
-        }
+__DASHBOARD_RUNTIME_BUNDLE__
 
     })();
     </script>
@@ -2451,4 +2485,7 @@ __DASHBOARD_CONFIG_CODE__
 </html>"""
 
 def generate_dashboard_html(config_js_code, page_title):
-    return TEMPLATE.replace('__PAGE_TITLE__', page_title).replace('__DASHBOARD_CONFIG_CODE__', config_js_code)
+    return (TEMPLATE
+            .replace('__PAGE_TITLE__', page_title)
+            .replace('__DASHBOARD_CONFIG_CODE__', config_js_code)
+            .replace('__DASHBOARD_RUNTIME_BUNDLE__', render_runtime_bundle()))

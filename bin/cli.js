@@ -39,10 +39,11 @@ function printHelp() {
     charts-design dashboard validate <dir> [--strict]  Validate components without rendering
     charts-design dashboard build <dir> -o <file>      Strictly compile the workspace to HTML
     charts-design dashboard inspect-html <file>         Inspect generated HTML contracts
+    charts-design dashboard inventory-html <file>       Create a migration preservation manifest
     charts-design dashboard compare-html <a> <b>        Compare preservation against a baseline
     charts-design dashboard --config <config.json>    Assemble full executive dashboard from AI config
     charts-design from-csv <file.csv> [options]        Legacy one-step CSV generation
-    charts-design list                                 List all 52 chart taxonomy codes
+    charts-design list                                 List every registered chart taxonomy code
 
   Chart Component Options:
     --code,   -c <code>       Chart taxonomy code (e.g. c01, t06, r01, fn01)
@@ -88,7 +89,7 @@ function printHelp() {
     # 4. Legacy full-config build
     charts-design dashboard --config ./my_analysis.json --output ./dist/report.html --open
 
-    # 5. List all 52 chart taxonomy codes
+    # 5. List every registered chart taxonomy code
     charts-design list
 `);
 }
@@ -160,7 +161,7 @@ function main() {
       break;
     case "dashboard":
     case "dash":
-      if (["init", "import-csv", "inspect", "inspect-html", "compare-html", "validate", "meta", "add", "table", "build"].includes(restArgs[0])) {
+      if (["init", "import-csv", "inspect", "inspect-html", "inventory-html", "compare-html", "validate", "meta", "add", "table", "build"].includes(restArgs[0])) {
         targetScript = WORKSPACE_PY;
       } else {
         targetScript = DASHBOARD_PY;

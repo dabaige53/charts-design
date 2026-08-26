@@ -15,6 +15,9 @@ python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./board r
 python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./board regional-sales \
   --code c01 --title "各区域营业收入" --unit "万元" \
   --data-file ./regional-sales.json
+python3 skills/executive-charts/scripts/dashboard_workspace.py add filter ./board region \
+  --label "大区" --option east=华东 --field region \
+  --consumer revenue --consumer regional-sales
 python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./board --json
 python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./board --strict --json
 python3 skills/executive-charts/scripts/dashboard_workspace.py build ./board --output ./dist/board.html
@@ -33,13 +36,13 @@ python3 skills/executive-charts/scripts/dashboard_workspace.py import-csv ./boar
 ## 1. 单图表生成引擎 (`generate_chart.py`)
 
 ### 核心功能
-- 支持 52 款完整分类图表（`c01~c08`, `t01~t06`, `k01~k06`, `d01~d04`, `r01~r05`, `f01~f03`, `fn01~fn04`, `m01~m04`）；
+- 支持当前目录注册的全部 40 款分类图表（`c01~c08`, `t01~t06`, `k01~k06`, `d01~d04`, `r01~r05`, `f01~f03`, `fn01~fn04`, `m01~m04`）；
 - 单文件自带 Tailwind CSS、ECharts 5.5.0 与 Lucide 矢量图标，开箱即用；
 - 具备图表/表格视图切换、CSV/Excel 导出、高清 PNG 图片一键复制至 PPT、全屏研判与业务口径弹窗。
 
 ### 常用命令示例
 ```bash
-# 1. 查看全部 52 款图表编号及中文释义
+# 1. 查看全部 40 款图表编号及中文释义
 python3 skills/executive-charts/scripts/generate_chart.py --list
 
 # 2. 生成单个独立图表 HTML
@@ -48,7 +51,7 @@ python3 skills/executive-charts/scripts/generate_chart.py --code c01 --output ./
 # 3. 自定义图表标题并生成后自动在浏览器中打开
 python3 skills/executive-charts/scripts/generate_chart.py --code t06 --title "2026年客运总收入与客公里收益走势" --output ./dist/my_t06.html --open
 
-# 4. 批量生成全部 52 款独立图表 HTML
+# 4. 批量生成全部 40 款独立图表 HTML
 python3 skills/executive-charts/scripts/generate_chart.py --batch --outdir ./dist/all_charts/
 
 # 5. 打印指定图表的原始 JavaScript ECharts 配置代码片段
@@ -96,10 +99,10 @@ scripts/
 ├── generate_dashboard.py     # 完整高管看板生成 CLI 与 Python API 入口
 ├── README.md                 # 脚本套件使用指南
 └── core/
-    ├── chart_catalog.py      # 52 款完整图表配置函数与数据抽取器 (ALL_CHARTS)
+    ├── chart_catalog.py      # 完整图表配置函数与数据抽取器 (ALL_CHARTS)
     ├── chart_builders.py     # 核心看板图表构建字典 (CHARTS_JS_DEFINITIONS)
     ├── dashboard_template.py # 生产级前端渲染框架与 DOM 交互引擎 (BASE_TEMPLATE)
-    ├── explanations.py       # 52 款图表与 KPI 咨询级指标口径词典 (CHART_EXPLANATIONS_DATA)
+    ├── explanations.py       # 图表与 KPI 咨询级指标口径词典 (CHART_EXPLANATIONS_DATA)
     └── table_data.py         # 全要素航线数据集与表头元数据 (TABLE_COLUMNS / TABLE_ROWS)
 ```
 

@@ -120,6 +120,35 @@ def run_cli(*args):
     res = subprocess.run(cmd, capture_output=True, text=True)
     return res
 
+
+def test_generated_html_inspector_contract():
+    print("Testing generated HTML inspector contract...")
+    with tempfile.TemporaryDirectory(prefix="charts-design-html-inspector-") as tmp:
+        valid_html = os.path.join(tmp, "valid.html")
+        duplicate_html = os.path.join(tmp, "duplicate.html")
+        with open(valid_html, "w", encoding="utf-8") as f:
+            f.write("""<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Valid</title></head><body><main id=\"app\"></main></body></html>""")
+        with open(duplicate_html, "w", encoding="utf-8") as f:
+            f.write("""<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Duplicate</title></head><body><div id=\"same\"></div><div id=\"same\"></div></body></html>""")
+
+        valid = run_cli("dashboard", "inspect-html", valid_html, "--strict", "--json")
+        assert valid.returncode == 0, valid.stdout + valid.stderr
+        valid_payload = json.loads(valid.stdout)
+        assert valid_payload["ok"] is True
+        assert valid_payload["command"] == "dashboard.inspect-html"
+        assert valid_payload["summary"]["duplicateIds"] == 0
+
+        duplicate = run_cli("dashboard", "inspect-html", duplicate_html, "--strict", "--json")
+        assert duplicate.returncode != 0
+        duplicate_payload = json.loads(duplicate.stdout)
+        assert duplicate_payload["ok"] is False
+        assert duplicate_payload["errors"] == [{
+            "code": "DOM_ID_DUPLICATE",
+            "path": "#same",
+            "message": "DOM id must be unique: same",
+        }]
+    print("✓ Generated HTML inspector contract test passed!")
+
 def test_workspace_generation():
     print("Testing composable dashboard workspace...")
     with tempfile.TemporaryDirectory(prefix="charts-design-workspace-") as tmp:
@@ -163,6 +192,31 @@ def test_workspace_generation():
             assert 'filters: []' in html, "Explicit zero filters should not fall back to a preset"
     print("✓ Composable workspace test passed!")
 
+
+def test_workspace_filter_scope_contract():
+    print("Testing explicit workspace filter scope...")
+    with tempfile.TemporaryDirectory(prefix="charts-design-filter-scope-") as tmp:
+        workspace = os.path.join(tmp, "board")
+        assert run_cli("dashboard", "init", workspace, "--title", "Scoped board", "--json").returncode == 0
+        add_filter = run_cli(
+            "dashboard", "add", "filter", workspace, "region",
+            "--label", "大区", "--option", "east=华东",
+            "--field", "region", "--consumer", "revenue", "--consumer", "regional-sales", "--json",
+        )
+        assert add_filter.returncode == 0, add_filter.stdout + add_filter.stderr
+        with open(os.path.join(workspace, "filters.json"), encoding="utf-8") as f:
+            filters = json.load(f)
+        assert filters[0]["fields"] == ["region"]
+        assert filters[0]["componentIds"] == ["revenue", "regional-sales"]
+
+        filters[0].pop("fields")
+        with open(os.path.join(workspace, "filters.json"), "w", encoding="utf-8") as f:
+            json.dump(filters, f, ensure_ascii=False)
+        invalid = run_cli("dashboard", "validate", workspace, "--strict", "--json")
+        assert invalid.returncode == 2
+        assert any(error["code"] == "FILTER_FIELDS_MISSING" for error in json.loads(invalid.stdout)["errors"])
+    print("✓ Explicit workspace filter scope test passed!")
+
 if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     test_chart_generation()
@@ -170,5 +224,7 @@ if __name__ == "__main__":
     test_preset_generation()
     test_config_generation()
     test_from_csv_generation()
+    test_generated_html_inspector_contract()
     test_workspace_generation()
+    test_workspace_filter_scope_contract()
     print("All tests successfully completed!")

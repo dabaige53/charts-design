@@ -12,13 +12,18 @@ CHART_CODES = (
     "m01", "m02", "m03", "m04", "r01", "r02", "r03", "r04", "r05",
     "t01", "t02", "t03", "t04", "t05", "t06",
 )
-CHART_SCHEMA_REGISTRY = {code: "generic-chart-data-v1" for code in CHART_CODES}
+CHART_SCHEMA_REGISTRY = {
+    code: f"{''.join(character for character in code if character.isalpha())}-family-data-v1"
+    for code in CHART_CODES
+}
 
 
 def validate_chart_data(data: Any, path: str) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
     if not isinstance(data, dict):
         return [{"code": "CHART_DATA_INVALID", "path": path, "message": "Chart data must be an object"}]
+    if not data:
+        return [{"code": "CHART_DATA_EMPTY", "path": path, "message": "Chart data must contain explicit business values"}]
 
     def array_required(key: str) -> None:
         if key in data and not isinstance(data[key], list):

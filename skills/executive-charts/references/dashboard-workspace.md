@@ -31,7 +31,8 @@ python3 "$WORKSPACE_SCRIPT" meta set ./board --subtitle "2026 年 7 月" --syste
 python3 "$WORKSPACE_SCRIPT" add filter ./board region \
   --label "大区" --type multi-select \
   --option east=华东 --option south=华南 \
-  --default east --default south
+  --default east --default south \
+  --field region --consumer revenue --consumer regional-sales
 
 python3 "$WORKSPACE_SCRIPT" add kpi ./board revenue \
   --label "营业收入" --value 224 --unit "万元" --yoy "+12.6% YoY"
@@ -48,7 +49,8 @@ python3 "$WORKSPACE_SCRIPT" table set ./board --from ./store-table.json
 
 python3 "$WORKSPACE_SCRIPT" inspect ./board --json
 python3 "$WORKSPACE_SCRIPT" validate ./board --strict --json
-python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html --json
+python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html \
+  --manifest ./preservation.json --json
 ```
 
 When the skill is installed outside this repository, set `WORKSPACE_SCRIPT` to the `scripts/dashboard_workspace.py` beside the active `SKILL.md`.
@@ -102,6 +104,8 @@ Use a focused component file when a chart needs multiple series. Keep data value
   "key": "region",
   "label": "大区",
   "type": "multi-select",
+  "fields": ["region"],
+  "componentIds": ["revenue", "regional-sales"],
   "options": [
     {"value": "east", "label": "华东", "default": true},
     {"value": "south", "label": "华南", "default": true}
@@ -109,7 +113,7 @@ Use a focused component file when a chart needs multiple series. Keep data value
 }
 ```
 
-An empty `filters.json` is valid and means the dashboard has no filters.
+`fields` is the explicit table-data binding. `componentIds` lists consumers by stable component id; chart code is never an instance identity. An empty `filters.json` is valid and means the dashboard has no filters.
 
 ### Table
 
@@ -135,9 +139,37 @@ For large tables, generate `table.json` from source data with a deterministic sc
 - workspace references stay inside the workspace and resolve to valid JSON;
 - component ids are unique;
 - filter definitions use the array schema;
+- strict filters declare one or more data fields, and optional consumers are component-id arrays;
 - chart codes exist and each chart provides explicit data;
 - KPI and chart units are declared;
 - table columns have stable keys and titles;
 - the dashboard has at least one KPI or chart.
 
 Warnings identify missing units or incomplete executive metadata. Resolve relevant warnings before final delivery.
+
+## Complete supported component surface
+
+The workspace contract covers all shipped component families:
+
+- KPI cards: `mc01`–`mc09` (9 types);
+- chart renderers: every code returned by `generate_chart.py --list` (currently 40 codes across `c`, `d`, `f`, `fn`, `k`, `m`, `r` and `t` families);
+- dynamic filters: 0–N `select` or `multi-select` components with explicit fields and consumers;
+- one structured table component with stable column keys and typed units;
+- shared card shell capabilities: chart/table view, export, copy, fullscreen, explanation, resize and destroy lifecycle.
+
+`component.id` is unique and preserved. `component.code` selects the visual renderer and may repeat.
+
+## Generated HTML inspection and migration preservation
+
+`build` always runs strict static inspection. Use the standalone commands for an existing page or CI:
+
+```bash
+python3 "$WORKSPACE_SCRIPT" inventory-html ./before.html --output ./preservation.json --json
+python3 "$WORKSPACE_SCRIPT" inspect-html ./dist/board.html --strict --manifest ./preservation.json --json
+python3 "$WORKSPACE_SCRIPT" inspect-html ./dist/board.html --runtime --strict --manifest ./preservation.json --json
+python3 "$WORKSPACE_SCRIPT" compare-html ./before.html ./dist/board.html --manifest ./preservation.json --json
+```
+
+A Preservation Manifest may declare `requiredIds`, `requiredText`, `forbiddenText`, `requiredAssets` and `components`. Inspection checks document metadata, duplicate ids, broken DOM references, missing local assets and manifest requirements. Comparison additionally catches baseline ids, visible text and asset references lost during migration.
+
+`--runtime` uses Playwright with the installed Chrome channel. It loads the generated file, waits for `DashboardRuntime`, checks every rendered KPI/chart/filter/table identity and chart-card actions, rejects browser errors or duplicate rendered ids, and verifies `destroy()` clears the mounted app.

@@ -16,7 +16,7 @@ from typing import Any
 from generate_dashboard import CHARTS_MAP, generate_dashboard
 from core.csv_profiler import profile_csv
 from core.component_schemas import CHART_SCHEMA_REGISTRY, KPI_TYPES, validate_chart_data
-from core.html_inspector import compare_html, inspect_html
+from core.html_inspector import compare_html, inspect_html, inventory_html
 
 
 SCHEMA_VERSION = 1
@@ -190,6 +190,25 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
                 error("FILTER_TYPE_INVALID", f"{path}.type", "Filter type must be select or multi-select")
             if not isinstance(item.get("options"), list):
                 error("FILTER_OPTIONS_INVALID", f"{path}.options", "Filter options must be an array")
+            fields = item.get("fields")
+            if strict and (not isinstance(fields, list) or not fields):
+                error(
+                    "FILTER_FIELDS_MISSING",
+                    f"{path}.fields",
+                    "Strict workspaces must declare at least one table field for each filter",
+                )
+            elif fields is not None and (not isinstance(fields, list) or not all(isinstance(field, str) and field for field in fields)):
+                error("FILTER_FIELDS_INVALID", f"{path}.fields", "Filter fields must be a non-empty string array")
+            component_ids = item.get("componentIds")
+            if component_ids is not None and (
+                not isinstance(component_ids, list)
+                or not all(isinstance(component_id, str) and component_id for component_id in component_ids)
+            ):
+                error(
+                    "FILTER_CONSUMERS_INVALID",
+                    f"{path}.componentIds",
+                    "Filter consumers must be a string array of component ids",
+                )
 
     for kind in ("kpis", "charts"):
         if not isinstance(resolved.get(kind), list):
@@ -421,6 +440,8 @@ def cmd_add_filter(args: argparse.Namespace) -> None:
         "label": args.label,
         "type": args.type,
         "options": [parse_option(raw, default_values) for raw in args.option],
+        "fields": args.fields or [],
+        "componentIds": args.component_ids or [],
     }
     filters.append(item)
     write_json(filters_path, filters)
@@ -504,14 +525,12 @@ def cmd_build(args: argparse.Namespace) -> None:
             auto_open=args.open,
             allow_preset_fallback=False,
         )
-    inspection = None
-    if args.inspect_html:
-        inspection = inspect_html(output, strict=True, manifest_path=Path(args.manifest) if args.manifest else None)
-        if not inspection["ok"]:
-            raise WorkspaceError("HTML_INSPECTION_FAILED", json.dumps({
-                "workspace": str(root), "output": str(output), "inspection": inspection,
-                "errors": inspection["errors"], "warnings": inspection["warnings"],
-            }, ensure_ascii=False))
+    inspection = inspect_html(output, strict=True, manifest_path=Path(args.manifest) if args.manifest else None)
+    if not inspection["ok"]:
+        raise WorkspaceError("HTML_INSPECTION_FAILED", json.dumps({
+            "workspace": str(root), "output": str(output), "inspection": inspection,
+            "errors": inspection["errors"], "warnings": inspection["warnings"],
+        }, ensure_ascii=False))
     emit(
         "dashboard.build",
         {
@@ -520,7 +539,7 @@ def cmd_build(args: argparse.Namespace) -> None:
             "bytes": output.stat().st_size,
             "summary": summary(root, manifest, resolved),
             "warnings": warnings,
-            **({"inspection": inspection} if inspection is not None else {}),
+            "inspection": inspection,
         },
         args.json,
     )
@@ -551,6 +570,19 @@ def cmd_compare_html(args: argparse.Namespace) -> None:
         Path(args.before), Path(args.after),
         manifest_path=Path(args.manifest) if args.manifest else None,
     ), args.json)
+
+
+def cmd_inventory_html(args: argparse.Namespace) -> None:
+    html_path = Path(args.html).expanduser().resolve()
+    manifest, errors = inventory_html(html_path)
+    if errors:
+        raise WorkspaceError("HTML_INVENTORY_FAILED", json.dumps({"errors": errors}, ensure_ascii=False))
+    output = Path(args.output).expanduser().resolve()
+    write_json(output, manifest)
+    emit("dashboard.inventory-html", {
+        "html": str(html_path), "output": str(output),
+        "summary": {"ids": len(manifest["requiredIds"]), "text": len(manifest["requiredText"]), "assets": len(manifest["requiredAssets"])},
+    }, args.json)
 
 
 def add_json_flag(parser: argparse.ArgumentParser) -> None:
@@ -606,6 +638,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_json_flag(compare_html_parser)
     compare_html_parser.set_defaults(func=cmd_compare_html)
 
+    inventory_html_parser = subparsers.add_parser("inventory-html", help="Create a preservation manifest from existing HTML")
+    inventory_html_parser.add_argument("html")
+    inventory_html_parser.add_argument("--output", "-o", required=True)
+    add_json_flag(inventory_html_parser)
+    inventory_html_parser.set_defaults(func=cmd_inventory_html)
+
     meta_parser = subparsers.add_parser("meta", help="Update dashboard metadata")
     meta_subparsers = meta_parser.add_subparsers(dest="meta_command", required=True)
     meta_set = meta_subparsers.add_parser("set", help="Set one or more metadata fields")
@@ -629,6 +667,8 @@ def build_parser() -> argparse.ArgumentParser:
     filter_parser.add_argument("--type", choices=("select", "multi-select"), default="select")
     filter_parser.add_argument("--option", action="append", default=[], help="Repeat value=label")
     filter_parser.add_argument("--default", action="append", help="Repeat a default option value")
+    filter_parser.add_argument("--field", action="append", dest="fields", help="Repeat an explicit table field consumed by this filter")
+    filter_parser.add_argument("--consumer", action="append", dest="component_ids", help="Repeat a component id that consumes this filter")
     add_json_flag(filter_parser)
     filter_parser.set_defaults(func=cmd_add_filter)
 
@@ -671,7 +711,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_cmd.add_argument("workspace")
     build_cmd.add_argument("--output", "-o", required=True)
     build_cmd.add_argument("--open", action="store_true")
-    build_cmd.add_argument("--inspect-html", action="store_true", help="Fail the build when generated HTML inspection fails")
+    build_cmd.add_argument("--inspect-html", action="store_true", help="Compatibility flag; static HTML inspection always runs")
     build_cmd.add_argument("--manifest", help="Preservation Manifest used by --inspect-html")
     add_json_flag(build_cmd)
     build_cmd.set_defaults(func=cmd_build)

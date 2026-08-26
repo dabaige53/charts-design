@@ -482,6 +482,12 @@ def serialize_chart_object(c):
         return "{\n            ...(\n" + CHARTS_MAP[code] + "\n            ),\n            ..." + overrides + "\n        }"
     return overrides
 
+
+def _chart_instance_id(code, index):
+    """Return the stable, DOM-safe identity for one chart occurrence."""
+    safe_code = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in str(code).lower()).strip("-")
+    return f"chart-{safe_code or 'component'}-{index + 1}"
+
 def generate_dashboard(
     preset_name="executive_report",
     chart_codes=None,
@@ -560,9 +566,14 @@ def generate_dashboard(
             selected_codes = [c.strip().lower() for c in selected_codes.split(',') if c.strip()]
 
         charts_js_list = []
-        for code in selected_codes:
+        for index, code in enumerate(selected_codes):
             if code in CHARTS_MAP:
-                charts_js_list.append(CHARTS_MAP[code])
+                instance_id = _chart_instance_id(code, index)
+                charts_js_list.append(
+                    "{\n            ...(\n"
+                    + CHARTS_MAP[code]
+                    + f'\n            ),\n            instanceId: "{instance_id}",\n            id: "{instance_id}"\n        }}'
+                )
             else:
                 print(f"⚠️ Warning: Chart code '{code}' not recognized, skipping.")
         charts_combined_js = ",\n        ".join(charts_js_list)

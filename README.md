@@ -41,7 +41,7 @@ python3 skills/executive-charts/scripts/dashboard_workspace.py build ./sales-boa
 | [**`examples/sample_financial_attribution.html`**](examples/sample_financial_attribution.html) | **# 财务归因** | EBITDA 毛利归因瀑布图、收支剪刀差盈亏线、成本敏感度多因子分析 |
 | [**`examples/sample_saas_product_analytics.html`**](examples/sample_saas_product_analytics.html) | **# SaaS 产品** | 订阅漏斗全链路转化、MRR 留存热力图、NDR / LTV 单元经济学透视 |
 | [**`examples/sample_strategic_matrix_portfolio.html`**](examples/sample_strategic_matrix_portfolio.html) | **# 战略矩阵** | BCG 增长-份额战略四象限、资产组合气泡阵列、多维能力雷达对标 |
-| [**`examples/gallery.html`**](examples/gallery.html) | **# 全谱系画廊** | 52 款麦肯锡咨询级图表全要素样式墙与全量交互示例 |
+| [**`examples/gallery.html`**](examples/gallery.html) | **# 全谱系画廊** | 已注册图表的全要素样式墙与交互示例 |
 
 ---
 
@@ -68,13 +68,13 @@ python3 skills/executive-charts/scripts/generate_chart.py --code t06 --output ./
 | `dashboard_workspace.py init/add/inspect/validate/build` | 分步组装并严格编译 dashboard workspace | `python3 skills/executive-charts/scripts/dashboard_workspace.py init ./board` |
 | `generate_dashboard.py` | 兼容生成整页 preset/config 看板 | `python3 skills/executive-charts/scripts/generate_dashboard.py --preset executive_monthly -o report.html` |
 | `generate_chart.py --code` | 生成独立图表组件（带 5+1 工具栏） | `python3 skills/executive-charts/scripts/generate_chart.py --code t06 -o chart.html` |
-| `generate_chart.py --list` | 终端打印 52 款图表编号与分类 | `python3 skills/executive-charts/scripts/generate_chart.py --list` |
+| `generate_chart.py --list` | 终端打印全部已注册图表编号与分类 | `python3 skills/executive-charts/scripts/generate_chart.py --list` |
 
 ---
 
 ## 核心亮点 (Key Features)
 
-- **52 款咨询级图表全谱系 (Taxonomy 52)**：涵盖对比、趋势、构成、分布、关系、转化、财务归因、监控 8 大核心分析意图。
+- **40 款已注册咨询级图表**：涵盖对比、趋势、构成、分布、关系、转化、财务归因、监控 8 大核心分析意图。
 - **图表卡片标配 5+1 交互工具栏**：
   - 时间粒度切换（月度 <-> 季度平滑过渡）
   - 图表 / 数据透视表一键互转（可视化与二维数据表无缝切换）
@@ -102,7 +102,7 @@ charts-design/
 │   └── executive-charts/               # 麦肯锡高管商业图表技能包
 │       ├── SKILL.md                    # 技能标准与强制遵循规范
 │       ├── scripts/                    # 看板与图表生成 CLI (generate_dashboard.py, generate_chart.py)
-│       ├── references/                 # 设计系统 Token、数据规范与 52 款 Option 库
+│       ├── references/                 # 设计系统 Token、数据规范与图表 Option 库
 │       └── examples/                   # 核心看板与画廊案例
 ├── examples/                           # 6 大高管看板与画廊独立演示入口
 │   ├── executive_report.html           # # 核心研判

@@ -7,7 +7,7 @@ McKinsey-Grade Frontend Component & Chart Generator (咨询级前端组件生成
 Author: Executive Charts Skill Suite
 Description:
     Generates standalone, McKinsey-grade interactive frontend components:
-    1. Chart Cards: 52 taxonomy charts with 5+1 toolbar (granularity, table toggle, CSV, PNG copy, fullscreen, info dialog)
+    1. Chart Cards: every registered taxonomy chart with 5+1 toolbar (granularity, table toggle, CSV, PNG copy, fullscreen, info dialog)
     2. Data Tables: Interactive pivot tables with sorting, nowrap scroll, cell copy, CSV export
     3. Business Explanation Modal: Complete Overview, specs, coordinate architecture, and mathematical formulas
 =============================================================================
@@ -623,9 +623,9 @@ def generate_standalone_chart(code, output_path=None, custom_title=None, width="
     return output_path
 
 def list_all_charts():
-    """Prints a formatted index of all 52 charts."""
+    """Print a formatted index of every registered chart."""
     print("=" * 80)
-    print("McKinsey-Grade Executive Chart Taxonomy (52 Full Spectrum)")
+    print(f"McKinsey-Grade Executive Chart Taxonomy ({len(ALL_CHART_BUILDERS)} Registered Charts)")
     print("=" * 80)
     current_prefix = ""
     for code, js in sorted(ALL_CHART_BUILDERS.items()):
@@ -652,7 +652,7 @@ def generate_batch_charts(codes_str, output_dir="./dist/charts", auto_open=False
             generate_standalone_chart(code, output_path=out_file, auto_open=False)
             generated.append(out_file)
         else:
-            print(f"⚠️ Warning: Chart code '{code}' not found in 52 taxonomy, skipping.")
+            print(f"⚠️ Warning: Chart code '{code}' is not registered, skipping.")
     print(f"✅ Successfully generated {len(generated)} charts in batch.")
     if auto_open and generated:
         subprocess.run(["open", generated[0]])
@@ -665,7 +665,7 @@ def main():
     parser.add_argument("--output", "-o", type=str, help="Target HTML output path (or output directory if --batch)")
     parser.add_argument("--output-dir", type=str, default="./dist/charts", help="Directory for batch generated charts")
     parser.add_argument("--title", "-t", type=str, help="Custom chart title")
-    parser.add_argument("--list", "-l", action="store_true", help="List all 52 available chart codes")
+    parser.add_argument("--list", "-l", action="store_true", help="List every registered chart code")
     parser.add_argument("--open", action="store_true", help="Automatically open generated chart in browser")
     parser.add_argument("--snippet", action="store_true", help="Print raw JavaScript ECharts option snippet")
 
