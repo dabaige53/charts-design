@@ -24,6 +24,44 @@ test('generated dashboard mounts, exposes every component, and destroys cleanly'
       }));
       expect(dimensions.width, 'standalone chart width').toBeGreaterThan(0);
       expect(dimensions.height, 'standalone chart height').toBeGreaterThan(0);
+
+      const explainTrigger = page.locator('.chart-explain-btn[data-explain-chart]');
+      await expect(explainTrigger, 'standalone explanation trigger exists').toHaveCount(1);
+      await expect(explainTrigger, 'explanation trigger has the canonical accessible label').toHaveAttribute('aria-label', '查看业务口径说明');
+      const triggerContract = await explainTrigger.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        const icon = element.querySelector('svg');
+        return {
+          width: rect.width,
+          height: rect.height,
+          iconWidth: icon?.getAttribute('width'),
+          iconHeight: icon?.getAttribute('height')
+        };
+      });
+      expect(triggerContract, 'canonical explanation trigger dimensions').toEqual({
+        width: 22,
+        height: 22,
+        iconWidth: '12',
+        iconHeight: '12'
+      });
+      await explainTrigger.click();
+      const dialog = page.locator('#app-explain-dialog');
+      await expect(dialog, 'shared explanation dialog opens').toHaveAttribute('open', '');
+      await expect(page.locator('#explainDialog'), 'legacy explanation dialog is removed').toHaveCount(0);
+      await expect(dialog.locator('.exp-overview-box'), 'shared overview card exists').toHaveCount(1);
+      await expect(dialog.locator('.exp-axis-grid'), 'shared axis cards exist').toHaveCount(1);
+      await expect(dialog.locator('.exp-metric-card'), 'shared metric cards exist').toHaveCount(1);
+      const centering = await dialog.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        return {
+          x: Math.abs(rect.left + rect.width / 2 - window.innerWidth / 2),
+          y: Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2)
+        };
+      });
+      expect(centering.x, 'explanation dialog is horizontally centered').toBeLessThanOrEqual(1);
+      expect(centering.y, 'explanation dialog is vertically centered').toBeLessThanOrEqual(1);
+      await page.keyboard.press('Escape');
+      await expect(dialog, 'Escape closes shared explanation dialog').not.toHaveAttribute('open', '');
     }
     expect(pageErrors, 'page errors').toEqual([]);
     return;

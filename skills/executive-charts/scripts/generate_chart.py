@@ -31,6 +31,12 @@ from core.component_schemas import validate_chart_data
 from core.html_inspector import inspect_html
 ALL_CHART_BUILDERS = {**CHARTS_JS_DEFINITIONS, **ALL_CHARTS}
 from core.explanations import CHART_EXPLANATIONS
+from core.explanation_dialog import (
+    EXPLANATION_DIALOG_CSS,
+    EXPLANATION_DIALOG_RENDERER_JS,
+    EXPLANATION_DIALOG_SHELL,
+    EXPLANATION_TRIGGER_ICON,
+)
 
 CATEGORY_MAP = {
     'c': '对比与排名',
@@ -106,76 +112,7 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
             width: 28px;
             padding: 0;
         }
-        .explanation-dialog {
-            border: none;
-            border-radius: 12px;
-            padding: 0;
-            width: 90vw;
-            max-width: 640px;
-            box-shadow: 0 20px 45px -10px rgba(11, 42, 66, 0.28);
-            background: #FFFFFF;
-        }
-        .explanation-dialog::backdrop {
-            background: rgba(11, 42, 66, 0.45);
-            backdrop-filter: blur(4px);
-        }
-        .exp-dialog-topbar {
-            padding: 14px 18px;
-            border-bottom: 1px solid #E2E8F0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: #F8FAFC;
-        }
-        .exp-dialog-body {
-            padding: 18px;
-            max-height: 70vh;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-        .exp-overview-box {
-            background: #F1F5F9;
-            border-left: 3px solid #123B5D;
-            padding: 10px 14px;
-            border-radius: 4px;
-        }
-        .exp-specs-strip {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 8px;
-        }
-        .exp-spec-badge {
-            font-size: 11px;
-            background: #FFFFFF;
-            border: 1px solid #CBD5E1;
-            padding: 2px 8px;
-            border-radius: 4px;
-            color: #334155;
-        }
-        .exp-axis-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 6px;
-        }
-        .exp-axis-cell {
-            background: #F8FAFC;
-            border: 1px solid #E2E8F0;
-            border-radius: 6px;
-            padding: 8px 10px;
-        }
-        .exp-formula {
-            background: #FFFFFF;
-            border: 1px solid #CBD5E1;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: var(--font-mono);
-            font-size: 11px;
-            color: #123B5D;
-        }
+__EXPLANATION_DIALOG_CSS__
         .toast-popup {
             position: fixed;
             bottom: 24px;
@@ -240,8 +177,8 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
                 </button>
                 <!-- 6. Explanation Dialog (i) -->
-                <button type="button" class="chart-action-btn icon-only" onclick="openExplanation()" title="业务定义、数学公式与判定基准 (i)">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <button type="button" class="chart-explain-btn" data-explain-chart="__CODE__" onclick="openExplanation()" aria-label="查看业务口径说明" title="查看业务口径与计算公式说明">
+                    __EXPLANATION_TRIGGER_ICON__
                 </button>
             </div>
         </div>
@@ -256,21 +193,8 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
     <!-- Toast Notification -->
     <div id="toast" class="toast-popup">已复制到剪贴板</div>
 
-    <!-- Explanation Dialog Modal -->
-    <dialog id="explainDialog" class="explanation-dialog">
-        <header class="exp-dialog-topbar">
-            <div class="flex items-center gap-2.5 min-w-0">
-                <span class="w-6 h-6 rounded-md bg-blue-50 text-[#123B5D] flex items-center justify-center flex-shrink-0">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                </span>
-                <h3 class="text-sm font-bold text-[#0B2A42] truncate" id="dialogTitle">__TITLE__</h3>
-            </div>
-            <button onclick="closeExplanation()" class="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer transition-colors" aria-label="关闭">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-        </header>
-        <div class="exp-dialog-body" id="dialogBody"></div>
-    </dialog>
+    <!-- Shared Explanation Dialog -->
+    __EXPLANATION_DIALOG_SHELL__
 
     <!-- Core Script -->
     <script>
@@ -473,88 +397,13 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
+__EXPLANATION_DIALOG_RENDERER_JS__
+
         function openExplanation() {
-            const dialog = document.getElementById('explainDialog');
-            const body = document.getElementById('dialogBody');
-            const exp = explanationData;
-
-            let html = `
-                <div class="exp-overview-box">
-                    <p class="text-xs text-slate-600 leading-relaxed m-0">${exp.overview || "标准高管咨询级业务分析图表"}</p>
-                    <div class="exp-specs-strip">
-                        <span class="exp-spec-badge"><strong>类型:</strong> ${exp.type || "分析图表"}</span>
-                        <span class="exp-spec-badge"><strong>周期:</strong> ${exp.period || "考核周期"}</span>
-                        <span class="exp-spec-badge"><strong>基准:</strong> ${exp.comparison || "管理会计口径"}</span>
-                    </div>
-                </div>
-            `;
-
-            if (exp.structure && exp.structure.xAxis && exp.structure.yAxis) {
-                html += `
-                    <div class="border border-slate-200 rounded-lg p-3 bg-white space-y-2">
-                        <div class="text-xs font-bold text-[#123B5D]">📐 坐标系维度与数据序列架构</div>
-                        <div class="exp-axis-grid">
-                            <div class="exp-axis-cell">
-                                <div class="font-bold text-[#0B2A42] text-xs">X 轴 · ${exp.structure.xAxis.name}</div>
-                                <div class="text-[11px] text-slate-500 mt-1">${exp.structure.xAxis.meaning}</div>
-                            </div>
-                            <div class="exp-axis-cell">
-                                <div class="font-bold text-[#0B2A42] text-xs">Y 轴 · ${exp.structure.yAxis.name}</div>
-                                <div class="text-[11px] text-slate-500 mt-1">${exp.structure.yAxis.meaning}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            if (exp.structure && exp.structure.series && exp.structure.series.length) {
-                html += `
-                    <div class="border border-slate-200 rounded-lg p-3 bg-white space-y-2">
-                        <div class="text-xs font-bold text-[#123B5D]">📊 数据序列映射</div>
-                        <div class="flex flex-wrap gap-2">
-                            ${exp.structure.series.map(s => `
-                                <span class="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[11px] text-slate-700">
-                                    <span class="font-bold text-[#0B2A42]">● ${s.name}</span> <span class="text-slate-400">(${s.desc || ""})</span>
-                                </span>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-
-            if (exp.metrics && exp.metrics.length) {
-                html += `
-                    <div class="space-y-2">
-                        <div class="text-xs font-bold text-[#123B5D]">📐 核心指标业务口径与数学公式</div>
-                        ${exp.metrics.map(m => `
-                            <div class="exp-metric-card space-y-1.5 p-3 bg-[#F8FAFC] border border-slate-200 rounded-lg">
-                                <div class="font-bold text-xs text-[#0B2A42]">${m.name}</div>
-                                <div class="text-xs text-slate-600 flex items-start gap-2">
-                                    <span class="text-slate-400 whitespace-nowrap">业务定义</span>
-                                    <span>${m.definition}</span>
-                                </div>
-                                <div class="text-xs flex items-center gap-2">
-                                    <span class="text-slate-400 whitespace-nowrap">计算公式</span>
-                                    <code class="exp-formula px-2 py-0.5 bg-white border border-slate-200 rounded font-mono text-[11px] text-[#123B5D]">${m.formula}</code>
-                                </div>
-                                ${m.rule ? `
-                                    <div class="text-xs text-slate-600 flex items-start gap-2">
-                                        <span class="text-slate-400 whitespace-nowrap">判定规则</span>
-                                        <span>${m.rule}</span>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            }
-
-            body.innerHTML = html;
+            const dialog = document.getElementById('app-explain-dialog');
+            dialog.innerHTML = renderSharedExplanationDialogContent(explanationData);
+            dialog.querySelector('#closeExplainModalBtn')?.addEventListener('click', () => dialog.close(), { once: true });
             dialog.showModal();
-        }
-
-        function closeExplanation() {
-            document.getElementById('explainDialog').close();
         }
 
         function showToast(msg) {
@@ -607,6 +456,10 @@ def generate_standalone_chart(
     html = html.replace('__SUBTITLE__', subtitle)
     html = html.replace('__CARD_WIDTH__', str(width))
     html = html.replace('__CHART_HEIGHT__', str(height))
+    html = html.replace('__EXPLANATION_DIALOG_CSS__', EXPLANATION_DIALOG_CSS)
+    html = html.replace('__EXPLANATION_DIALOG_SHELL__', EXPLANATION_DIALOG_SHELL)
+    html = html.replace('__EXPLANATION_DIALOG_RENDERER_JS__', EXPLANATION_DIALOG_RENDERER_JS)
+    html = html.replace('__EXPLANATION_TRIGGER_ICON__', EXPLANATION_TRIGGER_ICON)
     has_granularity = (
         chart_config.get("hasGranularity")
         if chart_config is not None and "hasGranularity" in chart_config

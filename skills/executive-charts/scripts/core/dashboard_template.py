@@ -3,6 +3,12 @@ import os
 import re
 
 from .runtime_bundle import render_runtime_bundle
+from .explanation_dialog import (
+    EXPLANATION_DIALOG_CSS,
+    EXPLANATION_DIALOG_RENDERER_JS,
+    EXPLANATION_DIALOG_SHELL,
+    EXPLANATION_TRIGGER_ICON,
+)
 
 TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -152,100 +158,7 @@ TEMPLATE = """<!DOCTYPE html>
             background: #EBF3F8 !important;
         }
 
-        /* Dialog Modal Styling & Consulting-Grade Explanation Box */
-        dialog.explanation-dialog {
-            width: min(680px, 94vw);
-            max-width: 680px;
-            padding: 0;
-            border: 1px solid #C9D1D8;
-            border-radius: 12px;
-            box-shadow: 0 20px 45px -10px rgba(11, 42, 66, 0.28), 0 0 0 1px rgba(11, 42, 66, 0.05);
-            background: #FFFFFF;
-            color: #17212B;
-        }
-        dialog.explanation-dialog::backdrop {
-            background: rgba(11, 42, 66, 0.45);
-            backdrop-filter: blur(4px);
-        }
-        dialog[open] {
-            animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.96) translateY(8px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .exp-dialog-topbar {
-            height: 52px;
-            padding: 0 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #E2E8F0;
-            background: #FFFFFF;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        .exp-dialog-body {
-            padding: 18px 20px 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            max-height: calc(85vh - 52px);
-            overflow-y: auto;
-            background: #FFFFFF;
-        }
-        .exp-overview-box {
-            background: #F8FAFC;
-            border: 1px solid #E2E8F0;
-            border-radius: 8px;
-            padding: 12px 14px;
-        }
-        .exp-specs-strip {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px 10px;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px dashed #CBD5E1;
-        }
-        .exp-spec-badge {
-            font-size: 11px;
-            background: #FFFFFF;
-            border: 1px solid #CBD5E1;
-            padding: 2px 8px;
-            border-radius: 4px;
-            color: #17212B;
-        }
-        .exp-axis-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-        .exp-axis-cell {
-            background: #F8FAFC;
-            border: 1px solid #E2E8F0;
-            border-radius: 6px;
-            padding: 8px 10px;
-            font-size: 11.5px;
-        }
-        .exp-metric-card {
-            border: 1px solid #E2E8F0;
-            border-radius: 8px;
-            padding: 12px;
-            background: #FFFFFF;
-            transition: border-color .15s;
-        }
-        .exp-metric-card:hover { border-color: #123B5D; }
-        .exp-formula {
-            background: #F1F5F9;
-            border: 1px solid #E2E8F0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 11.5px;
-            color: #0F172A;
-        }
+__EXPLANATION_DIALOG_CSS__
 
         /* Fullscreen Focus Mode */
         @keyframes fullscreenExpand {
@@ -325,7 +238,7 @@ TEMPLATE = """<!DOCTYPE html>
         </main>
 
         <!-- 4. Native Dialog for Metrics & Chart Explanations -->
-        <dialog id="app-explain-dialog" class="rounded-xl shadow-2xl overflow-hidden bg-white text-ink border border-slate-200 m-auto"></dialog>
+        __EXPLANATION_DIALOG_SHELL__
 
         <!-- 5. Toast Feedback Container -->
         <div id="app-toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
@@ -402,7 +315,7 @@ __DASHBOARD_CONFIG_CODE__
             minimize: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/></svg>',
             viewToggle: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>',
             copy: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
-            info: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+            info: '__EXPLANATION_TRIGGER_ICON__',
             chevronDown: '<svg class="w-3.5 h-3.5 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
             search: '<svg class="w-3.5 h-3.5 text-ink-subtle absolute left-2 top-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
             reset: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
@@ -887,7 +800,7 @@ __DASHBOARD_CONFIG_CODE__
                                         <span class="inline-flex items-center gap-1.5 text-[10px] text-[#2F6B55] bg-[#2F6B55]/8 border border-[#2F6B55]/20 px-2 py-0.5 rounded font-medium">
                                             <span class="w-1.5 h-1.5 rounded-full bg-[#2F6B55]"></span>${kpi.statusBadge || '核算中'}
                                         </span>
-                                        <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc01'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                        <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc01'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                     </div>
                                 </div>
                                 <div class="flex items-baseline gap-2 my-1">
@@ -908,7 +821,7 @@ __DASHBOARD_CONFIG_CODE__
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc02'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc02'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline gap-2 my-1">
                                     <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
@@ -931,7 +844,7 @@ __DASHBOARD_CONFIG_CODE__
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc03'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc03'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline justify-between gap-2">
                                     <div class="flex items-baseline gap-1.5">
@@ -957,7 +870,7 @@ __DASHBOARD_CONFIG_CODE__
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc04'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc04'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline justify-between my-0.5">
                                     <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
@@ -980,7 +893,7 @@ __DASHBOARD_CONFIG_CODE__
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc05'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc05'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline justify-between gap-2">
                                     <div class="flex items-baseline gap-1.5">
@@ -1003,7 +916,7 @@ __DASHBOARD_CONFIG_CODE__
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc06'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc06'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="grid grid-cols-2 gap-2 divide-x divide-slate-100 my-1">
                                     <div>
@@ -1031,7 +944,7 @@ __DASHBOARD_CONFIG_CODE__
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc07'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc07'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-center justify-between my-1">
                                     <div class="flex items-center gap-2">
@@ -1062,7 +975,7 @@ __DASHBOARD_CONFIG_CODE__
                                         <span class="w-2 h-2 rounded-full bg-[#9A6A18] animate-pulse"></span>
                                         ${kpi.label}
                                     </span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc08'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc08'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline gap-2 my-1">
                                     <span class="text-2xl font-extrabold text-[#0B2A42] tracking-tight font-mono tabular-nums">${kpi.value}</span>
@@ -1082,7 +995,7 @@ __DASHBOARD_CONFIG_CODE__
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                    <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc09'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc09'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline justify-between my-0.5">
                                     <span class="text-xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
@@ -1105,7 +1018,7 @@ __DASHBOARD_CONFIG_CODE__
                         <div class="section-card p-4 flex flex-col justify-between">
                             <div class="flex items-center justify-between mb-1">
                                 <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
-                                <button class="chart-action-btn" data-explain-chart="${kpi.explainKey || 'mc01'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc01'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                             </div>
                             <div class="flex items-baseline gap-2 my-1">
                                 <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
@@ -1169,7 +1082,7 @@ __DASHBOARD_CONFIG_CODE__
                                         ${LUCIDE_ICONS.maximize}
                                     </button>
                                     <!-- Info Dialog -->
-                                    <button type="button" class="chart-action-btn" data-explain-chart="${chart.explainKey || chart.code}" aria-label="查看业务口径说明" title="查看业务口径说明">
+                                    <button type="button" class="chart-explain-btn" data-explain-chart="${chart.explainKey || chart.code}" aria-label="查看业务口径说明" title="查看业务口径与计算公式说明">
                                         ${LUCIDE_ICONS.info}
                                     </button>
                                 </div>
@@ -1223,7 +1136,7 @@ __DASHBOARD_CONFIG_CODE__
                             </button>
 
                             <!-- Table Info Button -->
-                            <button class="chart-action-btn" data-explain-chart="table_airline_main" aria-label="查看表格指标说明" title="查看表格指标说明">
+                            <button class="chart-explain-btn" data-explain-chart="table_airline_main" aria-label="查看表格指标说明" title="查看表格指标说明">
                                 ${LUCIDE_ICONS.info}
                             </button>
                         </div>
@@ -1307,93 +1220,19 @@ __DASHBOARD_CONFIG_CODE__
                     ];
                 }
 
-                let html = `
-                    <header class="exp-dialog-topbar">
-                        <div class="flex items-center gap-2.5 min-w-0">
-                            <span class="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                                ${LUCIDE_ICONS.info}
-                            </span>
-                            <h3 class="text-sm font-bold text-primary-strong truncate">${expTitle}</h3>
-                        </div>
-                        <button id="closeExplainModalBtn" class="dialog-close w-7 h-7 rounded-md flex items-center justify-center text-ink-subtle hover:bg-slate-100 hover:text-ink cursor-pointer transition-colors" aria-label="关闭">
-                            ${LUCIDE_ICONS.close}
-                        </button>
-                    </header>
-                    <div class="exp-dialog-body custom-scrollbar space-y-3">
-                        <div class="exp-overview-box">
-                            <p class="text-xs text-ink leading-relaxed m-0">${expOverview}</p>
-                            <div class="exp-specs-strip">
-                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">指标/图表类型:</strong>${expType}</span>
-                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">统计分析周期:</strong>${expPeriod}</span>
-                                <span class="exp-spec-badge"><strong class="text-ink-subtle font-medium mr-1">对标决策基准:</strong>${expComparison}</span>
-                            </div>
-                        </div>
-
-                        <div class="border border-slate-200 rounded-lg p-3.5 bg-white space-y-2.5">
-                            <div class="text-xs font-bold text-primary flex items-center gap-1.5">
-                                <span class="w-4 h-4 text-primary inline-flex items-center justify-center">${LUCIDE_ICONS.layers}</span>
-                                <span>坐标系维度与数据序列架构</span>
-                            </div>
-                            <div class="exp-axis-grid">
-                                <div class="exp-axis-cell">
-                                    <div class="font-bold text-primary-strong mb-1">X 轴 · ${structure.xAxis.name}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">业务含义:</span>${structure.xAxis.meaning}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">覆盖范围:</span>${structure.xAxis.range}</div>
-                                </div>
-                                <div class="exp-axis-cell">
-                                    <div class="font-bold text-primary-strong mb-1">Y 轴 · ${structure.yAxis.name}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">业务含义:</span>${structure.yAxis.meaning}</div>
-                                    <div class="text-ink-muted text-[11px]"><span class="text-ink-subtle mr-1.5">量纲刻度:</span>${structure.yAxis.range}</div>
-                                </div>
-                            </div>
-                            ${structure.series && structure.series.length ? `
-                                <div class="flex flex-wrap gap-2 pt-1">
-                                    ${structure.series.map(s => `
-                                        <div class="inline-flex items-center gap-1 text-[11px] bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
-                                            <span class="font-semibold text-ink">${s.name}</span>
-                                            <span class="text-ink-subtle">(${s.desc})</span>
-                                        </div>
-                                    `).join("")}
-                                </div>
-                            ` : ""}
-                        </div>
-
-                        <div class="space-y-2">
-                            <div class="text-xs font-bold text-primary flex items-center gap-1.5">
-                                <span class="w-4 h-4 text-primary inline-flex items-center justify-center">${LUCIDE_ICONS.calculator}</span>
-                                <span>核心指标业务口径与数学公式</span>
-                            </div>
-                            <div class="space-y-2">
-                                ${metrics.map(m => `
-                                    <div class="exp-metric-card space-y-1.5">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-xs font-bold text-primary-strong">${m.name}</span>
-                                        </div>
-                                        <div class="text-xs flex items-baseline gap-2">
-                                            <span class="text-ink-subtle w-16 shrink-0 text-[11px]">业务定义</span>
-                                            <span class="text-ink leading-relaxed">${m.definition}</span>
-                                        </div>
-                                        <div class="text-xs flex items-baseline gap-2">
-                                            <span class="text-ink-subtle w-16 shrink-0 text-[11px]">计算公式</span>
-                                            <span class="text-ink"><code class="exp-formula font-mono">${m.formula}</code></span>
-                                        </div>
-                                        ${m.rule ? `
-                                            <div class="text-xs flex items-baseline gap-2">
-                                                <span class="text-ink-subtle w-16 shrink-0 text-[11px]">治理规则</span>
-                                                <span class="text-ink-muted text-[11.5px] leading-relaxed">${m.rule}</span>
-                                            </div>
-                                        ` : ""}
-                                    </div>
-                                `).join("")}
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-                return html;
+                return renderSharedExplanationDialogContent({
+                    title: expTitle,
+                    overview: expOverview,
+                    type: expType,
+                    period: expPeriod,
+                    comparison: expComparison,
+                    structure,
+                    metrics
+                });
             }
         }
+
+__EXPLANATION_DIALOG_RENDERER_JS__
 
         // 5. Main Application Controller
         class DashboardApp {
@@ -2508,5 +2347,9 @@ def generate_dashboard_html(config_js_code, page_title):
             .replace('__PAGE_TITLE__', page_title)
             .replace('__DASHBOARD_CONFIG_CODE__', config_js_code)
             .replace('__DASHBOARD_RUNTIME_BUNDLE__', render_runtime_bundle())
+            .replace('__EXPLANATION_DIALOG_CSS__', EXPLANATION_DIALOG_CSS)
+            .replace('__EXPLANATION_DIALOG_SHELL__', EXPLANATION_DIALOG_SHELL)
+            .replace('__EXPLANATION_DIALOG_RENDERER_JS__', EXPLANATION_DIALOG_RENDERER_JS)
+            .replace('__EXPLANATION_TRIGGER_ICON__', EXPLANATION_TRIGGER_ICON)
             # Inline controls resolve their owning root instead of a global singleton.
             .replace('window.App.', 'window.getDashboardAppForElement(this).'))
