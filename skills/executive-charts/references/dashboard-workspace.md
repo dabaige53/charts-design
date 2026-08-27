@@ -40,8 +40,7 @@ python3 "$WORKSPACE_SCRIPT" add kpi ./board revenue \
 python3 "$WORKSPACE_SCRIPT" add kpi ./board gross-margin --from ./gross-margin.json
 
 python3 "$WORKSPACE_SCRIPT" add chart ./board regional-sales \
-  --code c01 --title "各区域营业收入" --unit "万元" \
-  --data-file ./regional-sales-data.json
+  --from ./regional-sales.chart.json
 
 python3 "$WORKSPACE_SCRIPT" add chart ./board revenue-trend --from ./revenue-trend.json
 
@@ -55,7 +54,7 @@ python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html \
 
 When the skill is installed outside this repository, set `WORKSPACE_SCRIPT` to the `scripts/dashboard_workspace.py` beside the active `SKILL.md`.
 
-Use `--replace` only when intentionally replacing an existing KPI or chart with the same id.
+Use `--replace` for an intentional replacement of an existing KPI or chart with the same id.
 
 ## Component schemas
 
@@ -96,6 +95,34 @@ The `code` selects the catalog renderer and supplies the visible Badge. The comp
 
 Use a focused component file when a chart needs multiple series. Keep data values in the component; keep formatter and renderer behavior in the chart system.
 
+### Strict chart presentation
+
+All 40 registered chart codes use an explicit `presentation` object in strict mode. This object supplies the renderer with the business-facing axes, series names, Tooltip fields, units, complete table-column names, and any domains, thresholds, totals, or classification labels required by that chart shape:
+
+```json
+{
+  "id": "channel-mix",
+  "code": "k02",
+  "title": "区域渠道结构",
+  "unit": "%",
+  "data": {
+    "hubs": ["华东", "华南"],
+    "appDirect": [48, 42],
+    "corpDirect": [28, 25],
+    "ota": [24, 33]
+  },
+  "presentation": {
+    "axisLabels": {"x": "销售占比", "y": "区域"},
+    "seriesLabels": ["自营", "协议客户", "第三方"],
+    "tooltipValueLabels": ["自营占比", "协议客户占比", "第三方占比"],
+    "units": ["%", "%", "%"],
+    "tableHeaders": ["区域", "自营占比", "协议客户占比", "第三方占比"]
+  }
+}
+```
+
+The exact per-code field counts live in `scripts/core/component_schemas.py` as `CHART_PRESENTATION_CONTRACTS` and `CHART_TABLE_HEADER_COUNTS`. Follow the selected code's contract, then run `validate --strict --json`. The renderer reads `data` for values and transformations and reads `presentation` for display semantics. Shared geometry and interaction live in the registered renderer.
+
 ### Filter
 
 ```json
@@ -113,7 +140,7 @@ Use a focused component file when a chart needs multiple series. Keep data value
 }
 ```
 
-`fields` is the explicit table-data binding. `componentIds` lists consumers by stable component id; chart code is never an instance identity. An empty `filters.json` is valid and means the dashboard has no filters.
+`fields` is the explicit table-data binding. `componentIds` lists consumers by stable component id; chart code remains the renderer selection. An empty `filters.json` renders the dashboard with an empty filter region.
 
 ### Table
 
@@ -173,3 +200,5 @@ python3 "$WORKSPACE_SCRIPT" compare-html ./before.html ./dist/board.html --manif
 A Preservation Manifest may declare `requiredIds`, `requiredText`, `forbiddenText`, `requiredAssets` and `components`. Inspection checks document metadata, duplicate ids, broken DOM references, missing local assets and manifest requirements. Comparison additionally catches baseline ids, visible text and asset references lost during migration.
 
 `--runtime` uses Playwright with the installed Chrome channel. It loads the generated file, waits for `DashboardRuntime`, checks every rendered KPI/chart/filter/table identity and chart-card actions, rejects browser errors or duplicate rendered ids, and verifies `destroy()` clears the mounted app.
+
+When browser execution is unavailable, record that gate as unavailable and report strict validation, static inspection, generated inline-script syntax, and lifecycle unit-test evidence separately.

@@ -34,9 +34,14 @@ def test_generated_html_exposes_idempotent_runtime_lifecycle(tmp_path):
     html = _generate(tmp_path, ["c01"])
 
     assert "window.createDashboardRuntime" in html
-    assert "mount(root = document, config = this.config)" in html
+    assert "createDashboardRuntime(initialConfig, root = document)" in html
+    assert "mount(root = this.root, config = this.config)" in html
     assert "this.root = root" in html
-    assert "update(config, root = this.root || document)" in html
+    assert "new DashboardApp(this.config, root)" in html
+    assert "window.getDashboardAppForElement" in html
+    assert "this.root.__dashboardApp = this" in html
+    assert "window.App." not in html
+    assert "update(config, root = this.root)" in html
     assert "destroy()" in html
     assert "this._mounted" in html
     assert "inst?.dispose()" in html

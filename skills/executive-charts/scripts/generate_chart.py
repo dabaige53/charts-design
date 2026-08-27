@@ -18,6 +18,7 @@ import sys
 import json
 import argparse
 import subprocess
+from pathlib import Path
 
 # Add local path for modular imports
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +27,8 @@ if CURRENT_DIR not in sys.path:
 
 from core.chart_catalog import ALL_CHARTS
 from core.chart_builders import CHARTS_JS_DEFINITIONS
+from core.component_schemas import validate_chart_data
+from core.html_inspector import inspect_html
 ALL_CHART_BUILDERS = {**CHARTS_JS_DEFINITIONS, **ALL_CHARTS}
 from core.explanations import CHART_EXPLANATIONS
 
@@ -212,24 +215,17 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
         <!-- Card Header (No Icon, Pure Typography) -->
         <div class="card-header-wrap flex flex-wrap items-start justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
             <div class="min-w-0 max-w-[65%]">
-                <div class="flex items-center gap-2">
-                    <h3 class="text-sm font-bold text-[#0B2A42] tracking-tight truncate">__TITLE__</h3>
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">__CODE__</span>
-                </div>
+                <h3 class="text-sm font-bold text-[#0B2A42] tracking-tight truncate">__TITLE__</h3>
                 <p class="text-xs text-[#52606D] mt-0.5 leading-relaxed">__SUBTITLE__</p>
             </div>
 
             <!-- Standard 5+1 Interactive Toolbar -->
             <div class="flex items-center gap-1.5 flex-shrink-0">
                 <!-- 1. Granularity Toggle -->
-                <button type="button" class="chart-action-btn" id="granularityBtn" onclick="toggleGranularity()" title="切换时间统计粒度 (月度/季度)">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    <span id="granularityLabel">月度</span>
-                </button>
+                __GRANULARITY_TABS__
                 <!-- 2. Chart / Table Toggle -->
                 <button type="button" class="chart-action-btn" id="viewToggleBtn" onclick="toggleView()" title="一键切换图表/数据透视表视图">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
-                    <span id="viewToggleLabel">转表格</span>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
                 </button>
                 <!-- 3. Export CSV (with BOM) -->
                 <button type="button" class="chart-action-btn icon-only" onclick="exportCSV()" title="一键导出 CSV / Excel (UTF-8 BOM 防乱码)">
@@ -241,7 +237,7 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
                 </button>
                 <!-- 5. Fullscreen Focus -->
                 <button type="button" class="chart-action-btn icon-only" onclick="toggleFullscreen()" title="全屏沉浸研判 (按 Esc 退出)">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
                 </button>
                 <!-- 6. Explanation Dialog (i) -->
                 <button type="button" class="chart-action-btn icon-only" onclick="openExplanation()" title="业务定义、数学公式与判定基准 (i)">
@@ -321,7 +317,7 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
             axisTitleStyleX: { color: '#0B2A42', fontSize: 11, fontWeight: 700, align: 'center', padding: [8, 0, 0, 0] }
         };
 
-        const chartBuilderFunc = __CHART_CONFIG_JS__;
+        const chartConfig = __CHART_CONFIG_JS__;
         const explanationData = __EXPLANATION_JSON__;
 
         let chartInstance = null;
@@ -330,58 +326,54 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
         let currentSortCol = null;
         let currentSortAsc = true;
 
+        function buildChartOption() {
+            return chartConfig.optionBuilder(chartConfig.data, currentGranularity, TOKENS, chartConfig);
+        }
+
         function initChart() {
             const chartDom = document.getElementById('chart-main');
             chartInstance = echarts.init(chartDom);
-            const chartConfig = chartBuilderFunc(TOKENS);
-            chartInstance.setOption(chartConfig.option);
+            chartInstance.setOption(buildChartOption());
 
             window.addEventListener('resize', () => {
                 if (chartInstance) chartInstance.resize();
             });
         }
 
-        function toggleGranularity() {
-            currentGranularity = (currentGranularity === 'month') ? 'quarter' : 'month';
-            document.getElementById('granularityLabel').textContent = (currentGranularity === 'month') ? '月度' : '季度';
-            
-            const chartConfig = chartBuilderFunc(TOKENS);
-            if (chartConfig.granularityHandler) {
-                const opt = chartConfig.granularityHandler(currentGranularity);
-                chartInstance.setOption(opt, true);
-            } else {
-                showToast(`已切换至${currentGranularity === 'month' ? '月度' : '季度'}粒度统计`);
-            }
+        function setGranularity(granularity, activeButton) {
+            currentGranularity = granularity;
+            const tabs = document.getElementById('granularityTabs');
+            tabs.querySelectorAll('button').forEach(button => {
+                button.className = 'px-2 py-0.5 rounded text-[#52606D] hover:text-[#0F172A] font-medium';
+            });
+            activeButton.className = 'px-2 py-0.5 rounded bg-white text-[#0B2A42] font-semibold shadow-xs';
+            chartInstance.setOption(buildChartOption(), true);
             if (isTableView) renderTable();
         }
 
         function toggleView() {
             const chartEl = document.getElementById('chart-main');
             const tableEl = document.getElementById('table-main');
-            const labelEl = document.getElementById('viewToggleLabel');
             isTableView = !isTableView;
 
             if (isTableView) {
                 chartEl.classList.add('hidden');
                 tableEl.classList.remove('hidden');
-                labelEl.textContent = '转图表';
                 renderTable();
             } else {
                 tableEl.classList.add('hidden');
                 chartEl.classList.remove('hidden');
-                labelEl.textContent = '转表格';
                 chartInstance.resize();
             }
         }
 
         function renderTable() {
             const tableEl = document.getElementById('table-main');
-            const chartConfig = chartBuilderFunc(TOKENS);
             if (!chartConfig.tableDataExtractor) {
                 tableEl.innerHTML = '<div class="p-8 text-center text-xs text-slate-400">当前图表暂无结构化表格数据</div>';
                 return;
             }
-            let data = chartConfig.tableDataExtractor(chartConfig.data);
+            let data = chartConfig.tableDataExtractor(chartConfig.data, currentGranularity, chartConfig);
             let headers = [...data.headers];
             let rows = [...data.rows];
 
@@ -444,9 +436,8 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
         }
 
         function exportCSV() {
-            const chartConfig = chartBuilderFunc(TOKENS);
             if (!chartConfig.tableDataExtractor) return;
-            const data = chartConfig.tableDataExtractor(chartConfig.data);
+            const data = chartConfig.tableDataExtractor(chartConfig.data, currentGranularity, chartConfig);
             let csv = '\\uFEFF' + data.headers.join(',') + '\\n';
             data.rows.forEach(r => {
                 csv += r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\\n';
@@ -579,12 +570,26 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
-def generate_standalone_chart(code, output_path=None, custom_title=None, width="780px", height=340, auto_open=False):
+def generate_standalone_chart(
+    code, output_path=None, custom_title=None, width="780px", height=340,
+    auto_open=False, chart_config=None,
+):
     """Generates a standalone McKinsey-grade HTML chart file with 5+1 toolbar."""
     if code not in ALL_CHART_BUILDERS:
         raise ValueError(f"Chart code '{code}' not found in catalog! Available: {list(ALL_CHART_BUILDERS.keys())}")
 
     builder_js = ALL_CHART_BUILDERS[code]
+    if chart_config is not None:
+        errors = validate_chart_data(
+            chart_config.get("data"),
+            "chart.data",
+            code=code,
+            strict=True,
+            presentation=chart_config.get("presentation"),
+        )
+        if errors:
+            raise ValueError("Strict chart contract failed: " + json.dumps(errors, ensure_ascii=False))
+        builder_js = f"{{ ...({builder_js}), ...{json.dumps(chart_config, ensure_ascii=False)} }}"
     exp = CHART_EXPLANATIONS.get(code, {
         "title": custom_title or f"图表 {code.upper()}",
         "overview": "标准高管咨询级可视化图表",
@@ -593,8 +598,8 @@ def generate_standalone_chart(code, output_path=None, custom_title=None, width="
         "comparison": "管理口径"
     })
 
-    title = custom_title or exp.get("title", f"图表 {code.upper()}")
-    subtitle = exp.get("overview", "")
+    title = custom_title or (chart_config or {}).get("title") or exp.get("title", f"图表 {code.upper()}")
+    subtitle = (chart_config or {}).get("subtitle") or exp.get("overview", "")
 
     html = STANDALONE_CHART_TEMPLATE
     html = html.replace('__CODE__', code.upper())
@@ -602,6 +607,18 @@ def generate_standalone_chart(code, output_path=None, custom_title=None, width="
     html = html.replace('__SUBTITLE__', subtitle)
     html = html.replace('__CARD_WIDTH__', str(width))
     html = html.replace('__CHART_HEIGHT__', str(height))
+    has_granularity = (
+        chart_config.get("hasGranularity")
+        if chart_config is not None and "hasGranularity" in chart_config
+        else "hasGranularity: true" in ALL_CHART_BUILDERS[code]
+    )
+    granularity_tabs = """
+                <div id="granularityTabs" class="inline-flex bg-slate-100/90 p-0.5 rounded-md text-[11px]">
+                    <button type="button" onclick="setGranularity('month', this)" class="px-2 py-0.5 rounded bg-white text-[#0B2A42] font-semibold shadow-xs">月度</button>
+                    <button type="button" onclick="setGranularity('quarter', this)" class="px-2 py-0.5 rounded text-[#52606D] hover:text-[#0F172A] font-medium">季度</button>
+                </div>
+    """ if has_granularity else ""
+    html = html.replace('__GRANULARITY_TABS__', granularity_tabs)
     html = html.replace('__CHART_CONFIG_JS__', builder_js)
     html = html.replace('__EXPLANATION_JSON__', json.dumps(exp, ensure_ascii=False))
 
@@ -612,7 +629,11 @@ def generate_standalone_chart(code, output_path=None, custom_title=None, width="
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html)
 
-    print(f"Generated standalone chart '{code.upper()}' -> {output_path} ({len(html)} bytes)")
+    inspection = inspect_html(Path(output_path), strict=True, runtime=True)
+    if not inspection["ok"]:
+        raise RuntimeError("Generated HTML inspection failed: " + json.dumps(inspection["errors"], ensure_ascii=False))
+
+    print(f"Generated and inspected standalone chart '{code.upper()}' -> {output_path} ({len(html)} bytes)")
 
     if auto_open:
         subprocess.run(["open", output_path])
@@ -662,6 +683,7 @@ def main():
     parser.add_argument("--output", "-o", type=str, help="Target HTML output path (or output directory if --batch)")
     parser.add_argument("--output-dir", type=str, default="./dist/charts", help="Directory for batch generated charts")
     parser.add_argument("--title", "-t", type=str, help="Custom chart title")
+    parser.add_argument("--config", type=str, help="Complete chart component JSON with data and presentation")
     parser.add_argument("--list", "-l", action="store_true", help="List every registered chart code")
     parser.add_argument("--open", action="store_true", help="Automatically open generated chart in browser")
     parser.add_argument("--snippet", action="store_true", help="Print raw JavaScript ECharts option snippet")
@@ -677,6 +699,14 @@ def main():
         target_dir = args.output or args.output_dir
         generate_batch_charts(args.batch, output_dir=target_dir, auto_open=args.open)
         return
+
+    chart_config = None
+    if args.config:
+        with open(args.config, "r", encoding="utf-8") as handle:
+            chart_config = json.load(handle)
+        if not isinstance(chart_config, dict):
+            parser.error("--config must contain one chart component object")
+        args.code = (args.code or chart_config.get("code") or "").lower()
 
     if not args.code:
         parser.print_help()
@@ -695,7 +725,8 @@ def main():
         code=args.code.lower(),
         output_path=args.output,
         custom_title=args.title,
-        auto_open=args.open
+        auto_open=args.open,
+        chart_config=chart_config,
     )
 
 if __name__ == "__main__":

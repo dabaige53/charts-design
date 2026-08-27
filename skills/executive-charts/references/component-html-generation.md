@@ -21,9 +21,9 @@ Completion criterion: the delivered HTML comes from this pipeline, and its rende
 
 ### Standalone chart
 
-Use `generate_chart.py` when the deliverable is one chart card or a bounded visual preview. The script generates the complete standalone HTML document, including the selected renderer and card interactions. Treat that file as the component deliverable; use `--snippet` only when the user explicitly needs the ECharts option source.
+Use `generate_chart.py --config <chart.json> --output <chart.html>` when the deliverable is one business chart card. The JSON supplies the chart code, business data, title, unit, and full `presentation` contract; the command validates the selected renderer, generates the complete standalone HTML document with card interactions, and runs static plus browser-backed Generated HTML inspection. Use code-only generation for catalog preview and `--snippet` when the deliverable is the ECharts option source.
 
-Completion criterion: the selected chart code answers the stated business question and the standalone HTML opens without runtime errors.
+Completion criterion: the selected chart code answers the stated business question and the standalone HTML initializes successfully.
 
 ### Dashboard
 
@@ -36,6 +36,22 @@ Completion criterion: strict workspace validation passes before build, and the b
 Keep the existing framework as the page owner when the user needs an in-place migration. Map its component model to the JSON contracts, then either embed the generated standalone file or implement an adapter that preserves the DOM identities and capabilities below. Keep the shared renderer as the reference behavior; record any framework-specific Adapter in the existing-project checklist.
 
 Completion criterion: each adapted region has one source component, one stable identity, an explicit capability mapping, and preservation evidence.
+
+For embedded dashboards, mount against the owning container instead of the global document:
+
+```js
+const root = document.querySelector('#analytics-region');
+const runtime = window.createDashboardRuntime(config, root);
+runtime.mount();
+
+// Framework unmount
+runtime.destroy();
+
+// The same root remains available for a later remount.
+runtime.mount();
+```
+
+Only a document-root runtime owns the compatibility singleton `window.App`. A container-scoped runtime must keep queries, listeners, rendered identities, update, destroy, and remount inside its root so multiple embedded dashboards can coexist.
 
 ## Document shell
 
@@ -96,7 +112,7 @@ Completion criterion: every filter has one `data-component-id`, every strict fil
 | `mc08` | Threshold alert card |
 | `mc09` | Segment breakdown card |
 
-Every KPI explanation action uses `data-explain-chart`; the shared dialog renders its definition and formula. Sparkline and gauge DOM are initialized after the cards render. Filter-dependent KPI recomputation requires explicit business update behavior; HTML generation alone does not infer an aggregation formula.
+Every KPI explanation action uses `data-explain-chart`; the shared dialog renders its definition and formula. Sparkline and gauge DOM are initialized after the cards render. Define explicit aggregation behavior for each filter-dependent KPI.
 
 Completion criterion: every KPI root preserves `kpi.id`, the selected type has all data it displays, and any filter-dependent value has a verified recomputation path.
 
@@ -128,7 +144,7 @@ The shared shell generates:
 
 Each action carries `data-component-id="<chart.instanceId>"`; runtime registries are keyed by that identity. Reusing one chart `code` produces separate instances. Tooltip, axes, legend, annotations, series, and renderer-specific `dataZoom` come from the selected chart renderer rather than from the card shell.
 
-Completion criterion: the card, panes, actions, and runtime registry resolve to the same unique instance identity, and the renderer displays the component's explicit data and unit without catalog business residue.
+Completion criterion: the card, panes, actions, and runtime registry resolve to the same unique instance identity, and the renderer displays the component's explicit data, axes, series, Tooltip fields, units, and `tableHeaders`.
 
 ### Table
 
@@ -140,7 +156,7 @@ Completion criterion: the root has one stable component identity, every visible 
 
 ### Shared overlays and feedback
 
-Explanation content is generated into `#app-explain-dialog` when a KPI or chart explanation action fires. This is a read-only reference overlay: render the title-bar close control and support backdrop click and `Escape`; omit confirmation actions and the action footer. Toasts are appended to `#app-toast-container` for transient action feedback. Fullscreen changes the owning chart card state; it does not create a second chart component.
+Explanation content is generated into `#app-explain-dialog` when a KPI or chart explanation action fires. Render it as a read-only reference overlay with a title-bar close control, backdrop dismissal, `Escape` support, and a content-focused body. Toasts are appended to `#app-toast-container` for transient action feedback. Fullscreen changes the owning chart card state while preserving its component identity.
 
 Completion criterion: overlays have one shared root, opening and dismissal work by mouse and required keyboard actions, and repeated updates do not duplicate roots or handlers.
 
@@ -162,7 +178,7 @@ When no existing type or code represents the required component:
 4. Add behavior-level coverage for generation, identity, required interactions, and runtime cleanup.
 5. Generate a thin dashboard containing the new component and run static plus available runtime inspection.
 
-Completion criterion: the new component is discoverable, schema-validated, generated through the shared path, independently identifiable, and verified without reading a showcase HTML file.
+Completion criterion: the new component is discoverable, schema-validated, generated through the shared path, independently identifiable, and verified from registered renderer output.
 
 ## Delivery gate
 
@@ -175,4 +191,4 @@ Before presenting component HTML as complete:
 - required Tooltip, zoom, explanation, filtering, table, export, copy, and fullscreen behaviors are directly exercised where in scope;
 - existing-project migrations also pass Preservation Manifest inspection and baseline comparison.
 
-The HTML is complete only when every in-scope component and capability has observable evidence; file generation alone is not completion.
+Generation is complete when every in-scope component and capability has observable evidence through the delivery gate.

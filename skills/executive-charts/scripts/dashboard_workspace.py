@@ -251,7 +251,10 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
         if "data" not in item:
             error("CHART_DATA_MISSING", f"{path}.data", "Chart data is required; catalog demo data is not used in workspace builds")
         else:
-            errors.extend(validate_chart_data(item.get("data"), f"{path}.data"))
+            errors.extend(validate_chart_data(
+                item.get("data"), f"{path}.data", code=code, strict=strict,
+                presentation=item.get("presentation"),
+            ))
         if strict and not item.get("unit") and not (isinstance(item.get("data"), dict) and item["data"].get("unit")):
             error("CHART_UNIT_MISSING", f"{path}.unit", "Declare the metric unit in the chart or its data")
 

@@ -1,0 +1,21 @@
+{
+  "id": "regional-sales",
+  "code": "c01",
+  "title": "2026 年各区域营业收入",
+  "subtitle": "按区域比较当期营业收入规模",
+  "unit": "万元",
+  "data": {
+    "categories": ["华东", "华南", "华北", "西南", "东北"],
+    "values": [1280, 1060, 920, 760, 540]
+  },
+  "presentation": {
+    "axisLabels": {
+      "x": "区域",
+      "y": "营业收入（万元）"
+    },
+    "seriesLabels": ["营业收入"],
+    "tooltipValueLabels": ["当期营业收入"],
+    "units": ["万元"],
+    "tableHeaders": ["区域", "营业收入（万元）"]
+  }
+}

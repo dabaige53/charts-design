@@ -153,19 +153,28 @@ def test_workspace_generation():
     print("Testing composable dashboard workspace...")
     with tempfile.TemporaryDirectory(prefix="charts-design-workspace-") as tmp:
         workspace = os.path.join(tmp, "board")
-        data_file = os.path.join(tmp, "regional-sales.json")
+        chart_file = os.path.join(tmp, "regional-sales.chart.json")
         output_file = os.path.join(tmp, "board.html")
-        with open(data_file, "w", encoding="utf-8") as f:
+        with open(chart_file, "w", encoding="utf-8") as f:
             json.dump({
-                "categories": ["华东", "华南"],
-                "values": [128, 96],
-                "unit": "万元"
+                "id": "regional-sales",
+                "code": "c01",
+                "title": "各区域营业收入",
+                "unit": "万元",
+                "data": {"categories": ["华东", "华南"], "values": [128, 96]},
+                "presentation": {
+                    "axisLabels": {"x": "区域", "y": "营业收入"},
+                    "seriesLabels": ["营业收入"],
+                    "tooltipValueLabels": ["营业收入"],
+                    "units": ["万元"],
+                    "tableHeaders": ["区域", "营业收入"],
+                },
             }, f, ensure_ascii=False)
 
         commands = [
             ("dashboard", "init", workspace, "--title", "销售经营看板", "--org", "经营分析部", "--json"),
             ("dashboard", "add", "kpi", workspace, "revenue", "--label", "营业收入", "--value", "224", "--unit", "万元", "--json"),
-            ("dashboard", "add", "chart", workspace, "regional-sales", "--code", "c01", "--title", "各区域营业收入", "--unit", "万元", "--data-file", data_file, "--json"),
+            ("dashboard", "add", "chart", workspace, "regional-sales", "--from", chart_file, "--json"),
             ("dashboard", "validate", workspace, "--strict", "--json"),
             ("dashboard", "build", workspace, "--output", output_file, "--json"),
         ]

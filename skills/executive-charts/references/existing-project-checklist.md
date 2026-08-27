@@ -31,7 +31,7 @@ Choose one mode for each page before editing:
 - [ ] Keep the baseline entry operable while developing the first migrated slice, using the project's recoverable change workflow.
 - [ ] Record framework-specific differences as Adapters with their verification method.
 
-Completion criterion: every page has one declared adoption mode, every cross-boundary responsibility has one owner, and the first slice can be compared with the baseline without losing the working entry.
+Completion criterion: every page has one declared adoption mode, every cross-boundary responsibility has one owner, and the first slice preserves the working entry during baseline comparison.
 
 ## 3. Inventory components and behavior
 
@@ -51,7 +51,7 @@ Account for all of the following where present:
 - [ ] KPI aggregation and chart recomputation needed after filtering; identify the required `onFilterChange` behavior instead of assuming automatic recalculation.
 - [ ] Table columns, units, alignment, sorting, pagination, keyword search, filter behavior, column visibility, drag order, copying, export, and overflow behavior.
 - [ ] Dialogs, drawers, menus, keyboard actions, focus order, labels, and ARIA references.
-- [ ] Treat metric/chart explanations as read-only reference overlays: preserve the title-bar close control, backdrop dismissal, and `Escape`; remove confirmation actions and action footers introduced by older templates.
+- [ ] Render metric/chart explanations as read-only reference overlays with a title-bar close control, backdrop dismissal, `Escape`, and a content-focused body.
 
 Completion criterion: every existing region appears exactly once in the inventory, every behavior has an owner, and every unsupported behavior has an explicit adapter, scoped follow-up, or accepted exclusion.
 
@@ -68,6 +68,7 @@ Completion criterion: every retained identity, text, and asset is machine-checka
 ## 5. Map data contracts
 
 - [ ] Give every KPI and chart explicit business data; catalog and preset values remain preview inputs only.
+- [ ] For every registered chart code, map the original axes, series, Tooltip labels, units, complete table-column names, domains, thresholds, totals, and classification labels into `presentation` according to `CHART_PRESENTATION_CONTRACTS` and `CHART_TABLE_HEADER_COUNTS`.
 - [ ] Validate chart data collections, paired vector lengths, unit, scale, null handling, and formatter assumptions before rendering.
 - [ ] Give every filter at least one explicit `field`; list only stable consumer ids in `componentIds`.
 - [ ] Verify option `value` and displayed `label` both match the corresponding source field representation.
@@ -115,7 +116,7 @@ Completion criterion: each mapped component preserves the original business hier
 - [ ] Run `compare-html` from the exact baseline file to the candidate file.
 - [ ] When Playwright and Chrome are available, run `inspect-html --runtime --strict` on the generated candidate.
 - [ ] Exercise filters, filter reset, chart Tooltip, renderer-specific zoom, chart/table toggle, sorting, pagination, column controls, export, copy, fullscreen, explanation dialog, and keyboard dismissal where those capabilities are in scope.
-- [ ] Open every KPI/chart explanation trigger and verify the expected sections render without a confirmation button or empty footer.
+- [ ] Open every KPI/chart explanation trigger and verify the expected read-only sections and dismissal controls.
 - [ ] Verify filtered KPIs and charts actually recompute; a changed chip or filtered table alone is not evidence of consumer updates.
 - [ ] Inspect browser console errors, missing network resources, CSP violations, font fallback, and offline behavior required by the project.
 - [ ] Compare representative screenshots at required viewports when visual preservation is an acceptance criterion.
@@ -131,9 +132,9 @@ Classify every remaining item before delivery:
 - **Blocker:** lost business content, broken identity/reference, missing asset, incorrect data or unit, runtime error, unusable interaction, or unapproved behavior removal.
 - **Adapter:** required existing behavior implemented outside the current shared component contract, with its owner and verification recorded.
 - **Accepted difference:** intentional visual or behavioral change approved by the user and excluded from the Preservation Manifest where appropriate.
-- **Follow-up:** valuable improvement outside the migration acceptance boundary, recorded without being presented as completed.
+- **Follow-up:** valuable improvement outside the migration acceptance boundary, recorded with its future scope.
 
-The migration is ready only when no Blocker remains, every Adapter has passing evidence, every Accepted difference has approval, and the final component inventory accounts for every original region.
+The migration is ready when Blockers are zero, every Adapter has passing evidence, every Accepted difference has approval, and the final component inventory accounts for every original region.
 
 ## Handoff record
 
@@ -146,4 +147,4 @@ Deliver these artifacts together:
 - [ ] static inspection, comparison, and available runtime results;
 - [ ] approved differences, adapters, exclusions, and follow-ups.
 
-Completion criterion: another agent can reproduce the build and verification from the handoff without reading the migration conversation.
+Completion criterion: another agent can reproduce the build and verification from the delivered artifacts and evidence record.

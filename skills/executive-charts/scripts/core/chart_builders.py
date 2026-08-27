@@ -22,8 +22,13 @@ CHARTS_JS_DEFINITIONS = {
                 yieldGrowth: [15.2, 18.4, 24.0, 32.5]
             }
         },
-        optionBuilder: (d, gran, tokens) => {
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
             const cur = d[gran] || d.month;
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || ['主指标', '变化率'];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const units = presentation.units || [cfg.unit || '', '%'];
             return {
                 ...tokens.commonOption,
                 tooltip: {
@@ -34,31 +39,35 @@ CHARTS_JS_DEFINITIONS = {
                     padding: [8, 12],
                     extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
                     formatter: params => {
-                        let res = `<div class="font-bold text-primary-strong mb-1">${params[0].name} 客运收益</div>`;
-                        res += `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">客运总收入:</span><span class="font-mono font-bold text-ink">¥${params[0].value} 亿元</span></div>`;
+                        let res = `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div>`;
+                        res += `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">${tooltipLabels[0]}:</span><span class="font-mono font-bold text-ink">${params[0].value}${units[0] ? ` ${units[0]}` : ''}</span></div>`;
                         if (params[1]) {
-                            res += `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">收益同比增速:</span><span class="font-mono font-bold text-positive">+${params[1].value}%</span></div>`;
+                            res += `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">${tooltipLabels[1]}:</span><span class="font-mono font-bold text-positive">${params[1].value}${units[1] ? ` ${units[1]}` : ''}</span></div>`;
                         }
                         return res;
                     }
                 },
-                legend: { top: 0, left: 'center', orient: 'horizontal', icon: 'rect', itemWidth: 10, itemHeight: 10, itemGap: 20, data: ['客运总收入', '收益同比增速'], textStyle: { fontSize: 10, color: tokens.palette.inkMuted } },
-                xAxis: { type: 'category', name: '统计时段', nameLocation: 'middle', nameGap: 20, nameTextStyle: tokens.axisTitleStyleX, data: cur.categories, axisTick: { show: false } },
+                legend: { top: 0, left: 'center', orient: 'horizontal', icon: 'rect', itemWidth: 10, itemHeight: 10, itemGap: 20, data: seriesLabels, textStyle: { fontSize: 10, color: tokens.palette.inkMuted } },
+                xAxis: { type: 'category', name: axisLabels.x || '周期', nameLocation: 'middle', nameGap: 20, nameTextStyle: tokens.axisTitleStyleX, data: cur.categories, axisTick: { show: false } },
                 yAxis: [
-                    { type: 'value', max: gran === 'month' ? 1.0 : 2.8, name: '收入 (亿元)', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: '{value} 亿' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
-                    { type: 'value', max: 40, name: '增速 (%)', nameLocation: 'end', nameTextStyle: { color: tokens.palette.inkSubtle, fontSize: 10, align: 'right', padding: [0, 0, 6, 0] }, axisLabel: { formatter: '{value}%' }, splitLine: { show: false } }
+                    { type: 'value', name: axisLabels.leftY || seriesLabels[0], nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: value => `${value}${units[0] ? ` ${units[0]}` : ''}` }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+                    { type: 'value', name: axisLabels.rightY || seriesLabels[1], nameLocation: 'end', nameTextStyle: { color: tokens.palette.inkSubtle, fontSize: 10, align: 'right', padding: [0, 0, 6, 0] }, axisLabel: { formatter: value => `${value}${units[1] || ''}` }, splitLine: { show: false } }
                 ],
                 series: [
-                    { name: '客运总收入', type: 'bar', barWidth: gran === 'month' ? 14 : 26, data: cur.revenue, itemStyle: { color: tokens.palette.primary } },
-                    { name: '收益同比增速', type: 'line', yAxisIndex: 1, data: cur.yieldGrowth, lineStyle: { color: tokens.palette.positive, width: 2.5 }, itemStyle: { color: tokens.palette.positive, borderColor: '#FFF', borderWidth: 2 }, symbolSize: 6, label: { show: true, position: 'top', distance: 6, formatter: '+{c}%', color: tokens.palette.positive, fontSize: 10, fontWeight: 'bold' } }
+                    { name: seriesLabels[0], type: 'bar', barWidth: gran === 'month' ? 14 : 26, data: cur.revenue, itemStyle: { color: tokens.palette.primary } },
+                    { name: seriesLabels[1], type: 'line', yAxisIndex: 1, data: cur.yieldGrowth, lineStyle: { color: tokens.palette.positive, width: 2.5 }, itemStyle: { color: tokens.palette.positive, borderColor: '#FFF', borderWidth: 2 }, symbolSize: 6, label: { show: true, position: 'top', distance: 6, formatter: params => `${params.value}${units[1] || ''}`, color: tokens.palette.positive, fontSize: 10, fontWeight: 'bold' } }
                 ]
             };
         },
-        tableDataExtractor: (d, gran) => {
+        tableDataExtractor: (d, gran, cfg = {}) => {
             const cur = d[gran] || d.month;
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || ['主指标', '变化率'];
+            const units = presentation.units || [cfg.unit || '', '%'];
             return {
-                headers: ['统计时段', '客运总收入 (亿元)', '收益同比增速 (%)'],
-                rows: cur.categories.map((c, i) => [c, `¥${cur.revenue[i]} 亿`, `+${cur.yieldGrowth[i]}%`])
+                headers: presentation.tableHeaders || [axisLabels.x || '周期', `${seriesLabels[0]}${units[0] ? ` (${units[0]})` : ''}`, `${seriesLabels[1]}${units[1] ? ` (${units[1]})` : ''}`],
+                rows: cur.categories.map((c, i) => [c, `${cur.revenue[i]}${units[0] ? ` ${units[0]}` : ''}`, `${cur.yieldGrowth[i]}${units[1] ? ` ${units[1]}` : ''}`])
             };
         }
     }""",
@@ -74,7 +83,14 @@ CHARTS_JS_DEFINITIONS = {
             categories: ['华东基地', '华南基地', '北方基地', '西南基地', '海外基地'],
             values: [4.9, 3.4, 2.8, 1.9, 1.2]
         },
-        optionBuilder: (d, gran, tokens) => ({
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+            const tooltipLabel = (presentation.tooltipValueLabels || [seriesLabel])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            const yDomain = (presentation.domains || {}).y || {};
+            return ({
             ...tokens.commonOption,
             tooltip: {
                 trigger: 'axis',
@@ -83,16 +99,23 @@ CHARTS_JS_DEFINITIONS = {
                 borderWidth: 1,
                 padding: [8, 12],
                 extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
-                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">枢纽客运收入:</span><span class="font-mono font-bold text-primary">${params[0].value} 亿元</span></div>`
+                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">${tooltipLabel}:</span><span class="font-mono font-bold text-primary">${params[0].value}${unit ? ` ${unit}` : ''}</span></div>`
             },
-            xAxis: { type: 'category', name: '基地枢纽机场', nameLocation: 'middle', nameGap: 20, nameTextStyle: tokens.axisTitleStyleX, data: d.categories, axisTick: { show: false } },
-            yAxis: { type: 'value', max: 6.5, name: '营收 (亿元)', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: '{value} 亿' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
-            series: [{ name: '枢纽客运收入', type: 'bar', barWidth: 26, data: d.values, itemStyle: { color: tokens.palette.primary }, label: { show: true, position: 'top', distance: 6, formatter: '¥{c}亿', color: tokens.palette.ink, fontSize: 11, fontWeight: 'bold' } }]
-        }),
-        tableDataExtractor: (d) => ({
-            headers: ['基地枢纽', '营收贡献 (亿元)', '占大盘比重'],
-            rows: d.categories.map((c, i) => [c, `¥${d.values[i]} 亿`, `${((d.values[i]/14.2)*100).toFixed(1)}%`])
-        })
+            xAxis: { type: 'category', name: axisLabels.x || '类别', nameLocation: 'middle', nameGap: 20, nameTextStyle: tokens.axisTitleStyleX, data: d.categories, axisTick: { show: false } },
+            yAxis: { type: 'value', ...yDomain, name: axisLabels.y || `${seriesLabel}${unit ? ` (${unit})` : ''}`, nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: value => `${value}${unit ? ` ${unit}` : ''}` }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+            series: [{ name: seriesLabel, type: 'bar', barWidth: 26, data: d.values, itemStyle: { color: tokens.palette.primary }, label: { show: true, position: 'top', distance: 6, formatter: params => `${params.value}${unit ? ` ${unit}` : ''}`, color: tokens.palette.ink, fontSize: 11, fontWeight: 'bold' } }]
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            return {
+                headers: presentation.tableHeaders || [axisLabels.x || '类别', `${seriesLabel}${unit ? ` (${unit})` : ''}`],
+                rows: d.categories.map((c, i) => [c, `${d.values[i]}${unit ? ` ${unit}` : ''}`])
+            };
+        }
     }""",
 
     # 3. c02 Ordered Bar (6 categories, clean layout without dataZoom)
@@ -106,7 +129,13 @@ CHARTS_JS_DEFINITIONS = {
             categories: ['A350-900', 'B787-9', 'A321neo', 'B737-800', 'C919', 'ARJ21'],
             values: [4.9, 3.4, 2.8, 1.9, 1.5, 0.8]
         },
-        optionBuilder: (d, gran, tokens) => ({
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+          const presentation = cfg.presentation || {};
+          const axisLabels = presentation.axisLabels || {};
+          const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+          const tooltipLabel = (presentation.tooltipValueLabels || [seriesLabel])[0];
+          const unit = (presentation.units || [cfg.unit || ''])[0];
+          return ({
             ...tokens.commonOption,
             tooltip: {
                 trigger: 'axis',
@@ -115,17 +144,24 @@ CHARTS_JS_DEFINITIONS = {
                 borderWidth: 1,
                 padding: [8, 12],
                 extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
-                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">机队年度创收:</span><span class="font-mono font-bold text-primary">${params[0].value} 亿元</span></div>`
+                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">${tooltipLabel}:</span><span class="font-mono font-bold text-primary">${params[0].value}${unit ? ` ${unit}` : ''}</span></div>`
             },
             grid: { top: 38, bottom: 38, left: 10, right: 25, containLabel: true },
-            xAxis: { type: 'value', max: 6.0, name: '客运营收 (亿元)', nameLocation: 'middle', nameGap: 24, nameTextStyle: tokens.axisTitleStyleX, axisLabel: { formatter: '{value} 亿' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
-            yAxis: { type: 'category', inverse: true, name: '执飞机型', nameLocation: 'start', nameTextStyle: tokens.axisTitleStyleY, data: d.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: '#94A3B8', width: 1.2 } }, axisLabel: { color: '#0F172A', fontSize: 12, fontWeight: 700 } },
-            series: [{ name: '机队年度创收', type: 'bar', barWidth: 18, data: d.values, itemStyle: { color: tokens.palette.primary }, label: { show: true, position: 'right', distance: 6, formatter: '¥{c} 亿', color: tokens.palette.ink, fontSize: 10, fontWeight: 600 } }]
-        }),
-        tableDataExtractor: (d) => ({
-            headers: ['执飞机型', '年度创收 (亿元)', '机队定位'],
-            rows: d.categories.map((c, i) => [c, `¥${d.values[i]} 亿`, i < 2 ? '远程宽体主力' : '骨干窄体客机'])
-        })
+            xAxis: { type: 'value', name: axisLabels.x || `${seriesLabel}${unit ? ` (${unit})` : ''}`, nameLocation: 'middle', nameGap: 24, nameTextStyle: tokens.axisTitleStyleX, axisLabel: { formatter: value => `${value}${unit ? ` ${unit}` : ''}` }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+            yAxis: { type: 'category', inverse: true, name: axisLabels.y || '类别', nameLocation: 'start', nameTextStyle: tokens.axisTitleStyleY, data: d.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: '#94A3B8', width: 1.2 } }, axisLabel: { color: '#0F172A', fontSize: 12, fontWeight: 700 } },
+            series: [{ name: seriesLabel, type: 'bar', barWidth: 18, data: d.values, itemStyle: { color: tokens.palette.primary }, label: { show: true, position: 'right', distance: 6, formatter: params => `${params.value}${unit ? ` ${unit}` : ''}`, color: tokens.palette.ink, fontSize: 10, fontWeight: 600 } }]
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            return {
+                headers: presentation.tableHeaders || [axisLabels.y || '类别', `${seriesLabel}${unit ? ` (${unit})` : ''}`],
+                rows: d.categories.map((c, i) => [c, `${d.values[i]}${unit ? ` ${unit}` : ''}`])
+            };
+        }
     }""",
 
     # 4. r01 BCG Quadrant Clean
@@ -145,7 +181,17 @@ CHARTS_JS_DEFINITIONS = {
                 [8.5, 71.0, '广深通勤快线']
             ]
         },
-        optionBuilder: (d, gran, tokens) => ({
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const tooltipLabels = presentation.tooltipValueLabels || [axisLabels.x || 'X 值', axisLabels.y || 'Y 值'];
+            const seriesLabel = (presentation.seriesLabels || ['数据点'])[0];
+            const units = presentation.units || ['', ''];
+            const thresholds = presentation.thresholds || { x: 0, y: 0 };
+            const quadrant = (x, y) => x >= thresholds.x
+                ? (y >= thresholds.y ? '第一象限' : '第四象限')
+                : (y >= thresholds.y ? '第二象限' : '第三象限');
+            return ({
             ...tokens.commonOption,
             tooltip: {
                 backgroundColor: 'rgba(255, 255, 255, 0.98)',
@@ -153,11 +199,12 @@ CHARTS_JS_DEFINITIONS = {
                 borderWidth: 1,
                 padding: [8, 12],
                 extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
-                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params.data[2]}</div><div class="space-y-0.5"><div class="flex justify-between gap-4"><span class="text-ink-muted">客座率增速:</span><span class="font-mono font-bold text-positive">+${params.data[0]}%</span></div><div class="flex justify-between gap-4"><span class="text-ink-muted">座公里利润率:</span><span class="font-mono font-bold text-primary">${params.data[1]}%</span></div></div>`
+                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params.data[2]}</div><div class="space-y-0.5"><div class="flex justify-between gap-4"><span class="text-ink-muted">${tooltipLabels[0]}:</span><span class="font-mono font-bold text-positive">${params.data[0]}${units[0] ? ` ${units[0]}` : ''}</span></div><div class="flex justify-between gap-4"><span class="text-ink-muted">${tooltipLabels[1]}:</span><span class="font-mono font-bold text-primary">${params.data[1]}${units[1] ? ` ${units[1]}` : ''}</span></div></div>`
             },
-            xAxis: { type: 'value', min: -10, max: 45, name: '客座率增速 (%)', nameLocation: 'middle', nameGap: 24, nameTextStyle: tokens.axisTitleStyleX, axisLabel: { formatter: '{value}%' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
-            yAxis: { type: 'value', min: 20, max: 85, name: '座公里利润率 (%)', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: '{value}%' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+            xAxis: { type: 'value', name: axisLabels.x || 'X 轴', nameLocation: 'middle', nameGap: 24, nameTextStyle: tokens.axisTitleStyleX, axisLabel: { formatter: value => `${value}${units[0] || ''}` }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+            yAxis: { type: 'value', name: axisLabels.y || 'Y 轴', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: value => `${value}${units[1] || ''}` }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
             series: [{
+                name: seriesLabel,
                 type: 'scatter',
                 symbolSize: 14,
                 itemStyle: { color: tokens.palette.primary, borderColor: '#FFF', borderWidth: 2 },
@@ -167,14 +214,24 @@ CHARTS_JS_DEFINITIONS = {
                     silent: true,
                     symbol: 'none',
                     lineStyle: { type: 'dashed', color: tokens.palette.rule, width: 1 },
-                    data: [{ xAxis: 15 }, { yAxis: 50 }]
+                    data: [{ xAxis: thresholds.x }, { yAxis: thresholds.y }]
                 }
             }]
-        }),
-        tableDataExtractor: (d) => ({
-            headers: ['战略航线名称', '客座率增速 (%)', '座公里利润率 (%)', '象限归属'],
-            rows: d.routes.map(r => [r[2], `${r[0] > 0 ? '+' : ''}${r[0]}%`, `${r[1]}%`, r[0] > 15 && r[1] > 50 ? '第一象限 (明星快线)' : '第二象限 (现金牛)'])
-        })
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const units = presentation.units || ['', ''];
+            const thresholds = presentation.thresholds || { x: 0, y: 0 };
+            const quadrant = (x, y) => x >= thresholds.x
+                ? (y >= thresholds.y ? '第一象限' : '第四象限')
+                : (y >= thresholds.y ? '第二象限' : '第三象限');
+            return {
+                headers: presentation.tableHeaders || ['对象', axisLabels.x || 'X 值', axisLabels.y || 'Y 值', '象限'],
+                rows: d.routes.map(r => [r[2], `${r[0]}${units[0] ? ` ${units[0]}` : ''}`, `${r[1]}${units[1] ? ` ${units[1]}` : ''}`, quadrant(r[0], r[1])])
+            };
+        }
     }""",
 
     # 5. fn01 Waterfall
@@ -190,7 +247,15 @@ CHARTS_JS_DEFINITIONS = {
             deltas: [1.2, 0.4, 0.2, -0.3, 1.5],
             labels: ['¥1.2亿', '+¥0.4亿', '+¥0.2亿', '-¥0.3亿', '¥1.5亿']
         },
-        optionBuilder: (d, gran, tokens) => ({
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabel = (presentation.seriesLabels || ['变化值'])[0];
+            const tooltipLabel = (presentation.tooltipValueLabels || [seriesLabel])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            const yDomain = (presentation.domains || {}).y || {};
+            const formatDelta = value => `${value > 0 ? '+' : ''}${value}${unit ? ` ${unit}` : ''}`;
+            return ({
             ...tokens.commonOption,
             tooltip: {
                 trigger: 'axis',
@@ -203,40 +268,42 @@ CHARTS_JS_DEFINITIONS = {
                 formatter: params => {
                     const idx = params[0].dataIndex;
                     const val = d.deltas[idx];
-                    const valStr = val >= 0 ? `+¥${val.toFixed(1)} 亿` : `-¥${Math.abs(val).toFixed(1)} 亿`;
-                    return `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">边际影响:</span><span class="font-mono font-bold ${val >= 0 ? 'text-positive' : 'text-negative'}">${valStr}</span></div>`;
+                    return `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">${tooltipLabel}:</span><span class="font-mono font-bold ${val >= 0 ? 'text-positive' : 'text-negative'}">${formatDelta(val)}</span></div>`;
                 }
             },
-            xAxis: { type: 'category', data: d.categories, axisTick: { show: false } },
-            yAxis: { type: 'value', max: 1.8, name: '金额 (亿元)', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: '{value} 亿' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+            xAxis: { type: 'category', name: axisLabels.x || '类别', nameLocation: 'middle', nameGap: 20, nameTextStyle: tokens.axisTitleStyleX, data: d.categories, axisTick: { show: false } },
+            yAxis: { type: 'value', ...yDomain, name: axisLabels.y || `${seriesLabel}${unit ? ` (${unit})` : ''}`, nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: value => `${value}${unit ? ` ${unit}` : ''}` }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
             series: [
                 { type: 'bar', stack: 'total', itemStyle: { borderColor: 'transparent', color: 'transparent' }, data: d.baseSteps },
                 {
                     type: 'bar',
                     stack: 'total',
                     barWidth: 22,
-                    data: [
-                        { value: 1.2, itemStyle: { color: tokens.palette.primary } },
-                        { value: 0.4, itemStyle: { color: tokens.palette.positive } },
-                        { value: 0.2, itemStyle: { color: tokens.palette.positive } },
-                        { value: 0.3, itemStyle: { color: tokens.palette.negative } },
-                        { value: 1.5, itemStyle: { color: tokens.palette.primaryStrong } }
-                    ],
+                    name: seriesLabel,
+                    data: d.deltas.map((value, index) => ({ value: Math.abs(value), itemStyle: { color: index === 0 ? tokens.palette.primary : index === d.deltas.length - 1 ? tokens.palette.primaryStrong : value >= 0 ? tokens.palette.positive : tokens.palette.negative } })),
                     label: {
                         show: true,
                         position: 'top',
-                        formatter: params => d.labels[params.dataIndex],
+                        formatter: params => formatDelta(d.deltas[params.dataIndex]),
                         color: tokens.palette.ink,
                         fontSize: 10,
                         fontWeight: 600
                     }
                 }
             ]
-        }),
-        tableDataExtractor: (d) => ({
-            headers: ['归因阶梯节点', '边际影响金额 (亿元)', '性质说明'],
-            rows: d.categories.map((c, i) => [c, d.labels[i], d.deltas[i] >= 0 ? '正向贡献增益' : '负向成本侵蚀'])
-        })
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabel = (presentation.seriesLabels || ['变化值'])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            const labels = presentation.labels || {};
+            return {
+                headers: presentation.tableHeaders || [axisLabels.x || '类别', `${seriesLabel}${unit ? ` (${unit})` : ''}`, labels.directionHeader || '方向'],
+                rows: d.categories.map((c, i) => [c, `${d.deltas[i] > 0 ? '+' : ''}${d.deltas[i]}${unit ? ` ${unit}` : ''}`, d.deltas[i] >= 0 ? (labels.positive || '正向') : (labels.negative || '负向')])
+            };
+        }
     }""",
 
     # 6. f01 Funnel
@@ -254,7 +321,12 @@ CHARTS_JS_DEFINITIONS = {
                 { value: 600, name: '完成出票支付', itemStyle: { color: '#52606D' } }
             ]
         },
-        optionBuilder: (d, gran, tokens) => ({
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+            const tooltipLabel = (presentation.tooltipValueLabels || [seriesLabel])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            return ({
             tooltip: {
                 trigger: 'item',
                 backgroundColor: 'rgba(255, 255, 255, 0.98)',
@@ -262,7 +334,7 @@ CHARTS_JS_DEFINITIONS = {
                 borderWidth: 1,
                 padding: [8, 12],
                 extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
-                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params.name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">预订转化量:</span><span class="font-mono font-bold text-primary">${params.value} 会话 (${params.percent}%)</span></div>`
+                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params.name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">${tooltipLabel}:</span><span class="font-mono font-bold text-primary">${params.value}${unit ? ` ${unit}` : ''} (${params.percent}%)</span></div>`
             },
             series: [{
                 type: 'funnel',
@@ -271,14 +343,24 @@ CHARTS_JS_DEFINITIONS = {
                 top: 25,
                 bottom: 25,
                 gap: 3,
-                label: { show: true, position: 'inside', formatter: '{b}\\n{c}次 ({d}%)', color: '#FFF', fontSize: 11, fontWeight: 600 },
+                name: seriesLabel,
+                label: { show: true, position: 'inside', formatter: params => `${params.name}\\n${params.value}${unit ? ` ${unit}` : ''} (${params.percent}%)`, color: '#FFF', fontSize: 11, fontWeight: 600 },
                 data: d.stages
             }]
-        }),
-        tableDataExtractor: (d) => ({
-            headers: ['转化阶段环节', '独立会话量 (次)', '总体转化留存率'],
-            rows: d.stages.map(s => [s.name, `${s.value} 次`, `${((s.value/5000)*100).toFixed(1)}%`])
-        })
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            const labels = presentation.labels || {};
+            const baselineIndex = (presentation.derivedMetricRules || {}).baselineIndex || 0;
+            const baseline = d.stages[baselineIndex] ? d.stages[baselineIndex].value : 0;
+            return {
+                headers: presentation.tableHeaders || [labels.stageHeader || '阶段', `${seriesLabel}${unit ? ` (${unit})` : ''}`, labels.ratioHeader || '总体占比'],
+                rows: d.stages.map(s => [s.name, `${s.value}${unit ? ` ${unit}` : ''}`, `${baseline ? ((s.value / baseline) * 100).toFixed(1) : '0.0'}%`])
+            };
+        }
     }""",
 
     # 7. fn03 Tornado
@@ -293,7 +375,14 @@ CHARTS_JS_DEFINITIONS = {
             negative: [-52, -38, -25, -12],
             positive: [52, 38, 25, 12]
         },
-        optionBuilder: (d, gran, tokens) => ({
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || ['负向', '正向'];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            const xDomain = (presentation.domains || {}).x || {};
+            return ({
             ...tokens.commonOption,
             tooltip: {
                 trigger: 'axis',
@@ -305,24 +394,31 @@ CHARTS_JS_DEFINITIONS = {
                 extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
                 formatter: params => {
                     let res = `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div>`;
-                    params.forEach(p => {
-                        res += `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">${p.seriesName}:</span><span class="font-mono font-bold text-primary">${p.value} 百万元</span></div>`;
+                    params.forEach((p, index) => {
+                        res += `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">${tooltipLabels[index] || p.seriesName}:</span><span class="font-mono font-bold text-primary">${p.value}${unit ? ` ${unit}` : ''}</span></div>`;
                     });
                     return res;
                 }
             },
-            legend: { top: 0, left: 'center', orient: 'horizontal', icon: 'rect', itemWidth: 10, itemHeight: 10, itemGap: 20, data: ['负向影响弹性', '正向影响弹性'], textStyle: { fontSize: 10, color: tokens.palette.inkMuted } },
+            legend: { top: 0, left: 'center', orient: 'horizontal', icon: 'rect', itemWidth: 10, itemHeight: 10, itemGap: 20, data: seriesLabels, textStyle: { fontSize: 10, color: tokens.palette.inkMuted } },
             grid: { top: 38, bottom: 38, left: 10, right: 30, containLabel: true },
-            xAxis: { type: 'value', min: -60, max: 60, name: '利润变动 (百万元)', nameLocation: 'middle', nameGap: 24, nameTextStyle: tokens.axisTitleStyleX, axisLabel: { formatter: '{value}M' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
-            yAxis: { type: 'category', data: d.variables, axisTick: { show: false }, axisLine: { lineStyle: { color: '#94A3B8', width: 1.2 } }, axisLabel: { color: '#0F172A', fontSize: 11, fontWeight: 700 } },
+            xAxis: { type: 'value', ...xDomain, name: axisLabels.x || '数值', nameLocation: 'middle', nameGap: 24, nameTextStyle: tokens.axisTitleStyleX, axisLabel: { formatter: value => `${value}${unit ? ` ${unit}` : ''}` }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+            yAxis: { type: 'category', name: axisLabels.y || '变量', nameLocation: 'start', nameTextStyle: tokens.axisTitleStyleY, data: d.variables, axisTick: { show: false }, axisLine: { lineStyle: { color: '#94A3B8', width: 1.2 } }, axisLabel: { color: '#0F172A', fontSize: 11, fontWeight: 700 } },
             series: [
-                { name: '负向影响弹性', type: 'bar', stack: 'total', barWidth: 16, data: d.negative, itemStyle: { color: tokens.palette.negative }, label: { show: true, position: 'insideLeft', formatter: '{c}M', color: '#FFF', fontSize: 10, fontWeight: 600 } },
-                { name: '正向影响弹性', type: 'bar', stack: 'total', barWidth: 16, data: d.positive, itemStyle: { color: tokens.palette.positive }, label: { show: true, position: 'insideRight', formatter: '+{c}M', color: '#FFF', fontSize: 10, fontWeight: 600 } }
+                { name: seriesLabels[0], type: 'bar', stack: 'total', barWidth: 16, data: d.negative, itemStyle: { color: tokens.palette.negative }, label: { show: true, position: 'insideLeft', formatter: params => `${params.value}${unit ? ` ${unit}` : ''}`, color: '#FFF', fontSize: 10, fontWeight: 600 } },
+                { name: seriesLabels[1], type: 'bar', stack: 'total', barWidth: 16, data: d.positive, itemStyle: { color: tokens.palette.positive }, label: { show: true, position: 'insideRight', formatter: params => `+${params.value}${unit ? ` ${unit}` : ''}`, color: '#FFF', fontSize: 10, fontWeight: 600 } }
             ]
-        }),
-        tableDataExtractor: (d) => ({
-            headers: ['敏感性变量因子', '负向偏离影响 (百万元)', '正向偏离影响 (百万元)'],
-            rows: d.variables.map((v, i) => [v, `${d.negative[i]}M`, `+${d.positive[i]}M`])
-        })
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || ['负向', '正向'];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            return {
+                headers: presentation.tableHeaders || [axisLabels.y || '变量', `${seriesLabels[0]}${unit ? ` (${unit})` : ''}`, `${seriesLabels[1]}${unit ? ` (${unit})` : ''}`],
+                rows: d.variables.map((v, i) => [v, `${d.negative[i]}${unit ? ` ${unit}` : ''}`, `+${d.positive[i]}${unit ? ` ${unit}` : ''}`])
+            };
+        }
     }"""
 }

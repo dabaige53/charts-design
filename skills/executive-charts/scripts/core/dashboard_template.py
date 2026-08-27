@@ -701,14 +701,23 @@ __DASHBOARD_CONFIG_CODE__
 
         // 4. UI Renderer with Multi-Style High-Impact KPI Cards & Consulting Design Tokens
         class DashboardRenderer {
-            constructor(state) {
+            constructor(state, root = document) {
                 this.state = state;
                 this.config = state.config;
+                this.root = root;
+            }
+
+            getById(id) {
+                return this.root.getElementById?.(id) || this.root.querySelector?.(`#${CSS.escape(id)}`);
+            }
+
+            query(selector) {
+                return this.root.querySelector(selector);
             }
 
             renderHeader() {
                 const meta = this.config.meta;
-                const container = document.getElementById('app-header');
+                const container = this.getById('app-header');
                 if (!container) return;
 
                 // Match Lucide Icon
@@ -742,7 +751,7 @@ __DASHBOARD_CONFIG_CODE__
 
             renderFilters() {
                 const defs = this.state.filterDefs;
-                const container = document.getElementById('app-filters');
+                const container = this.getById('app-filters');
                 if (!container) return;
 
                 let filterControlsHtml = '';
@@ -862,7 +871,7 @@ __DASHBOARD_CONFIG_CODE__
 
             renderKPIs() {
                 const kpis = this.config.kpis || [];
-                const container = document.getElementById('app-kpis');
+                const container = this.getById('app-kpis');
                 if (!container) return;
 
                 container.innerHTML = kpis.map(kpi => {
@@ -1118,7 +1127,7 @@ __DASHBOARD_CONFIG_CODE__
 
             renderChartsGrid() {
                 const charts = this.config.charts || [];
-                const container = document.getElementById('app-charts-grid');
+                const container = this.getById('app-charts-grid');
                 if (!container) return;
 
                 container.innerHTML = charts.map(chart => {
@@ -1177,7 +1186,7 @@ __DASHBOARD_CONFIG_CODE__
 
             renderTableSection() {
                 const tableCfg = this.config.table;
-                const container = document.getElementById('app-table-section');
+                const container = this.getById('app-table-section');
                 if (!container) return;
                 container.dataset.componentId = tableCfg.id || 'table';
 
@@ -1258,14 +1267,14 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             renderDialog() {
-                const container = document.getElementById('app-explain-dialog');
+                const container = this.getById('app-explain-dialog');
                 if (!container) return;
                 container.className = 'explanation-dialog';
                 container.innerHTML = '';
             }
 
             renderExplanationDialogContent(chartKey, explanations) {
-                const cardEl = document.querySelector(`[data-explain-chart="${chartKey}"]`)?.closest('.section-card');
+                const cardEl = this.query(`[data-explain-chart="${chartKey}"]`)?.closest('.section-card');
                 const defaultTitle = cardEl?.querySelector('h3')?.textContent || cardEl?.querySelector('.text-ink-muted')?.textContent || '业务经营分析指标说明';
 
                 const chartCfg = (this.config.charts || []).find(c => c.code === chartKey || c.id === chartKey || c.explainKey === chartKey);
@@ -1388,20 +1397,34 @@ __DASHBOARD_CONFIG_CODE__
 
         // 5. Main Application Controller
         class DashboardApp {
-            constructor(config) {
+            constructor(config, root = document) {
                 this.config = config;
+                this.root = root;
                 this.state = new StateStore(config);
                 this.config = this.state.config;
-                this.renderer = new DashboardRenderer(this.state);
+                this.renderer = new DashboardRenderer(this.state, root);
                 this.draggedColKey = null;
                 this._mounted = false;
                 this._eventController = null;
                 this._resizeObserver = null;
             }
 
+            getById(id) {
+                return this.root.getElementById?.(id) || this.root.querySelector?.(`#${CSS.escape(id)}`);
+            }
+
+            query(selector) {
+                return this.root.querySelector(selector);
+            }
+
+            queryAll(selector) {
+                return this.root.querySelectorAll(selector);
+            }
+
             init() {
                 if (this._mounted) return this;
                 this._mounted = true;
+                this.root.__dashboardApp = this;
                 this._eventController = new AbortController();
                 // Render DOM structure
                 this.renderer.renderHeader();
@@ -1429,7 +1452,7 @@ __DASHBOARD_CONFIG_CODE__
                 kpis.forEach(kpi => {
                     // 1. mc03: Sparkline Micro Chart
                     if (kpi.type === 'mc03') {
-                        const dom = document.getElementById(`kpi-spark-${kpi.id}`);
+                        const dom = this.getById(`kpi-spark-${kpi.id}`);
                         if (dom) {
                             const inst = echarts.init(dom);
                             this.state.chartInstances[`kpi-spark-${kpi.id}`] = inst;
@@ -1476,7 +1499,7 @@ __DASHBOARD_CONFIG_CODE__
 
                     // 2. mc05: Mini Semi-Gauge
                     if (kpi.type === 'mc05') {
-                        const dom = document.getElementById(`kpi-gauge-${kpi.id}`);
+                        const dom = this.getById(`kpi-gauge-${kpi.id}`);
                         if (dom) {
                             const inst = echarts.init(dom);
                             this.state.chartInstances[`kpi-gauge-${kpi.id}`] = inst;
@@ -1509,14 +1532,14 @@ __DASHBOARD_CONFIG_CODE__
             initCharts() {
                 const charts = this.config.charts || [];
                 charts.forEach(chartCfg => {
-                    const dom = document.getElementById(chartCfg.id);
+                    const dom = this.getById(chartCfg.id);
                     if (!dom) return;
                     const inst = echarts.init(dom);
                     this.state.chartInstances[chartCfg.instanceId] = inst;
                     this.state.chartGranularities[chartCfg.instanceId] = chartCfg.defaultGranularity || 'month';
 
                     // Build and set option
-                    const opt = chartCfg.optionBuilder(chartCfg.data, this.state.chartGranularities[chartCfg.instanceId], TOKENS);
+                    const opt = chartCfg.optionBuilder(chartCfg.data, this.state.chartGranularities[chartCfg.instanceId], TOKENS, chartCfg);
                     inst.setOption(opt);
 
                     // Bind Cross Filtering
@@ -1539,7 +1562,7 @@ __DASHBOARD_CONFIG_CODE__
                         }
                     });
                     this._resizeObserver = observer;
-                    document.querySelectorAll('.card-chart-pane, .section-card div[id^="kpi-spark-"], .section-card div[id^="kpi-gauge-"]').forEach(el => observer.observe(el));
+                    this.queryAll('.card-chart-pane, .section-card div[id^="kpi-spark-"], .section-card div[id^="kpi-gauge-"]').forEach(el => observer.observe(el));
                 }
 
                 window.addEventListener('resize', () => {
@@ -1550,24 +1573,24 @@ __DASHBOARD_CONFIG_CODE__
             bindEvents() {
                 const eventOptions = { signal: this._eventController.signal };
                 // Dropdown dismiss on outside click
-                document.addEventListener('click', (e) => {
+                this.root.addEventListener('click', (e) => {
                     if (!e.target.closest('[id^="filter"]') && !e.target.closest('[id$="DropdownMenu"]') && !e.target.closest('#colDrawerWrap') && !e.target.closest('#globalSearchWrap')) {
-                        document.querySelectorAll('[id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
-                        document.getElementById('colDrawerMenu')?.classList.add('hidden');
-                        document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
+                        this.queryAll('[id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
+                        this.getById('colDrawerMenu')?.classList.add('hidden');
+                        this.getById('searchSuggestionsDropdown')?.classList.add('hidden');
                     }
                 }, eventOptions);
 
                 // Explain Modal Trigger
-                const modal = document.getElementById('app-explain-dialog');
-                document.addEventListener('click', (e) => {
+                const modal = this.getById('app-explain-dialog');
+                this.root.addEventListener('click', (e) => {
                     const btn = e.target.closest('[data-explain-chart]');
                     if (btn && modal) {
                         const code = btn.getAttribute('data-explain-chart');
                         const htmlContent = this.renderer.renderExplanationDialogContent(code, this.config.explanations);
                         modal.innerHTML = htmlContent;
 
-                        document.getElementById('closeExplainModalBtn')?.addEventListener('click', () => modal?.close(), eventOptions);
+                        this.getById('closeExplainModalBtn')?.addEventListener('click', () => modal?.close(), eventOptions);
                         if (typeof modal.showModal === 'function') {
                             modal.showModal();
                         } else {
@@ -1584,7 +1607,7 @@ __DASHBOARD_CONFIG_CODE__
                 }, eventOptions);
 
                 // Granularity Switcher
-                document.addEventListener('click', (e) => {
+                this.root.addEventListener('click', (e) => {
                     const tabBtn = e.target.closest('.granularity-tab-btn');
                     if (tabBtn) {
                         const code = tabBtn.getAttribute('data-component-id');
@@ -1601,7 +1624,7 @@ __DASHBOARD_CONFIG_CODE__
                         const inst = this.state.chartInstances[code];
                         if (chartCfg && inst) {
                             this.state.chartGranularities[code] = gran;
-                            const newOpt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS);
+                            const newOpt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg);
                             inst.setOption(newOpt, true);
                             
                             // If table pane is active, refresh table dynamically
@@ -1617,7 +1640,7 @@ __DASHBOARD_CONFIG_CODE__
                 }, eventOptions);
 
                 // View Toggle (Chart ↔ Dynamic Auto-Converted Table)
-                document.addEventListener('click', (e) => {
+                this.root.addEventListener('click', (e) => {
                     const btn = e.target.closest('.view-toggle-btn');
                     if (btn) {
                         const code = btn.getAttribute('data-component-id');
@@ -1647,7 +1670,7 @@ __DASHBOARD_CONFIG_CODE__
                 }, eventOptions);
 
                 // Export Chart CSV Data (One Click per Chart)
-                document.addEventListener('click', (e) => {
+                this.root.addEventListener('click', (e) => {
                     const btn = e.target.closest('.export-chart-btn');
                     if (btn) {
                         const code = btn.getAttribute('data-component-id');
@@ -1677,7 +1700,7 @@ __DASHBOARD_CONFIG_CODE__
                 }, eventOptions);
 
                 // Copy Chart to Clipboard
-                document.addEventListener('click', (e) => {
+                this.root.addEventListener('click', (e) => {
                     const btn = e.target.closest('.copy-chart-btn');
                     if (btn) {
                         const code = btn.getAttribute('data-component-id');
@@ -1698,7 +1721,7 @@ __DASHBOARD_CONFIG_CODE__
                 }, eventOptions);
 
                 // Fullscreen Focus Mode
-                document.addEventListener('click', (e) => {
+                this.root.addEventListener('click', (e) => {
                     const btn = e.target.closest('.fullscreen-btn');
                     if (btn) {
                         const code = btn.getAttribute('data-component-id');
@@ -1723,7 +1746,7 @@ __DASHBOARD_CONFIG_CODE__
                 // Esc to exit fullscreen
                 window.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
-                        document.querySelectorAll('.card-fullscreen').forEach(card => {
+                        this.queryAll('.card-fullscreen').forEach(card => {
                             card.classList.remove('card-fullscreen');
                             const btn = card.querySelector('.fullscreen-btn');
                             if (btn) {
@@ -1773,27 +1796,27 @@ __DASHBOARD_CONFIG_CODE__
             // Filter Handlers (100% Dynamic)
             toggleDropdown(id, event) {
                 if (event) event.stopPropagation();
-                const el = document.getElementById(id);
+                const el = this.getById(id);
                 if (!el) return;
                 const isHidden = el.classList.contains('hidden');
-                document.querySelectorAll('[id^="filterMenu_"], [id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
-                document.getElementById('colDrawerMenu')?.classList.add('hidden');
-                document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
+                this.queryAll('[id^="filterMenu_"], [id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
+                this.getById('colDrawerMenu')?.classList.add('hidden');
+                this.getById('searchSuggestionsDropdown')?.classList.add('hidden');
                 if (isHidden) el.classList.remove('hidden');
             }
 
             selectFilterOption(key, val, label) {
                 this.state.filterValues[key] = val;
                 this.state.filterLabels[key] = label;
-                const labelEl = document.getElementById(`selectedLabel_${key}`);
+                const labelEl = this.getById(`selectedLabel_${key}`);
                 if (labelEl) labelEl.textContent = label;
-                document.getElementById(`filterMenu_${key}`)?.classList.add('hidden');
+                this.getById(`filterMenu_${key}`)?.classList.add('hidden');
                 this.onGlobalFilterChange();
             }
 
             filterMultiDropdown(key, query) {
                 const q = query.toLowerCase();
-                const container = document.getElementById(`multiOptionsContainer_${key}`);
+                const container = this.getById(`multiOptionsContainer_${key}`);
                 if (!container) return;
                 container.querySelectorAll('.filter-opt-row').forEach(row => {
                     const label = row.getAttribute('data-label').toLowerCase();
@@ -1802,7 +1825,7 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             setAllMultiOptions(key, check) {
-                const container = document.getElementById(`multiOptionsContainer_${key}`);
+                const container = this.getById(`multiOptionsContainer_${key}`);
                 if (container) {
                     container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = check);
                 }
@@ -1810,7 +1833,7 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             onMultiFilterChange(key) {
-                const container = document.getElementById(`multiOptionsContainer_${key}`);
+                const container = this.getById(`multiOptionsContainer_${key}`);
                 const checkedVals = Array.from(container?.querySelectorAll('input[type="checkbox"]:checked') || []).map(cb => cb.value);
                 const f = this.state.filterDefs.find(d => d.key === key);
                 const totalCount = f?.options?.length || 0;
@@ -1819,9 +1842,9 @@ __DASHBOARD_CONFIG_CODE__
                 const labelText = checkedVals.length === totalCount ? `全部${f?.label || ''}` : (checkedVals.length === 0 ? `未选${f?.label || ''} (0)` : `已选 ${checkedVals.length} 项`);
                 this.state.filterLabels[key] = labelText;
 
-                const labelEl = document.getElementById(`selectedLabel_${key}`);
+                const labelEl = this.getById(`selectedLabel_${key}`);
                 if (labelEl) labelEl.textContent = labelText;
-                const badgeEl = document.getElementById(`countBadge_${key}`);
+                const badgeEl = this.getById(`countBadge_${key}`);
                 if (badgeEl) badgeEl.textContent = checkedVals.length;
 
                 this.onGlobalFilterChange();
@@ -1833,19 +1856,19 @@ __DASHBOARD_CONFIG_CODE__
             selectGlobalRoute(val, label) { this.selectFilterOption('route', val, label); }
             setAllHubs(check) { this.setAllMultiOptions('hub', check); }
             filterHubDropdownList() {
-                const inp = document.getElementById('hubSearchInput');
+                const inp = this.getById('hubSearchInput');
                 if (inp) this.filterMultiDropdown('hub', inp.value);
             }
 
             // Search Autocomplete Suggestions
             showSearchSuggestions() {
-                const query = document.getElementById('globalKeywordSearch')?.value.trim();
-                const dropdown = document.getElementById('searchSuggestionsDropdown');
-                const content = document.getElementById('searchSuggestionsContent');
+                const query = this.getById('globalKeywordSearch')?.value.trim();
+                const dropdown = this.getById('searchSuggestionsDropdown');
+                const content = this.getById('searchSuggestionsContent');
                 if (!dropdown || !content) return;
 
-                document.querySelectorAll('[id^="filterMenu_"], [id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
-                document.getElementById('colDrawerMenu')?.classList.add('hidden');
+                this.queryAll('[id^="filterMenu_"], [id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
+                this.getById('colDrawerMenu')?.classList.add('hidden');
 
                 if (!query) {
                     const rows = this.config.table?.rows || [];
@@ -1932,7 +1955,7 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             onSearchInput(val) {
-                const clearBtn = document.getElementById('clearSearchBtn');
+                const clearBtn = this.getById('clearSearchBtn');
                 if (clearBtn) {
                     if (val) clearBtn.classList.remove('hidden');
                     else clearBtn.classList.add('hidden');
@@ -1943,33 +1966,33 @@ __DASHBOARD_CONFIG_CODE__
 
             onSearchKeyDown(e) {
                 if (e.key === 'Enter' || e.key === 'Escape') {
-                    document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
+                    this.getById('searchSuggestionsDropdown')?.classList.add('hidden');
                 }
             }
 
             applySearchKeyword(val) {
-                const input = document.getElementById('globalKeywordSearch');
+                const input = this.getById('globalKeywordSearch');
                 if (input) {
                     input.value = val;
-                    document.getElementById('clearSearchBtn')?.classList.remove('hidden');
+                    this.getById('clearSearchBtn')?.classList.remove('hidden');
                 }
-                document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
+                this.getById('searchSuggestionsDropdown')?.classList.add('hidden');
                 this.onGlobalFilterChange();
                 this.showToast(`已应用检索: 「${val}」`);
             }
 
             clearSearchKeyword(e) {
                 if (e) e.stopPropagation();
-                const input = document.getElementById('globalKeywordSearch');
+                const input = this.getById('globalKeywordSearch');
                 if (input) input.value = '';
-                document.getElementById('clearSearchBtn')?.classList.add('hidden');
-                document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
+                this.getById('clearSearchBtn')?.classList.add('hidden');
+                this.getById('searchSuggestionsDropdown')?.classList.add('hidden');
                 this.onGlobalFilterChange();
                 this.showToast('已清空关键词检索');
             }
 
             onGlobalFilterChange() {
-                this.state.keyword = document.getElementById('globalKeywordSearch')?.value.trim() || '';
+                this.state.keyword = this.getById('globalKeywordSearch')?.value.trim() || '';
                 this.updateActiveChips();
                 this.state.table.page = 1;
                 this.renderTableEngine();
@@ -1988,7 +2011,7 @@ __DASHBOARD_CONFIG_CODE__
                 if (rows.length > 0) {
                     (this.config.kpis || []).forEach(kpi => {
                         if (scopedConsumerIds.size > 0 && !scopedConsumerIds.has(kpi.id)) return;
-                        const kpiCard = document.querySelector(`[data-explain-chart="${kpi.explainKey}"]`)?.closest('.section-card');
+                        const kpiCard = this.query(`[data-explain-chart="${kpi.explainKey}"]`)?.closest('.section-card');
                         if (!kpiCard) return;
 
                         const valEl = kpiCard.querySelector('.font-mono.tabular-nums');
@@ -2014,12 +2037,12 @@ __DASHBOARD_CONFIG_CODE__
                         if (typeof chartCfg.onFilterChange === 'function') {
                             chartCfg.onFilterChange(rows, isFiltered, inst, TOKENS);
                         } else if (typeof chartCfg.optionBuilder === 'function') {
-                            const opt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS);
+                            const opt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg);
                             inst.setOption(opt, true);
                         }
 
                         // If table pane is currently open for this card, refresh table dynamically
-                        const cardEl = document.getElementById(chartCfg.id)?.closest('.section-card');
+                        const cardEl = this.getById(chartCfg.id)?.closest('.section-card');
                         const tablePane = cardEl?.querySelector('.card-table-pane');
                         if (tablePane && !tablePane.classList.contains('hidden')) {
                             this.renderDynamicChartTable(instanceId, tablePane);
@@ -2031,9 +2054,9 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             updateActiveChips() {
-                const tray = document.getElementById('activeChipsTray');
-                const container = document.getElementById('chipsContainer');
-                const badge = document.getElementById('activeFilterBadgeCount');
+                const tray = this.getById('activeChipsTray');
+                const container = this.getById('chipsContainer');
+                const badge = this.getById('activeFilterBadgeCount');
                 if (!tray || !container) return;
 
                 let chips = [];
@@ -2073,7 +2096,7 @@ __DASHBOARD_CONFIG_CODE__
 
             removeFilterChip(key) {
                 if (key === '_kw') {
-                    const inp = document.getElementById('globalKeywordSearch');
+                    const inp = this.getById('globalKeywordSearch');
                     if (inp) inp.value = '';
                     this.state.keyword = '';
                     this.onGlobalFilterChange();
@@ -2096,27 +2119,27 @@ __DASHBOARD_CONFIG_CODE__
                         const allVals = f.options.map(o => o.value);
                         this.state.filterValues[f.key] = new Set(allVals);
                         this.state.filterLabels[f.key] = `全部${f.label}`;
-                        const container = document.getElementById(`multiOptionsContainer_${f.key}`);
+                        const container = this.getById(`multiOptionsContainer_${f.key}`);
                         if (container) container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-                        const labelEl = document.getElementById(`selectedLabel_${f.key}`);
+                        const labelEl = this.getById(`selectedLabel_${f.key}`);
                         if (labelEl) labelEl.textContent = `全部${f.label}`;
-                        const badgeEl = document.getElementById(`countBadge_${f.key}`);
+                        const badgeEl = this.getById(`countBadge_${f.key}`);
                         if (badgeEl) badgeEl.textContent = allVals.length;
                     } else {
                         const defVal = this.state.defaultFilterValues[f.key];
                         const defLabel = this.state.defaultFilterLabels[f.key];
                         this.state.filterValues[f.key] = defVal;
                         this.state.filterLabels[f.key] = defLabel;
-                        const labelEl = document.getElementById(`selectedLabel_${f.key}`);
+                        const labelEl = this.getById(`selectedLabel_${f.key}`);
                         if (labelEl) labelEl.textContent = defLabel;
                     }
                 });
 
-                const searchInput = document.getElementById('globalKeywordSearch');
+                const searchInput = this.getById('globalKeywordSearch');
                 if (searchInput) searchInput.value = '';
                 this.state.keyword = '';
                 this.state.chartCrossFilter = null;
-                document.getElementById('tableCrossFilterTray')?.classList.add('hidden');
+                this.getById('tableCrossFilterTray')?.classList.add('hidden');
                 this.onGlobalFilterChange();
                 this.showToast('已重置恢复全部基准筛选');
             }
@@ -2124,8 +2147,8 @@ __DASHBOARD_CONFIG_CODE__
             // Cross Filtering
             setTableCrossFilter(val) {
                 this.state.chartCrossFilter = val;
-                const tray = document.getElementById('tableCrossFilterTray');
-                const txt = document.getElementById('tableCrossFilterText');
+                const tray = this.getById('tableCrossFilterTray');
+                const txt = this.getById('tableCrossFilterText');
                 if (tray && txt) {
                     txt.textContent = `已根据图表选择联动过滤: 「${val}」`;
                     tray.classList.remove('hidden');
@@ -2138,7 +2161,7 @@ __DASHBOARD_CONFIG_CODE__
 
             clearTableCrossFilter() {
                 this.state.chartCrossFilter = null;
-                document.getElementById('tableCrossFilterTray')?.classList.add('hidden');
+                this.getById('tableCrossFilterTray')?.classList.add('hidden');
                 this.state.table.page = 1;
                 this.renderTableEngine();
                 this.updateKPIsAndChartsFromFilters();
@@ -2147,7 +2170,7 @@ __DASHBOARD_CONFIG_CODE__
 
             // Table Engine with Column Drag-and-Drop
             renderColCheckboxes() {
-                const container = document.getElementById('colCheckboxesContainer');
+                const container = this.getById('colCheckboxesContainer');
                 if (!container) return;
 
                 container.innerHTML = this.state.table.orderedColumns.map((col, index) => `
@@ -2168,7 +2191,7 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             bindColumnDragEvents() {
-                const items = document.querySelectorAll('.drag-col-item');
+                const items = this.queryAll('.drag-col-item');
                 items.forEach(item => {
                     item.addEventListener('dragstart', (e) => {
                         this.draggedColKey = item.getAttribute('data-col-key');
@@ -2198,7 +2221,7 @@ __DASHBOARD_CONFIG_CODE__
 
                     item.addEventListener('dragend', () => {
                         item.classList.remove('dragging');
-                        document.querySelectorAll('.drag-col-item').forEach(el => el.classList.remove('drag-over', 'dragging'));
+                        this.queryAll('.drag-col-item').forEach(el => el.classList.remove('drag-over', 'dragging'));
                     });
                 });
             }
@@ -2234,11 +2257,11 @@ __DASHBOARD_CONFIG_CODE__
 
             toggleColumnDrawer(e) {
                 if (e) e.stopPropagation();
-                const menu = document.getElementById('colDrawerMenu');
+                const menu = this.getById('colDrawerMenu');
                 if (!menu) return;
                 const isHidden = menu.classList.contains('hidden');
-                document.querySelectorAll('[id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
-                document.getElementById('searchSuggestionsDropdown')?.classList.add('hidden');
+                this.queryAll('[id$="DropdownMenu"]').forEach(m => m.classList.add('hidden'));
+                this.getById('searchSuggestionsDropdown')?.classList.add('hidden');
                 if (isHidden) {
                     this.renderColCheckboxes();
                     menu.classList.remove('hidden');
@@ -2344,8 +2367,8 @@ __DASHBOARD_CONFIG_CODE__
             }
 
             renderTableEngine() {
-                const thead = document.getElementById('main14ColThead');
-                const tbody = document.getElementById('main14ColTbody');
+                const thead = this.getById('main14ColThead');
+                const tbody = this.getById('main14ColTbody');
                 if (!thead || !tbody) return;
 
                 const visibleCols = this.state.table.orderedColumns.filter(c => this.state.table.visibleCols.has(c.key));
@@ -2396,10 +2419,10 @@ __DASHBOARD_CONFIG_CODE__
                 }
 
                 // Update Pagination Info
-                const pageInfo = document.getElementById('tablePaginationInfo');
-                const pageIndicator = document.getElementById('tablePageIndicator');
-                const prevBtn = document.getElementById('tablePrevBtn');
-                const nextBtn = document.getElementById('tableNextBtn');
+                const pageInfo = this.getById('tablePaginationInfo');
+                const pageIndicator = this.getById('tablePageIndicator');
+                const prevBtn = this.getById('tablePrevBtn');
+                const nextBtn = this.getById('tableNextBtn');
 
                 if (pageInfo) pageInfo.textContent = `显示第 ${total === 0 ? 0 : startIdx + 1} - ${Math.min(startIdx + pageSize, total)} 条 · 共 ${total} 条`;
                 if (pageIndicator) pageIndicator.textContent = `${this.state.table.page} / ${totalPages}`;
@@ -2454,11 +2477,12 @@ __DASHBOARD_CONFIG_CODE__
                 this._resizeObserver = null;
                 Object.values(this.state.chartInstances).forEach(inst => inst?.dispose());
                 this.state.chartInstances = {};
+                if (this.root.__dashboardApp === this) delete this.root.__dashboardApp;
                 if (window.App === this) window.App = null;
             }
 
             showToast(msg) {
-                const container = document.getElementById('app-toast-container');
+                const container = this.getById('app-toast-container');
                 if (!container) return;
                 const toast = document.createElement('div');
                 toast.className = 'px-4 py-2.5 bg-primary-strong text-white text-xs font-semibold rounded-lg shadow-xl toast-active flex items-center gap-2 border border-slate-700 pointer-events-auto';
@@ -2483,4 +2507,6 @@ def generate_dashboard_html(config_js_code, page_title):
     return (TEMPLATE
             .replace('__PAGE_TITLE__', page_title)
             .replace('__DASHBOARD_CONFIG_CODE__', config_js_code)
-            .replace('__DASHBOARD_RUNTIME_BUNDLE__', render_runtime_bundle()))
+            .replace('__DASHBOARD_RUNTIME_BUNDLE__', render_runtime_bundle())
+            # Inline controls resolve their owning root instead of a global singleton.
+            .replace('window.App.', 'window.getDashboardAppForElement(this).'))

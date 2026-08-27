@@ -4,28 +4,37 @@ RUNTIME_MODULES = (
     (
         "lifecycle",
         r"""
-        window.createDashboardRuntime = function createDashboardRuntime(initialConfig) {
+        window.getDashboardAppForElement = function getDashboardAppForElement(element) {
+            let node = element;
+            while (node) {
+                if (node.__dashboardApp) return node.__dashboardApp;
+                node = node.parentNode || node.host || null;
+            }
+            return window.App || null;
+        };
+
+        window.createDashboardRuntime = function createDashboardRuntime(initialConfig, root = document) {
             return {
                 config: initialConfig || null,
                 app: null,
-                root: null,
-                mount(root = document, config = this.config) {
+                root,
+                mount(root = this.root, config = this.config) {
                     if (this.app?._mounted) return this.app;
                     this.root = root;
                     this.config = config || window.DASHBOARD_CONFIG;
-                    this.app = new DashboardApp(this.config);
-                    this.app.root = root;
-                    window.App = this.app;
+                    this.app = new DashboardApp(this.config, root);
+                    if (root === document) window.App = this.app;
                     return this.app.init();
                 },
-                update(config, root = this.root || document) {
+                update(config, root = this.root) {
                     this.destroy();
                     return this.mount(root, config);
                 },
                 destroy() {
-                    this.app?.destroy();
+                    const app = this.app;
+                    app?.destroy();
+                    if (window.App === app) window.App = null;
                     this.app = null;
-                    this.root = null;
                 }
             };
         };
@@ -36,8 +45,8 @@ RUNTIME_MODULES = (
         r"""
         function bootApp() {
             if (window.DASHBOARD_CONFIG && !window.App) {
-                window.DashboardRuntime = window.createDashboardRuntime(window.DASHBOARD_CONFIG);
-                window.DashboardRuntime.mount(document);
+                window.DashboardRuntime = window.createDashboardRuntime(window.DASHBOARD_CONFIG, document);
+                window.DashboardRuntime.mount();
             }
         }
 

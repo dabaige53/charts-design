@@ -12,6 +12,19 @@ test('generated dashboard mounts, exposes every component, and destroys cleanly'
   await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'domcontentloaded' });
   const hasDashboardRuntime = await page.evaluate(() => Boolean(window.createDashboardRuntime));
   if (!hasDashboardRuntime) {
+    const standaloneChart = page.locator('#chart-main');
+    if (await standaloneChart.count()) {
+      await expect.poll(
+        async () => standaloneChart.locator('canvas, svg').count(),
+        { message: 'standalone chart creates a rendered canvas or SVG' }
+      ).toBeGreaterThan(0);
+      const dimensions = await standaloneChart.evaluate(element => ({
+        width: element.clientWidth,
+        height: element.clientHeight
+      }));
+      expect(dimensions.width, 'standalone chart width').toBeGreaterThan(0);
+      expect(dimensions.height, 'standalone chart height').toBeGreaterThan(0);
+    }
     expect(pageErrors, 'page errors').toEqual([]);
     return;
   }
@@ -58,9 +71,99 @@ test('generated dashboard mounts, exposes every component, and destroys cleanly'
     await expect(dialog, 'Escape closes explanation dialog').not.toHaveAttribute('open', '');
   }
 
-  const destroyed = await page.evaluate(() => {
+  const lifecycle = await page.evaluate(() => {
+    const firstApp = window.App;
+    const root = window.DashboardRuntime.root;
     window.DashboardRuntime.destroy();
-    return !window.App && !window.DashboardRuntime.app;
+    const destroyed = !window.App && !window.DashboardRuntime.app && window.DashboardRuntime.root === root;
+    const remountedApp = window.DashboardRuntime.mount();
+    const remounted = remountedApp !== firstApp
+      && remountedApp._mounted
+      && remountedApp.root === root
+      && window.App === remountedApp;
+    window.DashboardRuntime.destroy();
+    return { destroyed, remounted, finallyDestroyed: !window.App && !window.DashboardRuntime.app };
   });
-  expect(destroyed, 'runtime destroy clears the mounted app').toBe(true);
+  expect(lifecycle.destroyed, 'runtime destroy clears the mounted app and preserves its root').toBe(true);
+  expect(lifecycle.remounted, 'runtime remount creates a fresh app on the preserved root').toBe(true);
+  expect(lifecycle.finallyDestroyed, 'runtime can destroy the remounted app').toBe(true);
+});
+
+test('two container roots keep real filter controls and lifecycle isolated', async ({ page }) => {
+  const htmlPath = process.env.EXECUTIVE_CHARTS_HTML;
+  expect(htmlPath, 'EXECUTIVE_CHARTS_HTML is required').toBeTruthy();
+  await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'domcontentloaded' });
+  const hasDashboardRuntime = await page.evaluate(() => Boolean(window.createDashboardRuntime));
+  if (!hasDashboardRuntime) return;
+
+  const setup = await page.evaluate(() => {
+    window.DashboardRuntime?.destroy();
+    const shell = () => `
+      <header id="app-header"></header>
+      <section id="app-filters"></section>
+      <main>
+        <section id="app-kpis"></section>
+        <section id="app-charts-grid"></section>
+        <section id="app-table-section"></section>
+      </main>
+      <dialog id="app-explain-dialog"></dialog>
+      <div id="app-toast-container"></div>`;
+    const config = {
+      meta: { title: 'Scoped runtime' },
+      filters: [{
+        id: 'region', key: 'region', label: 'Region', type: 'select',
+        fields: ['region'], componentIds: [],
+        options: [
+          { value: 'east', label: 'East', default: true },
+          { value: 'south', label: 'South' }
+        ]
+      }],
+      kpis: [], charts: [],
+      table: {
+        id: 'detail', title: 'Detail',
+        columns: [{ key: 'region', title: 'Region', align: 'left' }],
+        rows: [{ region: 'east' }, { region: 'south' }]
+      }
+    };
+    document.body.innerHTML = '<div id="left-root"></div><div id="right-root"></div>';
+    const left = document.getElementById('left-root');
+    const right = document.getElementById('right-root');
+    left.innerHTML = shell();
+    right.innerHTML = shell();
+    window.leftRuntime = window.createDashboardRuntime(config, left);
+    window.rightRuntime = window.createDashboardRuntime(config, right);
+    window.leftRuntime.mount();
+    window.rightRuntime.mount();
+    return { leftMounted: window.leftRuntime.app._mounted, rightMounted: window.rightRuntime.app._mounted };
+  });
+  expect(setup).toEqual({ leftMounted: true, rightMounted: true });
+
+  const left = page.locator('#left-root');
+  const right = page.locator('#right-root');
+  await left.getByRole('button', { name: /Region:/ }).click();
+  await left.locator('#filterMenu_region').getByText('South', { exact: true }).click();
+
+  const isolation = await page.evaluate(() => {
+    const leftBeforeDestroy = window.leftRuntime.app.state.filterValues.region;
+    const rightBeforeDestroy = window.rightRuntime.app.state.filterValues.region;
+    window.leftRuntime.destroy();
+    const rightAfterDestroy = window.rightRuntime.app._mounted
+      && document.getElementById('right-root').__dashboardApp === window.rightRuntime.app;
+    const remounted = window.leftRuntime.mount();
+    return {
+      leftBeforeDestroy,
+      rightBeforeDestroy,
+      rightAfterDestroy,
+      leftRemounted: remounted._mounted
+        && document.getElementById('left-root').__dashboardApp === remounted
+    };
+  });
+
+  expect(isolation).toEqual({
+    leftBeforeDestroy: 'south',
+    rightBeforeDestroy: 'east',
+    rightAfterDestroy: true,
+    leftRemounted: true
+  });
+  await expect(right.locator('#selectedLabel_region')).toHaveText('East');
 });
