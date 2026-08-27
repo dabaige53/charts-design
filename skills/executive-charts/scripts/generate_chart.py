@@ -274,9 +274,6 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
             </button>
         </header>
         <div class="exp-dialog-body" id="dialogBody"></div>
-        <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
-            <button onclick="closeExplanation()" type="button" class="px-4 py-1.5 bg-[#123B5D] text-white text-xs font-semibold rounded-md hover:bg-[#0B2A42] transition-colors cursor-pointer shadow-xs">我知道了</button>
-        </div>
     </dialog>
 
     <!-- Core Script -->

@@ -3,6 +3,8 @@
 Read this checklist before using `executive-charts` to restyle, migrate, or extend an existing HTML dashboard or frontend project. Treat the existing product as the baseline: preserve its business meaning and working behavior while replacing presentation through explicit component contracts.
 
 Use [dashboard-workspace.md](dashboard-workspace.md) for current CLI syntax, component schemas, Preservation Manifest fields, and Inspector commands.
+Use [component-html-generation.md](component-html-generation.md) when mapping an existing region to generated DOM or adapting the runtime contract to another frontend framework.
+Use [design_standards.md](design_standards.md) when changing the page's visual system, chart geometry, Tooltip, typography, spacing, color, or responsive behavior.
 
 ## 1. Establish the baseline
 
@@ -15,7 +17,23 @@ Use [dashboard-workspace.md](dashboard-workspace.md) for current CLI syntax, com
 
 Completion criterion: every in-scope page and state has a reproducible entry, its constraints are recorded, and every Preservation Manifest contains only requirements that must survive migration.
 
-## 2. Inventory components and behavior
+## 2. Choose the adoption mode
+
+Choose one mode for each page before editing:
+
+| Mode | Use when | Delivery shape |
+| --- | --- | --- |
+| Standalone replacement | The user wants a generated single-file dashboard and the existing framework does not need to remain the page owner | Workspace sources plus generated HTML |
+| In-place adapter | Existing routing, authentication, state, data fetching, or framework components must remain | Existing page with components adapted to the shared DOM and capability contracts |
+| Hybrid | Individual charts can be standalone while the existing page retains navigation, forms, or tables | Explicit boundary and lifecycle for each embedded generated component |
+
+- [ ] Record the owner of page layout, data fetching, filter state, component lifecycle, and final HTML for the chosen mode.
+- [ ] Keep the baseline entry operable while developing the first migrated slice, using the project's recoverable change workflow.
+- [ ] Record framework-specific differences as Adapters with their verification method.
+
+Completion criterion: every page has one declared adoption mode, every cross-boundary responsibility has one owner, and the first slice can be compared with the baseline without losing the working entry.
+
+## 3. Inventory components and behavior
 
 Create one row for every visible or interactive region. Split a region when parts have different data ownership, lifecycle, or filtering behavior.
 
@@ -33,10 +51,11 @@ Account for all of the following where present:
 - [ ] KPI aggregation and chart recomputation needed after filtering; identify the required `onFilterChange` behavior instead of assuming automatic recalculation.
 - [ ] Table columns, units, alignment, sorting, pagination, keyword search, filter behavior, column visibility, drag order, copying, export, and overflow behavior.
 - [ ] Dialogs, drawers, menus, keyboard actions, focus order, labels, and ARIA references.
+- [ ] Treat metric/chart explanations as read-only reference overlays: preserve the title-bar close control, backdrop dismissal, and `Escape`; remove confirmation actions and action footers introduced by older templates.
 
 Completion criterion: every existing region appears exactly once in the inventory, every behavior has an owner, and every unsupported behavior has an explicit adapter, scoped follow-up, or accepted exclusion.
 
-## 3. Lock identity, content, and assets
+## 4. Lock identity, content, and assets
 
 - [ ] Preserve each business component's stable `id`; use chart `code` only to select its renderer.
 - [ ] Resolve duplicate ids before migration and update every `for`, `href`, `aria-controls`, and script reference together.
@@ -46,7 +65,7 @@ Completion criterion: every existing region appears exactly once in the inventor
 
 Completion criterion: every retained identity, text, and asset is machine-checkable, and every intentional removal is explicitly approved rather than silently omitted.
 
-## 4. Map data contracts
+## 5. Map data contracts
 
 - [ ] Give every KPI and chart explicit business data; catalog and preset values remain preview inputs only.
 - [ ] Validate chart data collections, paired vector lengths, unit, scale, null handling, and formatter assumptions before rendering.
@@ -58,7 +77,27 @@ Completion criterion: every retained identity, text, and asset is machine-checka
 
 Completion criterion: strict workspace validation passes, and each displayed value can be traced from source field through transformation, unit, and consumer component.
 
-## 5. Integrate the visual system
+## 6. Iterate one vertical slice
+
+Use a **thin slice**: migrate one complete business region through data, HTML generation, styling, interaction, and verification before starting the next region.
+
+1. Select one region whose data and current behavior are reproducible.
+2. Capture its baseline content, state, viewport, and required interactions.
+3. Map it to one supported component contract or define one scoped Adapter.
+4. Generate its HTML through the shared renderer, or implement the declared in-place adapter against the same identity and capability contract.
+5. Compare business content, information hierarchy, geometry, visual tokens, and interactions with the baseline.
+6. Run applicable static, preservation, and runtime checks; correct the slice until its Blockers are zero.
+7. Record the evidence and accepted differences, then select the next region.
+
+Track each iteration:
+
+| Slice | Baseline evidence | Component/Adapter | Visual delta | Interaction evidence | Result |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  | Blocked / accepted |
+
+Completion criterion: every accepted slice works end to end, has recorded comparison evidence, and leaves no unresolved Blocker before the next slice begins.
+
+## 7. Integrate the visual system
 
 - [ ] Map existing design tokens to the Skill tokens before changing individual component CSS.
 - [ ] Check typography, spacing, radius, border, shadow, categorical colors, and positive/negative/attention semantics.
@@ -69,20 +108,23 @@ Completion criterion: strict workspace validation passes, and each displayed val
 
 Completion criterion: each mapped component preserves the original business hierarchy, meets the required viewport constraints, and introduces no style leakage outside its owned region.
 
-## 6. Verify generated output
+## 8. Verify generated output
 
 - [ ] Build the candidate through the workspace path; confirm automatic static inspection passes.
 - [ ] Run strict `inspect-html` with the Preservation Manifest.
 - [ ] Run `compare-html` from the exact baseline file to the candidate file.
 - [ ] When Playwright and Chrome are available, run `inspect-html --runtime --strict` on the generated candidate.
 - [ ] Exercise filters, filter reset, chart Tooltip, renderer-specific zoom, chart/table toggle, sorting, pagination, column controls, export, copy, fullscreen, explanation dialog, and keyboard dismissal where those capabilities are in scope.
+- [ ] Open every KPI/chart explanation trigger and verify the expected sections render without a confirmation button or empty footer.
 - [ ] Verify filtered KPIs and charts actually recompute; a changed chip or filtered table alone is not evidence of consumer updates.
 - [ ] Inspect browser console errors, missing network resources, CSP violations, font fallback, and offline behavior required by the project.
 - [ ] Compare representative screenshots at required viewports when visual preservation is an acceptance criterion.
 
-Completion criterion: static inspection, preservation comparison, and every available runtime check pass; each in-scope interaction has direct observed evidence.
+After all slices pass individually, repeat the full-page states captured in the baseline. Verify cross-component filters, layout flow, shared overlays, resize behavior, and style isolation across slice boundaries.
 
-## 7. Decide readiness
+Completion criterion: static inspection, preservation comparison, and every available runtime check pass; each in-scope interaction has direct observed evidence, and the assembled page preserves the evidence already accepted for each slice.
+
+## 9. Decide readiness
 
 Classify every remaining item before delivery:
 

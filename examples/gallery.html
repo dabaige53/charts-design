@@ -130,10 +130,421 @@
             countEl.innerText = matchCount + ' 项匹配';
         }
 
+        // Standalone interaction component gallery demos
+        const ui04DefaultColumns = [
+            { key: 'route', title: '航线', align: 'left' }, { key: 'region', title: '大区', align: 'left' },
+            { key: 'owner', title: '负责人', align: 'left' }, { key: 'revenue', title: '收入', align: 'right' },
+            { key: 'progress', title: '达成率', align: 'right' }, { key: 'grade', title: '等级', align: 'center' }
+        ];
+        const ui04Rows = [
+            {route:'京沪快线',region:'华东',owner:'张立',revenue:4.9,progress:'97.0%',grade:'S级'},
+            {route:'沪广干线',region:'华南',owner:'陈昕',revenue:4.2,progress:'93.5%',grade:'A级'},
+            {route:'京蓉快线',region:'华北',owner:'王岚',revenue:3.8,progress:'88.4%',grade:'A级'},
+            {route:'深杭航线',region:'华东',owner:'李宁',revenue:3.1,progress:'82.1%',grade:'B级'},
+            {route:'西安支线',region:'华北',owner:'赵峰',revenue:2.4,progress:'76.8%',grade:'B级'},
+            {route:'广昆航线',region:'华南',owner:'周仪',revenue:2.1,progress:'72.3%',grade:'B级'}
+        ];
+        let ui04Columns = ui04DefaultColumns.map(col => ({...col, visible:true}));
+        let ui04Page = 1, ui04SortKey = 'revenue', ui04SortDesc = true, ui04DraggedKey = null;
+
+        function galleryToast(message, type = 'info') {
+            const toast = document.getElementById('galleryToast');
+            if (!toast) return;
+            toast.textContent = message;
+            toast.className = `fixed right-6 bottom-6 z-[70] rounded px-4 py-2.5 text-xs font-semibold text-white shadow-xl transition-all ${
+                type === 'success' ? 'bg-[#2F6B55]' : type === 'warning' ? 'bg-[#9A6A18]' : 'bg-primary-strong'
+            }`;
+            toast.classList.remove('opacity-0', 'translate-y-2', 'pointer-events-none');
+            clearTimeout(window.galleryToastTimer);
+            window.galleryToastTimer = setTimeout(() => toast.classList.add('opacity-0', 'translate-y-2', 'pointer-events-none'), 2400);
+        }
+
+        // UI01 Multi-Dimensional Filter Bar State & Interactivity
+        const ui01State = {
+            seasonVal: '2026S',
+            seasonLabel: '2026夏秋航季',
+            fleetVal: 'all',
+            fleetLabel: '全部机型 (全型)',
+            routeVal: 'all',
+            routeLabel: '全网航线网络',
+            hubs: ['华东基地', '华南基地', '北方基地', '西南基地']
+        };
+
+        function ui01ToggleDropdown(menuId, event) {
+            if (event) event.stopPropagation();
+            ['ui01SeasonMenu', 'ui01HubMenu', 'ui01FleetMenu', 'ui01RouteMenu'].forEach(id => {
+                if (id !== menuId) document.getElementById(id)?.classList.add('hidden');
+            });
+            document.getElementById(menuId)?.classList.toggle('hidden');
+        }
+
+        function ui01SelectSeason(val, label) {
+            ui01State.seasonVal = val;
+            ui01State.seasonLabel = label;
+            const el = document.getElementById('ui01SelectedSeason');
+            if (el) el.textContent = label;
+            document.getElementById('ui01SeasonMenu')?.classList.add('hidden');
+            ui01Apply();
+            galleryToast(`航季时段已切换：${label}`, 'info');
+        }
+
+        function ui01SelectFleet(val, label) {
+            ui01State.fleetVal = val;
+            ui01State.fleetLabel = label;
+            const el = document.getElementById('ui01SelectedFleet');
+            if (el) el.textContent = label;
+            document.getElementById('ui01FleetMenu')?.classList.add('hidden');
+            ui01Apply();
+            galleryToast(`机队机型已选择：${label}`, 'info');
+        }
+
+        function ui01SelectRoute(val, label) {
+            ui01State.routeVal = val;
+            ui01State.routeLabel = label;
+            const el = document.getElementById('ui01SelectedRoute');
+            if (el) el.textContent = label;
+            document.getElementById('ui01RouteMenu')?.classList.add('hidden');
+            ui01Apply();
+            galleryToast(`航线类型已选择：${label}`, 'info');
+        }
+
+        function ui01SetAllHubs(checkAll) {
+            document.querySelectorAll('.ui01-hub-cb').forEach(cb => cb.checked = checkAll);
+            ui01Apply();
+        }
+
+        function ui01FilterHubs() {
+            const q = (document.getElementById('ui01HubSearch')?.value || '').trim().toLowerCase();
+            document.querySelectorAll('.ui01-hub-row').forEach(row => {
+                const name = row.getAttribute('data-name') || '';
+                row.style.display = name.toLowerCase().includes(q) ? 'flex' : 'none';
+            });
+        }
+
+        function ui01Apply() {
+            const keyword = document.getElementById('ui01Keyword')?.value.trim();
+            const checkedHubs = [...document.querySelectorAll('.ui01-hub-cb:checked')].map(cb => cb.value);
+            ui01State.hubs = checkedHubs;
+
+            // Hub badge & label update
+            const hubBadge = document.getElementById('ui01HubBadge');
+            if (hubBadge) hubBadge.textContent = checkedHubs.length;
+            const hubLabel = document.getElementById('ui01SelectedHub');
+            if (hubLabel) {
+                hubLabel.textContent = checkedHubs.length === 4 ? '全网基地 (全部)' : checkedHubs.length === 0 ? '未选择基地' : checkedHubs.join(', ');
+            }
+
+            // Active Chips assembly
+            const chips = [];
+            if (ui01State.seasonLabel && ui01State.seasonVal !== 'all') chips.push(`航季：${ui01State.seasonLabel}`);
+            if (checkedHubs.length < 4 && checkedHubs.length > 0) chips.push(`基地：${checkedHubs.join('/')}`);
+            if (ui01State.fleetVal !== 'all') chips.push(`机型：${ui01State.fleetLabel}`);
+            if (ui01State.routeVal !== 'all') chips.push(`航线：${ui01State.routeLabel}`);
+            if (keyword) chips.push(`搜索："${keyword}"`);
+
+            const chipsEl = document.getElementById('ui01Chips');
+            if (chipsEl) {
+                chipsEl.innerHTML = chips.length 
+                    ? chips.map(c => `<span class="rounded-full border border-primary/25 bg-white px-2.5 py-0.5 text-xs text-primary font-medium flex items-center gap-1 shadow-2xs">${c}</span>`).join('') 
+                    : '<span class="text-xs text-ink-subtle">暂无生效筛选条件 · 当前呈现全网大盘全量数据</span>';
+            }
+
+            const countEl = document.getElementById('ui01Count');
+            if (countEl) countEl.textContent = `${Math.max(1, 14 - chips.length * 2)} 项匹配`;
+        }
+
+        function ui01Reset() {
+            if (document.getElementById('ui01Keyword')) document.getElementById('ui01Keyword').value = '';
+            ui01State.seasonVal = '2026S';
+            ui01State.seasonLabel = '2026夏秋航季';
+            ui01State.fleetVal = 'all';
+            ui01State.fleetLabel = '全部机型 (全型)';
+            ui01State.routeVal = 'all';
+            ui01State.routeLabel = '全网航线网络';
+            document.querySelectorAll('.ui01-hub-cb').forEach(cb => cb.checked = true);
+            const seasonEl = document.getElementById('ui01SelectedSeason');
+            if (seasonEl) seasonEl.textContent = '2026夏秋航季';
+            const fleetEl = document.getElementById('ui01SelectedFleet');
+            if (fleetEl) fleetEl.textContent = '全部机型 (全型)';
+            const routeEl = document.getElementById('ui01SelectedRoute');
+            if (routeEl) routeEl.textContent = '全网航线网络';
+            ui01Apply();
+            galleryToast('已恢复全局默认筛选条件', 'info');
+        }
+
+        // UI02 Card Action Toolbar Engine
+        let ui02CurrentGranularity = 'month';
+        let ui02CurrentView = 'chart';
+        const ui02DataSets = {
+            month: {
+                categories: ['1月', '2月', '3月', '4月', '5月', '6月'],
+                revenue: [4.85, 4.20, 5.10, 4.65, 5.40, 5.85],
+                progress: [97.0, 92.4, 102.0, 95.8, 106.5, 112.0],
+                rows: [
+                    { period: '2025年01月', revenue: '¥4.85 亿', progress: '97.0%', yoy: '+14.2%', rating: 'A级 · 稳健' },
+                    { period: '2025年02月', revenue: '¥4.20 亿', progress: '92.4%', yoy: '+11.8%', rating: 'B级 · 达标' },
+                    { period: '2025年03月', revenue: '¥5.10 亿', progress: '102.0%', yoy: '+18.5%', rating: 'S级 · 领跑' },
+                    { period: '2025年04月', revenue: '¥4.65 亿', progress: '95.8%', yoy: '+13.0%', rating: 'A级 · 稳健' },
+                    { period: '2025年05月', revenue: '¥5.40 亿', progress: '106.5%', yoy: '+21.4%', rating: 'S级 · 领跑' },
+                    { period: '2025年06月', revenue: '¥5.85 亿', progress: '112.0%', yoy: '+24.6%', rating: 'S级 · 领跑' }
+                ]
+            },
+            quarter: {
+                categories: ['2024Q3', '2024Q4', '2025Q1', '2025Q2(E)'],
+                revenue: [14.20, 15.80, 16.45, 17.90],
+                progress: [98.5, 101.2, 104.0, 108.5],
+                rows: [
+                    { period: '2024年三季度 (Q3)', revenue: '¥14.20 亿', progress: '98.5%', yoy: '+12.5%', rating: 'A级 · 稳健' },
+                    { period: '2024年四季度 (Q4)', revenue: '¥15.80 亿', progress: '101.2%', yoy: '+16.8%', rating: 'S级 · 领跑' },
+                    { period: '2025年一季度 (Q1)', revenue: '¥16.45 亿', progress: '104.0%', yoy: '+19.2%', rating: 'S级 · 领跑' },
+                    { period: '2025年二季度 (Q2)', revenue: '¥17.90 亿', progress: '108.5%', yoy: '+23.0%', rating: 'S级 · 领跑' }
+                ]
+            }
+        };
+
+        function ui02SetGranularity(btn, gran) {
+            ui02CurrentGranularity = gran;
+            const container = btn.parentElement;
+            container.querySelectorAll('button').forEach(b => {
+                b.className = 'px-2 py-0.5 rounded text-ink-muted hover:text-ink font-medium';
+            });
+            btn.className = 'px-2 py-0.5 rounded bg-white text-primary-strong font-semibold shadow-2xs';
+            ui02RenderChart();
+            ui02RenderTable();
+            galleryToast(`粒度已切换为：${gran === 'month' ? '月度数据' : '季度数据'}`);
+        }
+
+        function ui02ToggleView() {
+            ui02CurrentView = ui02CurrentView === 'chart' ? 'table' : 'chart';
+            const chartPane = document.getElementById('echarts-ui02');
+            const tablePane = document.getElementById('table-pane-ui02');
+            if (chartPane && tablePane) {
+                chartPane.classList.toggle('hidden', ui02CurrentView !== 'chart');
+                tablePane.classList.toggle('hidden', ui02CurrentView !== 'table');
+            }
+            if (ui02CurrentView === 'chart') {
+                setTimeout(() => {
+                    const inst = instances['ui02'];
+                    if (inst) inst.resize();
+                }, 50);
+                galleryToast('已切换至可视化图表视图', 'info');
+            } else {
+                ui02RenderTable();
+                galleryToast('已切换至结构化数据表格视图', 'info');
+            }
+        }
+
+        function ui02RenderTable() {
+            const tbody = document.getElementById('ui02TableBody');
+            if (!tbody) return;
+            const curData = ui02DataSets[ui02CurrentGranularity];
+            tbody.innerHTML = curData.rows.map(r => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-2.5 font-medium text-ink">${r.period}</td>
+                    <td class="p-2.5 text-right font-mono font-bold text-ink">${r.revenue}</td>
+                    <td class="p-2.5 text-right font-mono font-bold text-primary">${r.progress}</td>
+                    <td class="p-2.5 text-right font-mono text-positive font-semibold">${r.yoy}</td>
+                    <td class="p-2.5 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-[#2F6B55] border border-[#2F6B55]/20">${r.rating}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function ui02RenderChart() {
+            const inst = instances['ui02'];
+            if (!inst) return;
+            const curData = ui02DataSets[ui02CurrentGranularity];
+            inst.setOption({
+                xAxis: [{ data: curData.categories }],
+                series: [
+                    { data: curData.revenue },
+                    { data: curData.progress }
+                ]
+            });
+        }
+
+        function ui02ExportCsv() {
+            const curData = ui02DataSets[ui02CurrentGranularity];
+            const headers = ["核算周期", "客运结算收入", "预算达成率", "同比增速", "综合评级"];
+            const csvRows = [headers.join(",")];
+            curData.rows.forEach(r => {
+                csvRows.push([`"${r.period}"`, `"${r.revenue}"`, `"${r.progress}"`, `"${r.yoy}"`, `"${r.rating}"`].join(","));
+            });
+            const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `UI02_单图卡数据_${ui02CurrentGranularity}_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+            galleryToast("✓ 图表当前结构化数据 (CSV) 已导出成功！", "success");
+        }
+
+        function ui02CopyPng() {
+            const inst = instances['ui02'];
+            if (!inst) {
+                galleryToast("未获取到图表画布", "warning");
+                return;
+            }
+            try {
+                const dataUrl = inst.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#FFFFFF' });
+                fetch(dataUrl)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+                            .then(() => galleryToast("✓ 高清图表 PNG 已复制到剪贴板，可直接粘贴！", "success"))
+                            .catch(() => galleryToast("剪贴板权限受限，已生成导出快照", "info"));
+                    });
+            } catch (e) {
+                galleryToast("图表导出快照就绪", "info");
+            }
+        }
+
+        function ui02ToggleFullscreen() {
+            const card = document.getElementById('card-ui02');
+            if (!card) return;
+            card.classList.toggle('card-fullscreen');
+            const isFull = card.classList.contains('card-fullscreen');
+            if (isFull) {
+                document.body.style.overflow = 'hidden';
+                galleryToast('已进入全屏沉浸研判模式 (按 Esc 或再次点击退出)');
+            } else {
+                document.body.style.overflow = '';
+                galleryToast('已退出全屏模式');
+            }
+            setTimeout(() => {
+                const inst = instances['ui02'];
+                if (inst) inst.resize();
+            }, 100);
+        }
+
+        // UI03 Cross-filter Active Tray
+        function ui03Clear() {
+            const tray = document.getElementById('ui03Tray');
+            if (tray) tray.innerHTML = '<span class="text-xs text-ink-subtle">暂无图表联动条件</span>';
+            galleryToast('Cross-filter 全部联动条件已清除', 'info');
+        }
+        function ui03RemoveChip(btn, label) {
+            btn.remove();
+            galleryToast(`已移除联动条件：${label}`, 'info');
+            const tray = document.getElementById('ui03Tray');
+            if (tray && !tray.children.length) {
+                tray.innerHTML = '<span class="text-xs text-ink-subtle">暂无图表联动条件</span>';
+            }
+        }
+
+        // UI04 Table Controls & Drawer
+        function ui04ToggleDrawer(event) {
+            if (event) event.stopPropagation();
+            document.getElementById('ui04ColumnMenu')?.classList.toggle('hidden');
+        }
+        function ui04ToggleAll(checked) {
+            ui04Columns.forEach(col => col.visible = checked);
+            ui04RenderColumns();
+            ui04RenderTable();
+        }
+        function ui04ToggleColumn(key, checked) {
+            const col = ui04Columns.find(item => item.key === key);
+            if (col) col.visible = checked;
+            ui04RenderColumns();
+            ui04RenderTable();
+        }
+        function ui04ResetColumns() {
+            ui04Columns = ui04DefaultColumns.map(col => ({ ...col, visible: true }));
+            ui04RenderColumns();
+            ui04RenderTable();
+            galleryToast('已恢复默认列顺序与显隐');
+        }
+        function ui04RenderColumns() {
+            const box = document.getElementById('ui04ColumnList');
+            if (!box) return;
+            const all = ui04Columns.every(col => col.visible);
+            const selectAllEl = document.getElementById('ui04SelectAll');
+            if (selectAllEl) selectAllEl.checked = all;
+            box.innerHTML = ui04Columns.map((col, index) => `
+                <div draggable="true" data-key="${col.key}" class="ui04-drag flex items-center justify-between p-1.5 rounded border border-transparent hover:border-slate-200 hover:bg-slate-50 cursor-move">
+                    <label class="flex items-center gap-2 min-w-0 cursor-pointer">
+                        <span class="text-slate-400">⠿</span>
+                        <input type="checkbox" ${col.visible ? 'checked' : ''} onchange="ui04ToggleColumn('${col.key}', this.checked)" class="rounded text-primary focus:ring-0">
+                        <span class="truncate">${col.title}</span>
+                    </label>
+                    <span class="text-[10px] text-ink-subtle font-mono">#${index + 1}</span>
+                </div>
+            `).join('');
+
+            box.querySelectorAll('.ui04-drag').forEach(item => {
+                item.ondragstart = () => { ui04DraggedKey = item.dataset.key; item.classList.add('opacity-40'); };
+                item.ondragover = e => { e.preventDefault(); item.classList.add('border-primary'); };
+                item.ondragleave = () => item.classList.remove('border-primary');
+                item.ondrop = e => {
+                    e.preventDefault();
+                    const from = ui04Columns.findIndex(col => col.key === ui04DraggedKey);
+                    const to = ui04Columns.findIndex(col => col.key === item.dataset.key);
+                    if (from >= 0 && to >= 0 && from !== to) {
+                        const [moved] = ui04Columns.splice(from, 1);
+                        ui04Columns.splice(to, 0, moved);
+                        ui04RenderColumns();
+                        ui04RenderTable();
+                        galleryToast(`已调整列顺序：${moved.title}`);
+                    }
+                };
+                item.ondragend = () => document.querySelectorAll('.ui04-drag').forEach(el => el.classList.remove('opacity-40', 'border-primary'));
+            });
+        }
+        function ui04Sort(key) {
+            if (ui04SortKey === key) ui04SortDesc = !ui04SortDesc;
+            else { ui04SortKey = key; ui04SortDesc = false; }
+            ui04Page = 1;
+            ui04RenderTable();
+        }
+        function ui04FilteredRows() {
+            const q = (document.getElementById('ui04Search')?.value || '').trim().toLowerCase();
+            return ui04Rows.filter(row => Object.values(row).join(' ').toLowerCase().includes(q)).sort((a, b) => {
+                const av = a[ui04SortKey], bv = b[ui04SortKey];
+                return (typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv))) * (ui04SortDesc ? -1 : 1);
+            });
+        }
+        function ui04ChangePage(delta) {
+            const size = Number(document.getElementById('ui04PageSize')?.value || 2);
+            const pages = Math.max(1, Math.ceil(ui04FilteredRows().length / size));
+            ui04Page = Math.min(Math.max(1, ui04Page + delta), pages);
+            ui04RenderTable();
+        }
+        function ui04RenderTable() {
+            const head = document.getElementById('ui04Head'), body = document.getElementById('ui04Body');
+            if (!head || !body) return;
+            const visible = ui04Columns.filter(col => col.visible);
+            const rows = ui04FilteredRows();
+            const size = Number(document.getElementById('ui04PageSize')?.value || 2);
+            const pages = Math.max(1, Math.ceil(rows.length / size));
+            ui04Page = Math.min(ui04Page, pages);
+            const start = (ui04Page - 1) * size;
+            head.innerHTML = `<tr>${visible.map(col => `<th class="p-3 whitespace-nowrap ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}"><button onclick="ui04Sort('${col.key}')" class="font-bold inline-flex items-center gap-1">${col.title}${ui04SortKey === col.key ? (ui04SortDesc ? ' ↓' : ' ↑') : ''}</button></th>`).join('')}</tr>`;
+            body.innerHTML = rows.slice(start, start + size).map(row => `<tr class="border-t border-slate-100 hover:bg-slate-50 transition-colors">${visible.map(col => `<td class="p-3 whitespace-nowrap ${col.align === 'right' ? 'text-right font-mono' : col.align === 'center' ? 'text-center' : ''}">${col.key === 'revenue' ? '¥' + row[col.key] + ' 亿' : col.key === 'rating' ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-[#2F6B55] border border-[#2F6B55]/20">${row[col.key]}</span>` : row[col.key]}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${visible.length || 1}" class="p-6 text-center text-ink-subtle">无匹配结果</td></tr>`;
+            const infoEl = document.getElementById('ui04PageInfo');
+            if (infoEl) infoEl.textContent = `显示第 ${rows.length ? start + 1 : 0} - ${Math.min(start + size, rows.length)} 条 · 共 ${rows.length} 条`;
+            const indEl = document.getElementById('ui04PageIndicator');
+            if (indEl) indEl.textContent = `${ui04Page} / ${pages}`;
+        }
+        window.addEventListener('DOMContentLoaded', () => {
+            ui04RenderColumns();
+            ui04RenderTable();
+            ui02RenderTable();
+            document.addEventListener('click', event => {
+                const wrap04 = document.getElementById('ui04ColumnWrap');
+                if (wrap04 && !wrap04.contains(event.target)) document.getElementById('ui04ColumnMenu')?.classList.add('hidden');
+
+                // UI01 Dropdowns outside click
+                const u01Wraps = ['ui01SeasonWrap', 'ui01HubWrap', 'ui01FleetWrap', 'ui01RouteWrap'];
+                u01Wraps.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && !el.contains(event.target)) {
+                        el.querySelector('.ui01-dropdown-menu')?.classList.add('hidden');
+                    }
+                });
+            });
+        });
+
     </script>
     <style>
-        body { background-color: #F8FAFC; color: #17212B; font-feature-settings: "tnum" 1; }
-        .chart-card { background: #FFFFFF; border: 1px solid #C9D1D8; border-radius: 4px; transition: all 0.25s ease-in-out; }
+        .chart-card { background: #FFFFFF; border: 1px solid #C9D1D8; border-radius: 4px; transition: all 0.25s ease-in-out; display: flex; flex-direction: column; justify-content: space-between; }
         .chart-card:hover { border-color: #123B5D; box-shadow: 0 6px 20px rgba(18, 59, 93, 0.08); }
         .chart-card.highlight { border-color: #123B5D; ring: 2px; ring-color: #123B5D; background-color: #FAFCFE; }
         .echarts-box { width: 100%; height: 300px; }
@@ -174,6 +585,61 @@
         }
         .chart-explain-btn:hover svg { stroke: #FFFFFF; }
         .chart-explain-btn:active { transform: scale(0.95); }
+
+        /* Card Action Toolbar Button System */
+        .chart-action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: 1px solid #E2E8F0;
+            background: #FFFFFF;
+            color: #64748B;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+            flex-shrink: 0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+        .chart-action-btn:hover {
+            background: #123B5D;
+            border-color: #123B5D;
+            color: #FFFFFF;
+            transform: scale(1.1);
+            box-shadow: 0 3px 8px rgba(18, 59, 93, 0.2);
+        }
+        .chart-action-btn:hover svg { stroke: #FFFFFF; }
+        .chart-action-btn:active { transform: scale(0.95); }
+
+        /* Fullscreen Focus Mode */
+        @keyframes fullscreenExpand {
+            0% { opacity: 0; transform: scale(0.97) translateY(8px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .card-fullscreen {
+            position: fixed !important;
+            inset: 16px !important;
+            width: calc(100vw - 32px) !important;
+            height: calc(100vh - 32px) !important;
+            max-width: none !important;
+            max-height: none !important;
+            z-index: 60 !important;
+            box-shadow: 0 25px 60px -15px rgba(11, 42, 66, 0.4), 0 0 0 9999px rgba(11, 42, 66, 0.5) !important;
+            border-color: #123B5D !important;
+            animation: fullscreenExpand 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            padding: 24px !important;
+            background: #FFFFFF !important;
+        }
+        .card-fullscreen .card-body-wrap {
+            height: calc(100vh - 140px) !important;
+            flex: 1 1 0% !important;
+        }
 
         dialog.explanation-dialog {
             width: min(720px, calc(100% - 32px));
@@ -309,14 +775,14 @@
                 </button>
 
                 <div class="px-3 py-1.5 text-xs font-semibold text-primary bg-primary-soft rounded border border-primary/20 whitespace-nowrap">
-                    全库: <span id="totalChartCount">45</span> 款 (39 图表 + 4 指标卡 + 2 数据展示表格)
+                    全库: <span id="totalChartCount">57</span> 个样例 (含 6 个核心交互与浮层组件)
                 </div>
             </div>
         </div>
 
         <!-- Dimension Filter Tabs -->
         <div class="max-w-[1600px] mx-auto px-6 py-2 flex items-center gap-2 overflow-x-auto border-t border-slate-100 text-xs">
-            <button class="filter-tab px-3 py-1 font-semibold rounded bg-primary text-white transition-all whitespace-nowrap" data-cat="all">全部类别 (All)</button>
+            <button class="filter-tab px-3 py-1 font-semibold rounded bg-primary text-white transition-all whitespace-nowrap" data-cat="all">全部类别 (All · 57)</button>
             <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="comparison">1. 对比与排名 (8)</button>
             <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="trend">2. 时间与趋势 (6)</button>
             <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="composition">3. 构成与层级 (6)</button>
@@ -325,8 +791,9 @@
             <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="flow">6. 流程与转化 (3)</button>
             <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="financial">7. 财务与归因 (4)</button>
             <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="kpi">8. 目标与监控 (4)</button>
-            <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="metric">9. 经典指标卡 (4)</button>
+            <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="metric">9. 经典指标卡 (10)</button>
             <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="table">10. 数据展示表格 (2)</button>
+            <button class="filter-tab px-3 py-1 font-medium text-ink-muted hover:text-ink hover:bg-slate-100 rounded transition-all whitespace-nowrap" data-cat="interaction">11. 交互与浮层组件 (6)</button>
         </div>
     </header>
 
@@ -1788,6 +2255,475 @@
                     </div>
                 </div>
             </div>
+            <!-- ================= 11. 核心交互与浮层组件库 (6) ================= -->
+            
+            <!-- UI01 多维配置筛选栏 (通栏实际尺寸) -->
+            <div id="card-ui01" class="chart-card p-6 col-span-1 md:col-span-2 lg:col-span-3 w-full flex flex-col justify-start" data-cat="interaction" data-title="多维配置筛选栏 航季 大区 基地 机型 航线 关键词 生效徽章 一键重置 Filter Bar">
+                <div class="w-full mb-4">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="tag-pill bg-[#F0F5F9] text-[#123B5D] border border-[#123B5D]/20 font-semibold">交互组件 · UI01</span>
+                            <span class="text-xs text-ink-subtle font-mono">GLOBAL-FILTER-BAR</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="chart-explain-btn" data-explain-chart="ui01" aria-label="查看业务口径说明" title="查看业务口径说明">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                            <button class="code-btn text-xs text-ink-subtle hover:text-primary underline font-medium" onclick="showCode('ui01')">代码配置</button>
+                        </div>
+                    </div>
+                    <h3 class="text-base font-bold text-primary-strong">多维配置筛选栏 (Global Multi-Dimensional Filter Bar)</h3>
+                    <p class="text-xs text-ink-muted mt-0.5">实际生产尺寸：支持航季切换、基地枢纽多选搜索、机型业态、航线分类、全局检索与生效条件实时统计联动。</p>
+                </div>
+
+                <!-- 实际尺寸 Filter Bar 容器 (占满全宽) -->
+                <div class="w-full rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-3 shadow-2xs">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <!-- Left Controls -->
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <!-- 1. 航季时段 -->
+                            <div class="relative" id="ui01SeasonWrap">
+                                <button type="button" onclick="ui01ToggleDropdown('ui01SeasonMenu', event)" class="h-[32px] px-3 bg-white hover:bg-slate-50 border border-slate-200 rounded text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary shadow-2xs">
+                                    <span class="text-ink-subtle">航季时段:</span>
+                                    <span id="ui01SelectedSeason" class="font-semibold text-primary">2026夏秋航季</span>
+                                    <svg class="w-3 h-3 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div id="ui01SeasonMenu" class="ui01-dropdown-menu hidden absolute top-full left-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 text-xs">
+                                    <div class="px-2.5 py-1 text-[10px] font-bold text-ink-subtle uppercase border-b border-slate-100">选择计划与统计航季</div>
+                                    <div onclick="ui01SelectSeason('2026S', '2026夏秋航季')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between">
+                                        <span>2026夏秋航季</span>
+                                        <span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono font-semibold">当前</span>
+                                    </div>
+                                    <div onclick="ui01SelectSeason('2025/26W', '2025/26冬春航季')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between">
+                                        <span>2025/26冬春航季</span>
+                                    </div>
+                                    <div onclick="ui01SelectSeason('2025S', '2025夏秋航季')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer flex items-center justify-between">
+                                        <span>2025夏秋航季</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. 枢纽基地 (多选 + 搜索 + 全选/清空) -->
+                            <div class="relative" id="ui01HubWrap">
+                                <button type="button" onclick="ui01ToggleDropdown('ui01HubMenu', event)" class="h-[32px] px-3 bg-white hover:bg-slate-50 border border-slate-200 rounded text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary shadow-2xs">
+                                    <span class="text-ink-subtle">枢纽基地:</span>
+                                    <span id="ui01SelectedHub" class="font-semibold text-primary truncate max-w-[130px]">全网基地 (全部)</span>
+                                    <span id="ui01HubBadge" class="bg-primary text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">4</span>
+                                    <svg class="w-3 h-3 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div id="ui01HubMenu" class="ui01-dropdown-menu hidden absolute top-full left-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-2.5 z-50 space-y-2 text-xs">
+                                    <div class="relative">
+                                        <input type="text" id="ui01HubSearch" oninput="ui01FilterHubs()" placeholder="搜索枢纽基地/机场..." class="w-full text-xs pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 rounded text-ink focus:outline-none focus:border-primary focus:bg-white">
+                                        <svg class="w-3.5 h-3.5 text-ink-subtle absolute left-2 top-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[11px] text-ink-subtle pb-1 border-b border-slate-100">
+                                        <button type="button" onclick="ui01SetAllHubs(true)" class="hover:text-primary font-medium">全选</button>
+                                        <span class="text-slate-300">|</span>
+                                        <button type="button" onclick="ui01SetAllHubs(false)" class="hover:text-primary font-medium">清空</button>
+                                        <span class="ml-auto text-[10px] text-ink-subtle font-mono">四大地理区</span>
+                                    </div>
+                                    <div class="space-y-1 max-h-44 overflow-y-auto" id="ui01HubList">
+                                        <label class="ui01-hub-row flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs" data-name="华东基地 (虹桥/浦东)">
+                                            <span class="flex items-center gap-2">
+                                                <input type="checkbox" value="华东基地" checked onchange="ui01Apply()" class="ui01-hub-cb rounded text-primary focus:ring-0">
+                                                <span class="font-medium">华东基地 (虹桥/浦东)</span>
+                                            </span>
+                                            <span class="text-[10px] text-ink-subtle font-mono">5 条</span>
+                                        </label>
+                                        <label class="ui01-hub-row flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs" data-name="华南基地 (白云/宝安)">
+                                            <span class="flex items-center gap-2">
+                                                <input type="checkbox" value="华南基地" checked onchange="ui01Apply()" class="ui01-hub-cb rounded text-primary focus:ring-0">
+                                                <span class="font-medium">华南基地 (白云/宝安)</span>
+                                            </span>
+                                            <span class="text-[10px] text-ink-subtle font-mono">3 条</span>
+                                        </label>
+                                        <label class="ui01-hub-row flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs" data-name="北方基地 (大兴/首都)">
+                                            <span class="flex items-center gap-2">
+                                                <input type="checkbox" value="北方基地" checked onchange="ui01Apply()" class="ui01-hub-cb rounded text-primary focus:ring-0">
+                                                <span class="font-medium">北方基地 (大兴/首都)</span>
+                                            </span>
+                                            <span class="text-[10px] text-ink-subtle font-mono">5 条</span>
+                                        </label>
+                                        <label class="ui01-hub-row flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs" data-name="西南基地 (天府/双流)">
+                                            <span class="flex items-center gap-2">
+                                                <input type="checkbox" value="西南基地" checked onchange="ui01Apply()" class="ui01-hub-cb rounded text-primary focus:ring-0">
+                                                <span class="font-medium">西南基地 (天府/双流)</span>
+                                            </span>
+                                            <span class="text-[10px] text-ink-subtle font-mono">2 条</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. 机队机型 -->
+                            <div class="relative" id="ui01FleetWrap">
+                                <button type="button" onclick="ui01ToggleDropdown('ui01FleetMenu', event)" class="h-[32px] px-3 bg-white hover:bg-slate-50 border border-slate-200 rounded text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary shadow-2xs">
+                                    <span class="text-ink-subtle">机队机型:</span>
+                                    <span id="ui01SelectedFleet" class="font-semibold text-primary truncate max-w-[120px]">全部机型 (全型)</span>
+                                    <svg class="w-3 h-3 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div id="ui01FleetMenu" class="ui01-dropdown-menu hidden absolute top-full left-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 text-xs">
+                                    <div onclick="ui01SelectFleet('all', '全部机型 (全型)')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">全部机型 (全型)</div>
+                                    <div onclick="ui01SelectFleet('wide', '远程宽体机 (A350/B787/B777)')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">远程宽体机 (A350/B787/B777)</div>
+                                    <div onclick="ui01SelectFleet('narrow', '干线窄体机 (A320/B737/A321)')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">干线窄体机 (A320/B737/A321)</div>
+                                    <div onclick="ui01SelectFleet('domestic', '国产民机机队 (C919/ARJ21)')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">国产民机机队 (C919/ARJ21)</div>
+                                </div>
+                            </div>
+
+                            <!-- 4. 航线类型 -->
+                            <div class="relative" id="ui01RouteWrap">
+                                <button type="button" onclick="ui01ToggleDropdown('ui01RouteMenu', event)" class="h-[32px] px-3 bg-white hover:bg-slate-50 border border-slate-200 rounded text-xs font-medium text-ink flex items-center gap-2 transition focus:outline-none focus:border-primary shadow-2xs">
+                                    <span class="text-ink-subtle">航线类型:</span>
+                                    <span id="ui01SelectedRoute" class="font-semibold text-primary truncate max-w-[120px]">全网航线网络</span>
+                                    <svg class="w-3 h-3 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div id="ui01RouteMenu" class="ui01-dropdown-menu hidden absolute top-full left-0 mt-1.5 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 text-xs">
+                                    <div onclick="ui01SelectRoute('all', '全网航线网络')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">全网航线网络</div>
+                                    <div onclick="ui01SelectRoute('trunk', '国内干线快线 (Trunk)')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">国内干线快线 (Trunk)</div>
+                                    <div onclick="ui01SelectRoute('regional', '区域支线 (Regional)')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">区域支线 (Regional)</div>
+                                    <div onclick="ui01SelectRoute('intl', '国际及地区远程 (Intl)')" class="px-3 py-2 text-ink hover:bg-slate-50 cursor-pointer font-medium">国际及地区远程 (Intl)</div>
+                                </div>
+                            </div>
+
+                            <!-- 5. 全局关键词检索 -->
+                            <div class="relative">
+                                <input id="ui01Keyword" oninput="ui01Apply()" placeholder="快速检索航线/城市/机长..." class="h-[32px] w-52 pl-7 pr-3 bg-white border border-slate-200 rounded text-xs text-ink focus:outline-none focus:border-primary shadow-2xs">
+                                <svg class="w-3.5 h-3.5 text-ink-subtle absolute left-2.5 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            </div>
+                        </div>
+
+                        <!-- Right Actions: Match Badge & Reset Button -->
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-xs text-ink-subtle">已生效: <strong id="ui01Count" class="font-mono text-primary font-bold">14 项匹配</strong></span>
+                            <button type="button" onclick="ui01Reset()" class="h-[32px] px-3 bg-white hover:bg-slate-100 border border-slate-200 rounded text-xs font-semibold text-ink-muted transition-colors shadow-2xs">一键重置</button>
+                        </div>
+                    </div>
+
+                    <!-- Active Chips Tray -->
+                    <div class="pt-2.5 border-t border-slate-200 flex flex-wrap items-center gap-2">
+                        <div id="ui01Chips" class="flex flex-wrap items-center gap-1.5">
+                            <span class="text-xs text-ink-subtle">暂无生效筛选条件 · 当前呈现全网大盘全量数据</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UI02 单图卡操作工具栏与双态视图 -->
+            <div id="card-ui02" class="chart-card p-5 flex flex-col justify-between" data-cat="interaction" data-title="单图卡操作工具栏 粒度切换 图表表格视图切换 CSV导出 PNG复制 全屏沉浸 Card Action Toolbar View Toggle">
+                <div>
+                    <!-- 标准 Card Header -->
+                    <div class="card-header-wrap flex flex-wrap items-start justify-between gap-3 mb-2" id="header-ui02">
+                        <div class="min-w-0 max-w-[62%]">
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-sm font-bold text-primary-strong tracking-tight truncate">各核心航线月度客运收入与预算达成</h3>
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200 flex-shrink-0">T06 · TOOLBAR</span>
+                            </div>
+                            <p class="text-xs text-ink-muted mt-0.5 leading-relaxed truncate">双轴柱线复合 · 支持时间粒度即时聚合、图表/数据表双态对调与高清导出</p>
+                        </div>
+                        <!-- 标准 Action Toolbar 图标组 -->
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <!-- 粒度 Tabs: 月度 / 季度 -->
+                            <div class="inline-flex bg-slate-100 p-0.5 rounded-md text-[11px]">
+                                <button type="button" onclick="ui02SetGranularity(this,'month')" class="px-2 py-0.5 rounded bg-white text-primary-strong font-semibold shadow-2xs">月度</button>
+                                <button type="button" onclick="ui02SetGranularity(this,'quarter')" class="px-2 py-0.5 rounded text-ink-muted hover:text-ink font-medium">季度</button>
+                            </div>
+                            <!-- 切换图表/动态数据表视图 -->
+                            <button type="button" class="chart-action-btn" onclick="ui02ToggleView()" aria-label="切换图表/数据表视图" title="切换图表/动态数据表视图">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
+                            </button>
+                            <!-- 导出 CSV -->
+                            <button type="button" class="chart-action-btn" onclick="ui02ExportCsv()" aria-label="导出图表数据为 CSV" title="导出图表当前结构化数据 (CSV / Excel)">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            </button>
+                            <!-- 复制 PNG -->
+                            <button type="button" class="chart-action-btn" onclick="ui02CopyPng()" aria-label="复制高清图表至剪贴板" title="复制高清图表至剪贴板 (可直接粘贴入 PPT)">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                            </button>
+                            <!-- 全屏沉浸研判 -->
+                            <button type="button" class="chart-action-btn" onclick="ui02ToggleFullscreen()" aria-label="全屏沉浸研判" title="全屏沉浸研判 (Esc退出)">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+                            </button>
+                            <!-- 查看业务口径说明 -->
+                            <button type="button" class="chart-action-btn" data-explain-chart="ui02" aria-label="查看业务口径说明" title="查看业务口径说明">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                            <!-- 代码配置 -->
+                            <button class="code-btn text-xs text-ink-subtle hover:text-primary underline font-medium ml-1" onclick="showCode('ui02')">代码配置</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Card Body Wrap: 图表与动态数据表双态容器 -->
+                <div class="card-body-wrap relative w-full h-[220px] overflow-hidden border border-slate-100 rounded-lg bg-slate-50/20">
+                    <!-- 真实动态 ECharts 图表容器 -->
+                    <div id="echarts-ui02" class="card-chart-pane w-full h-full"></div>
+                    <!-- 视图切换产生的数据表格容器 -->
+                    <div id="table-pane-ui02" class="card-table-pane hidden w-full h-full p-2.5 overflow-y-auto bg-white">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-primary-strong border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2">核算周期</th>
+                                    <th class="p-2 text-right">客运结算收入</th>
+                                    <th class="p-2 text-right">预算达成率</th>
+                                    <th class="p-2 text-right">同比增速</th>
+                                    <th class="p-2 text-center">状态评级</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ui02TableBody" class="divide-y divide-slate-100 text-ink-muted"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UI03 联动状态托盘 -->
+            <div id="card-ui03" class="chart-card p-5 flex flex-col justify-between" data-cat="interaction" data-title="联动状态托盘 Cross-filter Active Tray 图表反选联动 过滤标签 清除全部">
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="tag-pill bg-[#F0F5F9] text-[#123B5D] border border-[#123B5D]/20 font-semibold">交互组件 · UI03</span>
+                        <div class="flex items-center gap-2">
+                            <button class="chart-explain-btn" data-explain-chart="ui03" aria-label="查看业务口径说明" title="查看业务口径说明">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                            <button class="code-btn text-xs text-ink-subtle hover:text-primary underline font-medium" onclick="showCode('ui03')">代码配置</button>
+                        </div>
+                    </div>
+                    <h3 class="text-sm font-bold text-primary-strong">Cross-filter 联动状态托盘 (Active Tray)</h3>
+                    <p class="text-xs text-ink-muted mb-3">实时汇聚图表多维联动与反选条件，支持标签单项移除与一键清空。</p>
+                </div>
+                <div class="rounded-lg border border-primary/20 bg-primary-soft/30 p-3.5 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                            <span class="text-xs font-bold text-primary">当前检索聚焦与图表联动中</span>
+                        </div>
+                        <button onclick="ui03Clear()" class="text-[11px] font-semibold text-primary hover:underline">清空所有条件</button>
+                    </div>
+                    <div id="ui03Tray" class="flex flex-wrap gap-1.5">
+                        <button onclick="ui03RemoveChip(this,'大区:华东基地')" class="rounded-full border border-primary/25 bg-white px-2.5 py-0.5 text-xs text-primary font-medium hover:border-negative hover:text-negative transition-colors shadow-2xs flex items-center gap-1">大区：华东基地 <span class="text-slate-400 hover:text-negative font-bold">×</span></button>
+                        <button onclick="ui03RemoveChip(this,'机型:远程宽体')" class="rounded-full border border-primary/25 bg-white px-2.5 py-0.5 text-xs text-primary font-medium hover:border-negative hover:text-negative transition-colors shadow-2xs flex items-center gap-1">机型：远程宽体 (A350) <span class="text-slate-400 hover:text-negative font-bold">×</span></button>
+                        <button onclick="ui03RemoveChip(this,'周期:2025Q1')" class="rounded-full border border-primary/25 bg-white px-2.5 py-0.5 text-xs text-primary font-medium hover:border-negative hover:text-negative transition-colors shadow-2xs flex items-center gap-1">周期：2025Q1 <span class="text-slate-400 hover:text-negative font-bold">×</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UI04 完整数据表格控制组合 (通栏) -->
+            <div id="card-ui04" class="chart-card p-6 col-span-1 md:col-span-2 lg:col-span-3 w-full flex flex-col justify-start" data-cat="interaction" data-title="完整数据表格控制组合 自定义列配置抽屉 拖拽排序 显隐勾选 恢复默认 CSV导出 分页 Table Controls Drawer">
+                <div class="w-full mb-3">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="tag-pill bg-[#F0F5F9] text-[#123B5D] border border-[#123B5D]/20 font-semibold">交互组件 · UI04</span>
+                            <span class="text-xs text-ink-subtle font-mono">TABLE-CONTROLS-PRO</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="chart-explain-btn" data-explain-chart="ui04" aria-label="查看业务口径说明" title="查看业务口径说明">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                            <button class="code-btn text-xs text-ink-subtle hover:text-primary underline font-medium" onclick="showCode('ui04')">代码配置</button>
+                        </div>
+                    </div>
+                    <h3 class="text-base font-bold text-primary-strong">完整数据表格控制组合 (Full-Featured Table Controls & Column Drawer)</h3>
+                    <p class="text-xs text-ink-muted mt-0.5">支持自定义列显隐 Drawer、原生拖拽排序、恢复默认、即时搜索、表头排序与分页。</p>
+                </div>
+                
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-100 text-xs">
+                    <div class="flex items-center gap-3">
+                        <span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+                        <h4 class="text-xs font-bold text-primary-strong">全要素航线运营效能透视明细</h4>
+                        <div class="relative">
+                            <input id="ui04Search" class="pl-7 pr-3 py-1.5 w-48 rounded border border-slate-200 text-xs focus:outline-none focus:border-primary shadow-2xs" placeholder="搜索任意字段..." oninput="ui04Page=1;ui04RenderTable()"/>
+                            <svg class="w-3.5 h-3.5 text-ink-subtle absolute left-2 top-2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div id="ui04ColumnWrap" class="relative">
+                            <button onclick="ui04ToggleDrawer(event)" class="px-3 py-1.5 bg-white border border-slate-200 text-xs font-semibold rounded text-ink hover:border-primary shadow-2xs flex items-center gap-1.5">
+                                <span>▥ 自定义列配置</span>
+                            </button>
+                            <div id="ui04ColumnMenu" class="hidden absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-xl p-3 z-30 text-xs space-y-2">
+                                <div class="font-bold text-primary-strong pb-2 border-b border-slate-100 flex items-center justify-between">
+                                    <span>列显隐与拖拽排序 <em class="font-normal text-[10px] text-ink-subtle">（按住拖动）</em></span>
+                                    <button onclick="ui04ResetColumns()" class="text-[10px] text-primary hover:underline font-semibold">恢复默认</button>
+                                </div>
+                                <label class="flex items-center gap-2 p-1 font-semibold border-b border-slate-100 cursor-pointer">
+                                    <input id="ui04SelectAll" type="checkbox" checked onchange="ui04ToggleAll(this.checked)"/> 全选 / 全不选
+                                </label>
+                                <div id="ui04ColumnList" class="space-y-1 max-h-56 overflow-y-auto"></div>
+                            </div>
+                        </div>
+                        <button onclick="galleryToast('✓ 表格数据 (CSV) 已成功导出', 'success')" class="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded hover:bg-primary-strong shadow-2xs transition-colors">导出 Excel (CSV)</button>
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left min-w-[760px]">
+                            <thead id="ui04Head" class="bg-slate-50 text-primary-strong border-b border-slate-200"></thead>
+                            <tbody id="ui04Body" class="divide-y divide-slate-100 text-ink-muted"></tbody>
+                        </table>
+                    </div>
+                    <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-ink-muted">
+                        <div class="flex items-center gap-2">
+                            <span id="ui04PageInfo"></span>
+                            <span class="text-slate-300">|</span>
+                            <label class="flex items-center gap-1">每页 
+                                <select id="ui04PageSize" class="rounded border border-slate-200 text-xs py-1 px-1.5 bg-white focus:outline-none focus:border-primary" onchange="ui04Page=1;ui04RenderTable()">
+                                    <option value="2">2 条</option>
+                                    <option value="3">3 条</option>
+                                    <option value="6">全部</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="ui04ChangePage(-1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-xs shadow-2xs">上一页</button>
+                            <span id="ui04PageIndicator" class="px-2 font-mono font-bold text-ink"></span>
+                            <button onclick="ui04ChangePage(1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-xs shadow-2xs">下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UI05 Toast 轻量全局反馈 -->
+            <div id="card-ui05" class="chart-card p-5 flex flex-col justify-between" data-cat="interaction" data-title="Toast 轻量全局反馈 成功 提示 警告 非阻塞 Toast Notification">
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="tag-pill bg-[#F0F5F9] text-[#123B5D] border border-[#123B5D]/20 font-semibold">交互组件 · UI05</span>
+                        <div class="flex items-center gap-2">
+                            <button class="chart-explain-btn" data-explain-chart="ui05" aria-label="查看业务口径说明" title="查看业务口径说明">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                            <button class="code-btn text-xs text-ink-subtle hover:text-primary underline font-medium" onclick="showCode('ui05')">代码配置</button>
+                        </div>
+                    </div>
+                    <h3 class="text-sm font-bold text-primary-strong">Toast 轻量全局反馈 (Toast Notification)</h3>
+                    <p class="text-xs text-ink-muted mb-3">非阻塞异步操作结果反馈，支持成功、信息与警示状态自动淡出。</p>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50/80 p-3.5 flex flex-wrap gap-2">
+                    <button onclick="galleryToast('✓ 报表导出任务已就绪，正在下载...', 'success')" class="rounded bg-[#2F6B55] text-white px-3 py-1.5 text-xs font-semibold hover:opacity-90 shadow-2xs transition-all">成功 Toast</button>
+                    <button onclick="galleryToast('已切换至全屏沉浸研判模式', 'info')" class="rounded bg-primary text-white px-3 py-1.5 text-xs font-semibold hover:bg-primary-strong shadow-2xs transition-all">信息 Toast</button>
+                    <button onclick="galleryToast('⚠ 请注意：所选时间段包含跨航季调整', 'warning')" class="rounded bg-[#9A6A18] text-white px-3 py-1.5 text-xs font-semibold hover:opacity-90 shadow-2xs transition-all">警示 Toast</button>
+                </div>
+            </div>
+
+            <!-- UI06 ExplanationDialog 业务口径说明面板 (通栏完整呈现) -->
+            <div id="card-ui06" class="chart-card p-6 col-span-1 md:col-span-2 lg:col-span-3 w-full flex flex-col justify-start" data-cat="interaction" data-title="ExplanationDialog 业务口径说明面板 只读说明 Overview Specs 坐标系 指标公式">
+                <div class="w-full mb-4">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="tag-pill bg-[#F0F5F9] text-[#123B5D] border border-[#123B5D]/20 font-semibold">交互组件 · UI06</span>
+                            <span class="text-xs text-ink-subtle font-mono">EXPLANATION-DIALOG</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="chart-explain-btn" data-explain-chart="ui06" aria-label="查看业务口径说明" title="查看业务口径说明">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                            <button class="code-btn text-xs text-ink-subtle hover:text-primary underline font-medium" onclick="showCode('ui06')">代码配置</button>
+                        </div>
+                    </div>
+                    <h3 class="text-base font-bold text-primary-strong">业务口径说明面板 (Explanation Dialog Component)</h3>
+                    <p class="text-xs text-ink-muted mt-0.5">点击任意图表卡片右上角 (i) 唤起，标准呈现图表业务综述、规格属性、坐标系与指标核算公式。</p>
+                </div>
+
+                <!-- 完整业务口径说明面板内嵌展示 -->
+                <div class="rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden max-w-4xl mx-auto">
+                    <!-- 面板 Header -->
+                    <div class="px-5 py-3.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </div>
+                            <h4 class="text-sm font-bold text-primary-strong">各核心航线月度客运收入与预算达成 (T06 · 口径说明)</h4>
+                        </div>
+                        <button type="button" class="text-ink-subtle hover:text-ink transition-colors p-1 rounded-md hover:bg-slate-200/50" onclick="galleryToast('业务口径说明面板支持右上角 X、遮罩点击或 Esc 键关闭', 'info')">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+
+                    <!-- 面板 Body -->
+                    <div class="p-5 space-y-4 text-xs text-ink">
+                        <!-- 1. 业务综述与 Specs 规格 -->
+                        <div class="rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                            <p class="text-xs text-ink-muted leading-relaxed">呈现各核心航线月度实际客运收入与预算达成进度，结合同比增幅评估航线盈利能力与预算执行健康度，辅助航线运力调配与收益管理决策。</p>
+                            <div class="border-t border-dashed border-slate-200 pt-2.5 flex flex-wrap gap-2 text-xs">
+                                <span class="px-2.5 py-1 rounded bg-white text-ink font-medium border border-slate-200 flex items-center gap-1.5 shadow-2xs">
+                                    <span class="text-ink-subtle">图表类型:</span> <strong class="text-primary-strong font-semibold">双轴柱线图 (Bar + Line)</strong>
+                                </span>
+                                <span class="px-2.5 py-1 rounded bg-white text-ink font-medium border border-slate-200 flex items-center gap-1.5 shadow-2xs">
+                                    <span class="text-ink-subtle">统计周期:</span> <strong class="text-primary-strong font-semibold">2025Q1 (月度/季度可切)</strong>
+                                </span>
+                                <span class="px-2.5 py-1 rounded bg-white text-ink font-medium border border-slate-200 flex items-center gap-1.5 shadow-2xs">
+                                    <span class="text-ink-subtle">对比基准:</span> <strong class="text-primary-strong font-semibold">经营预算目标与上年同期</strong>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- 2. 坐标系维度与数据序列架构 -->
+                        <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+                            <div class="flex items-center gap-2 font-bold text-primary-strong border-b border-slate-100 pb-2">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="text-primary"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                                <span>坐标系维度与数据序列架构</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="p-3 bg-slate-50 rounded border border-slate-200/80 space-y-1.5">
+                                    <div class="font-bold text-primary-strong flex items-center justify-between">
+                                        <span>X 轴 · 统计时序</span>
+                                        <span class="text-[10px] font-mono text-ink-subtle bg-white px-1.5 py-0.5 rounded border border-slate-200">月度 / 季度聚合</span>
+                                    </div>
+                                    <p class="text-[11px] text-ink-muted leading-normal">业务含义：按月份 (1-6月) 或季度连续时序排列，反映运营指标随时间的动态演进趋势。</p>
+                                </div>
+                                <div class="p-3 bg-slate-50 rounded border border-slate-200/80 space-y-1.5">
+                                    <div class="font-bold text-primary-strong flex items-center justify-between">
+                                        <span>Y 轴 · 双量纲</span>
+                                        <span class="text-[10px] font-mono text-ink-subtle bg-white px-1.5 py-0.5 rounded border border-slate-200">双轴独立量纲</span>
+                                    </div>
+                                    <p class="text-[11px] text-ink-muted leading-normal">业务含义：左轴为客运结算收入 (百万元)；右轴为预算达成率 (%) 与同比增速。</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 pt-1">
+                                <span class="px-2 py-1 rounded bg-slate-50 text-[11px] text-ink-muted border border-slate-200 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-primary"></span>
+                                    <strong class="text-primary-strong">客运收入</strong> (深蓝柱状图 · 实际结算金额)
+                                </span>
+                                <span class="px-2 py-1 rounded bg-slate-50 text-[11px] text-ink-muted border border-slate-200 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-[#D97706]"></span>
+                                    <strong class="text-[#D97706]">预算达成率</strong> (琥珀折线 · 计划进度百分比)
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- 3. 核心指标业务口径与数学公式 -->
+                        <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+                            <div class="flex items-center gap-2 font-bold text-primary-strong border-b border-slate-100 pb-2">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="text-primary"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M3 15h18"></path><path d="M9 3v18"></path><path d="M15 3v18"></path></svg>
+                                <span>核心指标业务口径与数学公式</span>
+                            </div>
+                            <div class="space-y-2.5">
+                                <div class="p-3 bg-slate-50/70 rounded border border-slate-200/80 space-y-1.5">
+                                    <div class="font-bold text-primary-strong text-xs flex items-center justify-between">
+                                        <span>预算达成率 (Budget Achievement Rate)</span>
+                                        <span class="text-[10px] font-mono text-[#2F6B55] bg-emerald-50 px-2 py-0.5 rounded border border-[#2F6B55]/20 font-semibold">≥100% 达标</span>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] pt-1">
+                                        <div class="text-ink-muted"><strong class="text-ink">业务定义：</strong>当期实际客运收入与经营预算目标的比值，衡量航线经营计划达成水平。</div>
+                                        <div class="text-ink-muted"><strong class="text-ink">计算公式：</strong><code class="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 text-primary font-semibold">客运结算收入 ÷ 预算目标金额 × 100%</code></div>
+                                        <div class="text-ink-muted"><strong class="text-ink">判定规则：</strong>≥100% S/A级达标；90%~100% B级观察；&lt;90% C级预警。</div>
+                                    </div>
+                                </div>
+                                <div class="p-3 bg-slate-50/70 rounded border border-slate-200/80 space-y-1.5">
+                                    <div class="font-bold text-primary-strong text-xs flex items-center justify-between">
+                                        <span>座公里收入 (RASK - Revenue per Available Seat Kilometer)</span>
+                                        <span class="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20 font-semibold">运力变现质量</span>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] pt-1">
+                                        <div class="text-ink-muted"><strong class="text-ink">业务定义：</strong>每可用座公里获得的客运结算收入，衡量航线单位运力变现效率。</div>
+                                        <div class="text-ink-muted"><strong class="text-ink">计算公式：</strong><code class="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 text-primary font-semibold">客运结算净额 ÷ (可供座位数 × 航程公里)</code></div>
+                                        <div class="text-ink-muted"><strong class="text-ink">判定规则：</strong>按权责发生制核算，剔除燃油附加费与退改签杂费。</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </main>
 
@@ -2524,6 +3460,72 @@
             ]
         };
 
+        // 46. UI01 配置驱动多维筛选栏
+        chartOptions.ui01 = {
+            componentType: "Configurable Multi-Dimensional Filter Bar",
+            fields: [
+                { id: "keyword", label: "关键词", type: "input", placeholder: "航线 / 负责人", immediate: true },
+                { id: "region", label: "大区", type: "select", options: ["全部", "华东", "华南", "华北"] },
+                { id: "grade", label: "等级（多选）", type: "multi-checkbox", options: ["S级 · 领跑", "A级 · 稳健", "B级 · 达标"] }
+            ],
+            actions: { apply: "ui01Apply()", reset: "ui01Reset()" },
+            feedback: { activeChips: true, resultCountBadge: true }
+        };
+
+        // 47. UI02 单图卡工具栏组合
+        chartOptions.ui02 = {
+            componentType: "Card Action & View Switch Toolbar",
+            granularity: ["月", "季", "年"],
+            views: ["chart", "table"],
+            exports: ["CSV", "PNG (Clipboard)", "Fullscreen", "Explanation Dialog"],
+            bindCardId: "card-ui02"
+        };
+
+        // 48. UI03 Cross-filter 联动状态托盘
+        chartOptions.ui03 = {
+            componentType: "Cross-Filter Active State Tray",
+            containerId: "ui03Tray",
+            features: { removableChips: true, clearAllButton: true, syncChartHighlight: true },
+            stateContract: "DashboardRuntime.crossFilterState"
+        };
+
+        // 49. UI04 完整数据表格控制组合
+        chartOptions.ui04 = {
+            componentType: "Full-Featured Table Controls & Column Drawer",
+            features: {
+                dynamicColumnDrawer: true,
+                html5DragReorder: true,
+                resetToDefault: true,
+                liveSearch: true,
+                headerSort: true,
+                pagination: { pageSizes: [2, 3, 6], defaultPageSize: 2 },
+                exportCsv: true
+            },
+            defaultColumns: ui04DefaultColumns,
+            dataset: "Airline Performance Operations Matrix"
+        };
+
+        // 50. UI05 Toast 轻量全局反馈
+        chartOptions.ui05 = {
+            componentType: "Lightweight Toast Notification System",
+            elementId: "galleryToast",
+            types: ["success (#2F6B55)", "info (#123B5D)", "warning (#9A6A18)"],
+            durationMs: 2400,
+            accessibility: { role: "status", ariaLive: "polite" }
+        };
+
+        // 51. UI06 ExplanationDialog 业务口径说明面板
+        chartOptions.ui06 = {
+            componentType: "HTML5 Native Modal Explanation Dialog",
+            dialogId: "infoDialog",
+            triggerAttr: "data-explain-chart",
+            behavior: {
+                readOnlyContract: "Strictly NO 'Got it' or confirmation footer buttons",
+                closeMethods: ["Top-right close button (X)", "Backdrop blur click", "Keyboard Esc key"],
+                sections: ["Overview Summary", "Specs Strip", "Coordinate & Series Specs", "Metric Calculation Formulas & Governance Rules"]
+            }
+        };
+
         // Initialize all charts with ResizeObserver
         const instances = {};
         function initCharts() {
@@ -2541,6 +3543,29 @@
                     }
                 }
             });
+
+            // Initialize UI02 ECharts Instance
+            const ui02Dom = document.getElementById('echarts-ui02');
+            if (ui02Dom && !instances['ui02']) {
+                instances['ui02'] = echarts.init(ui02Dom);
+                const curData = ui02DataSets['month'];
+                instances['ui02'].setOption({
+                    ...common,
+                    legend: { top: 0, right: 8, orient: 'horizontal', data: ['客运收入 (亿元)', '达成率 (%)'], icon: 'rect', itemWidth: 10, itemHeight: 10, itemGap: 12, textStyle: { fontSize: 10, color: colorPalette.inkMuted } },
+                    xAxis: [{ type: 'category', data: curData.categories, axisTick: { show: false } }],
+                    yAxis: [
+                        { type: 'value', name: '客运收入 (亿元)', nameTextStyle: { fontSize: 10, color: colorPalette.inkSubtle }, axisLabel: { formatter: '¥{value}亿' }, splitLine: { lineStyle: { color: colorPalette.gridline } } },
+                        { type: 'value', name: '达成率 (%)', min: 80, max: 120, nameTextStyle: { fontSize: 10, color: colorPalette.inkSubtle }, axisLabel: { formatter: '{value}%' }, splitLine: { show: false } }
+                    ],
+                    series: [
+                        { name: '客运收入 (亿元)', type: 'bar', data: curData.revenue, barWidth: 18, itemStyle: { color: colorPalette.primary } },
+                        { name: '达成率 (%)', type: 'line', yAxisIndex: 1, data: curData.progress, lineStyle: { color: colorPalette.positive, width: 2.2 }, itemStyle: { color: colorPalette.positive } }
+                    ]
+                });
+                if (window.ResizeObserver) {
+                    new ResizeObserver(() => instances['ui02']?.resize()).observe(ui02Dom);
+                }
+            }
         }
 
         window.addEventListener('DOMContentLoaded', initCharts);
@@ -2551,6 +3576,102 @@
         
         // Master Chart & Metric Explanations Dictionary
         const CHART_EXPLANATIONS = {"mc01": {"title": "民航客货运主营总收入", "overview": "反映民航航空集团在考核周期内的客运、货邮运输及航空附加服务的主营业务结算总收入。", "type": "指标卡", "period": "2025Q1 决算周期", "comparison": "当期值与客货运分部构成占比", "structure": {"xAxis": {"name": "时间截面", "meaning": "季度决算时点", "range": "2025Q1"}, "yAxis": {"name": "主营收入 (亿元)", "meaning": "含税主营结算总金额", "range": "¥28.5 亿 ~ ¥48.5 亿"}, "series": [{"name": "客运业务贡献", "desc": "主营客运收入占比 82.4%"}]}, "metrics": [{"name": "客运总收入", "definition": "航空公司各航线承运旅客产生的客票销售净结算金额。", "formula": "∑ 各航线承运旅客量 × 综合客单票价", "rule": "遵循民航总局与权责发生制结算口径。"}]}, "mc02": {"title": "座公里收益 RASK / 客公里收益", "overview": "衡量航空公司每一可用座公里的创收能力，是民航收益管理的核心关键效率指标。", "type": "指标卡", "period": "2024Q1 ~ 2025Q1 (连续滚动 4 季度)", "comparison": "同比增减 (YoY) 与环比变动 (MoM)", "structure": {"xAxis": {"name": "同比基期", "meaning": "上年同期水平", "range": "2024Q1"}, "yAxis": {"name": "单位收益 (元/座公里)", "meaning": "可用座公里平均客票收入", "range": "¥0.4500 ~ ¥0.5820"}, "series": [{"name": "同比增速", "desc": "红涨绿跌标准配色"}]}, "metrics": [{"name": "座公里收益 (RASK)", "definition": "主营客运总收入除以可用座公里 (ASK) 总量。", "formula": "客运总收入 ÷ 可用座公里 (ASK)", "rule": "全航线网络健康阈值建议不低于 ¥0.4800 / 座公里。"}]}, "mc03": {"title": "综合客座率 PLF / 常旅客留存率", "overview": "实时映射过去 12 个滚动自然月机队整体综合客座率的平滑演变轨迹与常旅客粘性。", "type": "指标卡", "period": "近 12 个滚动自然月", "comparison": "月度连续时序波动走势", "structure": {"xAxis": {"name": "月份序列", "meaning": "M1 ~ M12 连续走势", "range": "滚动 12 个月"}, "yAxis": {"name": "客座率 (%)", "meaning": "实际承运周转量占运力投入比重", "range": "75% ~ 92%"}, "series": [{"name": "12M 客座率火花线", "desc": "渐变填充火花线"}]}, "metrics": [{"name": "客座率 (Passenger Load Factor)", "definition": "收入客公里 (RPK) 与可用座公里 (ASK) 的比率。", "formula": "收入客公里 (RPK) ÷ 可用座公里 (ASK) × 100%", "rule": "主干线网络基准线建议维持在 85.0% 以上。"}]}, "mc04": {"title": "机队运力投入 ASK 年度规划达成进度", "overview": "量化考核期内机队可用座公里 (ASK) 运力投放总规模相对于年度预算目标的推进比例。", "type": "指标卡", "period": "2025 全年度考核期", "comparison": "当前实际投放 vs 100% 年度规划线", "structure": {"xAxis": {"name": "进度区间", "meaning": "0% ~ 100% 达成率", "range": "0% ~ 100%"}, "yAxis": {"name": "可用座公里", "meaning": "已完成投放运力 (亿座公里)", "range": "0 ~ 525 亿座公里"}, "series": [{"name": "运力达成进度条", "desc": "深海蓝填充进度条"}]}, "metrics": [{"name": "可用座公里 (ASK)", "definition": "各飞行航段可用座位数与该航段飞行距离公里的乘积之和。", "formula": "∑ (航段可用座位数 × 航段距离 km)", "rule": "衡量航空公司总运力供给的核心标准量纲。"}]}, "table_airline_main": {"title": "民航核心航线与机队运营效能透视表说明", "overview": "全景穿透各主干线及区域航线的运力供给 (ASK)、客座率 (PLF)、座公里收益 (RASK)、单座成本 (CASK) 与航线收益评级。", "type": "透视表", "period": "2025年Q1 决算周期", "comparison": "全网航线对标", "structure": {"xAxis": {"name": "航线与机型维度", "meaning": "航线代码、起降城市对、执飞机型", "range": "全网核心航线"}, "yAxis": {"name": "综合运营与收益指标", "meaning": "客票收入、客座率、RASK、CASK、综合票价", "range": "多维全要素"}, "series": [{"name": "航线效能", "desc": "全要素咨询级排版"}]}, "metrics": [{"name": "座公里收益 RASK", "definition": "单位可用座公里的营业收入，反映航线定价与客座率综合收益水平。", "formula": "客运总收入 ÷ 可用座公里 (ASK)", "rule": "RASK > CASK 时航线实现经营性盈利。"}, {"name": "座公里成本 CASK", "definition": "单位可用座公里的综合运营成本（含航油、起降费、机组、折旧）。", "formula": "航线总运营成本 ÷ 可用座公里 (ASK)", "rule": "窄体机队基准 CASK 约 ¥0.28~0.35/座公里。"}, {"name": "客座率 (PLF)", "definition": "实际旅客周转量与总运力提供的比值。", "formula": "RPK ÷ ASK × 100%", "rule": "S级黄金航线客座率通常高于 90.0%。"}]}, "table_airline_routes": {"title": "民航航线运营效能交互明细表说明", "overview": "支持按大区枢纽基地进行多维动态筛选与即时检索，实时监控重点航线达成进度与客座率波动。", "type": "明细表", "period": "2025年Q1 实时监测", "comparison": "区域基地横向对比", "structure": {"xAxis": {"name": "航线明细维度", "meaning": "航线编码、航线名称、所属基地、责任机长", "range": "按枢纽分类"}, "yAxis": {"name": "收益与增长指标", "meaning": "客运规模、客座率、YoY、MoM、座公里收益", "range": "13 列交互明细"}, "series": [{"name": "航线明细", "desc": "支持即时搜索与下拉联动"}]}, "metrics": [{"name": "航线达成进度", "definition": "当期实际承运收益占季度配额目标的百分比。", "formula": "实际客运收入 ÷ 目标配额 × 100%", "rule": "达成率 ≥ 95% 评为 S 级领跑航线。"}]}, "t01": {"title": "民航旅客月度运输总周转量 RPK 走势", "overview": "反映民航航空集团全年各月份旅客实际运输总周转量 (RPK) 的平滑连续演进轨迹。", "type": "折线图", "period": "2024年1月 ~ 12月 (全年)", "comparison": "月度环比走势", "structure": {"xAxis": {"name": "月份", "meaning": "1月 ~ 12月自然月", "range": "12 个月"}, "yAxis": {"name": "RPK 周转量 (亿客公里)", "meaning": "实际旅客周转量", "range": "100 ~ 240 亿客公里"}, "series": [{"name": "RPK 周转量", "desc": "主营收时序走线"}]}, "metrics": [{"name": "收入客公里 (RPK)", "definition": "承运旅客数量与每位旅客飞行公里的乘积之和。", "formula": "∑ (承运旅客人数 × 飞行公里 km)", "rule": "直接反映航空公司的有效运输产出。"}]}, "t02": {"title": "总可用座公里 ASK 历史投放与未来旺季预测", "overview": "对比历史实际可用座公里 (ASK) 运力投放规模，并预测未来春运与暑运旺季的情景走廊。", "type": "折线图", "period": "2024Q1 ~ 2025Q2(E)", "comparison": "历史实际 vs 未来预测 (E)", "structure": {"xAxis": {"name": "季度序列", "meaning": "历史决算期与未来预测期", "range": "6 个季度"}, "yAxis": {"name": "可用座公里 ASK (亿座公里)", "meaning": "运力投放规模", "range": "0 ~ 12.0 亿座公里"}, "series": [{"name": "历史实际运力", "desc": "实线深蓝"}, {"name": "未来预测运力", "desc": "虚线绿色"}]}, "metrics": [{"name": "预测走廊 (Forecast Corridor)", "definition": "基于历史机队交付与航线申请量构建的未来运力预测模型。", "formula": "现有运力 × (1 + 增机率) × 日利用率系数", "rule": "辅助机队规划与机组排班。"}]}, "t03": {"title": "常旅客飞行航段与金银卡升级阶梯门槛", "overview": "呈现民航常旅客飞行有效定级航段对应会员等级（普卡、银卡、金卡、白金卡）的阶梯门槛规则。", "type": "阶梯折线图", "period": "会员定级年度", "comparison": "定级航段阶梯", "structure": {"xAxis": {"name": "定级航段区间", "meaning": "累计有效乘机航段数", "range": "0 ~ 100+ 航段"}, "yAxis": {"name": "单航段积分兑换率 (元/航段)", "meaning": "里程积分回馈单价", "range": "¥0.18 ~ ¥0.45"}, "series": [{"name": "阶梯回馈率", "desc": "阶梯折线"}]}, "metrics": [{"name": "定级航段 (Qualifying Segments)", "definition": "旅客购买符合累积标准的客票并实际成行所获得的会员升级航段数。", "formula": "标准舱位系数 × 飞行航段数", "rule": "白金卡需年满 90 定级航段或 16 万定级里程。"}]}, "t04": {"title": "客运、货邮与航空辅营业务收入结构演变", "overview": "追踪头等商务舱客运、经济舱客运、腹舱货邮与航空增值辅营在历史时序中的结构占比演进。", "type": "面积图", "period": "2024Q1 ~ 2025Q1", "comparison": "多业务线堆叠构成", "structure": {"xAxis": {"name": "季度", "meaning": "连续 5 个季度", "range": "24Q1 ~ 25Q1"}, "yAxis": {"name": "营收规模 (亿元)", "meaning": "各业务线创收金额", "range": "0 ~ 7.0 亿元"}, "series": [{"name": "航空辅营增值服务", "desc": "选座、逾重行李、机上Wi-Fi"}, {"name": "腹舱货邮运输", "desc": "航空货运与跨境物流"}, {"name": "主营客运机票收入", "desc": "两舱与经济舱客票"}]}, "metrics": [{"name": "航空辅助收入 (Ancillary Revenue)", "definition": "非机票主营收入（如付费选座、预付费行李、机上餐食升舱、积分商城等）。", "formula": "∑ 非客票增值服务净结算额", "rule": "全球领先航司辅营占比可达 15%~25%。"}]}, "t05": {"title": "机队机型优化升级前后座公里成本 CASK 对照", "overview": "评估机队老旧机型替换为新一代节能宽体机/窄体机（A350/A321neo）前后座公里成本的改善斜率。", "type": "斜率图", "period": "机队更新前后 (2024 vs 2025)", "comparison": "新旧机型能耗成本对比", "structure": {"xAxis": {"name": "对比时点", "meaning": "机队更新前 (2024) vs 机队更新后 (2025)", "range": "2 个节点"}, "yAxis": {"name": "座公里成本 CASK (分/座公里)", "meaning": "单位可用座公里综合运营成本", "range": "20 ~ 70 分"}, "series": [{"name": "各机队板块斜率走线", "desc": "机型能耗下降幅度"}]}, "metrics": [{"name": "座公里成本 (CASK)", "definition": "总营业支出除以可用座公里 (ASK)。", "formula": "总运营成本 ÷ 可用座公里 (ASK)", "rule": "新一代窄体客机 CASK 较上一代下降约 12%~15%。"}]}, "t06": {"title": "季度客运总收入与客公里收益走势", "overview": "按季度追踪民航主营客运收入绝对规模 (亿元) 与客公里收益同比增速 (%) 的复合走势。", "type": "柱线复合图", "period": "2024Q1 ~ 2024Q4 (全年度)", "comparison": "绝对规模与相对增速双轴对比", "structure": {"xAxis": {"name": "统计季度", "meaning": "2024Q1 ~ 2024Q4", "range": "4 个季度"}, "yAxis": {"name": "客运收入 (亿元) / 增速 (%)", "meaning": "左轴绝对金额，右轴同比百分比", "range": "左: 0~2.8亿，右: 0~40%"}, "series": [{"name": "客运总收入", "desc": "深海蓝柱体"}, {"name": "收益同比增速", "desc": "正向红色折线"}]}, "metrics": [{"name": "客公里收益 (Yield per RPK)", "definition": "客运收入与收入客公里 (RPK) 的比值，反映平均实际票价水平。", "formula": "客运收入 ÷ 收入客公里 (RPK)", "rule": "用于衡量航司在不同航线上的实际变现能力。"}]}, "c01": {"title": "全国各大基地枢纽机场营收贡献对比", "overview": "衡量全国各战略基地枢纽（北京大兴/首都、上海虹桥/浦东、广州白云、成都天府、深圳宝安）当期客货运收入规模差异。", "type": "柱状图", "period": "2025Q1 报告期", "comparison": "基地枢纽横向对标", "structure": {"xAxis": {"name": "基地枢纽", "meaning": "五大核心枢纽机场", "range": "5 个基地"}, "yAxis": {"name": "营收规模 (亿元)", "meaning": "枢纽港客运结算总额", "range": "0 ~ 6.5 亿元"}, "series": [{"name": "基地营收", "desc": "标准垂直柱体"}]}, "metrics": [{"name": "枢纽贡献率", "definition": "单个枢纽机场始发与经停航班创造的客票收入占集团总收入的比重。", "formula": "枢纽营收 ÷ 集团总营收 × 100%", "rule": "主基地营收贡献率通常超过 35.0%。"}]}, "c02": {"title": "主流客运机型机队年度创收排行", "overview": "评估航空集团旗下 A350-900、B787-9、A321neo、B737-800 等主要客运机型的总营收贡献顺位。", "type": "条形图", "period": "2024 全年度", "comparison": "机型创收降序排列", "structure": {"xAxis": {"name": "营收规模 (亿元)", "meaning": "机型累计实现客运收入", "range": "0 ~ 6.0 亿元"}, "yAxis": {"name": "执飞机型", "meaning": "宽体机与窄体机型", "range": "4 大主流机队"}, "series": [{"name": "机队营收", "desc": "横向条形"}]}, "metrics": [{"name": "机型日均创收", "definition": "该机型全年在册客机创造的总收入除以在册架日数。", "formula": "机型年营收 ÷ (在册架数 × 365天)", "rule": "远程宽体客机日均创收通常高于窄体机 3~4 倍。"}]}, "c03": {"title": "四大核心航线集群预算收入 vs 实际完成", "overview": "对比京津冀集群、长三角集群、粤港澳大湾区集群、成渝城市群四大战略航线集群的年度预算配额与实际完成情况。", "type": "柱状图", "period": "2025 全年度", "comparison": "预算与实际成对对比", "structure": {"xAxis": {"name": "航线集群", "meaning": "四大国家级战略城市群", "range": "4 个集群"}, "yAxis": {"name": "营收规模 (亿元)", "meaning": "预算目标与实际达成金额", "range": "0 ~ 6.5 亿元"}, "series": [{"name": "预算目标", "desc": "浅蓝浅色柱"}, {"name": "实际完成", "desc": "深海蓝主柱"}]}, "metrics": [{"name": "预算达成率", "definition": "实际客运收入占年度下达预算指标的比重。", "formula": "实际营收 ÷ 预算目标 × 100%", "rule": "≥ 100% 为超额完成，< 90% 需启动收益管控。"}]}, "c04": {"title": "各机队板块座公里收益相对行业基准偏离", "overview": "以民航全行业统一座公里基准收益率为参考线，量化宽体机、窄体机、支线机及全货机板块的超额或滞后幅度。", "type": "条形图", "period": "2025Q1 报告期", "comparison": "双向偏离（红正绿负）", "structure": {"xAxis": {"name": "偏离基准收益率 (%)", "meaning": "相对行业基准收益率的百分比差额", "range": "-14% ~ +20%"}, "yAxis": {"name": "机队板块", "meaning": "不同运营机队类型", "range": "4 大机队类别"}, "series": [{"name": "偏离幅度", "desc": "正红负绿条形"}]}, "metrics": [{"name": "基准偏离度 (Alpha Yield)", "definition": "机队实际座公里收益率减去民航行业同期平均基准收益率。", "formula": "实际 RASK 收益率 - 行业基准收益率", "rule": "用于评估航司相对于行业大盘的超额竞争优势。"}]}, "c05": {"title": "航司各乘机服务环节 NPS 满意度排行", "overview": "对标呈现行李直挂、机上餐食、贵宾厅休息室、快速安检与客舱 Wi-Fi 各环节的旅客净推荐值与满意度评分。", "type": "柱状图", "period": "2025Q1 旅客调研快照", "comparison": "服务触点满意度降序", "structure": {"xAxis": {"name": "服务触点", "meaning": "旅客全流程乘机环节", "range": "5 大核心触点"}, "yAxis": {"name": "满意度评分 (分)", "meaning": "百分制旅客满意度得分", "range": "70 ~ 100 分"}, "series": [{"name": "满意度评分", "desc": "细柱散点"}]}, "metrics": [{"name": "净推荐值 (NPS)", "definition": "推荐者比例与贬损者比例的差值，衡量旅客对航司服务的忠诚度。", "formula": "(推荐者人数 - 贬损者人数) ÷ 调研总人数 × 100%", "rule": "民航服务 NPS 达到 +70 以上属于行业标杆水准。"}]}, "c06": {"title": "各大基地重点商务航线客座率跃升跨度", "overview": "对比京沪、沪深、京广、成渝等核心商务航线在春运淡季基期与商务旺季当期的客座率跃升幅度。", "type": "散点图", "period": "淡季基期 (2024) vs 旺季当期 (2025)", "comparison": "跨度跃升分析", "structure": {"xAxis": {"name": "航线客座率 (%)", "meaning": "承运旅客占总运力比重", "range": "0 ~ 50%"}, "yAxis": {"name": "基地大区", "meaning": "四大枢纽基地", "range": "4 个大区"}, "series": [{"name": "淡季基期", "desc": "浅灰散点"}, {"name": "旺季当期", "desc": "深蓝散点与连接线"}]}, "metrics": [{"name": "客座率跃升幅度", "definition": "当期客座率减去基期客座率的百分点差值。", "formula": "当期 PLF - 基期 PLF", "rule": "衡量航线收益管理与动态定价调节能力。"}]}, "c07": {"title": "核心航线集群上年度同期 vs 当期运力投放对比", "overview": "直观对比四大核心航线集群在上一年度同期基期与当期实际完成的运力投放与营收规模。", "type": "柱状图", "period": "2024同期 vs 2025当期", "comparison": "同期对比 (YoY)", "structure": {"xAxis": {"name": "航线集群", "meaning": "四大核心航线板块", "range": "4 个集群"}, "yAxis": {"name": "营收规模 (亿元)", "meaning": "客运收入绝对金额", "range": "0 ~ 6.0 亿元"}, "series": [{"name": "2024同期", "desc": "质感灰柱"}, {"name": "2025当期", "desc": "深海蓝主柱"}]}, "metrics": [{"name": "同期净增量", "definition": "当期客运收入与上年同期收入的绝对差额。", "formula": "当期营收 - 同期营收", "rule": "正增量反映该航线集群处于扩张增长通道。"}]}, "c08": {"title": "国内航线 vs 国际及地区航线主要基地客运规模对比", "overview": "按大区基地维度对称呈现国内航线网络与国际远程航线网络的客运收入与运力规模分布。", "type": "条形图", "period": "2024 全年度", "comparison": "左右对称横向条形", "structure": {"xAxis": {"name": "国内营收 (左) vs 国际营收 (右)", "meaning": "单位: 亿元", "range": "左右各 0 ~ 6.5 亿元"}, "yAxis": {"name": "枢纽基地", "meaning": "四大战略枢纽", "range": "4 个基地"}, "series": [{"name": "国内航线", "desc": "左侧深海蓝条形"}, {"name": "国际航线", "desc": "右侧质感灰条形"}]}, "metrics": [{"name": "国际航线收入占比", "definition": "国际及地区航线收入占基地总客运收入的比重。", "formula": "国际营收 ÷ (国内营收 + 国际营收) × 100%", "rule": "国际枢纽港（如上海浦东、北京首都）国际占比通常高于 40%。"}]}, "k01": {"title": "旅客舱位等级与出行客群构成分布", "overview": "反映公商务出行、休闲度假、探亲求学与团队政务等不同客群的构成占比及总承运旅客人次。", "type": "环形图", "period": "2025Q1 决算周期", "comparison": "整体构成占比 (100%)", "structure": {"xAxis": {"name": "环孔中心", "meaning": "总承运旅客数 (5,420 万人次)", "range": "大字号居中"}, "yAxis": {"name": "客群分类", "meaning": "商务、度假、探亲、政务", "range": "4 大客群"}, "series": [{"name": "客群比例", "desc": "多色调环形切片"}]}, "metrics": [{"name": "两舱旅客收益贡献率", "definition": "头等舱与公务舱旅客客票收入占全航线总收入的比重。", "formula": "两舱收入 ÷ 总客运收入 × 100%", "rule": "两舱以 10%~15% 的座位数贡献 35%~45% 的利润。"}]}, "k02": {"title": "各大核心基地直销 vs OTA 渠道销售配比", "overview": "横向对比各大基地枢纽在航司官方 App 直销、大客户企业直签与 OTA 在线旅行社渠道的销售占比结构。", "type": "条形图", "period": "2025Q1 报告期", "comparison": "100% 堆叠条形", "structure": {"xAxis": {"name": "销售占比 (%)", "meaning": "渠道出票金额占总销售额百分比", "range": "0% ~ 100%"}, "yAxis": {"name": "枢纽基地", "meaning": "四大战略枢纽", "range": "4 个基地"}, "series": [{"name": "航司官网/App直销", "desc": "高毛利直销"}, {"name": "大客户企业直签", "desc": "企业商旅协议"}, {"name": "OTA 代理平台", "desc": "携程/飞猪分销"}]}, "metrics": [{"name": "直销比例 (Direct Sales Ratio)", "definition": "通过自有渠道（官网、App、直营柜台、小程序）销售的机票金额占比。", "formula": "自有直销额 ÷ 总客票销售额 × 100%", "rule": "民航高质量发展战略目标要求直销比达到 50%~60% 以上。"}]}, "k03": {"title": "民航机队在册客机资产估值分布", "overview": "通过几何矩形面积直观映射 A350、B787、A320/A321 及国产 C919 各机型机队的资产估值体量与机队规模。", "type": "矩形树图", "period": "2025Q1 资产决算期", "comparison": "机队资产估值占比", "structure": {"xAxis": {"name": "矩形空间", "meaning": "按资产体量递归切分", "range": "全机队"}, "yAxis": {"name": "资产估值 (亿元)", "meaning": "在册飞机账面净值与重置评估值", "range": "¥2.2 亿 ~ ¥12.5 亿"}, "series": [{"name": "机队资产", "desc": "无间隙深色块"}]}, "metrics": [{"name": "机队账面净值", "definition": "在册飞机原值扣除累计折旧及减值准备后的账面余额。", "formula": "机队原值 - 累计折旧", "rule": "民航大型客机通常采用 15~20 年直线折旧法。"}]}, "k04": {"title": "航班延误与服务投诉主因帕累托 80/20 诊断", "overview": "依延误与投诉发生频数降序排列并绘制累计百分比曲线，精准识别引发 80% 延误的关键诱因（天气、空域流量、前序晚到等）。", "type": "柱线复合图", "period": "2025Q1 运行监控", "comparison": "帕累托二八定律分析", "structure": {"xAxis": {"name": "延误诱因", "meaning": "天气流控、前序晚到、跑道保障、机械故障、其他", "range": "5 大诱因"}, "yAxis": {"name": "发生频次 (架次) / 累计占比 (%)", "meaning": "左轴频数，右轴累计百分比", "range": "左: 0~500，右: 0~100%"}, "series": [{"name": "延误频数", "desc": "深海蓝柱体"}, {"name": "累计占比", "desc": "正向红色折线"}]}, "metrics": [{"name": "航班正常率 (OTP, On-Time Performance)", "definition": "正常出港/到港航班架次占实际飞行总架次的比重。", "formula": "正常航班架次 ÷ 实际执行总架次 × 100%", "rule": "民航五星航司航班正常率考核目标通常不低于 90.0%。"}]}, "k05": {"title": "国内航线 vs 国际及地区航线收入占比", "overview": "展示国内航线与国际及地区航线在集团客运收入大盘中的份额结构占比（国内 72% vs 国际 28%）。", "type": "饼图", "period": "2025Q1 决算快照", "comparison": "整体二元划分", "structure": {"xAxis": {"name": "饼图中心", "meaning": "双色对立切片", "range": "100% 构成"}, "yAxis": {"name": "收入占比 (%)", "meaning": "国内 72% vs 国际 28%", "range": "百分比"}, "series": [{"name": "市场分布", "desc": "极简双色饼图"}]}, "metrics": [{"name": "国际航线周转量占比", "definition": "国际航线 RPK 占全网总 RPK 的比重。", "formula": "国际 RPK ÷ 全网总 RPK × 100%", "rule": "反映航空公司的国际化经营广度与全球网络通达性。"}]}, "k06": {"title": "航线网络国内外与区域层级结构", "overview": "呈现国内干线/支线与国际远程/周边区域航线的同心多层级客运规模构成。", "type": "旭日图", "period": "2025Q1 航网结构", "comparison": "多层级环形穿透", "structure": {"xAxis": {"name": "层级同心圆", "meaning": "内环: 国内/国际，外环: 细分区域航线", "range": "两层级"}, "yAxis": {"name": "客运规模 (亿元)", "meaning": "各层级对应客运结算金额", "range": "多层穿透"}, "series": [{"name": "航网层级", "desc": "同心旭日图"}]}, "metrics": [{"name": "航线网络通达度", "definition": "航司通航城市点对点连接数量及枢纽中转航线覆盖度。", "formula": "已开通定期航线总数 (条)", "rule": "干支结合、枢纽辐射型网络具有最高的网络外部性溢价。"}]}, "d01": {"title": "旅客平均机票购票金额频数分布", "overview": "展示不同机票价格区间（300-600特价、600-1200标准、1200-2500全价、2500+公务头等）的购票出票笔数频数密度。", "type": "直方图", "period": "2025Q1 订票分析", "comparison": "价格区间连续分布", "structure": {"xAxis": {"name": "客单金额区间", "meaning": "机票支付价格分档", "range": "5 个价格区间"}, "yAxis": {"name": "出票笔数 (万张)", "meaning": "该价格区间的出票量", "range": "0 ~ 500 万张"}, "series": [{"name": "出票笔数", "desc": "密集柱状分布"}]}, "metrics": [{"name": "平均客单票价 (Average Ticket Fare)", "definition": "客运总收入除以承运旅客总人数。", "formula": "客运总收入 ÷ 承运旅客人数", "rule": "用于评估旅客支付意愿与航司动态收益管理定价水平。"}]}, "d02": {"title": "各大基地航线平均单座票价收益分布特征", "overview": "通过箱线图呈现华东、华南、华北、西南各大基地航线单座票价收益的极值、四分位数与中位数分布离散度。", "type": "箱线图", "period": "2025Q1 航线收益", "comparison": "五数概括分布对比", "structure": {"xAxis": {"name": "枢纽基地", "meaning": "四大核心运营基地", "range": "4 个大区"}, "yAxis": {"name": "单座收益 (元)", "meaning": "各航线平均单座票价收益", "range": "¥100 ~ ¥900"}, "series": [{"name": "票价离散度", "desc": "箱体与须线"}]}, "metrics": [{"name": "中位座公里收益", "definition": "该基地所有航线 RASK 排序后处于 50% 分位点的收益水平。", "formula": "Median(航线 RASK 序列)", "rule": "相比均值更能消除极高/极低航线的统计偏差。"}]}, "d03": {"title": "航线综合客座率离散度概率分布", "overview": "拟合全航线网络实际综合客座率 (PLF) 的连续正态分布曲线与偏度特征。", "type": "面积图", "period": "2025Q1 航班执行", "comparison": "概率密度拟合曲线", "structure": {"xAxis": {"name": "综合客座率 (%)", "meaning": "客座率分档 (-10% ~ +40% 相对基准)", "range": "连续区间"}, "yAxis": {"name": "概率密度", "meaning": "航班落在该客座率区间的概率密度", "range": "0 ~ 0.12"}, "series": [{"name": "正态分布曲线", "desc": "平滑面积走线"}]}, "metrics": [{"name": "客座率标准差", "definition": "各航线客座率相对于全网平均客座率的离散离差程度。", "formula": "SQRT(∑ (PLF_i - 平均PLF)^2 ÷ N)", "rule": "标准差越小说明航线网络运力匹配与收益管控越均衡。"}]}, "d04": {"title": "全周 24 小时航班起降与枢纽港吞吐高峰时刻", "overview": "定位一周内（周一至周日）各时段（00:00~24:00）枢纽机场航班波起降频次与停机位负荷密度峰值。", "type": "热力图", "period": "全周 7×24 小时运行时刻", "comparison": "二维时空负荷热力", "structure": {"xAxis": {"name": "时刻 (小时)", "meaning": "00:00 ~ 21:00 (每3小时分段)", "range": "8 个时段"}, "yAxis": {"name": "星期", "meaning": "周一 ~ 周日", "range": "7 天"}, "series": [{"name": "起降并发指数", "desc": "深浅色块矩阵"}]}, "metrics": [{"name": "枢纽航班波吞吐指数 (Hub Wave Index)", "definition": "单位小时内进出港航班衔接量与中转旅客规模。", "formula": "出港架次 + 进港架次 + 快速中转比率", "rule": "高峰时段需强化地面保障、机坪滑行及安检通道资源调度。"}]}, "r01": {"title": "航线网络战略四象限增长与收益矩阵", "overview": "依据客座率增速 (X轴) 与座公里利润率 (Y轴) 划分商务黄金干线、旅游度假热线、培育期支线与收缩航线象限归属。", "type": "散点图", "period": "2025Q1 航网评估", "comparison": "BCG 战略四象限", "structure": {"xAxis": {"name": "客座率增速 (%)", "meaning": "航线旅客周转增速", "range": "-5% ~ 45%"}, "yAxis": {"name": "座公里利润率 (%)", "meaning": "航线边际利润率", "range": "0% ~ 80%"}, "series": [{"name": "战略航线", "desc": "带标签散点与虚线十字基准"}]}, "metrics": [{"name": "航线边际贡献率", "definition": "航线客货运收入扣除直接变动成本（航油、起降、旅客餐食等）后的结余比率。", "formula": "(航线收入 - 直接变动成本) ÷ 航线收入 × 100%", "rule": "用于决定航线增班、减频或机型置换决策。"}]}, "r02": {"title": "常旅客获客成本 CAC 与生命周期价值 LTV 分布", "overview": "量化白金卡高端商旅、金卡高频商务、银卡普通商务与普卡大众旅客的获客成本、生命周期价值与规模关系。", "type": "气泡图", "period": "会员年度画像", "comparison": "三维气泡分布", "structure": {"xAxis": {"name": "获客成本 CAC (万元)", "meaning": "获取并激活单名会员的营销成本", "range": "¥0 ~ ¥10 万"}, "yAxis": {"name": "生命周期价值 LTV (万元)", "meaning": "会员全生命周期贡献机票及辅营毛利", "range": "¥0 ~ ¥40 万"}, "series": [{"name": "会员客群气泡", "desc": "气泡大小代表该客群会员总人数"}]}, "metrics": [{"name": "LTV / CAC 倍数", "definition": "旅客全生命周期价值与获客成本的比值。", "formula": "生命周期价值 LTV ÷ 获客成本 CAC", "rule": "商旅客群 LTV/CAC 通常要求达到 4.0x 以上。"}]}, "r03": {"title": "民航运营核心要素相关性系数矩阵", "overview": "量化客座率、票价指数、飞机日利用率、航班准点率与航线利润率之间的双向皮尔逊相关性强度。", "type": "热力图", "period": "2024 全年运行大数据", "comparison": "5×5 对称相关性矩阵", "structure": {"xAxis": {"name": "运营要素 A", "meaning": "客座率、票价指数、日利用率、准点率、利润率", "range": "5 大维度"}, "yAxis": {"name": "运营要素 B", "meaning": "同上维度", "range": "5 大维度"}, "series": [{"name": "皮尔逊相关系数", "desc": "数值热力色块 (0.3 ~ 1.0)"}]}, "metrics": [{"name": "皮尔逊相关系数 (Pearson r)", "definition": "衡量两个民航经营变量之间线性相关程度的统计指标。", "formula": "Cov(X, Y) ÷ (σX × σY)", "rule": "r > 0.8 表示强正相关（如准点率与常旅客复购率）。"}]}, "r04": {"title": "全国核心枢纽机场航线网络拓扑关联图", "overview": "呈现北京、上海、广州等主枢纽机场与成都、深圳、西安等区域节点的航线协同流向与运力关联强度。", "type": "关系图", "period": "当前航季网络拓扑", "comparison": "网络节点与流向连线", "structure": {"xAxis": {"name": "拓扑平面", "meaning": "枢纽节点与航线连线", "range": "全国航网"}, "yAxis": {"name": "节点权重", "meaning": "枢纽吞吐量与航线周转规模", "range": "节点大小"}, "series": [{"name": "航网拓扑", "desc": "力导向网络图"}]}, "metrics": [{"name": "枢纽中转衔接率", "definition": "经由枢纽机场进行跨区域中转的旅客占该枢纽总旅客吞吐量的比重。", "formula": "中转旅客人数 ÷ 总吞吐量 × 100%", "rule": "国际一流枢纽机场中转率通常在 25%~40% 之间。"}]}, "r05": {"title": "民航航空集团多维综合运营能力对标透视", "overview": "对标民航五星级航司基准，综合评估客座率 PLF、座公里收益 RASK、航班准点率 OTP、飞机日利用率与服务 NPS。", "type": "雷达图", "period": "2025Q1 综合评估", "comparison": "集团实际 vs 行业头部五星基准", "structure": {"xAxis": {"name": "极坐标轴", "meaning": "5 大综合运营维度", "range": "0 ~ 100 分"}, "yAxis": {"name": "评估得分", "meaning": "各维度量化综合评分", "range": "0 ~ 100"}, "series": [{"name": "集团实际表现", "desc": "深海蓝实线填充"}, {"name": "行业五星基准", "desc": "虚线灰色对标"}]}, "metrics": [{"name": "飞机日利用率 (Aircraft Daily Utilization)", "definition": "在册飞机每日实际飞行小时数（轮挡小时 Block Hours）。", "formula": "机队总飞行小时数 ÷ (在册机队架数 × 天数)", "rule": "窄体客机日利用率基准线建议维持在 9.5~10.5 小时/天。"}]}, "f01": {"title": "航司官方渠道机票预订全链路流转漏斗", "overview": "监控旅客自航线航班检索、舱位选择、旅客信息录入、选座辅营增购至最终出票支付的全流程留存与衰减。", "type": "漏斗图", "period": "2025Q1 线上预订全量数据", "comparison": "各预订阶段流转衰减", "structure": {"xAxis": {"name": "漏斗宽度", "meaning": "进入该预订环节的独立会话量", "range": "5,000 ➔ 600 条"}, "yAxis": {"name": "预订阶段", "meaning": "检索 ➔ 舱位 ➔ 信息 ➔ 支付", "range": "4 大阶段"}, "series": [{"name": "预订留存", "desc": "阶梯递减漏斗"}]}, "metrics": [{"name": "出票转化率 (Booking Conversion Rate)", "definition": "最终完成支付出票的订单量占初始航班搜索查询量的百分比。", "formula": "最终出票订单数 ÷ 航班搜索会话数 × 100%", "rule": "航司直销 App 端到端转化率通常在 8%~15% 之间。"}]}, "f02": {"title": "客货运主营收入向成本与航油分流资金流向", "overview": "清晰呈现客货运主营收入如何扣除航油成本、机场起降费、机组薪酬及飞机折旧维修后转化为综合毛利与净利润。", "type": "桑基图", "period": "2024 全年度决算", "comparison": "资金流向节点守恒", "structure": {"xAxis": {"name": "资金流向链路", "meaning": "总营收 (13.0亿) ➔ 航油/起降/折旧 ➔ 毛利 (8.0亿) ➔ 净利润 (2.5亿)", "range": "全链路"}, "yAxis": {"name": "资金体量 (亿元)", "meaning": "各流向节点金额", "range": "节点分流"}, "series": [{"name": "资金价值流", "desc": "平滑流向带"}]}, "metrics": [{"name": "航油成本占比 (Fuel Cost Ratio)", "definition": "航油消耗支出占航空公司总运营成本的比重。", "formula": "航油总支出 ÷ 总运营支出 × 100%", "rule": "航油为航司最大单一运营成本，通常占比 25%~35%。"}]}, "f03": {"title": "新增常旅客会员批次 M0~M3 乘机复购留存", "overview": "追踪各季度新注册常旅客会员批次在入会后前 3 个月的乘机复购留存率与里程积分活跃度演变。", "type": "热力图", "period": "2024Q1 ~ 2024Q4 会员队列", "comparison": "队列时序衰减", "structure": {"xAxis": {"name": "入会后周期", "meaning": "M0 (首次乘机) ➔ M1 留存 ➔ M2 留存 ➔ M3 留存", "range": "4 个月"}, "yAxis": {"name": "入会季度批次", "meaning": "24Q1 批次 ~ 24Q4 批次", "range": "4 个批次"}, "series": [{"name": "乘机复购留存率 (%)", "desc": "色彩渐变热力矩阵"}]}, "metrics": [{"name": "常旅客 M3 复购率", "definition": "新入会会员在入会第 3 个月内再次购买客票乘机的比例。", "formula": "第3月再次成行会员数 ÷ 该批次新会员总数 × 100%", "rule": "优质商旅会员 M3 复购率通常稳定在 75%~85% 以上。"}]}, "fn01": {"title": "主营客运边际利润形成与航油扣减归因", "overview": "穿透客票基础毛利至当期航线边际利润 EBITDA 的核心增益与扣减归因链路（票价上浮、载运量增长 vs 航油上涨、起降费扣减）。", "type": "瀑布图", "period": "2025Q1 财务归因", "comparison": "增减变动桥接归因", "structure": {"xAxis": {"name": "财务归因要素", "meaning": "基期毛利、综合票价拉动、客运量增长、航油成本上涨、当期EBITDA", "range": "5 大归因项"}, "yAxis": {"name": "金额 (亿元)", "meaning": "各项对利润的贡献净额", "range": "0 ~ 1.8 亿元"}, "series": [{"name": "增减归因", "desc": "悬浮柱状瀑布"}]}, "metrics": [{"name": "航线边际 EBITDA", "definition": "航线客运收入扣除除折旧与摊销外的直接变动成本与分摊运行费用。", "formula": "主营收入 - 航油 - 起降 - 机组 - 运行费用", "rule": "衡量航线实际造血能力的关键指标。"}]}, "fn02": {"title": "季度客运总收入与运营总成本盈亏演变", "overview": "反映营业收入与运营总成本（航油、机场起降、飞机折旧、机组薪酬）的收支走势及盈亏平衡剪刀差拐点。", "type": "折线图", "period": "2024Q1 ~ 2024Q4", "comparison": "收入线 vs 成本线双线对比", "structure": {"xAxis": {"name": "季度", "meaning": "2024Q1 ~ 2024Q4", "range": "4 个季度"}, "yAxis": {"name": "收支金额 (亿元)", "meaning": "季度营业收入与总运营成本", "range": "0 ~ 2.8 亿元"}, "series": [{"name": "客运总收入", "desc": "实线深蓝 (¥2.3亿 当期)"}, {"name": "运营总成本", "desc": "虚线灰色 (¥1.7亿 当期)"}]}, "metrics": [{"name": "盈亏平衡客座率 (Break-even Load Factor)", "definition": "客运收入刚好覆盖总运营成本时的客座率阈值。", "formula": "总运营成本 ÷ (ASK × 客公里收益 Yield)", "rule": "当实际客座率高于盈亏平衡客座率时航线产生净利润。"}]}, "fn03": {"title": "民航经营关键变量敏感性分析", "overview": "测试平均客单票价、综合客座率、航油价格与美元汇率波动对民航集团季度净利润的影响弹性。", "type": "条形图", "period": "2025Q1 敏感性测算 (±10% 变量波动)", "comparison": "负向侵蚀 vs 正向增益", "structure": {"xAxis": {"name": "净利变动 (百万)", "meaning": "对净利润的影响绝对金额", "range": "-60M ~ +60M"}, "yAxis": {"name": "经营变量", "meaning": "客单票价、客座率、航油采购价、美元汇率", "range": "4 大变量"}, "series": [{"name": "负向侵蚀", "desc": "绿色条形"}, {"name": "正向增益", "desc": "红色条形"}]}, "metrics": [{"name": "航油价格敏感系数", "definition": "国际航空煤油价格每波动 10% 对航司年度净利润的影响金额。", "formula": "Δ净利润 ÷ (Δ航油价格 ÷ 基准油价)", "rule": "民航大型航司油价每上涨 10% 净利侵蚀约数亿元。"}]}, "fn04": {"title": "各大基地主营航线收入归一增长指数走势", "overview": "消除各基地规模体量差异，以基期为 100 对比华东、华南、北方与西南基地主营航线收入的成长动能。", "type": "折线图", "period": "2024Q1 ~ 2025Q1 (基期 24Q1=100)", "comparison": "基准归一指数对比", "structure": {"xAxis": {"name": "季度", "meaning": "连续 5 个季度", "range": "5 个节点"}, "yAxis": {"name": "增长指数 (Base=100)", "meaning": "以基期为 100 的相对增长倍数", "range": "90 ~ 240"}, "series": [{"name": "华东基地 (虹桥/浦东)", "desc": "深海蓝领跑走线"}, {"name": "华南基地 (白云/宝安)", "desc": "次主走线"}, {"name": "北方基地 (大兴/首都)", "desc": "稳健走线"}, {"name": "西南基地 (天府/双流)", "desc": "虚线走势"}]}, "metrics": [{"name": "定基增长指数 (Base-100 Index)", "definition": "报告期客运收入除以基期客运收入乘以 100。", "formula": "当期营收 ÷ 基期营收 × 100", "rule": "用于横向评估不同体量基地的内生增长活力。"}]}, "m01": {"title": "民航年度战略关键绩效考核达成情况", "overview": "对比航班正常率、综合客座率、飞机日利用率与直销比例的实际考核完成值与目标基准线差距。", "type": "子弹图", "period": "2025 全年度考核期", "comparison": "实际柱 vs 目标刻度线", "structure": {"xAxis": {"name": "综合达成率 (%)", "meaning": "各项绩效指标完成百分比", "range": "0% ~ 130%"}, "yAxis": {"name": "考核指标", "meaning": "客运总收入、客座率、航班正常率、直销比例", "range": "4 项核心指标"}, "series": [{"name": "实际完成", "desc": "深海蓝条形"}, {"name": "基准目标", "desc": "100% 垂直黑线"}]}, "metrics": [{"name": "综合绩效达成指数", "definition": "各项民航运营 KPI 实际达成率加权综合得分。", "formula": "∑ (指标达成率 × 指标权重)", "rule": "总分 ≥ 100% 达标并享有绩效激励。"}]}, "m02": {"title": "春运及暑运民航客运量预测扩散走廊", "overview": "基于历史机队运力与客票预售基线，展示未来春运与暑运客运量在悲观、基准与乐观三档情景下的预测扩散区间。", "type": "面积图", "period": "2024Q1 ~ 2025Q2(E)", "comparison": "三档情景扩散走廊", "structure": {"xAxis": {"name": "季度", "meaning": "历史实测与未来预测季度", "range": "6 个季度"}, "yAxis": {"name": "客运收入 (亿元)", "meaning": "不同情景下的创收区间", "range": "0 ~ 14.0 亿元"}, "series": [{"name": "历史实测", "desc": "实线深蓝"}, {"name": "乐观情景 (旺季超预期)", "desc": "虚线红色"}, {"name": "基准预测 (平稳发展)", "desc": "虚线深蓝"}, {"name": "悲观情景 (油价高企/需求收缩)", "desc": "虚线绿色"}]}, "metrics": [{"name": "情景预测扩散度 (Forecast Variance)", "definition": "乐观情景与悲观情景预测值之间的差额区间。", "formula": "乐观预测值 - 悲观预测值", "rule": "为航司机队租赁调配与临时包机提供风险决策缓冲。"}]}, "m03": {"title": "各机场地面服务与延误保障费用超支红线监控", "overview": "监控各机场配餐、地面摆渡、旅客延误改签安置与除冰保障费用的超支率，并标识 5.0% 预警红线边界。", "type": "柱状图", "period": "2025Q1 成本管控", "comparison": "超支率 vs 5% 红线阈值", "structure": {"xAxis": {"name": "地面保障节点", "meaning": "航食配餐、地面摆渡、延误赔偿、除冰保障、机坪租赁", "range": "5 个节点"}, "yAxis": {"name": "超支率 (%)", "meaning": "实际支出超出预算百分比", "range": "0% ~ 10%"}, "series": [{"name": "超支率", "desc": "红绿状态柱与 5% 虚线"}]}, "metrics": [{"name": "延误保障费用超支率", "definition": "因不正常航班产生的旅客食宿安置与改签支出超出预算的比率。", "formula": "(实际延误支出 - 预算额) ÷ 预算额 × 100%", "rule": "超支率 > 5.0% 触发成本控制黄牌预警。"}]}};
+
+        CHART_EXPLANATIONS.ui01 = {
+            title: "配置驱动多维筛选栏 (UI01)",
+            overview: "为仪表盘提供结构化、低耦合的多维查询能力，统一汇聚关键词、枚举下拉与多选标签，并通过 Chips 实时展示生效条件。",
+            type: "交互筛选组件",
+            period: "实时交互响应",
+            comparison: "多条件组合交集 (AND)",
+            structure: {
+                xAxis: { name: "筛选维度", meaning: "关键词、大区、航线等级", range: "全量业务字段" },
+                yAxis: { name: "结果集", meaning: "匹配的数据行数与指标聚合", range: "动态过滤" },
+                series: [{ name: "筛选触发", desc: "即时过滤并向全屏广播联动事件" }]
+            },
+            metrics: [
+                { name: "生效过滤条件数", definition: "当前处于激活状态的非空过滤字段总量。", formula: "Count(Active Filter Chips)", rule: "支持一键清空与单项撤销。" }
+            ]
+        };
+
+        CHART_EXPLANATIONS.ui02 = {
+            title: "单图卡工具栏组合 (UI02)",
+            overview: "围绕单一图表卡片编排的操作集，支持时间粒度即时聚合切换、图表/表格视图对调、数据导出与全屏沉浸分析。",
+            type: "卡片操作工具栏",
+            period: "按需触发",
+            comparison: "月/季/年多粒度视图",
+            structure: {
+                xAxis: { name: "粒度维度", meaning: "月度、季度、年度", range: "时序粒度" },
+                yAxis: { name: "视图形态", meaning: "可视化图表 vs 精确明细表格", range: "双态切换" },
+                series: [{ name: "动作流", desc: "就近响应用户导出与口径查阅诉求" }]
+            },
+            metrics: [
+                { name: "视图切换耗时", definition: "图表与表格形态切换的 DOM 响应时延。", formula: "t_render - t_click", rule: "必须在 100ms 内完成无闪烁切换。" }
+            ]
+        };
+
+        CHART_EXPLANATIONS.ui03 = {
+            title: "Cross-filter 联动状态托盘 (UI03)",
+            overview: "集中展示用户在各个图表上点击反选触发的跨图表过滤条件，避免用户迷失于隐式联动状态，保障探索分析可回溯。",
+            type: "联动状态托盘",
+            period: "会话生命周期",
+            comparison: "跨图表反选条件汇聚",
+            structure: {
+                xAxis: { name: "联动来源", meaning: "触发点击的源图表与选中的维度分类", range: "全画廊图表" },
+                yAxis: { name: "筛选范围", meaning: "联动影响的目标组件集合", range: "全局广播" },
+                series: [{ name: "联动标签", desc: "可视化 Chips 带删除按钮" }]
+            },
+            metrics: [
+                { name: "联动过滤深度", definition: "当前同时生效的图表反选条件个数。", formula: "Count(CrossFilter Tags)", rule: "点击全部清除可一键恢复原始全量视图。" }
+            ]
+        };
+
+        CHART_EXPLANATIONS.ui04 = {
+            title: "完整数据表格控制组合 (UI04)",
+            overview: "高阶企业级表格控制器，提供抽屉式列显隐管理、HTML5 原生列顺序拖拽调整、全选/全不选、即时搜索与无刷新分页。",
+            type: "高阶表格控制系统",
+            period: "当期全量明细",
+            comparison: "多列动态对比与排序",
+            structure: {
+                xAxis: { name: "动态列集合", meaning: "可勾选显隐与拖拽排序列定义", range: "6~14 列" },
+                yAxis: { name: "明细记录", meaning: "航线与产品效能行数据", range: "支持分页" },
+                series: [{ name: "排序列", desc: "支持升降序动态切换" }]
+            },
+            metrics: [
+                { name: "列可见度比例", definition: "当前勾选可见的列数占全量列数的百分比。", formula: "Visible Columns ÷ Total Columns × 100%", rule: "支持一键恢复系统默认列布局。" }
+            ]
+        };
+
+        CHART_EXPLANATIONS.ui05 = {
+            title: "Toast 轻量全局反馈 (UI05)",
+            overview: "在页面右下角以非阻塞浮层形式提供异步操作反馈（如导出就绪、复制成功、条件重置等），2.4秒后自动淡出。",
+            type: "全局反馈组件",
+            period: "瞬时通知 (2.4s)",
+            comparison: "成功 / 信息 / 警告状态",
+            structure: {
+                xAxis: { name: "时序动画", meaning: "滑入显示 ➔ 保持 ➔ 淡出隐藏", range: "2400ms" },
+                yAxis: { name: "状态层级", meaning: "成功 (绿) / 信息 (蓝) / 警告 (黄)", range: "语义色彩" },
+                series: [{ name: "消息体", desc: "高对比度深色胶囊" }]
+            },
+            metrics: [
+                { name: "通知触达率", definition: "操作结果成功通知并被无干扰关闭的比例。", formula: "100%", rule: "必须支持 ARIA 无障碍屏幕阅读器播报。" }
+            ]
+        };
+
+        CHART_EXPLANATIONS.ui06 = {
+            title: "业务口径说明面板 (UI06)",
+            overview: "为图表与关键度量提供权威口径释义，点击卡片右上角 (i) 唤起，完整承载业务综述、规格属性、坐标系定义与核算公式。",
+            type: "业务口径说明面板",
+            period: "当前报告周期",
+            comparison: "集团统一核算口径",
+            structure: {
+                xAxis: { name: "说明分块", meaning: "业务综述、规格属性、坐标系维度、指标核算公式", range: "4 大标准化模块" },
+                yAxis: { name: "口径层级", meaning: "集团财务制度、民航统计准则、运力收益规范", range: "权责发生制" },
+                series: [{ name: "释义维度", desc: "指标定义、量纲单位与计算逻辑" }]
+            },
+            metrics: [
+                { name: "口径标准覆盖率", definition: "具备权威业务口径说明的经营分析指标比例。", formula: "已定义指标数 ÷ 核心指标总数 × 100%", rule: "遵循集团统一财务核算与数据治理规范。" }
+            ]
+        };
 
         // Explanation Dialog Controller
         function renderExplanationDialogContent(chartKey) {
@@ -2863,20 +3984,59 @@
 
         // Code Modal Logic
         function showCode(key) {
-            const opt = chartOptions[key];
-            document.getElementById('modalTitle').innerText = 'ECharts Option 配置 · ' + key.toUpperCase();
-            document.getElementById('modalCode').innerText = JSON.stringify(opt, null, 2);
-            document.getElementById('codeModal').classList.remove('hidden');
+            const opt = chartOptions[key] || { component: key, message: "该组件配置代码直接内嵌于 DOM 模板中" };
+            const titleEl = document.getElementById('modalTitle');
+            const codeEl = document.getElementById('modalCode');
+            if (titleEl) titleEl.innerText = 'ECharts Option / 组件配置 · ' + key.toUpperCase();
+            if (codeEl) codeEl.innerText = JSON.stringify(opt, null, 2);
+            const modal = document.getElementById('codeModal');
+            if (modal) modal.classList.remove('hidden');
         }
         function closeModal() {
-            document.getElementById('codeModal').classList.add('hidden');
+            const modal = document.getElementById('codeModal');
+            if (modal) modal.classList.add('hidden');
         }
         function copyCode() {
-            const text = document.getElementById('modalCode').innerText;
+            const text = document.getElementById('modalCode')?.innerText || '';
             navigator.clipboard.writeText(text).then(() => {
-                alert('✓ ECharts 配置代码已复制到剪贴板！');
+                galleryToast('✓ 配置代码已成功复制到剪贴板！', 'success');
+            }).catch(() => {
+                galleryToast('复制失败，请手动选择复制', 'warning');
             });
         }
+
+        // Code Modal Backdrop Click & Esc Key Support
+        document.getElementById('codeModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'codeModal') closeModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Dynamic Gallery Counts Auto-Calibration
+        function updateGalleryCounts() {
+            const allCards = document.querySelectorAll('.chart-card');
+            const totalCountEl = document.getElementById('totalChartCount');
+            if (totalCountEl) totalCountEl.textContent = allCards.length;
+
+            const categoryMap = {};
+            allCards.forEach(card => {
+                const cat = card.getAttribute('data-cat') || 'other';
+                categoryMap[cat] = (categoryMap[cat] || 0) + 1;
+            });
+
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                const cat = tab.getAttribute('data-cat');
+                if (cat === 'all') {
+                    tab.textContent = `全部类别 (All · ${allCards.length})`;
+                } else if (cat && categoryMap[cat] !== undefined) {
+                    const originalText = tab.textContent.replace(/\s*\(\d+\)/, '');
+                    tab.textContent = `${originalText} (${categoryMap[cat]})`;
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', updateGalleryCounts);
 
         // Interactive Table Filter
         
@@ -2979,6 +4139,8 @@
 
     </script>
 
+    <div id="galleryToast" role="status" aria-live="polite" class="fixed right-6 bottom-6 z-[70] rounded bg-primary-strong px-4 py-2.5 text-xs font-semibold text-white shadow-xl transition-all opacity-0 translate-y-2 pointer-events-none">操作完成</div>
+
     <!-- Global Info Explanation Dialog (HTML5 Native Modal) -->
     <dialog id="infoDialog" class="explanation-dialog">
         <header class="exp-dialog-topbar">
@@ -2994,9 +4156,6 @@
         </header>
         <div class="exp-dialog-body" id="dialogContent">
             <!-- Injected by JavaScript -->
-        </div>
-        <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
-            <button class="dialog-close px-4 py-1.5 bg-primary text-white text-xs font-semibold rounded-md hover:bg-primary-strong transition-colors cursor-pointer shadow-xs">我知道了</button>
         </div>
     </dialog>
 

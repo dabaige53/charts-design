@@ -46,6 +46,18 @@ test('generated dashboard mounts, exposes every component, and destroys cleanly'
   expect(contract.missing, 'missing rendered component capabilities').toEqual([]);
   expect(pageErrors, 'page errors before destroy').toEqual([]);
 
+  const explainTrigger = page.locator('[data-explain-chart]').first();
+  if (await explainTrigger.count()) {
+    await explainTrigger.click();
+    const dialog = page.locator('#app-explain-dialog');
+    await expect(dialog, 'explanation dialog opens').toHaveAttribute('open', '');
+    await expect(dialog.locator('#closeExplainModalBtn'), 'title-bar close control exists').toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: '我知道了' }), 'read-only dialog has no confirmation action').toHaveCount(0);
+    await expect(dialog.locator('#closeExplainModalFooterBtn'), 'read-only dialog has no action footer').toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(dialog, 'Escape closes explanation dialog').not.toHaveAttribute('open', '');
+  }
+
   const destroyed = await page.evaluate(() => {
     window.DashboardRuntime.destroy();
     return !window.App && !window.DashboardRuntime.app;

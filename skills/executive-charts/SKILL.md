@@ -18,6 +18,8 @@ Turn business evidence into a restrained executive dashboard. Run the scripts bu
 
 Resolve the directory containing this `SKILL.md` once, then invoke its sibling scripts with `python3`. The bundled scripts are the execution interface; package-manager wrappers are unnecessary.
 
+For any task that creates, restyles, migrates, or embeds component HTML, read [references/component-html-generation.md](references/component-html-generation.md) before writing markup. It defines which layer generates each component, the stable DOM contract, and the completion gate.
+
 ## Dashboard workspace loop
 
 1. Discover chart codes without loading generator source or example HTML:

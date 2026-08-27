@@ -1380,9 +1380,6 @@ __DASHBOARD_CONFIG_CODE__
                             </div>
                         </div>
                     </div>
-                    <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
-                        <button id="closeExplainModalFooterBtn" type="button" class="px-4 py-1.5 bg-primary text-white text-xs font-semibold rounded-md hover:bg-primary-strong transition-colors cursor-pointer shadow-xs">我知道了</button>
-                    </div>
                 `;
 
                 return html;
@@ -1571,8 +1568,6 @@ __DASHBOARD_CONFIG_CODE__
                         modal.innerHTML = htmlContent;
 
                         document.getElementById('closeExplainModalBtn')?.addEventListener('click', () => modal?.close(), eventOptions);
-                        document.getElementById('closeExplainModalFooterBtn')?.addEventListener('click', () => modal?.close(), eventOptions);
-
                         if (typeof modal.showModal === 'function') {
                             modal.showModal();
                         } else {
