@@ -58,14 +58,12 @@ class Service:
                         'note': 'Interactive filters apply to the reviewed snapshot, not to a new SQL execution.'}
             return {'metrics': {key: doc['manifest']['metrics'][key] for key in c.get('measures', [])}, 'dataset': meta, 'originalPresentation': c.get('config',{}).get('presentation'), 'originalExplanation': c.get('config',{}).get('explanation'), 'certified': False}
         if tool == 'legacy_render':
-            from .legacy import render
+            from .assets import export_component
             doc = self.store.get(board)
-            c = doc['manifest']['components'].get(args.get('componentId'))
-            require(c is not None and c['kind'] == 'legacy', 'Legacy chart not found')
-            if c.get('family','chart') != 'chart':
-                from .assets import render_html
-                return {'html': render_html('offline', doc), 'scope': 'dashboard', 'note': 'Use dashboard_preview for native original KPI/table components.'}
-            return {'html': render(c['config'])}
+            key = args.get('componentId')
+            c = doc['manifest']['components'].get(key)
+            require(c is not None and c['kind'] == 'legacy', 'Original component not found')
+            return {'html': export_component(doc, key), 'scope': 'component', 'componentId': key}
         if tool == 'dataset_import':
             import csv
             import io
@@ -131,6 +129,6 @@ TOOLS = {
 READ_ONLY = {'dashboard_list', 'dashboard_get', 'dashboard_preview', 'dashboard_validate', 'dashboard_history', 'chart_catalog', 'query_inspect', 'semantic_inspect'}
 TOOLS.update({
     'dataset_import': ('Import explicit JSON rows or CSV; inferred measures remain unverified', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'rows': {'type':'array', 'items':{'type':'object'}}, 'csvText':STR, 'name':STR}, ('dashboardId','expectedRevision','datasetId'))),
-    'legacy_render': ('Export an explicitly configured original component; dashboard_preview uses bundled original components', schema(TARGET, ('dashboardId','componentId')))
+    'legacy_render': ('Export one original component with the shared bundled UI and only its required data sources', schema(TARGET, ('dashboardId','componentId')))
 })
 READ_ONLY.add('legacy_render')
