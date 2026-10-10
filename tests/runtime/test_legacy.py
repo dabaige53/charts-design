@@ -13,3 +13,6 @@ def test_legacy_template_uses_explicit_data():
     assert '__CHART_CONFIG_JS__' not in html
     assert 'Real values &lt;not markup&gt;' in html
     assert 'Content-Security-Policy' in html
+
+    assert 'echarts@6.1.0/' in html
+    assert 'echarts@5.5.0/' not in html

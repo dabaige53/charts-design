@@ -28,6 +28,8 @@ jobs:
           python -m pip install 'pytest>=8,<9' 'mcp>=1.28,<2' playwright
           npm --prefix runtime-ui install
           python -m playwright install --with-deps chromium
+      - name: Audit production browser dependencies
+        run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate --json > runtime-audit.json
       - name: Build the shared browser and MCP App bundle
         run: npm --prefix runtime-ui run build
       - name: Core, MCP protocol, legacy adapter and real browser acceptance
@@ -47,6 +49,7 @@ jobs:
           path: |
             runtime-source.tar.gz
             runtime-tests.txt
+            runtime-audit.json
             runtime-screenshot.png
             runtime-ui/package-lock.json
             dashboard_runtime/web/dist/

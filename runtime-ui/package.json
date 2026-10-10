@@ -9,8 +9,10 @@
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.1.2",
-    "echarts": "5.5.0",
+    "echarts": "6.1.0",
     "gridstack": "12.3.3"
   },
-  "devDependencies": {"esbuild": "0.25.9"}
+  "devDependencies": {
+    "esbuild": "0.25.9"
+  }
 }

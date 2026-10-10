@@ -43,6 +43,8 @@ def render(config):
     result = module.STANDALONE_CHART_TEMPLATE
     for key, value in values.items():
         result = result.replace(key, value)
+    # Use the patched engine for new runtime previews without rewriting old generators.
+    result = result.replace('echarts@5.5.0/', 'echarts@6.1.0/')
     policy = "default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'"
     return result.replace('<head>', '<head><meta http-equiv="Content-Security-Policy" content="' + html.escape(policy, quote=True) + '">', 1)
 
