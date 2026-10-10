@@ -24,7 +24,7 @@ def document(board_id='original-review'):
         c=charts[k];c['unit']='\u4ebf\u5143'
         p={'axisLabels':{'x':'\u7edf\u8ba1\u5468\u671f' if k=='t06' else '\u4e1a\u52a1\u57fa\u5730','y':'\u5ba2\u8fd0\u6536\u5165'},'seriesLabels':['\u5ba2\u8fd0\u6536\u5165'],'tooltipValueLabels':['\u5ba2\u8fd0\u6536\u5165'],'units':['\u4ebf\u5143'],'tableHeaders':['\u4e1a\u52a1\u57fa\u5730','\u5ba2\u8fd0\u6536\u5165 (\u4ebf\u5143)']}
         if k=='t06':p.update(axisLabels={'x':'\u7edf\u8ba1\u5468\u671f','leftY':'\u5ba2\u8fd0\u6536\u5165','rightY':'\u6536\u76ca\u589e\u957f'},seriesLabels=['\u5ba2\u8fd0\u6536\u5165','\u6536\u76ca\u589e\u957f'],tooltipValueLabels=['\u5ba2\u8fd0\u6536\u5165','\u6536\u76ca\u589e\u957f'],units=['\u4ebf\u5143','%'],tableHeaders=['\u5468\u671f','\u5ba2\u8fd0\u6536\u5165 (\u4ebf\u5143)','\u6536\u76ca\u589e\u957f (%)'])
-        if k=='c02':p['axisLabels']={'x':'\u5ba2\u8fd0\u6536\u5165','y':'\u4e1a\u52a1\u57fa\u5730'}
+        if k=='c02':p['axisLabels']={'x':'\u5ba2\u8fd0\u6536\u5165','y':'\u673a\u578b'};p['tableHeaders'][0]='\u673a\u578b'
         if k=='c08':p.update(seriesLabels=['\u56fd\u5185','\u56fd\u9645'],tooltipValueLabels=['\u56fd\u5185\u6536\u5165','\u56fd\u9645\u6536\u5165'],units=['\u4ebf\u5143','\u4ebf\u5143'],tableHeaders=['\u4e1a\u52a1\u57fa\u5730','\u56fd\u5185\u6536\u5165','\u56fd\u9645\u6536\u5165','\u5408\u8ba1'])
         c['presentation']=p
         ops.append({'op':'put_component','id':k,'value':{'kind':'legacy','family':'chart','title':c['title'],'config':c,'sourceId':'original-fixture'}})
@@ -35,7 +35,7 @@ def document(board_id='original-review'):
         for key,c in doc['manifest']['components'].items():
             w=(cols//4 if bp=='desktop' else cols//2) if c['family']=='kpi' else (cols if c['family']=='table' else cols//2)
             if bp=='mobile':w=cols
-            height=4 if c['family']=='kpi' else 8
+            height=4 if c['family']=='kpi' else 12 if c['family']=='table' else 8
             if x+w>cols:y+=h;x=h=0
             positions.append({'id':key,'x':x,'y':y,'w':w,'h':height});x+=w;h=max(h,height)
         doc=apply_operations(doc,[{'op':'set_layout','breakpoint':bp,'value':positions}])

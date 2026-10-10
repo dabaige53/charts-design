@@ -91,7 +91,7 @@ def import_workspace(path, board_id):
             c = result['manifest']['components'][key]
             width = (cols // 4 if bp == 'desktop' else cols // 2) if c['family'] == 'kpi' else (cols if c['family'] == 'table' or c['config'].get('colSpan') == 2 else cols // 2)
             if bp == 'mobile': width = cols
-            height = 4 if c['family'] == 'kpi' else 8
+            height = 4 if c['family'] == 'kpi' else 12 if c['family'] == 'table' else 8
             if x + width > cols: y += row_height; x = row_height = 0
             positions.append({'id': key, 'x': x, 'y': y, 'w': width, 'h': height})
             x += width; row_height = max(row_height, height)
