@@ -37,10 +37,10 @@ def test_editor_preview_switch_layout_and_inspect(tmp_path):
             page.wait_for_function("document.querySelector('#notice').textContent.includes('v5')")
             assert service.store.get('demo')['manifest']['layout']['desktop']==before
             page.locator('[data-component-id="load"]').get_by_role('button',name='SQL / \u8bed\u4e49',exact=True).click()
-            page.wait_for_selector('dialog[open]')
-            assert 'denominator' in page.locator('dialog').inner_text()
+            page.wait_for_selector('dialog.inspector[open]')
+            assert 'denominator' in page.locator('dialog.inspector[open]').inner_text()
             page.get_by_role('button',name='\u67e5\u8be2\u6765\u6e90',exact=True).click()
-            page.wait_for_function("document.querySelector('dialog').textContent.includes('fixture')")
+            page.wait_for_function("document.querySelector('dialog.inspector').textContent.includes('fixture')")
             page.get_by_role('button',name='\u5173\u95ed',exact=True).click()
             page.screenshot(path='runtime-screenshot.png',full_page=True)
             page.set_viewport_size({'width':390,'height':844})

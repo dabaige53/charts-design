@@ -38,6 +38,7 @@ def test_original_toolbar_kpi_table_and_offline_fidelity(tmp_path):
             browser=p.chromium.launch(headless=True);page=browser.new_page(viewport={'width':1600,'height':1200});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(f'http://127.0.0.1:{server.server_address[1]}/?board=original-review#fidelity-token')
             chart=page.locator('.grid-stack-item[data-component-id=t06]');chart.locator('canvas').wait_for()
+            page.screenshot(path='runtime-original-restored.png',full_page=True)
             assert chart.locator('.granularity-tab-btn').count()==2
             assert chart.locator('.view-toggle-btn,.export-chart-btn,.copy-chart-btn,.fullscreen-btn,.chart-explain-btn').count()==5
             assert page.locator('[data-component-id=kpi-plf] canvas').count()==1
@@ -49,9 +50,14 @@ def test_original_toolbar_kpi_table_and_offline_fidelity(tmp_path):
             chart.locator('.view-toggle-btn').click()
             chart.locator('.chart-explain-btn').click();assert chart.locator('dialog[open]').count()==1
             chart.locator('#closeExplainModalBtn').click()
+            chart.locator('.fullscreen-btn').click();assert chart.locator('.original-fullscreen[open]').count()==1
+            page.keyboard.press('Escape');assert chart.locator('.original-fullscreen[open]').count()==0
             table=page.locator('.grid-stack-item[data-component-id=original-table]');table.locator('#colDrawerBtn').click()
             assert table.locator('#colDrawerMenu').is_visible()
-            checks=table.locator('#colCheckboxesContainer input');before=table.locator('th').count();checks.last.uncheck();assert table.locator('th').count()==before-1
+            checks=table.locator('#colCheckboxesContainer input');before=table.locator('th').count()
+            assert before==len(doc['manifest']['components']['original-table']['config']['columns'])
+            assert table.locator('tbody tr').count()>0
+            checks.last.uncheck();assert table.locator('th').count()==before-1
             table.get_by_role('button',name='\u6062\u590d\u9ed8\u8ba4',exact=True).click();assert table.locator('th').count()==before
             table.locator('#colDrawerBtn').click()
             page.screenshot(path='runtime-original-restored.png',full_page=True)

@@ -25,7 +25,13 @@ DOMPurify.addHook('uponSanitizeAttribute',(node,data)=>{
   if(data.attrName==='style'&&/url\s*\(|expression\s*\(|@import/i.test(data.attrValue))data.keepAttr=false;
 });
 function setOriginalHtml(node,markup){
-  node.innerHTML=DOMPurify.sanitize(String(markup??''),{ADD_TAGS:['dialog'],FORBID_TAGS:['script','iframe','object','embed','img','form'],ALLOW_DATA_ATTR:true});
+  const options={ADD_TAGS:['dialog'],FORBID_TAGS:['script','iframe','object','embed','img','form'],ALLOW_DATA_ATTR:true,RETURN_DOM_FRAGMENT:true};
+  const text=String(markup??''),tag=node.tagName?.toLowerCase();
+  // Parse table fragments in their actual destination context, then move only sanitized nodes.
+  const wrappers={table:['<table>','</table>','table'],thead:['<table><thead>','</thead></table>','thead'],tbody:['<table><tbody>','</tbody></table>','tbody'],tfoot:['<table><tfoot>','</tfoot></table>','tfoot'],tr:['<table><tbody><tr>','</tr></tbody></table>','tr'],colgroup:['<table><colgroup>','</colgroup></table>','colgroup']};
+  const wrap=wrappers[tag];
+  if(wrap){const fragment=DOMPurify.sanitize(wrap[0]+text+wrap[1],options);const context=fragment.querySelector(wrap[2]);node.replaceChildren(...(context?Array.from(context.childNodes):[]));}
+  else node.replaceChildren(DOMPurify.sanitize(text,options));
 }
 const node=(tag,cls='',text='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;};
 function action(label,html,run){const b=node('button','chart-action-btn catalog-source-btn');b.type='button';b.title=label;b.setAttribute('aria-label',label);if(html)setOriginalHtml(b,html);else b.textContent=label;b.addEventListener('click',e=>{e.stopPropagation();Promise.resolve().then(run).catch(error=>window.dispatchEvent(new CustomEvent('charts-error',{detail:error})));});return b;}
