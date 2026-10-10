@@ -9,7 +9,6 @@ from dashboard_runtime.model import validate
 from dashboard_runtime.service import Service
 from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.assets import DIST,export_document
-
 spec=importlib.util.spec_from_file_location('fidelity_fixture',Path(__file__).with_name('fidelity_fixture.py'))
 fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
 
@@ -43,7 +42,8 @@ def test_original_toolbar_kpi_table_and_offline_fidelity(tmp_path):
             assert chart.locator('.view-toggle-btn,.export-chart-btn,.copy-chart-btn,.fullscreen-btn,.chart-explain-btn').count()==5
             assert page.locator('[data-component-id=kpi-plf] canvas').count()==1
             assert page.locator('[data-component-id=kpi-rask]').get_by_text('+1.2% MoM',exact=True).count()==1
-            chart.get_by_role('button',name='\u5b63\u5ea6',exact=True).click()
+            chart.get_by_role('button',name='时间粒度',exact=True).click()
+            chart.get_by_role('menuitemradio',name='季度',exact=True).click()
             page.wait_for_function("document.querySelector('#notice').textContent.includes('v2')")
             assert service.store.get('original-review')['manifest']['components']['t06']['config']['defaultGranularity']=='quarter'
             chart.locator('.view-toggle-btn').click();assert chart.locator('.card-table-pane').is_visible()
@@ -58,8 +58,8 @@ def test_original_toolbar_kpi_table_and_offline_fidelity(tmp_path):
             assert before==len(doc['manifest']['components']['original-table']['config']['columns'])
             assert table.locator('tbody tr').count()>0
             checks.last.uncheck();assert table.locator('th').count()==before-1
-            table.get_by_role('button',name='\u6062\u590d\u9ed8\u8ba4',exact=True).click();assert table.locator('th').count()==before
-            table.locator('#colDrawerBtn').click()
+            table.get_by_role('button',name='恢复默认',exact=True).click();assert table.locator('th').count()==before
+            page.keyboard.press('Escape')
             page.screenshot(path='runtime-original-restored.png',full_page=True)
             offline=tmp_path/'offline.html';offline.write_text(export_document(service.store.get('original-review')))
             page.goto(offline.as_uri());page.locator('[data-component-id=t06] canvas').wait_for();assert page.locator('iframe').count()==0

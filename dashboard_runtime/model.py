@@ -147,12 +147,31 @@ def validate(doc):
         identifier(key, 'component id')
         require(isinstance(c, dict) and c.get('kind') in ('chart', 'kpi', 'table', 'text', 'legacy'), f'{key}: invalid component kind')
         require(isinstance(c.get('title'), str) and len(c['title']) <= 240, f'{key}: title required')
+        presentation = c.get('config', {}) if c['kind'] == 'legacy' else c.get('presentation', {})
+        require(isinstance(presentation, dict), 'Presentation must be an object')
+        state = presentation.get('tableState')
+        if state is not None:
+            require(isinstance(state, dict), 'Table state must be an object')
+            columns = presentation.get('columns')
+            names = {x['key'] for x in columns if isinstance(x, dict) and 'key' in x} if isinstance(columns, list) else set(m['datasets'].get(c.get('datasetId'), {}).get('fields', {}))
+            for list_key in ('columns', 'visible'):
+                values = state.get(list_key, [])
+                require(isinstance(values, list) and all(isinstance(v, str) and v in names for v in values) and len(values) == len(set(values)), 'Unknown or repeated table state column')
+            if 'columns' in state:
+                require(set(state['columns']) == names, 'Table order must preserve every column')
+            require(type(state.get('page', 1)) is int and state.get('page', 1) >= 1, 'Invalid table page')
+            require(type(state.get('pageSize', 10)) is int and state.get('pageSize', 10) in (10, 20, 50, 100, 9999), 'Invalid table page size')
+            require(state.get('sortCol') is None or state['sortCol'] in names, 'Invalid table sort column')
+            require(state.get('sortDir', 'asc') in ('asc', 'desc'), 'Invalid table sort direction')
         if c['kind'] == 'text':
             require(isinstance(c.get('text'), str), 'Text component requires text')
             continue
         if c['kind'] == 'legacy':
             from .legacy import validate_original
             validate_original(c)
+            if c.get('binding') is not None:
+                from .bindings import validate_binding
+                validate_binding(doc, c)
             continue
         ds = c.get('datasetId')
         require(ds in m['datasets'], f'{key}: dataset not found')
@@ -185,7 +204,7 @@ def validate(doc):
         for target in targets:
             require(target in m['components'], 'Filter refers to a missing component')
             c = m['components'][target]
-            require(c['kind'] not in ('legacy', 'text'), 'Filters cannot silently apply to legacy/text blocks')
+            require(c['kind'] != 'text' and (c['kind'] != 'legacy' or c.get('binding')), 'Original components need explicit bindings before filtering')
             metadata = m['datasets'][c['datasetId']]
             field(metadata, f.get('field'))
             kind = metadata['fields'][f['field']]['type']
@@ -225,6 +244,12 @@ def apply_operations(doc, operations):
             if kind == 'put_component' and key not in m['components']:
                 place_new(m, key)
             m[collection][key] = copy.deepcopy(op['value'])
+            if kind == 'put_component' and m[collection][key].get('binding'):
+                binding = m[collection][key]['binding']
+                require(isinstance(binding, dict), 'binding must be an object')
+                m[collection][key]['datasetId'] = binding.get('datasetId')
+                require(isinstance(binding.get('measures', {}), dict), 'Binding measures must be an object')
+                m[collection][key]['measures'] = list(dict.fromkeys(binding.get('measures', {}).values()))
         elif kind == 'put_dataset':
             key = identifier(op.get('id'))
             m['datasets'][key] = copy.deepcopy(op.get('meta'))

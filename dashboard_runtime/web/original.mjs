@@ -1,3 +1,5 @@
+import {resolveOriginal} from './bindings.mjs';
+import {installChrome} from './chrome.mjs';
 /* Original components are extracted at build time, never reauthored as lookalikes. */
 import DOMPurify from 'dompurify';
 import {createOriginalComponents} from '../../runtime-ui/generated/original-engine.mjs';
@@ -27,7 +29,6 @@ DOMPurify.addHook('uponSanitizeAttribute',(node,data)=>{
 function setOriginalHtml(node,markup){
   const options={ADD_TAGS:['dialog'],FORBID_TAGS:['script','iframe','object','embed','img','form'],ALLOW_DATA_ATTR:true,RETURN_DOM_FRAGMENT:true};
   const text=String(markup??''),tag=node.tagName?.toLowerCase();
-  // Parse table fragments in their actual destination context, then move only sanitized nodes.
   const wrappers={table:['<table>','</table>','table'],thead:['<table><thead>','</thead></table>','thead'],tbody:['<table><tbody>','</tbody></table>','tbody'],tfoot:['<table><tfoot>','</tfoot></table>','tfoot'],tr:['<table><tbody><tr>','</tr></tbody></table>','tr'],colgroup:['<table><colgroup>','</colgroup></table>','colgroup']};
   const wrap=wrappers[tag];
   if(wrap){const fragment=DOMPurify.sanitize(wrap[0]+text+wrap[1],options);const context=fragment.querySelector(wrap[2]);node.replaceChildren(...(context?Array.from(context.childNodes):[]));}
@@ -36,14 +37,14 @@ function setOriginalHtml(node,markup){
 const node=(tag,cls='',text='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;};
 function action(label,html,run){const b=node('button','chart-action-btn catalog-source-btn');b.type='button';b.title=label;b.setAttribute('aria-label',label);if(html)setOriginalHtml(b,html);else b.textContent=label;b.addEventListener('click',e=>{e.stopPropagation();Promise.resolve().then(run).catch(error=>window.dispatchEvent(new CustomEvent('charts-error',{detail:error})));});return b;}
 function download(name,body,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-const names={bar:'\u67f1\u72b6\u56fe',line:'\u6298\u7ebf\u56fe',area:'\u9762\u79ef\u56fe',pie:'\u73af\u5f62\u56fe',scatter:'\u6563\u70b9\u56fe',heatmap:'\u70ed\u529b\u56fe',funnel:'\u6f0f\u6597\u56fe',waterfall:'\u7011\u5e03\u56fe'};
+const names={bar:'柱状图',line:'折线图',area:'面积图',pie:'环形图',scatter:'散点图',heatmap:'热力图',funnel:'漏斗图',waterfall:'瀑布图'};
 let api=null;
 export function initializeOriginal(echarts){api=createOriginalComponents(echarts,setOriginalHtml);const fallback=api.ChartDataToTableConverter.convert;api.ChartDataToTableConverter.convert=(inst,c)=>c?.resolvedTable?c.resolvedTable():fallback(inst,c);return api;}
-export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentation,editing=false,readOnly=false}){
+export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentation,onBinding,editing=false,readOnly=false}){
   const c=doc.manifest.components[id],shadow=host.attachShadow({mode:'open'}),style=node('style');style.textContent=originalStyle;shadow.append(style);host.dataset.theme=doc.manifest.theme;
   const cfg={meta:{title:c.title},filters:[],kpis:[],charts:[],table:{columns:[],rows:[]},explanations:{...api.explanations}};
   let family=c.kind==='legacy'?(c.family||'chart'):c.kind;
-  const key='original-'+id;let raw=c.config,rows=[];
+  const key='original-'+id;let raw=c.kind==='legacy'?resolveOriginal(doc,id,c.config.defaultGranularity||'month'):c.config,rows=[];
   if(family==='chart'){
     let chart;
     if(c.kind==='legacy'){
@@ -54,9 +55,9 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
       chart={id:key,instanceId:key,code:c.chartType,title:c.title,subtitle:c.subtitle||'',hasGranularity:false,
         data:{},optionBuilder:()=>optionFor(doc,id),tableDataExtractor:()=>{const values=chartTable(doc,id),headers=Object.keys(values[0]||{});return {headers,rows:values.map(row=>headers.map(h=>row[h]))};}};
     }
-    const builder=chart.optionBuilder,extractor=chart.tableDataExtractor;let selectedGranularity='month';if(extractor)chart.resolvedTable=()=>extractor(chart.data,selectedGranularity,chart);
+    const builder=chart.optionBuilder,extractor=chart.tableDataExtractor;let selectedGranularity='month';if(extractor)chart.resolvedTable=()=>extractor(chart.data,c.binding?'month':selectedGranularity,chart);
     chart.optionBuilder=(...args)=>{
-      selectedGranularity=args[1]||'month';const option=builder(...args);
+      selectedGranularity=args[1]||'month';if(c.binding){chart.data=resolveOriginal(doc,id,selectedGranularity).data;args[0]=chart.data;args[1]='month';}const option=builder(...args);
       function protect(value){if(!value||typeof value!=='object')return;for(const [k,v]of Object.entries(value)){if(k==='tooltip'&&v&&typeof v==='object'&&typeof v.formatter==='function'){const formatter=v.formatter;v.formatter=(...a)=>DOMPurify.sanitize(String(formatter(...a)),{FORBID_TAGS:['img','iframe','script'],FORBID_ATTR:['src','href']});}else if(v&&typeof v==='object')protect(v);}}
       protect(option);return option;
     };
@@ -66,12 +67,12 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   }else if(family==='kpi'){
     if(c.kind!=='legacy'){
       const m=doc.manifest.metrics[c.measures[0]],value=aggregate(visibleRows(doc,id),m);
-      raw={...(c.presentation||{}),type:c.presentation?.type||'mc01',label:c.title,value:format(value,m),yoy:c.presentation?.yoy??'\u2014',statusBadge:m.status==='reviewed'?'\u5df2\u590d\u6838':'\u5f85\u590d\u6838',subLabel:c.presentation?.subLabel||'\u7edf\u8ba1\u53e3\u5f84',subVal:c.presentation?.subVal||({sum:'\u5408\u8ba1',ratio:'\u5206\u5b50 / \u5206\u6bcd',avg:'\u5e73\u5747',count:'\u8ba1\u6570'}[m.aggregation]||m.aggregation)};
+      raw={...(c.presentation||{}),type:c.presentation?.type||'mc01',label:c.title,value:format(value,m),yoy:c.presentation?.yoy??'—',statusBadge:m.status==='reviewed'?'已复核':'待复核',subLabel:c.presentation?.subLabel||'统计口径',subVal:c.presentation?.subVal||({sum:'合计',ratio:'分子 / 分母',avg:'平均',count:'计数'}[m.aggregation]||m.aggregation)};
       if(raw.type==='mc03'&&c.presentation?.timeField){const groups=new Map();for(const row of visibleRows(doc,id)){const k=row[c.presentation.timeField];if(!groups.has(k))groups.set(k,[]);groups.get(k).push(row);}raw.sparkMonths=[...groups.keys()];raw.sparkData=[...groups.values()].map(r=>{const v=aggregate(r,m);return m.format==='percent'&&v!=null?v*100:v;});}
-      cfg.explanations[key]={title:m.label,overview:m.definition,type:raw.type,period:m.period||'\u5f53\u524d\u7b5b\u9009\u8303\u56f4',metrics:[{name:m.label,definition:m.definition,formula:m.aggregation==='ratio'?`SUM(${m.numerator}) / SUM(${m.denominator})`:`${m.aggregation.toUpperCase()}(${m.field||'*'})`,rule:'\u5c55\u793a\u6837\u5f0f\u4e0d\u4ee3\u8868\u6307\u6807\u5df2\u8ba4\u8bc1'}]};
+      cfg.explanations[key]={title:m.label,overview:m.definition,type:raw.type,period:m.period||'当前筛选范围',metrics:[{name:m.label,definition:m.definition,formula:m.aggregation==='ratio'?`SUM(${m.numerator}) / SUM(${m.denominator})`:`${m.aggregation.toUpperCase()}(${m.field||'*'})`,rule:'展示样式不代表指标已认证'}]};
     }
     cfg.kpis=[{...structuredClone(raw),sparkData:raw.sparkData??raw.sparkline,id:key,explainKey:raw.explainKey||key}];
-    if(c.kind==='legacy')cfg.explanations[key]=raw.explanation||api.explanations[raw.type]||{title:c.title,overview:'\u539f\u59cb\u6307\u6807\u5361\u7247\u5feb\u7167'};
+    if(c.kind==='legacy')cfg.explanations[key]=raw.explanation||api.explanations[raw.type]||{title:c.title,overview:'原始指标卡片快照'};
     const container=node('div');container.id='app-kpis';shadow.append(container);
   }else if(family==='table'){
     rows=c.kind==='legacy'?raw.rows:visibleRows(doc,id);
@@ -87,26 +88,37 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   },{signal:controller.signal,capture:event==='focus'||event==='mouseenter'||event==='mouseleave'});
   app.setTableCrossFilter=()=>{};
   app.init();
-  if(family==='table'&&c.presentation?.visibleColumns){app.state.table.visibleCols=new Set(c.presentation.visibleColumns);app.renderColCheckboxes();app.renderTableEngine();}
-  app.copyCell=text=>navigator.clipboard?.writeText(String(text??'')).then(()=>app.showToast('\u5df2\u590d\u5236')).catch(()=>app.showToast('\u6d4f\u89c8\u5668\u672a\u6388\u6743\u526a\u8d34\u677f'));
+  if(family==='table'){
+    const saved=(c.kind==='legacy'?c.config:c.presentation)?.tableState;
+    if(saved){if(Array.isArray(saved.columns))app.state.table.orderedColumns=saved.columns.map(k=>cfg.table.columns.find(col=>col.key===k)).filter(Boolean);
+      if(Array.isArray(saved.visible))app.state.table.visibleCols=new Set(saved.visible);
+      if(saved.pageSize)app.state.table.pageSize=saved.pageSize;if(saved.page)app.state.table.page=saved.page;
+      if(saved.sortCol){app.state.table.sortCol=saved.sortCol;app.state.table.sortDir=saved.sortDir;}
+      app.renderColCheckboxes();app.renderTableEngine();}
+    let persistTimer;const originalRender=app.renderTableEngine.bind(app);
+    app.renderTableEngine=(...args)=>{const result=originalRender(...args);clearTimeout(persistTimer);
+      if(onPresentation&&!readOnly)persistTimer=setTimeout(()=>onPresentation(id,{tableState:{columns:app.state.table.orderedColumns.map(x=>x.key),visible:[...app.state.table.visibleCols],page:app.state.table.page,pageSize:app.state.table.pageSize,sortCol:app.state.table.sortCol,sortDir:app.state.table.sortDir}}),350);
+      return result;};controller.signal.addEventListener('abort',()=>clearTimeout(persistTimer));
+  }
+  app.copyCell=text=>navigator.clipboard?.writeText(String(text??'')).then(()=>app.showToast('已复制')).catch(()=>app.showToast('浏览器未授权剪贴板'));
   if(family==='table'){
     app.exportTableToCSV=()=>{const cols=app.state.table.orderedColumns.filter(c=>app.state.table.visibleCols.has(c.key)),result=app.getFilteredTableRows().map(r=>Object.fromEntries(cols.map(col=>[col.title,r[col.key]])));download(c.title+'.csv',csv(result),'text/csv;charset=utf-8');};
-    const search=node('input','catalog-search');search.placeholder='\u641c\u7d22\u660e\u7ec6';search.setAttribute('aria-label','\u641c\u7d22\u660e\u7ec6');search.oninput=()=>{app.state.keyword=search.value;app.state.table.page=1;app.renderTableEngine();};shadow.querySelector('#app-table-section>div:first-child').prepend(search);
+    const search=node('input','catalog-search');search.placeholder='搜索明细';search.setAttribute('aria-label','搜索明细');search.oninput=()=>{app.state.keyword=search.value;app.state.table.page=1;app.renderTableEngine();};shadow.querySelector('#app-table-section>div:first-child').prepend(search);
   }
   const actions=shadow.querySelector('.card-header-wrap>div:last-child')||shadow.querySelector('.section-card>div:first-child>div:last-child')||shadow.querySelector('.section-card>div:first-child');
   if(actions){
-    actions.append(action('SQL / \u8bed\u4e49',null,()=>onInspect(id)));
+    actions.append(action('SQL / 语义',null,()=>onInspect(id)));
     if(family==='chart'&&c.kind!=='legacy'){
       const choice=node('select');choice.setAttribute('aria-label','Chart type');choice.disabled=readOnly;
       for(const t of chartTypes){const o=node('option','',names[t]);o.value=t;o.disabled=!!compatible(doc,c,t);choice.append(o);}choice.value=c.chartType;choice.onchange=()=>onType(id,choice.value);const wrap=node('span','catalog-actions');wrap.append(choice);actions.prepend(wrap);
     }
-    if(editing)actions.append(action('\u7f16\u8f91\u7ec4\u4ef6',api.LUCIDE_ICONS.layers,()=>onEdit(id)));
+    if(editing)actions.append(action('编辑组件',api.LUCIDE_ICONS.layers,()=>onEdit(id)));
   }
   if(family==='chart'){
     shadow.addEventListener('click',e=>{
       const csvButton=e.target.closest('.export-chart-btn'),copyButton=e.target.closest('.copy-chart-btn');
-      if(csvButton){e.stopImmediatePropagation();const chart=app.config.charts[0],gran=app.state.chartGranularities[key],data=chart.tableDataExtractor(chart.data,gran,chart);download(c.title+'.csv',csv(data.rows.map(r=>Object.fromEntries(data.headers.map((h,i)=>[h,r[i]])))),'text/csv;charset=utf-8');}
-      if(copyButton){e.stopImmediatePropagation();const url=app.state.chartInstances[key].getDataURL({pixelRatio:2,backgroundColor:'#fff'});fetch(url).then(r=>r.blob()).then(async blob=>{try{if(!navigator.clipboard?.write)throw Error();await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);app.showToast('\u5df2\u590d\u5236 2x PNG');}catch{const a=document.createElement('a');a.href=url;a.download=c.title+'.png';a.click();app.showToast('\u526a\u8d34\u677f\u4e0d\u53ef\u7528\uff0c\u5df2\u5bfc\u51fa PNG');}}).catch(error=>app.showToast(error.message));}
+      if(csvButton){e.stopImmediatePropagation();const chart=app.config.charts[0],gran=app.state.chartGranularities[key],data=chart.tableDataExtractor(chart.data,c.binding?'month':gran,chart);download(c.title+'.csv',csv(data.rows.map(r=>Object.fromEntries(data.headers.map((h,i)=>[h,r[i]])))),'text/csv;charset=utf-8');}
+      if(copyButton){e.stopImmediatePropagation();const url=app.state.chartInstances[key].getDataURL({pixelRatio:2,backgroundColor:'#fff'});fetch(url).then(r=>r.blob()).then(async blob=>{try{if(!navigator.clipboard?.write)throw Error();await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);app.showToast('已复制 2x PNG');}catch{const a=document.createElement('a');a.href=url;a.download=c.title+'.png';a.click();app.showToast('剪贴板不可用，已导出 PNG');}}).catch(error=>app.showToast(error.message));}
       const gran=e.target.closest('.granularity-tab-btn');if(gran&&onPresentation&&!readOnly)setTimeout(()=>onPresentation(id,{defaultGranularity:gran.dataset.granularity}),0);
     },{capture:true,signal:controller.signal});
     const saved=c.kind==='legacy'?raw.defaultGranularity:null;if(saved==='quarter'){app.state.chartGranularities[key]='quarter';shadow.querySelectorAll('.granularity-tab-btn').forEach(button=>{const active=button.dataset.granularity==='quarter';button.classList.toggle('bg-white',active);button.classList.toggle('font-semibold',active);button.classList.toggle('shadow-xs',active);button.classList.toggle('text-primary-strong',active);button.classList.toggle('text-ink-muted',!active);});const spec=app.config.charts[0];app.state.chartInstances[key]?.setOption(spec.optionBuilder(spec.data,'quarter',api.TOKENS,spec),true);}
@@ -114,5 +126,6 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   const fullscreen=node('dialog');fullscreen.className='original-fullscreen';shadow.append(fullscreen);let placeholder=null;
   fullscreen.addEventListener('close',()=>{const card=fullscreen.querySelector('.section-card');if(card&&placeholder){card.classList.remove('card-fullscreen');placeholder.replaceWith(card);placeholder=null;const b=card.querySelector('.fullscreen-btn');if(b)setOriginalHtml(b,api.LUCIDE_ICONS.maximize);Object.values(app.state.chartInstances).forEach(i=>i.resize());}});
   shadow.addEventListener('click',e=>{const b=e.target.closest('.fullscreen-btn');if(!b)return;e.stopImmediatePropagation();if(fullscreen.open)fullscreen.close();else{const card=b.closest('.section-card');placeholder=document.createComment('original-card-position');card.replaceWith(placeholder);fullscreen.append(card);card.classList.add('card-fullscreen');setOriginalHtml(b,api.LUCIDE_ICONS.minimize);fullscreen.showModal();requestAnimationFrame(()=>Object.values(app.state.chartInstances).forEach(i=>i.resize()));}},{capture:true,signal:controller.signal});
-  return {app,shadow,destroy(){controller.abort();if(fullscreen.open)fullscreen.close();app.destroy();}};
+  const disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding});
+  return {app,shadow,destroy(){disposeChrome();controller.abort();if(fullscreen.open)fullscreen.close();app.destroy();}};
 }

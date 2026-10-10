@@ -36,7 +36,7 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest tests/runtime -q | tee runtime-tests.txt
-          node --test tests/runtime/engine.test.mjs
+          node --test tests/runtime/*.test.mjs
       - name: Package source and built UI for review
         if: always()
         run: |
@@ -52,6 +52,9 @@ jobs:
             runtime-audit.json
             runtime-screenshot.png
             runtime-original-restored.png
+            runtime-icons-gallery.png
+            runtime-bound-filter.png
+            component-review/
             runtime-ui/generated/provenance.json
             runtime-ui/package-lock.json
             dashboard_runtime/web/dist/

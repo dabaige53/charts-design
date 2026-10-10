@@ -19,16 +19,17 @@ out.mkdir(exist_ok=True)
 page = generate_dashboard_html('', 'Original components')
 engine = re.search(r'<script id="dashboard-engine">(.*?)</script>', page, re.S).group(1)
 engine = engine[engine.index("'use strict';") + len("'use strict';"):engine.rfind('})();')]
-# Mounting belongs to the shared editor, not to the old full-page bootstrap.
 engine = engine[:engine.index('// runtime:lifecycle')]
 engine += '\n' + RUNTIME_MODULES[0][1]
-# Keep real zeroes and missing data; original visual presets must not invent values.
 engine = engine.replace('parseFloat(kpi.value) || 88.6', 'Number.isFinite(Number(kpi.percent)) ? Number(kpi.percent) : (Number.isFinite(parseFloat(kpi.value)) ? parseFloat(kpi.value) : 0)')
 engine = engine.replace('parseFloat(kpi.value) || 92.4', 'Number.isFinite(Number(kpi.percent)) ? Number(kpi.percent) : (Number.isFinite(parseFloat(kpi.value)) ? parseFloat(kpi.value) : 0)')
 engine = engine.replace("kpi.sparkData || [81.5, 82.4, 83.0, 84.5, 85.2, 85.8, 86.2, 87.8, 85.5, 86.0, 86.4, 86.8]", 'kpi.sparkData || []')
 for literal in ['+4.8% YoY', '+1.2% MoM', '+12.4%', '+18.2%', '86.8%']:
-    engine = engine.replace("|| '" + literal + "'", "?? '\\u2014'")
+    engine = engine.replace("|| '" + literal + "'", "?? '\u2014'")
 engine = engine.replace("row[col.key] || '-'", "row[col.key] ?? '-'").replace("row[col.key] || ''", "row[col.key] ?? ''")
+engine = engine.replace('\u2191 \u7a33\u6b65\u6500\u5347', "${kpi.trendLabel || ''}")
+engine = engine.replace('S \u7ea7\u6807\u6746', "${kpi.rankBadge || ''}")
+engine = engine.replace('\u9884\u7b97\u7ea2\u7ebf 5%', "${kpi.thresholdLabel || ''}")
 builders = {**CHARTS_JS_DEFINITIONS, **ALL_CHARTS}
 registry = ',\n'.join(json.dumps(k) + ': (' + v + ')' for k, v in builders.items())
 engine += '\nconst builders = {' + registry + '};\n'
