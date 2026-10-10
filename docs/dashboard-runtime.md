@@ -1,10 +1,10 @@
 # Dashboard Runtime: web + CLI + MCP
 
-This is an additive runtime for charts-design, not a replacement for the existing executive-charts generator. The original CLI, registered chart builders and generation tests remain unchanged.
+The runtime extends charts-design. Original chart builders, KPI bodies, table and explanation components remain the rendering foundation; the runtime adds persistence, editing, transport and a shared SVG-only action layer.
 
 ## Run locally
 
-Python 3.10+ runs the CLI and local API without third-party packages. Node 22 is the tested UI build target.
+Python 3.10+ runs the CLI and local API. Node 22 is the tested UI build target.
 
 ```sh
 npm --prefix runtime-ui install
@@ -13,48 +13,38 @@ python3 -m dashboard_runtime --root ./boards init demo --demo
 python3 -m dashboard_runtime --root ./boards serve --port 8765
 ```
 
-Open the token-bearing URL printed by `serve`. The token is carried in the URL fragment, removed from the address bar and retained in session storage. Do not share the token. The server binds only to 127.0.0.1; this is not an Internet-facing multi-tenant service.
+Open the token-bearing URL printed by `serve`. It binds only to 127.0.0.1. The token is carried in the URL fragment, removed from the address bar and retained in session storage. Do not share it. This is not an Internet-facing multi-tenant service.
 
-`--demo` is the only path that inserts synthetic data. Plain `init` creates an empty dashboard. `./boards` contains data snapshots, SQL and parameters: keep it outside source control and protect it as business data.
+Plain `init` creates an empty dashboard; `--demo` explicitly inserts synthetic data. The test fixtures also use explicitly labelled demonstration data. Keep `./boards` outside source control: it contains business snapshots, SQL and parameters.
 
-## MCP (official SDK, stdio)
+## MCP
 
 ```sh
 python3 -m pip install 'mcp>=1.28,<2'
 python3 /absolute/path/charts-design/bin/dashboard_runtime.py --root /absolute/path/boards mcp
 ```
 
-Configure any compatible MCP client with the same command and arguments. `mcp.json` uses the portable `${PLUGIN_ROOT}` convention; replace it with absolute paths for clients that do not expand this convention. MCP logging goes to stderr; stdout is reserved for protocol messages.
+Web, CLI and MCP must use the same absolute `--root`. `mcp.json` uses `${PLUGIN_ROOT}`; replace it with actual paths in clients that do not expand the convention. Logs go to stderr; stdout is reserved for MCP protocol messages.
 
-The server exposes `dashboard_create`, `dashboard_list`, `dashboard_get`, `dashboard_patch`, `dashboard_validate`, `dashboard_preview`, `dashboard_history`, `dashboard_restore`, `chart_catalog`, `dataset_import`, `query_execute`, `query_inspect`, `semantic_inspect`, and `legacy_render`.
+Tools: `dashboard_create`, `dashboard_list`, `dashboard_get`, `dashboard_patch`, `dashboard_validate`, `dashboard_preview`, `dashboard_history`, `dashboard_restore`, `chart_catalog`, `dataset_import`, `query_execute`, `query_inspect`, `semantic_inspect`, `legacy_render`.
 
-`dashboard_preview` links to `ui://charts-design/dashboard-v1.html` with MIME type `text/html;profile=mcp-app`. Its UI uses the official `@modelcontextprotocol/ext-apps` client and the **same bundle** as the web editor. A regular MCP connection does not imply MCP Apps support: a host without UI support can still call tools and use the separate web editor. No claim is made that a particular Codex/ChatGPT release has been tested in this repository.
+`dashboard_preview` links to the versioned resource `ui://charts-design/dashboard-v0.3.0.html`, MIME `text/html;profile=mcp-app`. It uses `@modelcontextprotocol/ext-apps` and the same built UI as the independent web editor. A normal MCP connection does not imply support for embedded MCP Apps. Actual Codex/ChatGPT host installation remains a separate acceptance step. Remote Streamable HTTP MCP, OAuth and hosted publishing are not included.
 
-MCP stdio and the browser HTTP API are implemented. Remote Streamable HTTP MCP, OAuth and Internet hosting are **not** included in this version.
+## Canonical state and editing
 
-## One state, three entrances
+`dashboard_runtime.service.Service` is the mutation service for all transports. SQLite stores the document and last 100 revisions. Every edit supplies `expectedRevision`; stale writes fail with `REVISION_CONFLICT`. Batched operations validate and commit atomically.
 
-`dashboard_runtime.service.Service` is the only mutation service. CLI, HTTP and MCP delegate to it. SQLite stores the canonical document and the last 100 revisions, using transactional optimistic concurrency. Every edit supplies `expectedRevision`; stale edits fail with `REVISION_CONFLICT` instead of overwriting another writer.
-
-Schema v2 separates:
-
-- `manifest.components`: card kinds, chart types, field and metric bindings.
-- `manifest.datasets`: field metadata and source references.
-- `manifest.metrics`: business definitions, aggregation, unit, formatting and review status.
-- `manifest.sources`: file/import provenance or captured SQL execution records.
-- `manifest.layout`: independent desktop/tablet/mobile integer-grid placements.
-- `snapshot.datasets`: bounded arrays of reviewed row objects; no executable code.
-
-`python3 -m dashboard_runtime contract` prints all tools and typed operations. Unknown operations are rejected. Batched operations commit atomically after reference, type, unit, filter, layout and size validation.
+Schema v2 separates components, datasets/field metadata, metric definitions, source/query provenance, per-breakpoint layout, and bounded snapshot rows. It contains no executable application code. View changes never execute SQL.
 
 ```sh
+python3 -m dashboard_runtime contract
 python3 -m dashboard_runtime --root ./boards get demo
 python3 -m dashboard_runtime --root ./boards patch demo --expected 1 --file changes.json
 python3 -m dashboard_runtime --root ./boards history demo
 python3 -m dashboard_runtime --root ./boards restore demo --expected 2 --revision 1
 ```
 
-Example `changes.json`:
+Example changes.json:
 
 ```json
 [
@@ -63,27 +53,29 @@ Example `changes.json`:
 ]
 ```
 
-Restore creates a new revision. It does not rewrite history. Browser undo/redo uses this same operation. A new external revision clears the browser's local undo stack to avoid reverting another writer accidentally.
+Restore creates a new revision; it does not rewrite history. Browser undo/redo uses the same service. New external revisions clear the browser undo stack instead of silently undoing another writer's work. Web clients check for external revisions every five seconds.
 
-## Web editing
+GridStack uses independent desktop/tablet/mobile 12/8/4-column layouts. This is flexible responsive positioning and resizing, not arbitrary overlapping pixel placement. Read/edit modes, component add/delete/duplicate, titles/descriptions, undo/redo, global filters, import/export and SQL/semantic inspectors remain available.
 
-The editor provides read/edit modes, card creation/deletion/duplication, title edits, responsive GridStack drag/resize, independent breakpoint layouts, chart selection, field/series/measure binding, table views with sorting/pagination/CSV export, global filters, undo/redo, theme switching, JSON/HTML export, and SQL/semantic inspectors.
+All main-card action buttons are real Lucide SVGs with accessible names, hover help and keyboard focus. Titles/descriptions stay upper-left, actions upper-right; narrow cards expose secondary actions through More. Menus and forms keep normal readable text. Table order, visibility, pagination and sorting persist. See `icon-header-and-bindings.md` for bindings and the component UI contract.
 
-Layouts use 12/8/4 columns. This is a high-freedom responsive grid, **not** an arbitrary pixel-overlap canvas. Layout changes never execute SQL. SQL execution requires an explicit separate action. Live web changes and MCP/CLI changes share the same persisted document; web clients check for external revisions every five seconds and reject stale writes.
+## Original components and chart switching
 
-The SQL inspector shows recorded/supplied source data. The semantic inspector shows stored metric definitions, not an AI explanation guessed from chart labels. Imported definitions are marked unverified. `reviewed` is descriptive metadata, **not** an enterprise approval/authorization system.
+The runtime directly bundles all 40 original chart builders, 9 KPI rendering branches, the detail table and business explanation dialog. Bodies run inside ShadowRoots, not nested iframe cards. Source extraction preserves the original geometry, labels, microcharts and original actions while replacing the header controls with consistent SVG chrome.
 
-## Chart switching and aggregation
+```sh
+python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
+```
 
-The native engine supports bar, line, area, pie, scatter, heatmap, funnel and waterfall. Compatibility is evaluated from field types, grouping and metric semantics. Unavailable choices explain the missing requirement. Negative pie/funnel values are rejected. Heatmaps need a second categorical field. Scatter needs numeric X. Waterfall needs an additive `semantic: "delta"` metric. Mixed-unit axes are rejected; use separate native charts or an explicitly configured legacy dual-axis chart.
+Workspace import preserves original chart/KPI/table JSON, including c01/c02 designs and KPI auxiliary fields. It does not turn charts into generic bars or KPI cards into text. Original filter metadata is retained; working cross-component filtering requires explicit dataset/metric bindings. Supported bindings include 14 one-dimensional chart shapes, mc01-mc06 and detail tables. Complex shapes and mc07-mc09 require additional reviewed transforms; incomplete bindings fail rather than inventing data. Their static original configurations remain usable.
 
-Metrics support sum, average, min, max, row count, and ratio-of-sums. Ratio definitions contain numerator and denominator field references. Filters recompute `sum(numerator)/sum(denominator)` instead of averaging precomputed percentages. Nulls remain missing; a zero denominator returns no value. Percent formatting requires fractional values and `scale: "fraction"`.
+The separate native field-mapping engine supports bar, line, area, pie, scatter, heatmap, funnel and waterfall. It validates field roles and compatible measures; mixed-unit plots are rejected unless explicitly provided by an original dual-axis component. Waterfall needs an additive delta metric, heatmap a second category, scatter numeric X, and pie/funnel additive nonnegative values.
 
-These are operations on a **bounded snapshot**, not arbitrary re-querying of missing dimensions. A dimension absent from the snapshot cannot become a working filter. Previously aggregated averages cannot be reconstructed into correct finer-grained metrics without additional data.
+Metrics support sum, average, min, max, row count and ratio-of-sums. Filters recalculate SUM(numerator)/SUM(denominator), never the average of percentages. Nulls remain missing; a zero denominator yields no value. Percent formatting requires fractional values. Existing aggregate snapshots cannot produce missing finer-grained dimensions or statistically valid averages without the underlying data.
 
-## Import JSON or CSV
+## Import data
 
-Use the web Import dialog, or the common CLI tool entrance:
+Use the web import dialog or the common CLI tool entrance:
 
 ```sh
 python3 -m dashboard_runtime --root ./boards call dataset_import --json-file import.json
@@ -91,20 +83,16 @@ python3 -m dashboard_runtime --root ./boards call dataset_import --json-file imp
 
 ```json
 {
-  "dashboardId":"demo",
-  "expectedRevision":1,
-  "datasetId":"sales2",
+  "dashboardId":"demo","expectedRevision":1,"datasetId":"sales2",
   "rows":[{"region":"East","revenue":128},{"region":"South","revenue":96}]
 }
 ```
 
-CSV is accepted as `csvText` instead of `rows`. Numeric columns get explicitly **unreviewed** default sum metrics; review aggregation, units and definitions before business use. Postal-code-like strings with leading zeros are preserved. A complete exported v2 JSON artifact can be imported as a new dashboard with `import NEW_ID --file artifact.json`.
+Use `csvText` instead of `rows` for CSV. Inferred numeric metrics are unreviewed default sums; confirm definitions, units and grain before use. Leading-zero strings remain strings. A complete exported v2 artifact can be imported as a new dashboard using `import NEW_ID --file artifact.json`.
 
-## SQL execution
+## SQL and semantic provenance
 
-This version executes **SQLite only**. It can display SQL provenance supplied by other engines, but that does not make them live connectors. DuckDB/PostgreSQL/warehouse execution needs a subsequent connector implementation.
-
-The operator, not the MCP caller, configures local source aliases:
+SQL execution currently supports SQLite only. Displaying SQL from another engine does not make that engine a live connector. Operators configure allowed source aliases, not MCP callers:
 
 ```json
 {"analytics":{"engine":"sqlite","path":"/absolute/path/analytics.sqlite3"}}
@@ -124,37 +112,24 @@ python3 -m dashboard_runtime --root ./boards --sources ./sources.json call query
 }
 ```
 
-The executor uses a read-only SQLite connection, `query_only`, an authorizer and a function allowlist; extension loading, ATTACH, PRAGMA, DDL and DML are blocked. It enforces a time limit and a 10,000-row cap without silent truncation. Each successful query stores exact SQL, parameters, engine, source alias, timestamp, duration and row count. The same transaction installs its dataset. Calls supplying source metadata are marked `supplied`, never `runtime-executed`.
+Read-only SQLite connections use query_only, an authorizer and a function allowlist. Extension loading, ATTACH, PRAGMA, DDL and DML are blocked. Time and row limits fail explicitly instead of silently truncating data. Successful query provenance records exact SQL, parameters, source alias, engine, duration, timestamp and row count in the same transaction as the snapshot. Supplied sources are marked supplied, never runtime-executed.
 
-This is a local read-only guardrail, not a hardened query sandbox for hostile tenants. Sensitive SQL parameters and snapshots remain sensitive after saving/exporting.
+The semantic inspector uses stored business definitions and aggregation rules, not generated explanations inferred from labels. `reviewed` is descriptive metadata, not an enterprise approval system. Local query restrictions are not a hardened multi-tenant sandbox. Exported parameters and snapshots remain sensitive.
 
-## Existing 40-chart catalog
-
-The existing 40 registered charts and old Python generator are not rewritten. The adapter imports their actual builder registry and template, requires explicit business data/presentation, and isolates output in a sandboxed iframe. It never falls back to sample data. Advanced legacy charts are not falsely advertised as compatible with every native field mapping.
-
-```sh
-python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
-```
-
-Simple c01/c02 charts migrate to native datasets/bindings. Advanced charts keep their original config in legacy cards. Legacy KPIs without a trustworthy numeric definition are preserved as text instead of fabricating a metric. The migration report calls out filters that need explicit rebinding. Legacy templates retain their original CDN dependencies; their preview requires network access. Native bundles and exports do not require a CDN after build.
-
-## Export and validation
+## Export and verification
 
 ```sh
 python3 -m dashboard_runtime --root ./boards validate demo
 python3 -m dashboard_runtime --root ./boards export demo --output ./dist/demo.html
 python3 -m dashboard_runtime --root ./boards export demo --format json --output ./dist/demo.json
-```
-
-HTML is a read-only snapshot with bundled native ECharts/UI code. It is not a live shared dashboard. JSON preserves the editable canonical document. Exported legacy frames retain the legacy network requirements above.
-
-```sh
 python3 -m pytest tests/runtime -q
-node --test tests/runtime/engine.test.mjs
+node --test tests/runtime/*.test.mjs
 ```
 
-Core tests cover atomicity, concurrent conflicts, restores, types, layout bounds, chart compatibility, ratios, SQL restrictions, provenance, HTTP authentication and CLI round-trips. MCP integration uses an actual stdio SDK client. Browser acceptance uses actual Chromium, ECharts and GridStack; build assets and install `playwright`/Chromium first. Tests explicitly skip unavailable optional runtimes instead of claiming coverage.
+HTML is a read-only snapshot with bundled original components, ECharts, icons and UI; it needs no CDN after building. It is not a live shared dashboard. JSON preserves editable canonical state. The historical standalone Python generators remain separate compatibility entrances and retain their own historical behavior.
 
-## Current boundary
+MCP integration uses a real stdio SDK client. Browser acceptance uses actual Chromium, ECharts and GridStack. The full component test renders all 40 charts and 9 KPI types, checks icon-only headers, original chart/table actions and CSV downloads, and writes screenshots plus `component-review/coverage.json`. This is rendering and behavioral coverage, not a claim of pixel-exact equivalence with historical screenshots. Optional unavailable runtimes are explicitly skipped outside CI, never counted as passed.
 
-The implementation is a local-first, reviewable first release. It does not include multi-user authentication, row-level permissions, enterprise certification, scheduling, remote publishing, live warehouse connections, or a tested Codex host installation. Native and legacy chart behavior have distinct compatibility limits. The PR must pass the supplied CI/browser checks before being treated as release-ready.
+## Remaining boundaries
+
+Complex original-data transforms, warehouse execution, remote MCP, multi-user permissions/RLS, enterprise approval, scheduled refresh, hosted publishing, and real Codex host installation are not complete. UI completion does not imply these platform capabilities exist. Keep the PR Draft until visual review, code review and target-host acceptance; do not merge automatically.

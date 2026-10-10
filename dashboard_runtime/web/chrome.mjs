@@ -11,7 +11,7 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
   if(family==='chart'&&c.config?.code)titleRow.append(text('span','component-code',c.config.code.toUpperCase()));
   const statusBadge=family==='kpi'&&c.config?.statusBadge;if(statusBadge)heading.append(text('span','component-status',statusBadge));
   const actions=text('div','component-actions');actions.setAttribute('role','toolbar');actions.setAttribute('aria-label','组件操作');
-  const storage=text('div','component-storage');storage.hidden=true;shadow.append(storage);
+  const storage=text('div','component-storage');storage.hidden=true;heading.append(storage);
   const use=(b,name,label)=>{if(!b)return;decorateButton(b,name,label||b.getAttribute('aria-label')||b.title);b.dataset.icon=name;actions.append(b);return b;};
   const menu=(name,label,items)=>{const b=menuButton(name,label,items);b.dataset.icon=name;actions.append(b);return b;};
   if(family==='chart'){
@@ -23,17 +23,17 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
   }
   for(const b of [...old.querySelectorAll('.catalog-source-btn')])if(b.getAttribute('aria-label')==='SQL / 语义')use(b,'sql');
   if(family==='table'){
-    const search=shadow.querySelector('.catalog-search');if(search){storage.append(search);menu('search','搜索明细',[]).onclick=e=>{e.stopPropagation();openMenu(e.currentTarget,[],{label:'搜索明细',content:search});};}
+    const search=shadow.querySelector('.catalog-search');if(search){storage.append(search);const searchButton=iconButton('search','搜索明细',()=>openMenu(searchButton,[],{label:'搜索明细',content:search}));use(searchButton,'search','搜索明细');}
     const col=old.querySelector('#colDrawerBtn'),drawer=old.querySelector('#colDrawerMenu');
     if(col&&drawer){col.removeAttribute('data-original-click');use(col,'columns','列设置');drawer.className='column-content';storage.append(drawer);
-      col.addEventListener('click',e=>{e.stopPropagation();openMenu(col,[],{label:'列设置',content:drawer});});
+      col.addEventListener('click',e=>{e.stopPropagation();const popup=openMenu(col,[],{label:'列设置',content:drawer});popup.id='colDrawerWrap';});
       const reset=drawer.querySelector('button');if(reset)decorateButton(reset,'refresh','恢复默认');}
     use(old.querySelector('[data-original-click*="exportTableToCSV"]'),'export','导出表格 CSV');
     const prev=shadow.querySelector('#tablePrevBtn'),next=shadow.querySelector('#tableNextBtn'),pageSize=shadow.querySelector('select[data-original-change]');
     const pagination=shadow.querySelector('#tablePaginationInfo'),indicator=shadow.querySelector('#tablePageIndicator');
     const footer=prev?.parentElement?.parentElement;
     if(pagination){const metadata=text('div','component-metadata');metadata.append(pagination);if(indicator)metadata.append(text('span','',' / '),indicator);heading.append(metadata);}
-    if(pageSize){storage.append(pageSize);menu('sliders','每页条数',()=>[...pageSize.options].map(o=>({icon:'table',label:o.textContent,checked:o.value===pageSize.value,run:()=>{pageSize.value=o.value;pageSize.dispatchEvent(new Event('change',{bubbles:true}));}})));}
+    if(pageSize){pageSize.value=app.state.table.pageSize===9999?'all':String(app.state.table.pageSize);storage.append(pageSize);menu('sliders','每页条数',()=>[...pageSize.options].map(o=>({icon:'table',label:o.textContent,checked:o.value===pageSize.value,run:()=>{pageSize.value=o.value;pageSize.dispatchEvent(new Event('change',{bubbles:true}));}})));}
     use(prev,'prev','上一页');use(next,'next','下一页');footer?.remove();
   }
   if(family==='chart'){

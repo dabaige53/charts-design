@@ -60,6 +60,11 @@ def test_original_toolbar_kpi_table_and_offline_fidelity(tmp_path):
             checks.last.uncheck();assert table.locator('th').count()==before-1
             table.get_by_role('button',name='恢复默认',exact=True).click();assert table.locator('th').count()==before
             page.keyboard.press('Escape')
+            table.get_by_role('button',name='每页条数',exact=True).click()
+            table.get_by_role('menuitemradio',name='25 条',exact=True).click()
+            page.wait_for_timeout(500)
+            assert service.store.get('original-review')['manifest']['components']['original-table']['config']['tableState']['pageSize']==25
+            assert table.locator('tbody tr').count()==25
             page.screenshot(path='runtime-original-restored.png',full_page=True)
             offline=tmp_path/'offline.html';offline.write_text(export_document(service.store.get('original-review')))
             page.goto(offline.as_uri());page.locator('[data-component-id=t06] canvas').wait_for();assert page.locator('iframe').count()==0

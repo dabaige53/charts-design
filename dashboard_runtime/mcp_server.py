@@ -2,11 +2,12 @@
 from __future__ import annotations
 import asyncio
 import json
+from . import __version__
 from .assets import render_html
 from .model import DashboardError
 from .service import READ_ONLY, TOOLS
 
-URI = 'ui://charts-design/dashboard-v1.html'
+URI = f'ui://charts-design/dashboard-v{__version__}.html'
 MIME = 'text/html;profile=mcp-app'
 
 def create_server(service):
@@ -16,7 +17,7 @@ def create_server(service):
         from mcp.server.lowlevel.helper_types import ReadResourceContents
     except ImportError as exc:
         raise DashboardError('MCP_NOT_INSTALLED', 'Install the MCP adapter: python3 -m pip install "mcp>=1.28,<2"') from exc
-    server = Server('charts-design', version='0.1.0')
+    server = Server('charts-design', version=__version__)
 
     @server.list_tools()
     async def list_tools():

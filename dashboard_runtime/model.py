@@ -160,7 +160,7 @@ def validate(doc):
             if 'columns' in state:
                 require(set(state['columns']) == names, 'Table order must preserve every column')
             require(type(state.get('page', 1)) is int and state.get('page', 1) >= 1, 'Invalid table page')
-            require(type(state.get('pageSize', 10)) is int and state.get('pageSize', 10) in (10, 20, 50, 100, 9999), 'Invalid table page size')
+            require(type(state.get('pageSize', 10)) is int and state.get('pageSize', 10) in (10, 20, 25, 50, 100, 9999), 'Invalid table page size')
             require(state.get('sortCol') is None or state['sortCol'] in names, 'Invalid table sort column')
             require(state.get('sortDir', 'asc') in ('asc', 'desc'), 'Invalid table sort direction')
         if c['kind'] == 'text':
