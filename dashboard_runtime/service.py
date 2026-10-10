@@ -41,11 +41,11 @@ class Service:
             if board and args.get('componentId'):
                 doc = self.store.get(board)
                 component = doc['manifest']['components'].get(args['componentId'])
-                require(component is not None and component['kind'] == 'chart', 'Chart not found')
-                charts = [{'type': t, 'compatible': compatibility(doc, component, t) is None,
+                require(component is not None and component['kind'] in ('chart','legacy'), 'Chart not found')
+                charts = [] if component['kind']=='legacy' else [{'type': t, 'compatible': compatibility(doc, component, t) is None,
                            'reason': compatibility(doc, component, t)} for t in TYPES]
             from .legacy import catalog
-            return {'charts': charts, 'legacy': catalog()}
+            return {'charts': charts, 'legacy': catalog(), 'originalKpis': ['mc%02d'%i for i in range(1,10)], 'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
             doc = self.store.get(board)
             c = doc['manifest']['components'].get(args.get('componentId'))
@@ -56,12 +56,15 @@ class Service:
                 return {'source': source, 'snapshotUpdatedAt': doc['snapshot']['updatedAt'],
                         'filters': [f for f in doc['manifest']['filters'] if args['componentId'] in f['componentIds']],
                         'note': 'Interactive filters apply to the reviewed snapshot, not to a new SQL execution.'}
-            return {'metrics': {key: doc['manifest']['metrics'][key] for key in c.get('measures', [])}, 'dataset': meta}
+            return {'metrics': {key: doc['manifest']['metrics'][key] for key in c.get('measures', [])}, 'dataset': meta, 'originalPresentation': c.get('config',{}).get('presentation'), 'originalExplanation': c.get('config',{}).get('explanation'), 'certified': False}
         if tool == 'legacy_render':
             from .legacy import render
             doc = self.store.get(board)
             c = doc['manifest']['components'].get(args.get('componentId'))
             require(c is not None and c['kind'] == 'legacy', 'Legacy chart not found')
+            if c.get('family','chart') != 'chart':
+                from .assets import render_html
+                return {'html': render_html('offline', doc), 'scope': 'dashboard', 'note': 'Use dashboard_preview for native original KPI/table components.'}
             return {'html': render(c['config'])}
         if tool == 'dataset_import':
             import csv
@@ -87,12 +90,10 @@ class Service:
                     ops.append({'op': 'put_metric', 'id': mid, 'value': {'datasetId': ds, 'field': key, 'aggregation': 'sum', 'label': key, 'unit': '', 'definition': f'Unreviewed sum of {key}. Confirm the business meaning before use.', 'status': 'unverified'}})
             return {'document': self.store.mutate(board, args.get('expectedRevision'), ops)}
         if tool == 'query_execute':
-            # Check revision BEFORE expensive execution, then again in the commit transaction.
             doc = self.store.get(board)
             require(doc['revision'] == args.get('expectedRevision'), 'Reload before running a query', 'REVISION_CONFLICT')
             ds = identifier(args.get('datasetId'))
             rows, fields, source = self.queries.execute(args.get('connection'), args.get('sql'), args.get('parameters'))
-            # Empty SQL results have no type information. Existing metadata is retained when possible.
             if not rows and ds in doc['manifest']['datasets']:
                 previous = doc['manifest']['datasets'][ds]['fields']
                 fields = {key: previous.get(key, info) for key, info in fields.items()}
@@ -107,7 +108,6 @@ class Service:
             return {'document': self.store.mutate(board, args['expectedRevision'], operations), 'execution': source['query']}
         raise DashboardError('UNKNOWN_TOOL', f'Unsupported tool: {tool}', 404)
 
-# JSON schemas are shared by HTTP diagnostics, CLI help and MCP registration.
 def schema(properties=None, required=()):
     return {'type': 'object', 'properties': properties or {}, 'required': list(required), 'additionalProperties': False}
 STR = {'type': 'string'}
@@ -123,15 +123,14 @@ TOOLS = {
     'dashboard_patch': ('Apply atomic typed operations with optimistic concurrency', schema({**BOARD, 'expectedRevision': INT, 'operations': {'type': 'array', 'minItems': 1, 'maxItems': 200, 'items': {'type': 'object'}}}, ('dashboardId', 'expectedRevision', 'operations'))),
     'dashboard_history': ('List the last 100 revisions', schema(BOARD, ('dashboardId',))),
     'dashboard_restore': ('Restore a revision as a new revision; never overwrite history', schema({**BOARD, 'expectedRevision': INT, 'revision': INT}, ('dashboardId', 'expectedRevision', 'revision'))),
-    'chart_catalog': ('List compatible native types and installed legacy chart codes', schema(TARGET)),
+    'chart_catalog': ('List compatible native types and installed original chart codes', schema(TARGET)),
     'query_inspect': ('Inspect actual or supplied SQL provenance, without execution', schema(TARGET, ('dashboardId', 'componentId'))),
     'semantic_inspect': ('Inspect stored metric definitions, units and aggregation', schema(TARGET, ('dashboardId', 'componentId'))),
     'query_execute': ('Execute a bounded read-only SQLite query on a configured alias and atomically save its snapshot', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'connection': STR, 'sql': STR, 'parameters': {'type': ['object', 'array']}}, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql')))
 }
 READ_ONLY = {'dashboard_list', 'dashboard_get', 'dashboard_preview', 'dashboard_validate', 'dashboard_history', 'chart_catalog', 'query_inspect', 'semantic_inspect'}
-
 TOOLS.update({
     'dataset_import': ('Import explicit JSON rows or CSV; inferred measures remain unverified', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'rows': {'type':'array', 'items':{'type':'object'}}, 'csvText':STR, 'name':STR}, ('dashboardId','expectedRevision','datasetId'))),
-    'legacy_render': ('Render an explicitly configured legacy chart in an isolated frame', schema(TARGET, ('dashboardId','componentId')))
+    'legacy_render': ('Export an explicitly configured original component; dashboard_preview uses bundled original components', schema(TARGET, ('dashboardId','componentId')))
 })
 READ_ONLY.add('legacy_render')

@@ -151,7 +151,8 @@ def validate(doc):
             require(isinstance(c.get('text'), str), 'Text component requires text')
             continue
         if c['kind'] == 'legacy':
-            require(isinstance(c.get('config'), dict) and c['config'].get('data') and c['config'].get('presentation'), 'Legacy charts need explicit data and presentation')
+            from .legacy import validate_original
+            validate_original(c)
             continue
         ds = c.get('datasetId')
         require(ds in m['datasets'], f'{key}: dataset not found')

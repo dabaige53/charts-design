@@ -32,7 +32,7 @@ jobs:
         run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate --json > runtime-audit.json
       - name: Build the shared browser and MCP App bundle
         run: npm --prefix runtime-ui run build
-      - name: Core, MCP protocol, legacy adapter and real browser acceptance
+      - name: Core, MCP protocol, original component fidelity and real browser acceptance
         run: |
           set -o pipefail
           python -m pytest tests/runtime -q | tee runtime-tests.txt
@@ -51,6 +51,8 @@ jobs:
             runtime-tests.txt
             runtime-audit.json
             runtime-screenshot.png
+            runtime-original-restored.png
+            runtime-ui/generated/provenance.json
             runtime-ui/package-lock.json
             dashboard_runtime/web/dist/
           retention-days: 7

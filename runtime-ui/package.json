@@ -1,18 +1,9 @@
 {
   "name": "charts-design-runtime-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "node build.mjs",
-    "test": "node --test ../tests/runtime/engine.test.mjs"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/ext-apps": "1.1.2",
-    "echarts": "6.1.0",
-    "gridstack": "12.3.3"
-  },
-  "devDependencies": {
-    "esbuild": "0.25.9"
-  }
+  "scripts": {"build": "node build.mjs", "test": "node --test ../tests/runtime/engine.test.mjs"},
+  "dependencies": {"@modelcontextprotocol/ext-apps": "1.1.2", "echarts": "6.1.0", "gridstack": "12.3.3", "dompurify": "3.4.16"},
+  "devDependencies": {"esbuild": "0.25.9", "acorn": "8.15.0", "postcss": "8.5.6", "tailwindcss": "3.4.17"}
 }

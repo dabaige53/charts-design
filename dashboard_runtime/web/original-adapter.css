@@ -1,0 +1,19 @@
+:host{display:block;height:100%;min-height:0;color:#17212B;font-family:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;font-size:14px;line-height:1.5}
+#app-kpis,#app-charts-grid{height:100%;min-height:0}
+#app-kpis>.section-card,#app-charts-grid>.section-card{height:100%;min-height:0;box-sizing:border-box}
+#app-charts-grid>.section-card{justify-content:flex-start}
+.card-header-wrap{flex:0 0 auto}.card-header-wrap>div:first-child{max-width:100%;flex:1 1 160px}.card-header-wrap h3,.card-header-wrap p{white-space:normal;overflow:visible;text-overflow:clip}
+.card-body-wrap{flex:1 1 auto;height:auto!important;min-height:120px;overflow:hidden}
+.card-chart-pane,.card-table-pane{min-height:120px;height:100%!important}
+#app-table-section{height:100%;min-height:0;box-sizing:border-box;padding:20px;display:flex;flex-direction:column}
+#app-table-section>div:last-child{min-height:0;display:flex;flex:1;flex-direction:column}
+#app-table-section>div:last-child>div:first-child{min-height:0;flex:1;overflow:auto}
+#main14ColTable{min-width:100%;width:max-content}#main14ColThead th{position:sticky;top:0;background:#f1f5f9;z-index:3}
+#app-toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;max-width:min(440px,90vw)}
+.card-fullscreen{height:100vh!important;padding:28px!important}.card-fullscreen .card-body-wrap{min-height:250px}
+.catalog-actions{display:flex;align-items:center;gap:6px}.catalog-actions select{max-width:126px;font-size:11px;line-height:1.5;color:#52606D;background:white;border:1px solid #E2E8F0;border-radius:5px;padding:3px 6px}
+.catalog-source-btn{font-size:10px;font-weight:600;width:auto;padding:0 6px;font-family:inherit}
+.catalog-search{font:inherit;font-size:12px;padding:6px 10px;border:1px solid #E2E8F0;border-radius:6px;min-width:0;width:200px;color:#17212B}
+.catalog-summary{font-size:10px;color:#7B8794;line-height:1.6;margin-top:6px}
+:host([data-theme=dark]){color:#e4e9ed}:host([data-theme=dark]) .section-card{background:#1e2832;border-color:#35404c}
+:host([data-theme=dark]) .text-primary-strong,:host([data-theme=dark]) .text-ink,:host([data-theme=dark]) .text-primary{color:#d7e6f3}:host([data-theme=dark]) .text-ink-muted,:host([data-theme=dark]) .text-ink-subtle{color:#a7b6c4}

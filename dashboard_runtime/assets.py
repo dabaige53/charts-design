@@ -23,6 +23,5 @@ def render_html(mode='web', document=None, legacy=None):
             '<script>window.__DASHBOARD_BOOT__=' + payload + ';</script><script>' + javascript + '</script></body></html>')
 
 def export_document(document):
-    from .legacy import render
-    legacy = {key: render(c['config']) for key, c in document['manifest']['components'].items() if c['kind'] == 'legacy'}
-    return render_html('offline', document, legacy)
+    # Original components are bundled from canonical source, not external CDN frames.
+    return render_html('offline', document)

@@ -1,3 +1,4 @@
+import {initializeOriginal,mountOriginal,catalog} from './original.mjs';
 import {aggregate,visibleRows,format,optionFor,chartTable,csv,chartTypes,compatible} from './engine.mjs';
 
 const T={edit:'\u7f16\u8f91',view:'\u9605\u8bfb',add:'\u6dfb\u52a0\u7ec4\u4ef6',import:'\u5bfc\u5165\u6570\u636e',undo:'\u64a4\u9500',redo:'\u91cd\u505a',reload:'\u91cd\u65b0\u8bfb\u53d6',export:'\u5bfc\u51fa',close:'\u5173\u95ed',save:'\u4fdd\u5b58',data:'\u6570\u636e',semantic:'\u6307\u6807\u8bed\u4e49',settings:'\u56fe\u8868\u8bbe\u7f6e',source:'\u67e5\u8be2\u6765\u6e90',remove:'\u5220\u9664',copy:'\u590d\u5236',empty:'\u5bfc\u5165\u6570\u636e\uff0c\u6216\u901a\u8fc7 CLI / MCP \u6dfb\u52a0\u7ec4\u4ef6\u3002'};
@@ -23,11 +24,12 @@ function table(rows){
 }
 
 export async function start({echarts,GridStack,App}){
+  initializeOriginal(echarts);
   const boot=window.__DASHBOARD_BOOT__||{},root=el('div','workspace');document.body.append(root);
   const top=el('header','topbar'),brand=el('div','brand','CHARTS / WORKSPACE'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
   notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');top.append(brand,title,toolbar);canvas.append(gridEl);root.append(top,notice,filters,canvas);
   let doc=null,editing=false,grid=null,charts=[],observers=[],undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,app=null;
-  let lastBreakpoint=null,tableViews=new Set(),transport;
+  let lastBreakpoint=null,tableViews=new Set(),transport,originalInstances=[];
   const bp=()=>window.innerWidth<650?'mobile':window.innerWidth<1050?'tablet':'desktop';
   const status=text=>{notice.textContent=text;notice.className='notice';};
   const accept=result=>{if(result?.error)throw Error(result.error.message);if(result?.isError)throw Error(result.content?.[0]?.text||'Tool failed');return result;};
@@ -67,7 +69,7 @@ export async function start({echarts,GridStack,App}){
     document.documentElement.dataset.theme=doc.manifest.theme;document.title=doc.manifest.title;title.value=doc.manifest.title;title.disabled=!editing;
     toolbar.replaceChildren();
     const edit=button(editing?T.view:T.edit,()=>{editing=!editing;render();});edit.disabled=boot.mode==='offline';toolbar.append(edit);
-    if(editing){const u=button(T.undo,()=>restore('undo')),r=button(T.redo,()=>restore('redo'));u.disabled=!undo.length;r.disabled=!redo.length;toolbar.append(button(T.add,()=>componentEditor()),button(T.import,importData),u,r);}
+    if(editing){const u=button(T.undo,()=>restore('undo')),r=button(T.redo,()=>restore('redo'));u.disabled=!undo.length;r.disabled=!redo.length;toolbar.append(button(T.add,()=>componentEditor()),button('\u539f\u7248\u7ec4\u4ef6',catalogDialog),button(T.import,importData),u,r);}
     if(boot.mode!=='offline')toolbar.append(button('SQL',queryEditor),button(doc.manifest.theme==='dark'?'Light':'Dark',()=>patch([{op:'set_theme',value:doc.manifest.theme==='dark'?'light':'dark'}])),button(T.reload,reload));toolbar.append(button(T.export,exportDialog));
     status(`${boot.mode==='offline'?'OFFLINE SNAPSHOT / ':''}${doc.snapshot.status.toUpperCase()}  /  v${doc.revision}  /  ${doc.snapshot.updatedAt}  ${doc.snapshot.status==='fixture'?' / DEMO DATA':''}`);
     filters.replaceChildren();
@@ -77,31 +79,22 @@ export async function start({echarts,GridStack,App}){
     if(editing)filters.append(button('\u7b5b\u9009\u8bbe\u7f6e',()=>jsonEditor('Filters',doc.manifest.filters,value=>patch([{op:'set_filters',value}]))));
     if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null;}
     charts.forEach(c=>c.dispose());charts=[];observers.forEach(o=>o.disconnect());observers=[];
+    originalInstances.forEach(x=>x.destroy());originalInstances=[];
     if(grid)grid.destroy(false);gridEl.replaceChildren();
     const breakpoint=bp();lastBreakpoint=breakpoint;const columns={desktop:12,tablet:8,mobile:4}[breakpoint];
     grid=GridStack.init({column:columns,cellHeight:48,margin:8,float:true,disableDrag:!editing,disableResize:!editing,
-      draggable:{handle:'.drag-handle',cancel:'button,input,select,textarea,a'},resizable:{handles:'e,se,s,sw,w'},minRow:1},gridEl);
+      draggable:{handle:'.layout-handle',cancel:'input,select,textarea,a'},resizable:{handles:'e,se,s,sw,w'},minRow:1},gridEl);
     for(const position of doc.manifest.layout[breakpoint]){
-      const id=position.id,c=doc.manifest.components[id],item=el('div','grid-stack-item'),card=el('section','grid-stack-item-content card'),head=el('header','card-header'),body=el('div','card-body');
-      item.dataset.componentId=id;const heading=el('h2','drag-handle',c.title);heading.tabIndex=editing?0:-1;head.append(heading);
-      const actions=el('div','card-actions');
-      if(c.kind==='chart'){
-        const s=select(chartTypes.map(t=>[t,t]),c.chartType);s.setAttribute('aria-label','Chart type');s.disabled=boot.mode==='offline';for(const o of s.options){const reason=compatible(doc,c,o.value);o.disabled=!!reason;o.title=reason||'';}s.onchange=()=>patch([{op:'set_chart',id,chartType:s.value}]).catch(showError);actions.append(s);
-        actions.append(button(tableViews.has(id)?'\u56fe':'\u8868',()=>{tableViews.has(id)?tableViews.delete(id):tableViews.add(id);render();}));
-      }
-      actions.append(button('i',()=>inspect(id),'icon'));
-      if(editing)actions.append(button('\u2026',()=>componentEditor(id),'icon'));
-      head.append(actions);card.append(head,body);item.append(card);gridEl.append(item);grid.makeWidget(item,{...position,minW:2,minH:2});
+      const id=position.id,c=doc.manifest.components[id],item=el('div','grid-stack-item'),card=el('section','grid-stack-item-content card original-host');
+      item.dataset.componentId=id;item.append(card);gridEl.append(item);grid.makeWidget(item,{...position,minW:2,minH:c.kind==='kpi'||c.family==='kpi'?3:5});
+      if(editing){const handle=el('button','drag-handle layout-handle','\u283f');handle.title='\u62d6\u52a8\u7ec4\u4ef6';handle.setAttribute('aria-label','\u62d6\u52a8\u7ec4\u4ef6');item.append(handle);}
       try{
-        if(c.kind==='text')body.append(el('div','text-block',c.text));
-        else if(c.kind==='kpi'){const metric=doc.manifest.metrics[c.measures[0]],value=aggregate(visibleRows(doc,id),metric);body.append(el('div','kpi',format(value,metric)),el('div','muted',metric.definition));}
-        else if(c.kind==='table'||tableViews.has(id))body.append(table(c.kind==='table'?visibleRows(doc,id):chartTable(doc,id)));
-        else if(c.kind==='legacy'){
-          body.append(el('p','muted','Legacy renderer / isolated preview'));
-          const captured=body;
-          (boot.legacy?.[id]?Promise.resolve({html:boot.legacy[id]}):transport('legacy_render',{dashboardId:doc.id,componentId:id})).then(result=>{if(!captured.isConnected)return;const frame=el('iframe');frame.title=c.title;frame.setAttribute('sandbox','allow-scripts');frame.srcdoc=result.html;captured.replaceChildren(frame);}).catch(error=>captured.replaceChildren(el('p','error',error.message)));
-        }else{const chartNode=el('div','chart');body.append(chartNode);const instance=echarts.init(chartNode,null,{renderer:'canvas'});instance.setOption(optionFor(doc,id),true);charts.push(instance);const observer=new ResizeObserver(()=>instance.resize());observer.observe(chartNode);observers.push(observer);}
-      }catch(error){body.append(el('p','error',error.message));}
+        if(c.kind==='text'){card.append(el('h2','text-heading',c.title),el('div','text-block',c.text));if(editing)card.append(button(T.edit,()=>componentEditor(id)));}
+        else originalInstances.push(mountOriginal(card,{doc,id,editing,readOnly:boot.mode==='offline',
+          onInspect:inspect,onEdit:componentEditor,onType:(id,chartType)=>patch([{op:'set_chart',id,chartType}]).catch(showError),
+          onPresentation:(id,changes)=>{const old=doc.manifest.components[id];if(old.kind==='legacy'&&old.config.defaultGranularity!==changes.defaultGranularity)return patch([{op:'put_component',id,value:{...old,config:{...old.config,...changes}}}]).catch(showError);}
+        }));
+      }catch(error){card.append(el('p','error',error.message));}
     }
     if(!Object.keys(doc.manifest.components).length)gridEl.append(el('div','empty',T.empty));
     grid.on('change',()=>{if(!editing)return;clearTimeout(layoutTimer);const value=grid.engine.nodes.map(n=>({id:String(n.id),x:n.x,y:n.y,w:n.w,h:n.h}));layoutTimer=setTimeout(()=>{layoutTimer=null;patch([{op:'set_layout',breakpoint,value}]).catch(showError);},250);});
@@ -110,15 +103,16 @@ export async function start({echarts,GridStack,App}){
   function componentEditor(id){
     const old=id?doc.manifest.components[id]:null,{d,body}=dialog(old?T.settings:T.add),key=input(id||'card-'+Date.now().toString(36)),kind=select(['chart','kpi','table','text','legacy'].map(v=>[v,v]),old?.kind||'chart'),name=input(old?.title||'New chart');key.disabled=!!id;
     const datasets=Object.keys(doc.manifest.datasets),ds=select(datasets.map(v=>[v,v]),old?.datasetId),mapping=el('div');
-    let x,group,measures,type,text,config;
+    let x,group,measures,type,text,config,family,presentation;
     function fields(){mapping.replaceChildren();const selected=ds.value,meta=doc.manifest.datasets[selected];
       if(kind.value==='text'){text=textarea(old?.text||'');mapping.append(field('Text',text));return;}
-      if(kind.value==='legacy'){config=textarea(old?.config||{code:'c01',title:name.value,unit:'',data:{categories:[],values:[]},presentation:{axisLabels:{x:'Value',y:'Category'},seriesLabels:['Value'],tooltipValueLabels:['Value'],units:[''],tableHeaders:['Category','Value']}});mapping.append(field('Complete legacy chart config (no sample data fallback)',config));return;}
+      if(kind.value==='legacy'){family=select([['chart','\u539f\u7248\u56fe\u8868'],['kpi','\u539f\u7248 KPI'],['table','\u539f\u7248\u660e\u7ec6\u8868']],old?.family||'chart');mapping.append(field('\u7ec4\u4ef6\u7c7b\u578b',family));config=textarea(old?.config||{code:'c01',title:name.value,unit:'',data:{categories:[],values:[]},presentation:{axisLabels:{x:'Value',y:'Category'},seriesLabels:['Value'],tooltipValueLabels:['Value'],units:[''],tableHeaders:['Category','Value']}});mapping.append(field('Complete legacy chart config (no sample data fallback)',config));return;}
       if(!meta){mapping.append(el('p','error','Import a dataset first.'));return;}
       if(kind.value==='chart'){type=select(chartTypes.map(v=>[v,v]),old?.chartType||'bar');x=select(Object.keys(meta.fields).map(v=>[v,meta.fields[v].label||v]),old?.x);group=select([['','None'],...Object.keys(meta.fields).map(v=>[v,v])],old?.series||'');mapping.append(field('Chart type',type),field('X / category',x),field('Series / heatmap Y',group));}
       if(['chart','kpi'].includes(kind.value)){measures=select(Object.entries(doc.manifest.metrics).filter(([,m])=>m.datasetId===selected).map(([k,m])=>[k,m.label]),old?.measures?.[0]);measures.multiple=kind.value==='chart';measures.size=4;if(old?.measures)for(const o of measures.options)o.selected=old.measures.includes(o.value);mapping.append(field('Measures',measures));}
     }kind.onchange=fields;ds.onchange=fields;body.append(field('Component ID',key),field('Kind',kind),field('Title',name),field('Dataset',ds),mapping);fields();
-    body.append(button(T.save,async()=>{let value={kind:kind.value,title:name.value};if(kind.value==='text')value.text=text.value;else if(kind.value==='legacy'){value.config=JSON.parse(config.value);value.config.title=name.value;}else{value.datasetId=ds.value;if(measures)value.measures=[...measures.selectedOptions].map(o=>o.value);if(kind.value==='chart'){value.chartType=type.value;value.x=x.value;if(group.value)value.series=group.value;}}await patch([{op:'put_component',id:key.value,value}]);d.close();}));
+    if(old&&old.kind!=='legacy'&&old.kind!=='text'){presentation=textarea(old.presentation||{});mapping.append(field('\u663e\u793a\u8bbe\u7f6e\uff08\u4fdd\u7559\u539f\u7248 KPI / \u8868\u683c\u53c2\u6570\uff09',presentation));}
+    body.append(button(T.save,async()=>{let value={...(old||{}),kind:kind.value,title:name.value};if(kind.value==='text')value.text=text.value;else if(kind.value==='legacy'){value.family=family.value;value.config=JSON.parse(config.value);if(family.value==='kpi')value.config.label=name.value;else value.config.title=name.value;}else{value.datasetId=ds.value;if(measures)value.measures=[...measures.selectedOptions].map(o=>o.value);if(kind.value==='chart'){value.chartType=type.value;value.x=x.value;if(group.value)value.series=group.value;}}if(presentation)value.presentation=JSON.parse(presentation.value);await patch([{op:'put_component',id:key.value,value}]);d.close();}));
     if(id){body.append(button(T.copy,async()=>{await patch([{op:'put_component',id:id+'-'+Date.now().toString(36),value:structuredClone(old)}]);d.close();}),button(T.remove,async()=>{if(!confirm('Remove this component?'))return;await patch([{op:'remove_component',id}]);d.close();},'danger'));}
   }
   async function inspect(id){
@@ -126,15 +120,23 @@ export async function start({echarts,GridStack,App}){
     async function display(tab){content.replaceChildren();
       if(tab==='data'){const rows=doc.snapshot.datasets[c.datasetId]||[];content.append(el('p','muted',`Snapshot: ${rows.length} rows; table below applies current viewer filters.`),table(visibleRows(doc,id)));}
       if(tab==='source'){const result=boot.mode==='offline'?{source:doc.manifest.sources[doc.manifest.datasets[c.datasetId]?.sourceId||c.sourceId]}:await transport('query_inspect',{dashboardId:doc.id,componentId:id});content.append(el('pre','code',JSON.stringify(result,null,2)));}
-      if(tab==='semantic'){for(const mid of c.measures||[]){const metric=doc.manifest.metrics[mid];content.append(el('h3','',metric.label),el('pre','code',JSON.stringify(metric,null,2)));if(editing)content.append(button(T.edit,()=>jsonEditor(mid,metric,value=>patch([{op:'put_metric',id:mid,value}]))));}if(!c.measures?.length)content.append(el('p','muted','No governed measure binding on this component.'));}
+      if(tab==='semantic'){for(const mid of c.measures||[]){const metric=doc.manifest.metrics[mid];content.append(el('h3','',metric.label),el('pre','code',JSON.stringify(metric,null,2)));if(editing)content.append(button(T.edit,()=>jsonEditor(mid,metric,value=>patch([{op:'put_metric',id:mid,value}]))));}if(!c.measures?.length){content.append(el('p','muted','\u539f\u7248\u7ec4\u4ef6\u5feb\u7167\uff1a\u5c55\u793a\u8bf4\u660e\u4e0e\u5df2\u8ba4\u8bc1\u6307\u6807\u662f\u4e24\u4ef6\u4e8b\u3002'),el('pre','code',JSON.stringify(c.config?.explanation||c.config?.presentation||c.config||{},null,2)));}}
       if(tab==='settings')content.append(button(T.settings,()=>componentEditor(id)),el('pre','code',JSON.stringify(c,null,2)));
     }
     for(const tab of ['data','source','semantic','settings'])tabs.append(button(T[tab],()=>display(tab)));await display('semantic');
+  }
+  function catalogDialog(){
+    const {body}=dialog('\u539f\u7248\u7ec4\u4ef6\u76ee\u5f55'),search=input(''),list=el('div','catalog-list');search.placeholder='\u641c\u7d22\u56fe\u8868\u540d\u79f0\u3001\u7f16\u53f7';
+    body.append(el('p','muted','40 \u6b3e\u539f\u7248\u56fe\u8868 + 9 \u7c7b KPI\u3002\u4f7f\u7528\u539f\u7248\u7ec4\u4ef6 JSON \u6216\u5bfc\u5165 Workspace\uff0c\u4e0d\u7528\u901a\u7528\u56fe\u8868\u66ff\u6362\u539f\u914d\u7f6e\u3002'),search,list);
+    const all=Array.isArray(catalog)?catalog:Object.entries(catalog).map(([code,v])=>({code,...v}));
+    function draw(){list.replaceChildren();for(const entry of all.filter(e=>JSON.stringify(e).toLowerCase().includes(search.value.toLowerCase()))){const row=el('div','catalog-row');row.append(el('strong','',entry.code||entry.id||''),el('span','',entry.nameZh||entry.title||entry.name||''),button('\u67e5\u770b\u5951\u7ea6',()=>{const {body}=dialog(entry.nameZh||entry.title||entry.name||entry.id||entry.code);body.append(el('pre','code',JSON.stringify(entry,null,2)));}));list.append(row);}for(let i=1;i<=9;i++){const row=el('div','catalog-row');row.append(el('strong','','mc0'+i),el('span','',['\u6807\u51c6\u6307\u6807','\u540c\u6bd4 / \u73af\u6bd4','\u8ff7\u4f60\u8d8b\u52bf','\u76ee\u6807\u8fdb\u5ea6','\u534a\u73af\u4eea\u8868','\u53cc\u6307\u6807','\u6392\u540d\u5206\u5c42','\u9608\u503c\u9884\u8b66','\u5206\u7ec4\u62c6\u89e3'][i-1]));list.append(row);}}
+    search.oninput=draw;draw();
   }
   function importData(){const {d,body}=dialog(T.import),name=input('dataset-'+Date.now().toString(36)),area=textarea('[]'),file=input('','file'),formatSelect=select([['json','JSON rows'],['csv','CSV']],'json');file.accept='.json,.csv';file.onchange=async()=>{area.value=await file.files[0].text();formatSelect.value=file.files[0].name.endsWith('.csv')?'csv':'json';};body.append(field('Dataset ID',name),file,formatSelect,area,button(T.save,async()=>{await mutate('dataset_import',{datasetId:name.value,...(formatSelect.value==='csv'?{csvText:area.value}:{rows:JSON.parse(area.value)}),name:file.files[0]?.name||name.value});d.close();}));}
   function queryEditor(){const {d,body}=dialog('SQL / read-only'),alias=input('analytics'),ds=input('query-result'),sql=textarea('SELECT * FROM your_table LIMIT 100'),params=textarea('{}');body.append(el('p','muted','Only explicitly configured SQLite aliases are executable. No query runs on preview or chart switching.'),field('Connection alias',alias),field('Dataset ID',ds),field('SQL',sql),field('Parameters',params),button('\u6267\u884c\u53ea\u8bfb\u67e5\u8be2',async()=>{if(!confirm('Execute this read-only query and save a new snapshot?'))return;await mutate('query_execute',{connection:alias.value,datasetId:ds.value,sql:sql.value,parameters:JSON.parse(params.value)});d.close();}));}
   function exportDialog(){const {body}=dialog(T.export);body.append(button('JSON artifact',()=>download(doc.id+'.json',JSON.stringify(doc,null,2))));if(boot.exportFile)body.append(button('Self-contained HTML',()=>boot.exportFile(doc.id)));body.append(button('Version history',async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id});body.append(el('pre','code',JSON.stringify(result,null,2)));}));}
   window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!layoutTimer&&!busy)render();});
   if(boot.mode==='web')setInterval(async()=>{if(!doc||busy||layoutTimer||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision){doc=current;undo=[];redo=[];render();}}catch(e){showError(e);}},5000);
+  window.addEventListener('charts-error',event=>showError(event.detail));
   render();
 }

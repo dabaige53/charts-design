@@ -22,7 +22,7 @@ def test_editor_preview_switch_layout_and_inspect(tmp_path):
             errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_address[1]}/?board=demo#browser-test-token')
             page.wait_for_selector('[data-component-id="trend"] canvas')
-            assert page.locator('.kpi').first.inner_text()=='484 10k CNY'
+            assert page.locator('[data-component-id=total] .text-2xl').first.inner_text()=='484 10k CNY'
             page.get_by_label('Chart type').first.select_option('bar')
             page.wait_for_function("document.querySelector('#notice').textContent.includes('v2')")
             assert service.store.get('demo')['manifest']['components']['trend']['chartType']=='bar'
@@ -36,7 +36,7 @@ def test_editor_preview_switch_layout_and_inspect(tmp_path):
             page.get_by_role('button',name='\u64a4\u9500',exact=True).click()
             page.wait_for_function("document.querySelector('#notice').textContent.includes('v5')")
             assert service.store.get('demo')['manifest']['layout']['desktop']==before
-            page.locator('[data-component-id="load"]').get_by_role('button',name='i',exact=True).click()
+            page.locator('[data-component-id="load"]').get_by_role('button',name='SQL / \u8bed\u4e49',exact=True).click()
             page.wait_for_selector('dialog[open]')
             assert 'denominator' in page.locator('dialog').inner_text()
             page.get_by_role('button',name='\u67e5\u8be2\u6765\u6e90',exact=True).click()
