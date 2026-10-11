@@ -2,6 +2,7 @@ import {reportMarkdown,renderReport} from './report.mjs';
 import {icon,iconButton,openMenu,adaptiveActions} from './icons.mjs';
 import {initializeOriginal,mountOriginal,catalog} from './original.mjs';
 import {visibleRows,csv,chartTypes} from './engine.mjs';
+import {mountStatisticalImage,updateStatisticalArtifacts} from './statistical.mjs';
 const T={edit:'编辑',view:'阅读',add:'添加组件',import:'导入数据',undo:'撤销',redo:'重做',reload:'重新读取',export:'导出',close:'关闭',save:'保存',data:'数据',semantic:'指标语义',settings:'图表设置',source:'查询来源',remove:'删除',copy:'复制',empty:'导入数据，或通过 CLI / MCP 添加组件。'};
 const el=(tag,cls='',text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 const button=(label,fn,cls='')=>{const b=el('button',cls,label);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
@@ -28,17 +29,18 @@ export async function start({echarts,GridStack,App}){
   const boot=window.__DASHBOARD_BOOT__||{},root=el('div','workspace');document.body.append(root);
   const top=el('header','topbar'),brand=el('div','brand','CHARTS / WORKSPACE'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
   notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');const heading=el('div','dashboard-heading'),hidden=el('div');hidden.hidden=true;heading.append(brand,title,notice);top.append(heading,toolbar);hidden.append(filters);canvas.append(gridEl);root.append(top,hidden,canvas);toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Dashboard actions');
-  let doc=null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,app=null;
+  let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,app=null;
   let lastBreakpoint=null,transport,originalInstances=[],disposeToolbar=null,disposeReport=null;
+  let statisticalArtifacts=updateStatisticalArtifacts(Object.create(null),boot),renderedStatisticalArtifacts=null;
   const reportDrafts=new Map();
   const currentDraft=()=>{let draft=reportDrafts.get(doc.id);if(!draft){draft={text:reportMarkdown(doc),saved:reportMarkdown(doc),dirty:false,revision:doc.revision};reportDrafts.set(doc.id,draft);}return draft;};
   const bp=()=>window.innerWidth<650?'mobile':window.innerWidth<1050?'tablet':'desktop';
   const status=text=>{notice.textContent=text;notice.className='notice';};
-  const accept=result=>{if(result?.error)throw Error(result.error.message);if(result?.isError)throw Error(result.content?.[0]?.text||'Tool failed');return result;};
+  const accept=result=>{if(result?.error)throw Error(result.error.message);if(result?.isError)throw Error(result.content?.[0]?.text||'Tool failed');statisticalArtifacts=updateStatisticalArtifacts(statisticalArtifacts,result);return result;};
   const unpack=result=>accept(result.structuredContent || (result.content?.[0]?.text?JSON.parse(result.content[0].text):result));
   if(boot.mode==='mcp'){
     app=new App({name:'Charts Design Dashboard',version:'0.4.0'},{},{autoResize:true});
-    app.ontoolresult=result=>{try{const value=unpack(result);if(value.document){doc=value.document;render();}}catch(e){showError(e);}};
+    app.ontoolresult=result=>{try{const previous=statisticalArtifacts,value=unpack(result);if(value.document)doc=value.document;if(value.document||previous!==statisticalArtifacts)render();}catch(e){showError(e);}};
     transport=async(name,args)=>unpack(await app.callServerTool({name,arguments:args}));await app.connect();
   }else if(boot.mode==='offline'){
     doc=boot.document;transport=async()=>{throw Error('Offline snapshot: use Export JSON and import it through CLI to persist server-side changes.');};editing=false;
@@ -66,6 +68,7 @@ export async function start({echarts,GridStack,App}){
   function statusLine(){status(`${doc.snapshot.status==='fixture'?'示例数据 / ':''}${boot.mode==='offline'?'离线快照 / ':''}v${doc.revision} / ${doc.snapshot.updatedAt}`);}
   function render(){
     if(!doc){status('Create a dashboard with CLI / MCP, then reload this page.');return;}
+    renderedStatisticalArtifacts=statisticalArtifacts;
     root.classList.toggle('paper-reading',doc.manifest.viewMode==='report'&&!editing);document.documentElement.dataset.theme=doc.manifest.theme;document.title=doc.manifest.title;title.value=doc.manifest.title;title.disabled=!editing;
     disposeToolbar?.();toolbar.replaceChildren();
     const oldSwitch=heading.querySelector('.view-switch');oldSwitch?.remove();const modes=el('nav','view-switch');modes.setAttribute('aria-label','呈现模式');for(const [mode,label,glyph] of [['dashboard','仪表盘','catalog'],['report','分析报告','semantic']]){const b=button(label,()=>switchMode(mode));b.prepend(icon(glyph));b.setAttribute('aria-pressed',String((doc.manifest.viewMode||'dashboard')===mode));modes.append(b);}heading.append(modes);
@@ -105,6 +108,11 @@ export async function start({echarts,GridStack,App}){
     const c=doc.manifest.components[id];
     try{
         if(c.kind==='text'){card.classList.add('text-card');const h=el('div','text-card-header'),text=el('div','text-card-heading'),actions=el('div','text-card-actions');text.append(el('h2','text-heading',c.title));if(c.subtitle)text.append(el('p','component-description',c.subtitle));if(editing)actions.append(iconButton('edit',T.edit,()=>componentEditor(id)));h.append(text,actions);card.append(h,el('div','text-block',c.text));}
+        else if(c.kind==='statistical'){
+          card.classList.add('statistical-card');
+          if(!quiet){const header=el('div','card-header'),actions=el('div','card-actions');header.append(el('h2','',c.title));actions.append(iconButton('semantic','SQL / 语义',()=>inspect(id)));if(editing)actions.append(iconButton('edit',T.edit,()=>componentEditor(id)));header.append(actions);card.append(header);}
+          mountStatisticalImage(card,c,statisticalArtifacts[id]);
+        }
         else originalInstances.push(mountOriginal(card,{doc,id,editing:quiet?false:editing,readOnly:quiet||boot.mode==='offline',onInspect:inspect,onEdit:componentEditor,onBinding:bindingEditor,onType:(id,chartType)=>patch([{op:'set_chart',id,chartType}]).catch(showError),
           onPresentation:(id,changes)=>{const old=doc.manifest.components[id],base=old.kind==='legacy'?old.config:old.presentation||{};
             if(Object.keys(changes).some(k=>JSON.stringify(base[k])!==JSON.stringify(changes[k]))){const value=old.kind==='legacy'?{...old,config:{...base,...changes}}:{...old,presentation:{...base,...changes}};return mutate('dashboard_patch',{operations:[{op:'put_component',id,value}]},true,false).catch(showError);}}
@@ -124,6 +132,12 @@ export async function start({echarts,GridStack,App}){
   }
   function jsonEditor(name,value,save){const {d,body}=dialog(name),area=textarea(value);body.append(area,button(T.save,async()=>{await save(JSON.parse(area.value));d.close();}));}
   function componentEditor(id){
+    const statistical=id?doc.manifest.components[id]:null;
+    if(statistical?.kind==='statistical'){
+      const {d,body}=dialog(T.settings+' / statistical'),area=textarea(statistical);area.setAttribute('aria-label','Statistical component JSON');
+      body.append(el('p','muted','编辑统计图声明。图片由服务端生成；plot 和 analysis 会随声明一并保存。'),area,button(T.save,async()=>{const value=JSON.parse(area.value);if(!value||Array.isArray(value)||value.kind!=='statistical')throw Error('请保留 kind: statistical；此编辑器仅保存统计图声明。');await patch([{op:'put_component',id,value}]);d.close();}),button(T.copy,async()=>{await patch([{op:'put_component',id:id+'-'+Date.now().toString(36),value:structuredClone(statistical)}]);d.close();}),button(T.remove,async()=>{if(!confirm('Remove this component?'))return;await patch([{op:'remove_component',id}]);d.close();},'danger'));
+      return;
+    }
     const old=id?doc.manifest.components[id]:null,{d,body}=dialog(old?T.settings:T.add),key=input(id||'card-'+Date.now().toString(36)),kind=select(['chart','kpi','table','text','legacy'].map(v=>[v,v]),old?.kind||'chart'),name=input(old?.title||'New chart'),subtitle=input(old?.subtitle||old?.config?.subtitle||'');key.disabled=!!id;
     const datasets=Object.keys(doc.manifest.datasets),ds=select(datasets.map(v=>[v,v]),old?.datasetId),mapping=el('div');
     let x,group,measures,type,text,config,family,presentation;
@@ -144,7 +158,7 @@ export async function start({echarts,GridStack,App}){
     async function display(tab){content.replaceChildren();
       if(tab==='data'){let rows=visibleRows(doc,id);if(c.kind==='legacy'&&!c.binding){const instance=originalInstances.find(i=>i.app.config.charts.some(ch=>ch.instanceId==='original-'+id));if(c.family==='table')rows=c.config.rows;else if(instance){const ch=instance.app.config.charts[0],data=ch.resolvedTable?.();if(data)rows=data.rows.map(r=>Object.fromEntries(data.headers.map((h,i)=>[h,r[i]])));}else rows=[{value:c.config.value,unit:c.config.unit||''}];}content.append(el('p','muted',`Snapshot: ${rows.length} rows`),table(rows));}
       if(tab==='source'){const result=boot.mode==='offline'?{source:doc.manifest.sources[doc.manifest.datasets[c.datasetId]?.sourceId||c.sourceId]}:await transport('query_inspect',{dashboardId:doc.id,componentId:id});content.append(el('pre','code',JSON.stringify(result,null,2)));}
-      if(tab==='semantic'){for(const mid of c.measures||[]){const metric=doc.manifest.metrics[mid];content.append(el('h3','',metric.label),el('pre','code',JSON.stringify(metric,null,2)));if(editing)content.append(button(T.edit,()=>jsonEditor(mid,metric,value=>patch([{op:'put_metric',id:mid,value}]))));}if(!c.measures?.length)content.append(el('p','muted','原版组件快照：展示说明与已认证指标是两件事。'),el('pre','code',JSON.stringify(c.config?.explanation||c.config?.presentation||c.config||{},null,2)));}
+      if(tab==='semantic'){if(c.kind==='statistical'){content.append(el('h3','','统计分析口径'),el('pre','code',JSON.stringify({plot:c.plot,analysis:c.analysis},null,2)));return;}for(const mid of c.measures||[]){const metric=doc.manifest.metrics[mid];content.append(el('h3','',metric.label),el('pre','code',JSON.stringify(metric,null,2)));if(editing)content.append(button(T.edit,()=>jsonEditor(mid,metric,value=>patch([{op:'put_metric',id:mid,value}]))));}if(!c.measures?.length)content.append(el('p','muted','原版组件快照：展示说明与已认证指标是两件事。'),el('pre','code',JSON.stringify(c.config?.explanation||c.config?.presentation||c.config||{},null,2)));}
       if(tab==='settings')content.append(button(T.settings,()=>componentEditor(id)),el('pre','code',JSON.stringify(c,null,2)));
     }
     for(const tab of ['data','source','semantic','settings'])tabs.append(button(T[tab],()=>display(tab)));await display('semantic');
@@ -169,7 +183,7 @@ export async function start({echarts,GridStack,App}){
   function queryEditor(){const {d,body}=dialog('SQL / read-only'),alias=input('analytics'),ds=input('query-result'),sql=textarea('SELECT * FROM your_table LIMIT 100'),params=textarea('{}');body.append(el('p','muted','Only explicitly configured SQLite aliases are executable. No query runs on preview or chart switching.'),field('Connection alias',alias),field('Dataset ID',ds),field('SQL',sql),field('Parameters',params),button('执行只读查询',async()=>{if(!confirm('Execute this read-only query and save a new snapshot?'))return;await mutate('query_execute',{connection:alias.value,datasetId:ds.value,sql:sql.value,parameters:JSON.parse(params.value)});d.close();}));}
   function exportDialog(){const {body}=dialog(T.export);body.append(button('JSON artifact',()=>download(doc.id+'.json',JSON.stringify(doc,null,2))));if(boot.exportFile)body.append(button('Self-contained HTML',()=>boot.exportFile(doc.id)));if(boot.mode!=='offline')body.append(button('Version history',async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id});body.append(el('pre','code',JSON.stringify(result,null,2)));}));}
   window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!layoutTimer&&!busy)render();});
-  if(boot.mode==='web')setInterval(async()=>{if(!doc||busy||layoutTimer||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision){doc=current;undo=[];redo=[];render();}}catch(e){showError(e);}},5000);
+  if(boot.mode==='web')setInterval(async()=>{if(!doc||busy||layoutTimer||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision||renderedStatisticalArtifacts!==statisticalArtifacts){if(current.revision!==doc.revision){undo=[];redo=[];}doc=current;render();}}catch(e){showError(e);}},5000);
   window.addEventListener('beforeunload',event=>{if(doc&&reportDrafts.get(doc.id)?.dirty){event.preventDefault();event.returnValue='';}});
   window.addEventListener('charts-error',event=>showError(event.detail));render();
 }

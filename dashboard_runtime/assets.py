@@ -13,7 +13,8 @@ def render_html(mode='web', document=None, legacy=None):
         raise DashboardError('ASSETS_NOT_BUILT', 'Build the UI first: npm --prefix runtime-ui install && npm --prefix runtime-ui run build', 503)
     if document is not None:
         validate(document)
-    boot = {'mode': mode, 'document': document, 'legacy': legacy or {}}
+    from .statistical import statistical_artifacts
+    boot = {'statisticalArtifacts': statistical_artifacts(document) if document else {}, 'mode': mode, 'document': document, 'legacy': legacy or {}}
     payload = json.dumps(boot, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     javascript = js.read_text().replace('</script', '<\\/script')
     styles = css.read_text().replace('</style', '<\\/style')

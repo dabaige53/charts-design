@@ -40,3 +40,7 @@ Use standard Markdown named notes for metric definitions, provenance or key qual
 - Re-read after a revision conflict rather than blindly retrying. Changing filters/data does not rewrite narrative: recompute and review claims explicitly.
 
 Dashboard layouts and report source coexist. Route dashboard-first requests to `../executive-charts/SKILL.md`; retain their examples and interactive controls.
+
+## Optional Seaborn statistical figures
+
+For distributions and raw-observation comparisons, read the statistical section of `charts://declarations`. With `.[statistics]` installed, declare `kind=statistical` with histogram, boxplot or regression `plot`, typed dataset, and explicit `analysis.definition`/`unit`. These do not consume aggregated metrics. Use the same Markdown chart fences; previews and offline HTML embed static SVG with source, grain and missing-row captions. `statistical_render` also returns PNG. Do not add an internal chart title in the paper. No interactive filter targets, confidence-interval claims or causal interpretation; see `docs/seaborn-backend.md`.
