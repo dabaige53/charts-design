@@ -36,6 +36,9 @@ def export_component(document, component_id):
     component = m['components'][component_id]
     m['components'] = {component_id: component}
     m['title'] = component['title'] or m['title']
+    # A standalone component has no enclosing report or other narrative blocks.
+    m['viewMode'] = 'dashboard'
+    m.pop('report', None)
     metric_ids = set(component.get('measures', []))
     m['metrics'] = {k: v for k, v in m['metrics'].items() if k in metric_ids}
     dataset_ids = {component.get('datasetId')} | {v['datasetId'] for v in m['metrics'].values()}

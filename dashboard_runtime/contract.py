@@ -2,17 +2,21 @@
 from .service import TOOLS
 CONTRACT = {
     'schemaVersion': 2,
+    'declarationsResource': 'charts://declarations',
     'tools': {key: {'description': value[0], 'inputSchema': value[1]} for key, value in TOOLS.items()},
     'operations': {
         'put_source': {'id': 'source id', 'value': {'kind': 'file|query|fixture|declared', 'name': 'source description'}},
         'put_dataset': {'id': 'dataset id', 'meta': {'fields': {'field': {'type': 'string|number|date|boolean', 'label': 'Display name'}}, 'sourceId': 'source id'}, 'rows': [{'field': 'value'}]},
         'put_metric': {'id': 'metric id', 'value': {'datasetId': 'dataset id', 'field': 'numeric field', 'aggregation': 'sum|avg|min|max|count|ratio', 'label': 'Name', 'unit': '', 'definition': 'Business definition', 'status': 'unverified|reviewed'}},
-        'put_component': {'id': 'component id', 'value': {'kind': 'chart|kpi|table|text|legacy', 'title': 'Title', 'datasetId': 'dataset id', 'x': 'category field', 'measures': ['metric id'], 'chartType': 'bar|line|area|pie|scatter|heatmap|funnel|waterfall'}},
+        'put_component': {'id': 'component id', 'value': {'kind': 'chart|kpi|table|text|legacy', 'title': 'Title', 'datasetId': 'dataset id', 'x': 'category field (numeric for scatter)', 'series': 'optional dataset grouping field; required for heatmap; omit for pie/funnel/waterfall', 'measures': ['metric id'], 'chartType': 'bar|line|area|pie|scatter|heatmap|funnel|waterfall', 'family': 'legacy only: chart|kpi|table', 'config': {'code': 'legacy chart code (for example c01)', 'type': 'legacy KPI type (mc01-mc09)', 'data': 'explicit chart data object', 'presentation': 'complete per-code chart presentation', 'label': 'KPI label', 'value': 'explicit KPI value (mc06 also supports leftVal/rightVal)', 'columns': 'table columns with unique keys', 'rows': 'explicit table rows'}, 'sourceId': 'optional legacy provenance source id', 'binding': 'optional explicit legacy dataset/metric binding; required for filters'}},
         'remove_component': {'id': 'component id'},
         'set_chart': {'id': 'component id', 'chartType': 'compatible chart type'},
         'set_layout': {'breakpoint': 'desktop|tablet|mobile', 'value': [{'id': 'component id', 'x': 0, 'y': 0, 'w': 6, 'h': 6}]},
         'set_filters': {'value': [{'id': 'region', 'field': 'region', 'op': 'in|range', 'values': [], 'componentIds': ['component id']}]},
         'set_title': {'value': 'Dashboard title'}, 'set_theme': {'value': 'light|dark'},
+        'set_view_mode': {'value': 'dashboard|report'},
+        'set_report_markdown': {'value': 'Markdown source (0-200000 characters); chart fences require componentId and allow optional caption (string, 0-500 characters) and source (string, 0-1000 characters)'},
+        'set_report': {'value': {'subtitle': 'Report subtitle (0-1000 characters)', 'blocks': [{'id': 'unique block id', 'componentId': 'existing component id'}]}},
         'set_status': {'value': 'ready|partial|blocked|fixture'}
     },
     'rules': [
@@ -24,8 +28,21 @@ CONTRACT = {
         'format=percent requires scale=fraction. Raw 0.98 displays as 98%.',
         'Waterfall requires metric semantic=delta and aggregation=sum.',
         'All breakpoints must place each component exactly once; placement is automatically added for new components.',
+        'manifest.viewMode is optional and defaults to dashboard; report mode does not change dashboard layouts.',
+        'manifest.report.markdown is canonical source (0-200000 characters). Ordinary Markdown prose and chart fences determine the report, independently of dashboard layouts.',
+        'A top-level fenced code block with exact info string chart must contain one JSON object with required componentId and optional plain-string caption (0-500 characters) and source (0-1000 characters). The ID must resolve to an existing non-text chart, KPI, table or original component after the atomic batch. Existing componentId-only fences and repeated references are allowed.',
+        'Figures are numbered in source order by the report renderer. Standard Markdown links such as [图](#fig-trend) refer to the first figure for component trend and display its figure number. No separate figureId is stored.',
+        'Chart fences accept backticks or tildes, at least three characters, with up to three leading spaces; the closing fence uses the same character and at least the opening length. Unclosed chart fences, invalid JSON, duplicate JSON keys, unknown fields and missing/text references cannot be persisted. Other code blocks are inert text.',
+        'set_report_markdown replaces canonical source without changing view mode, components, data or dashboard layouts. Existing legacy subtitle/blocks are retained as inert history.',
+        'set_view_mode=report initializes missing Markdown from the title, legacy subtitle/blocks or desktop reading order (y, then x), escaping legacy plain text. Existing Markdown survives view switching.',
+        'Legacy set_report still replaces report metadata; old subtitle (0-1000 characters) and blocks (at most 100 unique block IDs and component references) remain supported when Markdown is absent. IDs use the existing 1-80 character rules.',
+        'New components never append to canonical Markdown. remove_component rejects deletion while a chart fence still refers to the component; first remove that fence with set_report_markdown. Legacy-only block reports retain their old append/delete behavior.',
         'CLI writes to files; MCP never accepts arbitrary filesystem paths.',
-        'Legacy chart configs require explicit data and presentation from the existing catalog.',
+        'Native charts require kind, title, datasetId, x, measures and chartType; series is a dataset field name rather than an ECharts array. Heatmap additionally requires series; pie, funnel and waterfall forbid series grouping.',
+        'Legacy put_component uses kind=legacy plus explicit family and config: chart uses code/data/presentation, KPI uses type/label/explicit values (mc03 needs sparkData or sparkline), table uses columns/rows. These fields are conditional, not required together.',
+        'charts://declarations provides required-field schemas, eight native working examples and original family/code requirements with authoritative validator sources and coverage limits.',
+        'The original discovery catalog contains 45 entries including KPI and table entries, while its installed validator registry has 40 chart codes and 9 KPI types. Do not use every catalog entry as a chart code.',
+        'Legacy chart configs require explicit data and presentation from the registered schema. Per-code discovery metadata is partial guidance, not a complete JSON Schema.',
         'Source verification supplied is not proof of execution or certification.'
     ]
 }

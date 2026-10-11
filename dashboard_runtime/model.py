@@ -10,10 +10,16 @@ from typing import Any
 MAX_BYTES = 16 * 1024 * 1024
 MAX_ROWS = 20_000
 MAX_COMPONENTS = 100
+MAX_REPORT_BLOCKS = 100
+MAX_REPORT_SUBTITLE = 1000
+MAX_REPORT_MARKDOWN = 200_000
+MAX_REPORT_CAPTION = 500
+MAX_REPORT_SOURCE = 1000
 ID = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]{0,79}$')
 TYPES = ('bar', 'line', 'area', 'pie', 'scatter', 'heatmap', 'funnel', 'waterfall')
 COLS = {'desktop': 12, 'tablet': 8, 'mobile': 4}
 AGGREGATES = ('sum', 'avg', 'min', 'max', 'count', 'ratio')
+VIEW_MODES = ('dashboard', 'report')
 
 class DashboardError(ValueError):
     def __init__(self, code: str, message: str, status: int = 400):
@@ -54,6 +60,163 @@ def field(meta, key, numeric=False):
     if numeric:
         require(meta['fields'][key]['type'] == 'number', f'Numeric field required: {key}')
 
+def report_chart_references(markdown, components=None):
+    """Read top-level chart fences as bounded data, never as executable code.
+
+    Ordinary fenced code is skipped, including chart-looking examples nested in it.
+    Both Markdown fence characters are accepted with 0-3 leading spaces. A chart
+    block uses the exact, case-sensitive info string ``chart`` and must close.
+    """
+    require(isinstance(markdown, str) and len(markdown) <= MAX_REPORT_MARKDOWN,
+            f'Report markdown must contain 0-{MAX_REPORT_MARKDOWN} characters')
+    references = []
+    opened, body, chart, start_line, containers = None, [], False, 0, []
+    for line_number, original_line in enumerate(markdown.splitlines(), 1):
+        # Expanding indentation tabs follows Markdown's four-column tab stops.
+        line = original_line.expandtabs(4)
+        candidate = line
+        if opened is not None and containers:
+            for prefix in containers:
+                match = re.match(prefix, candidate)
+                if match is None:
+                    # Leaving a quote/list also ends its ordinary fenced code.
+                    opened, body, chart, containers = None, [], False, []
+                    break
+                candidate = candidate[match.end():]
+        if opened is not None:
+            closed = re.fullmatch(r' {0,3}' + re.escape(opened[0]) +
+                                  r'{' + str(len(opened)) + r',}[ \t]*', candidate)
+            if not closed:
+                if chart:
+                    body.append(original_line)
+                continue
+            if chart:
+                try:
+                    def unique_keys(pairs):
+                        result = {}
+                        for key, value in pairs:
+                            if key in result:
+                                raise ValueError('Duplicate JSON key')
+                            result[key] = value
+                        return result
+                    value = json.loads('\n'.join(body), object_pairs_hook=unique_keys)
+                except (ValueError, RecursionError) as exc:
+                    raise DashboardError('INVALID_DOCUMENT',
+                        f'Chart fence at line {start_line}: invalid JSON; use {{"componentId":"trend"}}') from exc
+                require(isinstance(value, dict) and 'componentId' in value and
+                        set(value) <= {'componentId', 'caption', 'source'},
+                        f'Chart fence at line {start_line} requires componentId and permits only optional caption/source')
+                target = identifier(value['componentId'], 'chart fence componentId')
+                for name, limit in (('caption', MAX_REPORT_CAPTION), ('source', MAX_REPORT_SOURCE)):
+                    if name in value:
+                        require(isinstance(value[name], str) and len(value[name]) <= limit,
+                                f'Chart fence at line {start_line}: {name} must contain 0-{limit} characters')
+                if components is not None:
+                    require(target in components,
+                            f'Chart fence refers to missing component "{target}"; insert an existing component ID')
+                    require(components[target].get('kind') != 'text',
+                            f'Chart fence "{target}" must reference a non-text component; write narrative in Markdown')
+                references.append(target)
+            opened, body, chart, containers = None, [], False, []
+            continue
+        # Recognize explicit containers so examples inside their ordinary code
+        # fences stay inert, while real nested chart fences get useful feedback.
+        candidate, prefixes = line, []
+        while True:
+            quote = re.match(r' {0,3}> ?', candidate)
+            item = re.match(r'( {0,3})([-+*]|[0-9]{1,9}[.)])( +)', candidate)
+            if quote:
+                prefixes.append(r' {0,3}> ?')
+                candidate = candidate[quote.end():]
+            elif item:
+                padding = len(item[3]) if len(item[3]) <= 4 else 1
+                width = len(item[1]) + len(item[2]) + padding
+                prefixes.append(r' {' + str(width) + '}')
+                candidate = candidate[width:]
+            else:
+                break
+        match = re.fullmatch(r' {0,3}(`{3,}|~{3,})(.*)', candidate)
+        if match and not (match[1][0] == '`' and '`' in match[2]):
+            opened, chart, start_line = match[1], match[2].strip() == 'chart', line_number
+            require(not chart or not prefixes,
+                    f'Chart fence at line {line_number} must be top-level; move it outside the list or blockquote')
+            containers = prefixes
+    require(opened is None or not chart,
+            f'Chart fence at line {start_line} is not closed; add its closing fence before saving')
+    return references
+
+
+def validate_report(report, components=None):
+    """Markdown is canonical when present; legacy metadata remains readable."""
+    require(isinstance(report, dict), 'manifest.report must be an object')
+    canonical = 'markdown' in report
+    if canonical:
+        report_chart_references(report['markdown'], components)
+    if canonical and 'subtitle' not in report and 'blocks' not in report:
+        return
+    require(isinstance(report.get('subtitle'), str) and len(report['subtitle']) <= MAX_REPORT_SUBTITLE,
+            f'Report subtitle must contain 0-{MAX_REPORT_SUBTITLE} characters')
+    blocks = report.get('blocks')
+    require(isinstance(blocks, list) and len(blocks) <= MAX_REPORT_BLOCKS,
+            f'Report blocks must be an array of at most {MAX_REPORT_BLOCKS} items')
+    ids, references = set(), set()
+    for block in blocks:
+        require(isinstance(block, dict), 'Report block must be an object')
+        key = identifier(block.get('id'), 'report block id')
+        target = identifier(block.get('componentId'), 'report component id')
+        require(key not in ids, 'Duplicate report block id')
+        require(target not in references, 'Duplicate report component reference')
+        # Once migrated, historical blocks no longer control rendering or deletion.
+        if components is not None and not canonical:
+            require(target in components, 'Report refers to a missing component')
+        ids.add(key)
+        references.add(target)
+
+
+def report_markdown(manifest):
+    """Return canonical source, or safely migrate legacy display without mutation."""
+    report = manifest.get('report', {})
+    if 'markdown' in report:
+        return report['markdown']
+
+    def literal(value):
+        # Preserve the old plain-text semantics: no injected Markdown or raw HTML.
+        return re.sub(r'([!"#$%&\'()*+,\-./:;<=>?@\[\]\\^_`{|}~])', r'\\\1', value)
+
+    parts = ['# ' + literal(' '.join(manifest['title'].splitlines()))]
+    if report.get('subtitle'):
+        parts.append(literal(report['subtitle']))
+    blocks = report.get('blocks')
+    if blocks is None:
+        blocks = [{'componentId': p['id']} for p in sorted(
+            manifest['layout']['desktop'], key=lambda p: (p['y'], p['x']))]
+    for block in blocks:
+        key = block['componentId']
+        component = manifest['components'][key]
+        if component['kind'] == 'text':
+            if component['title']:
+                parts.append('## ' + literal(' '.join(component['title'].splitlines())))
+            if isinstance(component.get('subtitle'), str) and component['subtitle']:
+                parts.append(literal(component['subtitle']))
+            if component['text']:
+                parts.append(literal(component['text']))
+        else:
+            parts.append('```chart\n' + json.dumps({'componentId': key}, separators=(',', ':')) + '\n```')
+    return '\n\n'.join(parts) + '\n'
+
+
+def append_report_component(report, key):
+    """Use readable bounded IDs, including when a custom block already owns the ID."""
+    if any(block['componentId'] == key for block in report['blocks']):
+        return
+    ids = {block['id'] for block in report['blocks']}
+    block_id, suffix = key, 2
+    while block_id in ids:
+        ending = f'-{suffix}'
+        block_id = key[:80 - len(ending)] + ending
+        suffix += 1
+    report['blocks'].append({'id': block_id, 'componentId': key})
+
 def compatibility(doc, component, chart_type):
     """Return an actionable reason instead of silently inventing missing fields."""
     if chart_type not in TYPES:
@@ -91,6 +254,7 @@ def validate(doc):
     require(isinstance(m, dict) and isinstance(s, dict), 'manifest and snapshot are required')
     require(isinstance(m.get('title'), str) and 0 < len(m['title']) <= 240, 'Title must contain 1-240 characters')
     require(m.get('theme') in ('light', 'dark'), 'Unknown theme')
+    require(m.get('viewMode', 'dashboard') in VIEW_MODES, 'Unknown view mode')
     for name in ('components', 'datasets', 'metrics', 'sources', 'layout'):
         require(isinstance(m.get(name), dict), f'manifest.{name} must be an object')
     require(isinstance(s.get('datasets'), dict), 'snapshot.datasets must be an object')
@@ -188,6 +352,8 @@ def validate(doc):
             else:
                 problem = compatibility(doc, c, c.get('chartType'))
                 require(problem is None, f'{key}: {problem}', 'INCOMPATIBLE_CHART')
+    if 'report' in m:
+        validate_report(m['report'], m['components'])
     require(isinstance(m.get('filters'), list) and len(m['filters']) <= 30, 'Invalid filters')
     seen = set()
     for f in m['filters']:
@@ -234,6 +400,7 @@ def apply_operations(doc, operations):
     require(isinstance(operations, list) and 0 < len(operations) <= 200, 'Expected 1-200 operations')
     result = copy.deepcopy(doc)
     m, s = result['manifest'], result['snapshot']
+    initialize_report = False
     for op in operations:
         require(isinstance(op, dict), 'Operation must be an object')
         kind = op.get('op')
@@ -243,6 +410,8 @@ def apply_operations(doc, operations):
             require(isinstance(op.get('value'), dict), 'Operation value must be an object')
             if kind == 'put_component' and key not in m['components']:
                 place_new(m, key)
+                if 'report' in m and 'markdown' not in m['report']:
+                    append_report_component(m['report'], key)
             m[collection][key] = copy.deepcopy(op['value'])
             if kind == 'put_component' and m[collection][key].get('binding'):
                 binding = m[collection][key]['binding']
@@ -258,12 +427,18 @@ def apply_operations(doc, operations):
         elif kind == 'remove_component':
             key = op.get('id')
             require(key in m['components'], 'Component does not exist')
+            if 'markdown' in m.get('report', {}):
+                require(key not in report_chart_references(m['report']['markdown']),
+                        f'Component "{key}" is referenced in report Markdown; remove its chart fence before deleting it',
+                        'REPORT_COMPONENT_REFERENCED')
             del m['components'][key]
             for bp in COLS:
                 m['layout'][bp] = [p for p in m['layout'][bp] if p['id'] != key]
             for f in m['filters']:
                 f['componentIds'] = [x for x in f['componentIds'] if x != key]
             m['filters'] = [f for f in m['filters'] if f['componentIds']]
+            if 'report' in m and 'markdown' not in m['report']:
+                m['report']['blocks'] = [b for b in m['report']['blocks'] if b['componentId'] != key]
         elif kind == 'set_chart':
             key = op.get('id')
             require(key in m['components'] and m['components'][key]['kind'] == 'chart', 'Chart not found')
@@ -274,10 +449,31 @@ def apply_operations(doc, operations):
             m['layout'][bp] = copy.deepcopy(op.get('value'))
         elif kind in ('set_title', 'set_theme', 'set_filters'):
             m[kind[4:]] = copy.deepcopy(op.get('value'))
+        elif kind == 'set_view_mode':
+            value = op.get('value')
+            require(value in VIEW_MODES, 'Unknown view mode')
+            m['viewMode'] = value
+            if value == 'report' and 'markdown' not in m.get('report', {}):
+                initialize_report = True
+        elif kind == 'set_report_markdown':
+            markdown = copy.deepcopy(op.get('value'))
+            # Component references may be created later in this atomic batch.
+            report_chart_references(markdown)
+            m.setdefault('report', {})['markdown'] = markdown
+        elif kind == 'set_report':
+            report = copy.deepcopy(op.get('value'))
+            # References may be created by later operations in this atomic batch.
+            validate_report(report)
+            m['report'] = report
         elif kind == 'set_status':
             s['status'] = op.get('value')
         else:
             raise DashboardError('UNKNOWN_OPERATION', f'Unsupported operation: {kind}')
+    if initialize_report and 'markdown' not in m.get('report', {}):
+        if 'report' in m:
+            validate_report(m['report'], m['components'])
+        markdown = report_markdown(m)
+        m.setdefault('report', {})['markdown'] = markdown
     return validate(result)
 
 def inferred_fields(rows):

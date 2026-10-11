@@ -12,7 +12,8 @@
     "runtime:build": "npm --prefix runtime-ui install && npm --prefix runtime-ui run build",
     "runtime:test": "python3 -m pytest tests/runtime -q && node --test tests/runtime/engine.test.mjs",
     "runtime:serve": "python3 -m dashboard_runtime serve",
-    "runtime:mcp": "python3 -m dashboard_runtime mcp"
+    "runtime:mcp": "python3 -m dashboard_runtime mcp",
+    "prepack": "npm --prefix runtime-ui run build"
   },
   "files": [
     "bin/",
@@ -22,13 +23,22 @@
     "skills/executive-charts/scripts/runtime_inspector.spec.js",
     "skills/executive-charts/scripts/core/*.py",
     "skills/executive-charts/scripts/README.md",
-    "dashboard_runtime/",
     "runtime-ui/*.mjs",
     "runtime-ui/package.json",
     "docs/dashboard-runtime.md",
     "pyproject.toml",
     "mcp.json",
-    "README.md"
+    "README.md",
+    "skills/analytical-reports/",
+    "skills/executive-charts/examples/",
+    "docs/generation-tracks.md",
+    "dashboard_runtime/web/dist/app.js",
+    "dashboard_runtime/web/dist/app.css",
+    "dashboard_runtime/*.py",
+    "dashboard_runtime/web/*.mjs",
+    "dashboard_runtime/web/*.css",
+    "dashboard_runtime/web/.npmignore",
+    "dashboard_runtime/examples/*.md"
   ],
   "keywords": [
     "mckinsey",

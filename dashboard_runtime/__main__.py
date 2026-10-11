@@ -13,7 +13,8 @@ def parser():
     p.add_argument('--root', default='.charts-runtime', help='Persistent dashboard store (shared by all transports)')
     p.add_argument('--sources', help='Operator-owned read-only source aliases JSON')
     sub = p.add_subparsers(dest='command', required=True)
-    init = sub.add_parser('init'); init.add_argument('id'); init.add_argument('--title', default='Dashboard'); init.add_argument('--demo', action='store_true')
+    init = sub.add_parser('init'); init.add_argument('id'); init.add_argument('--title'); init.add_argument('--demo', action='store_true')
+    init.add_argument('--mode', choices=['dashboard', 'report'], default='dashboard', help='Initial view; report provides a Markdown document with inline chart fences')
     sub.add_parser('list')
     for name in ('get','validate','history'):
         sub.add_parser(name).add_argument('id')
@@ -36,8 +37,16 @@ def main(argv=None):
         service = Service(args.root, args.sources)
         command = args.command
         if command == 'init':
-            from .demo import document
-            result = service.call('dashboard_create', {'dashboardId': args.id, 'title': args.title, **({'document': document(args.id)} if args.demo else {})})
+            from .demo import document, report_document
+            from .model import apply_operations, new_document
+            title = args.title or ('Analysis report' if args.mode == 'report' else 'Dashboard')
+            doc = ((report_document if args.mode == 'report' else document)(args.id)
+                   if args.demo else new_document(args.id, title))
+            if args.title is not None:
+                doc['manifest']['title'] = args.title
+            if args.mode == 'report' and doc['manifest'].get('viewMode') != 'report':
+                doc = apply_operations(doc, [{'op': 'set_view_mode', 'value': 'report'}])
+            result = service.call('dashboard_create', {'dashboardId': args.id, 'document': doc})
         elif command in ('list','get','validate','history'):
             result = service.call('dashboard_'+command, {'dashboardId':args.id} if hasattr(args,'id') else {})
         elif command == 'patch':
@@ -68,7 +77,7 @@ def main(argv=None):
             from .assets import render_html
             render_html('web') # fail early with the exact build command
             server=RuntimeHTTPServer(service,args.port)
-            print(json.dumps({'url':f'http://127.0.0.1:{server.server_address[1]}/#{server.token}','mode':'local-only'}),flush=True)
+            print(json.dumps({'url':f'http://127.0.0.1:{server.server_address[1]}/#token={server.token}','mode':'local-only'}),flush=True)
             try:server.serve_forever()
             finally:server.server_close()
             return 0

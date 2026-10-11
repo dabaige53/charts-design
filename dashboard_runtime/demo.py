@@ -32,3 +32,13 @@ def document(board_id='demo'):
             {'id':'trend','x':0,'y':4,'w':half,'h':7}, {'id':'regions','x':half,'y':4,'w':half,'h':7},
             {'id':'details','x':0,'y':11,'w':cols,'h':7}]}])
     return doc
+
+def report_document(board_id='report-demo'):
+    """A Markdown-first document, using only explicitly synthetic data."""
+    from pathlib import Path
+    markdown = (Path(__file__).parent / 'examples' / 'academic-report.md').read_text(encoding='utf-8')
+    return apply_operations(document(board_id), [
+        {'op': 'set_title', 'value': '季度收入变化与区域结构的描述性分析'},
+        {'op': 'set_report_markdown', 'value': markdown},
+        {'op': 'set_view_mode', 'value': 'report'}
+    ])

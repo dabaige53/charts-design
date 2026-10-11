@@ -12,6 +12,12 @@ class Service:
     def call(self, tool, args):
         require(isinstance(args, dict), 'Tool arguments must be an object')
         board = args.get('dashboardId')
+        if tool == 'generation_examples':
+            from .generation import generation_examples
+            return generation_examples(args.get('caseId'))
+        if tool == 'chart_declarations':
+            from .declarations import declaration_contract
+            return declaration_contract(chart_type=args.get('chartType'), legacy_code=args.get('code'), summary=not (args.get('chartType') or args.get('code')))
         if tool == 'dashboard_list':
             return {'dashboards': self.store.list()}
         if tool == 'dashboard_create':
@@ -132,3 +138,9 @@ TOOLS.update({
     'legacy_render': ('Export one original component with the shared bundled UI and only its required data sources', schema(TARGET, ('dashboardId','componentId')))
 })
 READ_ONLY.add('legacy_render')
+
+TOOLS.update({
+    'generation_examples': ('Discover Dashboard and analytical-report generation cases; select caseId for reusable atomic declarations and the academic Markdown master. All case data is synthetic.', schema({'caseId': {'type':'string','enum':['executive-dashboard','academic-report']}})),
+    'chart_declarations': ('Discover available declaration types; select chartType or original code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'chartType': {'type':'string','enum':list(TYPES)}, 'code':STR}))
+})
+READ_ONLY.update({'generation_examples','chart_declarations'})

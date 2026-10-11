@@ -50,6 +50,7 @@ jobs:
             runtime-source.tar.gz
             runtime-tests.txt
             runtime-audit.json
+            report-preview.png
             runtime-screenshot.png
             runtime-original-restored.png
             runtime-icons-gallery.png
