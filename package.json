@@ -38,7 +38,8 @@
     "dashboard_runtime/web/*.mjs",
     "dashboard_runtime/web/*.css",
     "dashboard_runtime/web/.npmignore",
-    "dashboard_runtime/examples/*.md"
+    "dashboard_runtime/examples/*.md",
+    "docs/seaborn-backend.md"
   ],
   "keywords": [
     "mckinsey",

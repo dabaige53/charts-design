@@ -349,11 +349,14 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
                       'Creating a component does not append it to report Markdown. Set view mode to report separately when desired.'],
         },
     }
+    from .statistical import statistical_declarations
+    result['statistical'] = statistical_declarations()
     if summary:
         legacy = result['legacy']
         result = {
             'schemaVersion': result['schemaVersion'],
             'documentSchemaVersion': result['documentSchemaVersion'],
+            'statistical': {'backend':'seaborn','types':result['statistical']['types'],'component':result['statistical']['component'],'resource':'charts://declarations','renderTool':'statistical_render'},
             'summary': True, 'resource': 'charts://declarations',
             'usage': 'Choose chartType for a native declaration or code for an original chart/KPI. The full resource also documents the table family.',
             'nativeCharts': list(result['nativeCharts']),

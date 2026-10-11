@@ -170,3 +170,7 @@ charts-design/
 ## 开源协议 (License)
 
 MIT License
+
+### Seaborn 统计图（可选）
+
+安装 `pip install ".[statistics]"` 后，同一个 MCP 可声明直方图、箱线图、回归散点图，输出 SVG/PNG 并嵌入 Markdown 报告。保留 ECharts 交互图表。统计图直接读取原始观测行，显示口径、来源与缺失值计数；见 [声明合同与边界](docs/seaborn-backend.md)。

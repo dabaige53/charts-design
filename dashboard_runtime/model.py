@@ -307,9 +307,10 @@ def validate(doc):
             field(m['datasets'][ds], metric.get('denominator'), True)
         elif metric['aggregation'] != 'count':
             field(m['datasets'][ds], metric.get('field'), True)
+    require(sum(isinstance(c, dict) and c.get('kind') == 'statistical' for c in m['components'].values()) <= 10, 'At most 10 statistical components per document')
     for key, c in m['components'].items():
         identifier(key, 'component id')
-        require(isinstance(c, dict) and c.get('kind') in ('chart', 'kpi', 'table', 'text', 'legacy'), f'{key}: invalid component kind')
+        require(isinstance(c, dict) and c.get('kind') in ('chart', 'kpi', 'table', 'text', 'legacy', 'statistical'), f'{key}: invalid component kind')
         require(isinstance(c.get('title'), str) and len(c['title']) <= 240, f'{key}: title required')
         presentation = c.get('config', {}) if c['kind'] == 'legacy' else c.get('presentation', {})
         require(isinstance(presentation, dict), 'Presentation must be an object')
@@ -329,6 +330,10 @@ def validate(doc):
             require(state.get('sortDir', 'asc') in ('asc', 'desc'), 'Invalid table sort direction')
         if c['kind'] == 'text':
             require(isinstance(c.get('text'), str), 'Text component requires text')
+            continue
+        if c['kind'] == 'statistical':
+            from .statistical import validate_statistical
+            validate_statistical(doc, c)
             continue
         if c['kind'] == 'legacy':
             from .legacy import validate_original
@@ -370,6 +375,7 @@ def validate(doc):
         for target in targets:
             require(target in m['components'], 'Filter refers to a missing component')
             c = m['components'][target]
+            require(c['kind'] != 'statistical', 'Statistical components are static raw-observation plots; filters are not supported')
             require(c['kind'] != 'text' and (c['kind'] != 'legacy' or c.get('binding')), 'Original components need explicit bindings before filtering')
             metadata = m['datasets'][c['datasetId']]
             field(metadata, f.get('field'))

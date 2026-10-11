@@ -10,8 +10,19 @@ class Service:
         self.store, self.queries = Store(root), QueryRunner(sources_file)
 
     def call(self, tool, args):
+        result = self._call(tool, args)
+        if "document" in result:
+            from .statistical import statistical_artifacts
+            result["statisticalArtifacts"] = statistical_artifacts(result["document"])
+        return result
+
+    def _call(self, tool, args):
         require(isinstance(args, dict), 'Tool arguments must be an object')
         board = args.get('dashboardId')
+        if tool == 'statistical_render':
+            from .statistical import render_statistical
+            doc = self.store.get(board)
+            return render_statistical(doc, args.get('componentId'), args.get('format', 'svg'))
         if tool == 'generation_examples':
             from .generation import generation_examples
             return generation_examples(args.get('caseId'))
@@ -51,7 +62,8 @@ class Service:
                 charts = [] if component['kind']=='legacy' else [{'type': t, 'compatible': compatibility(doc, component, t) is None,
                            'reason': compatibility(doc, component, t)} for t in TYPES]
             from .legacy import catalog
-            return {'charts': charts, 'legacy': catalog(), 'originalKpis': ['mc%02d'%i for i in range(1,10)], 'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
+            from .statistical import statistical_declarations
+            return {'statistical': statistical_declarations(), 'charts': charts, 'legacy': catalog(), 'originalKpis': ['mc%02d'%i for i in range(1,10)], 'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
             doc = self.store.get(board)
             c = doc['manifest']['components'].get(args.get('componentId'))
@@ -62,7 +74,7 @@ class Service:
                 return {'source': source, 'snapshotUpdatedAt': doc['snapshot']['updatedAt'],
                         'filters': [f for f in doc['manifest']['filters'] if args['componentId'] in f['componentIds']],
                         'note': 'Interactive filters apply to the reviewed snapshot, not to a new SQL execution.'}
-            return {'metrics': {key: doc['manifest']['metrics'][key] for key in c.get('measures', [])}, 'dataset': meta, 'originalPresentation': c.get('config',{}).get('presentation'), 'originalExplanation': c.get('config',{}).get('explanation'), 'certified': False}
+            return {'metrics': {key: doc['manifest']['metrics'][key] for key in c.get('measures', [])}, 'dataset': meta, 'originalPresentation': c.get('config',{}).get('presentation'), 'originalExplanation': c.get('config',{}).get('explanation'), 'statisticalAnalysis': c.get('analysis'), 'certified': False}
         if tool == 'legacy_render':
             from .assets import export_component
             doc = self.store.get(board)
@@ -144,3 +156,6 @@ TOOLS.update({
     'chart_declarations': ('Discover available declaration types; select chartType or original code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'chartType': {'type':'string','enum':list(TYPES)}, 'code':STR}))
 })
 READ_ONLY.update({'generation_examples','chart_declarations'})
+
+TOOLS["statistical_render"] = ("Render a declared Seaborn component as bounded SVG or PNG with raw-observation provenance", schema({**TARGET, "format": {"enum": ["svg", "png"]}}, ("dashboardId", "componentId")))
+READ_ONLY.add("statistical_render")

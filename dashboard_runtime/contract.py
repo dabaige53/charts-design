@@ -1,5 +1,6 @@
 """Discoverable operation documentation; the Python validator is authoritative."""
 from .service import TOOLS
+from .statistical import statistical_declarations
 CONTRACT = {
     'schemaVersion': 2,
     'declarationsResource': 'charts://declarations',
@@ -8,7 +9,7 @@ CONTRACT = {
         'put_source': {'id': 'source id', 'value': {'kind': 'file|query|fixture|declared', 'name': 'source description'}},
         'put_dataset': {'id': 'dataset id', 'meta': {'fields': {'field': {'type': 'string|number|date|boolean', 'label': 'Display name'}}, 'sourceId': 'source id'}, 'rows': [{'field': 'value'}]},
         'put_metric': {'id': 'metric id', 'value': {'datasetId': 'dataset id', 'field': 'numeric field', 'aggregation': 'sum|avg|min|max|count|ratio', 'label': 'Name', 'unit': '', 'definition': 'Business definition', 'status': 'unverified|reviewed'}},
-        'put_component': {'id': 'component id', 'value': {'kind': 'chart|kpi|table|text|legacy', 'title': 'Title', 'datasetId': 'dataset id', 'x': 'category field (numeric for scatter)', 'series': 'optional dataset grouping field; required for heatmap; omit for pie/funnel/waterfall', 'measures': ['metric id'], 'chartType': 'bar|line|area|pie|scatter|heatmap|funnel|waterfall', 'family': 'legacy only: chart|kpi|table', 'config': {'code': 'legacy chart code (for example c01)', 'type': 'legacy KPI type (mc01-mc09)', 'data': 'explicit chart data object', 'presentation': 'complete per-code chart presentation', 'label': 'KPI label', 'value': 'explicit KPI value (mc06 also supports leftVal/rightVal)', 'columns': 'table columns with unique keys', 'rows': 'explicit table rows'}, 'sourceId': 'optional legacy provenance source id', 'binding': 'optional explicit legacy dataset/metric binding; required for filters'}},
+        'put_component': {'id': 'component id', 'value': {'kind': 'chart|kpi|table|text|legacy|statistical', 'title': 'Title', 'datasetId': 'dataset id', 'x': 'category field (numeric for scatter)', 'series': 'optional dataset grouping field; required for heatmap; omit for pie/funnel/waterfall', 'measures': ['metric id'], 'chartType': 'bar|line|area|pie|scatter|heatmap|funnel|waterfall', 'family': 'legacy only: chart|kpi|table', 'config': {'code': 'legacy chart code (for example c01)', 'type': 'legacy KPI type (mc01-mc09)', 'data': 'explicit chart data object', 'presentation': 'complete per-code chart presentation', 'label': 'KPI label', 'value': 'explicit KPI value (mc06 also supports leftVal/rightVal)', 'columns': 'table columns with unique keys', 'rows': 'explicit table rows'}, 'sourceId': 'optional legacy provenance source id', 'binding': 'optional explicit legacy dataset/metric binding; required for filters'}},
         'remove_component': {'id': 'component id'},
         'set_chart': {'id': 'component id', 'chartType': 'compatible chart type'},
         'set_layout': {'breakpoint': 'desktop|tablet|mobile', 'value': [{'id': 'component id', 'x': 0, 'y': 0, 'w': 6, 'h': 6}]},
@@ -19,6 +20,7 @@ CONTRACT = {
         'set_report': {'value': {'subtitle': 'Report subtitle (0-1000 characters)', 'blocks': [{'id': 'unique block id', 'componentId': 'existing component id'}]}},
         'set_status': {'value': 'ready|partial|blocked|fixture'}
     },
+    'statistical': statistical_declarations(),
     'rules': [
         'Read dashboard_get before mutation and supply its expectedRevision.',
         'Every operation object must include its op name.',
