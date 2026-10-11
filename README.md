@@ -6,6 +6,51 @@ Enterprise-grade, McKinsey/Bloomberg/FT-caliber business charts, KPI decision ca
 
 ---
 
+## 两条 Skills 与 MCP 生成路径
+
+- **Dashboard**：保留 [executive-charts Skill](skills/executive-charts/SKILL.md) 和原有案例；MCP 案例 `charts://examples/executive-dashboard`。
+- **分析报告**：[analytical-reports Skill](skills/analytical-reports/SKILL.md)，以认可的学术单栏版式为母稿；MCP 案例 `charts://examples/academic-report`。
+
+MCP 可从空白文档声明数据、指标和图表，再写入包含嵌入图表的 Markdown 并渲染。调用 `generation_examples` 发现案例，`chart_declarations` 阅读声明合同，然后 create → patch → validate → preview。案例数据均为合成数据，调用方必须用真实输入重写分析，不是仅导出一个母稿页面。见 [完整生成流程](docs/generation-tracks.md)。
+
+## 本地个人分析报告 + Dashboard
+
+Runtime 提供两种可切换的呈现方式：Dashboard 保留响应式网格，分析报告是一整篇 Markdown 文档，以学术论文式单栏版面阅读。像写文档一样写标题、段落、加粗、列表和引用，在需要图表的位置插入 chart 代码块，图表就会在文字之间渲染。两种模式共享组件、数据、指标口径和版本记录，不需要部署企业平台。
+
+```bash
+npm --prefix runtime-ui install
+npm --prefix runtime-ui run build
+# 空白报告，不自动填入案例数据
+python3 -m dashboard_runtime --root ./boards init analysis --mode report --title "我的分析报告"
+# 可选：明确标记的合成数据示例
+python3 -m dashboard_runtime --root ./boards init report-demo --mode report --demo
+python3 -m dashboard_runtime --root ./boards serve --port 8765
+```
+
+打开 `serve` 打印的本地链接，编辑 Markdown 源文并预览。图表引用写成：
+
+````markdown
+# 我的分析报告
+
+*副标题由作者填写*
+
+**摘要：** 说明分析范围、主要观察与限制。
+
+**关键词：** 收入；描述性分析
+
+## 我的观察
+
+先写**分析与依据**，正文用[图](#fig-trend)引用下方图表。
+
+```chart
+{"componentId":"trend","caption":"月度收入变化","source":"数据来源：作者提供并核对的收入快照。"}
+```
+
+图表后继续写解读、限制和下一步。
+````
+
+源文保存在 `manifest.report.markdown`，CLI/MCP 使用 `set_report_markdown` 更新。图表 ID 必须指向已有的非文字组件；`caption`（最多 500 字符）和 `source`（最多 1,000 字符）是可选纯文字字符串，仅含 `componentId` 的旧代码块仍有效。图号按源文顺序生成，`[图](#fig-trend)` 自动显示对应图号并跳转；同一组件出现多次时，引用指向第一次出现的位置。二级章节标题自动编号，源文不必手写编号；作者、摘要、关键词及来源须由作者提供，不自动补写。保存时校验引用和 JSON，拒绝未知字段与重复键，普通代码块不会执行。分析文字由作者维护，筛选图表后需要复核文字结论。支持 JSON 保存/恢复及离线 HTML 导出，旧版段落块报告仍可读取。完整合同、CLI/MCP 源文工作流和使用边界见 [Runtime 文档](docs/dashboard-runtime.md)。
+
 ## 推荐：积木式构建 Dashboard
 
 CLI workspace 将筛选器、KPI、图表和表格拆成独立小文件。Agent 可以逐块添加、检查和验证，只在 `build` 阶段于内存中合并完整配置。

@@ -9,6 +9,12 @@ Turn business evidence into a restrained executive dashboard. Run the scripts bu
 
 The goal is a reusable business-component generation system whose deliverable is working HTML or an explicit framework Adapter. Use the Gallery and `examples/` for discovery and visual comparison. Generate final markup from explicit business data through the registered component pipeline.
 
+## Runtime MCP reference case
+
+This is the Dashboard generation track. Preserve the existing Gallery and `examples/` cases. For the local runtime, call `generation_examples` with `{"caseId":"executive-dashboard"}` or read `charts://examples/executive-dashboard`: it returns synthetic KPI/chart/table/filter declarations ready for an atomic patch. Read `charts://declarations` for chart contracts and `charts://contract` for mutation rules; create, patch with the latest revision, validate, then preview.
+
+For Markdown-first analytical documents, use [analytical-reports](../analytical-reports/SKILL.md) and its approved academic master instead of composing a dashboard grid. Both tracks reuse existing chart definitions and source/data semantics.
+
 ## Route the task
 
 - For one chart, provide a complete chart component JSON and run `scripts/generate_chart.py --config`; deliver the generated HTML component.

@@ -43,17 +43,27 @@ def create_server(service):
     async def list_resources():
         return [types.Resource(uri=URI, name='Dashboard editor', mimeType=MIME),
                 types.Resource(uri='charts://catalog', name='Chart catalog', mimeType='application/json'),
-                types.Resource(uri='charts://contract', name='Runtime tools and typed operations', mimeType='application/json')]
+                types.Resource(uri='charts://contract', name='Runtime tools and typed operations', mimeType='application/json'),
+                types.Resource(uri='charts://declarations', name='Chart declaration requirements', mimeType='application/json'),
+                types.Resource(uri='charts://examples', name='Dashboard and report reference cases', mimeType='application/json'),
+                types.Resource(uri='charts://examples/executive-dashboard', name='Dashboard generation case', mimeType='application/json'),
+                types.Resource(uri='charts://examples/academic-report', name='Approved academic report master', mimeType='application/json')]
 
     @server.read_resource()
     async def read_resource(uri):
         if str(uri) == URI:
             return [ReadResourceContents(content=render_html('mcp'), mime_type=MIME)]
         if str(uri) == 'charts://catalog':
-            return json.dumps(service.call('chart_catalog', {}), ensure_ascii=False)
+            return [ReadResourceContents(content=json.dumps(service.call('chart_catalog', {}), ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://contract':
             from .contract import CONTRACT
-            return json.dumps(CONTRACT)
+            return [ReadResourceContents(content=json.dumps(CONTRACT, ensure_ascii=False), mime_type='application/json')]
+        if str(uri) == 'charts://declarations':
+            from .declarations import declaration_contract
+            return [ReadResourceContents(content=json.dumps(declaration_contract(), ensure_ascii=False), mime_type='application/json')]
+        if str(uri) == 'charts://examples' or str(uri) in ('charts://examples/executive-dashboard', 'charts://examples/academic-report'):
+            args = {} if str(uri) == 'charts://examples' else {'caseId':str(uri).rsplit('/',1)[1]}
+            return [ReadResourceContents(content=json.dumps(service.call('generation_examples', args), ensure_ascii=False), mime_type='application/json')]
         raise ValueError('Unknown resource')
     return server
 
