@@ -1,0 +1,31 @@
+:host{display:block;height:100%;min-height:0;color:#17212B;font-family:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;font-size:14px;line-height:1.5}
+#app-kpis,#app-charts-grid{height:100%;min-height:0}
+#app-kpis>.section-card,#app-charts-grid>.section-card{height:100%;min-height:0;box-sizing:border-box}
+#app-charts-grid>.section-card{justify-content:flex-start}
+.card-header-wrap{flex:0 0 auto}.card-header-wrap>div:first-child{max-width:100%;flex:1 1 160px}.card-header-wrap h3,.card-header-wrap p{white-space:normal;overflow:visible;text-overflow:clip}
+.card-body-wrap{flex:1 1 auto;height:auto!important;min-height:120px;overflow:hidden}
+.card-chart-pane,.card-table-pane{min-height:120px;height:100%!important}
+#app-table-section{height:100%;min-height:0;box-sizing:border-box;padding:20px;display:flex;flex-direction:column}
+#app-table-section>div:last-child{min-height:0;display:flex;flex:1;flex-direction:column}
+#app-table-section>div:last-child>div:first-child{min-height:0;flex:1;overflow:auto}
+#main14ColTable{min-width:100%;width:max-content}#main14ColThead th{position:sticky;top:0;background:#f1f5f9;z-index:3}
+#app-toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;max-width:min(440px,90vw)}
+.card-fullscreen{height:100vh!important;padding:28px!important}.card-fullscreen .card-body-wrap{min-height:250px}
+.catalog-actions{display:flex;align-items:center;gap:6px}.catalog-actions select{max-width:126px;font-size:11px;line-height:1.5;color:#52606D;background:white;border:1px solid #E2E8F0;border-radius:5px;padding:3px 6px}
+.catalog-source-btn{font-size:10px;font-weight:600;width:auto;padding:0 6px;font-family:inherit}
+.catalog-search{font:inherit;font-size:12px;padding:6px 10px;border:1px solid #E2E8F0;border-radius:6px;min-width:0;width:200px;color:#17212B}
+.catalog-summary{font-size:10px;color:#7B8794;line-height:1.6;margin-top:6px}
+:host([data-theme=dark]){color:#e4e9ed}:host([data-theme=dark]) .section-card{background:#1e2832;border-color:#35404c}
+:host([data-theme=dark]) .text-primary-strong,:host([data-theme=dark]) .text-ink,:host([data-theme=dark]) .text-primary{color:#d7e6f3}:host([data-theme=dark]) .text-ink-muted,:host([data-theme=dark]) .text-ink-subtle{color:#a7b6c4}
+.original-fullscreen{padding:0;margin:0;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;border:0;background:#fff}.original-fullscreen::backdrop{background:#fff}.original-fullscreen .section-card{width:100%;height:100%;box-sizing:border-box}
+/* A fixed two-zone header: content at upper left, controls at upper right. */
+.component-header{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:start!important;gap:12px!important;flex:0 0 auto;margin:0 0 14px!important;min-width:0}
+.component-heading{min-width:0;text-align:left;align-self:start}.component-title-row{display:flex;align-items:baseline;gap:7px;min-width:0}.component-title{margin:0!important;font-size:14px!important;line-height:1.5!important;font-weight:650!important;color:#0b2a42;white-space:normal!important;overflow-wrap:anywhere;text-align:left!important}
+.component-kpi .component-title{font-size:12px!important;font-weight:550!important;color:#52606d}.component-description{font-size:12px!important;line-height:1.55!important;color:#52606d;margin:4px 0 0!important;white-space:normal!important;overflow-wrap:anywhere;text-align:left!important}
+.component-code{font:9px/1.5 ui-monospace,monospace;color:#8493a0;white-space:nowrap}.component-status{display:inline-block;font-size:10px;color:#526b5e;margin-top:4px}.component-actions{display:flex!important;align-items:flex-start!important;justify-content:flex-end!important;gap:3px!important;flex-wrap:nowrap!important;justify-self:end;min-width:0}
+.component-metadata{font-size:10px;color:#7b8794;line-height:1.5;margin-top:5px}.component-metadata #tablePageIndicator{padding:0;font-size:10px;font-weight:500}
+.component-storage[hidden]{display:none!important}.component-chart{display:flex;flex-direction:column}.component-chart .card-body-wrap{min-height:100px!important}
+.column-content{width:268px;max-width:calc(100vw - 40px);padding:8px}.column-content #colCheckboxesContainer{max-height:300px;overflow:auto}.column-content button{font:inherit}
+.ui-menu .catalog-search{min-width:210px;font:12px/1.5 inherit}.component-table>div:last-child>div:first-child{max-height:100%}
+:host([data-theme=dark]) .component-title{color:#dce8f1}:host([data-theme=dark]) .component-description,:host([data-theme=dark]) .component-kpi .component-title{color:#a7b6c4}
+:host(.is-editing) .component-actions{padding-right:31px}

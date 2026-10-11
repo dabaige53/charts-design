@@ -1,0 +1,87 @@
+"""CLI: core commands need only Python 3.10+; MCP and UI builds are optional."""
+from __future__ import annotations
+import argparse
+import asyncio
+import json
+import sys
+from pathlib import Path
+from .model import DashboardError
+from .service import Service, TOOLS
+
+def parser():
+    p = argparse.ArgumentParser(prog='charts-design-runtime')
+    p.add_argument('--root', default='.charts-runtime', help='Persistent dashboard store (shared by all transports)')
+    p.add_argument('--sources', help='Operator-owned read-only source aliases JSON')
+    sub = p.add_subparsers(dest='command', required=True)
+    init = sub.add_parser('init'); init.add_argument('id'); init.add_argument('--title', default='Dashboard'); init.add_argument('--demo', action='store_true')
+    sub.add_parser('list')
+    for name in ('get','validate','history'):
+        sub.add_parser(name).add_argument('id')
+    patch = sub.add_parser('patch'); patch.add_argument('id'); patch.add_argument('--expected', type=int, required=True); patch.add_argument('--file', required=True)
+    restore = sub.add_parser('restore'); restore.add_argument('id'); restore.add_argument('--expected', type=int, required=True); restore.add_argument('--revision', type=int, required=True)
+    serve = sub.add_parser('serve'); serve.add_argument('--port', type=int, default=8765)
+    export = sub.add_parser('export'); export.add_argument('id'); export.add_argument('--output', required=True); export.add_argument('--format', choices=['json','html'], default='html')
+    imported = sub.add_parser('import'); imported.add_argument('id'); imported.add_argument('--file', required=True)
+    legacy = sub.add_parser('import-workspace'); legacy.add_argument('id'); legacy.add_argument('--path', required=True)
+    call = sub.add_parser('call'); call.add_argument('tool', choices=list(TOOLS)); call.add_argument('--json-file', default='-')
+    sub.add_parser('catalog'); sub.add_parser('contract'); sub.add_parser('mcp')
+    return p
+
+def read_json(path):
+    return json.load(sys.stdin) if path == '-' else json.loads(Path(path).read_text())
+
+def main(argv=None):
+    args = parser().parse_args(argv)
+    try:
+        service = Service(args.root, args.sources)
+        command = args.command
+        if command == 'init':
+            from .demo import document
+            result = service.call('dashboard_create', {'dashboardId': args.id, 'title': args.title, **({'document': document(args.id)} if args.demo else {})})
+        elif command in ('list','get','validate','history'):
+            result = service.call('dashboard_'+command, {'dashboardId':args.id} if hasattr(args,'id') else {})
+        elif command == 'patch':
+            result = service.call('dashboard_patch', {'dashboardId':args.id,'expectedRevision':args.expected,'operations':read_json(args.file)})
+        elif command == 'restore':
+            result = service.call('dashboard_restore', {'dashboardId':args.id,'expectedRevision':args.expected,'revision':args.revision})
+        elif command == 'call':
+            result = service.call(args.tool, read_json(args.json_file))
+        elif command == 'catalog':
+            result = service.call('chart_catalog', {})
+        elif command == 'contract':
+            from .contract import CONTRACT
+            result = CONTRACT
+        elif command == 'import':
+            result = service.call('dashboard_create', {'dashboardId':args.id,'document':read_json(args.file)})
+        elif command == 'import-workspace':
+            from .legacy import import_workspace
+            doc, notes = import_workspace(args.path,args.id)
+            result = service.call('dashboard_create', {'dashboardId':args.id,'document':doc});result['migrationNotes']=notes
+        elif command == 'export':
+            from .assets import export_document
+            doc = service.store.get(args.id)
+            content = json.dumps(doc,ensure_ascii=False,indent=2) if args.format == 'json' else export_document(doc)
+            path=Path(args.output).expanduser();path.parent.mkdir(parents=True,exist_ok=True);path.write_text(content)
+            result={'output':str(path.resolve()),'revision':doc['revision'],'format':args.format}
+        elif command == 'serve':
+            from .http_server import RuntimeHTTPServer
+            from .assets import render_html
+            render_html('web') # fail early with the exact build command
+            server=RuntimeHTTPServer(service,args.port)
+            print(json.dumps({'url':f'http://127.0.0.1:{server.server_address[1]}/#{server.token}','mode':'local-only'}),flush=True)
+            try:server.serve_forever()
+            finally:server.server_close()
+            return 0
+        elif command == 'mcp':
+            asyncio.run(__import__('dashboard_runtime.mcp_server',fromlist=['run']).run(service));return 0
+        print(json.dumps(result,ensure_ascii=False,allow_nan=False))
+        return 0
+    except DashboardError as exc:
+        print(json.dumps(exc.as_dict(),ensure_ascii=False),file=sys.stderr);return 2
+    except (OSError,ValueError,KeyError,TypeError) as exc:
+        print(json.dumps({'ok':False,'error':{'code':'COMMAND_FAILED','message':str(exc)}}),file=sys.stderr);return 2
+    except KeyboardInterrupt:
+        return 130
+
+if __name__ == '__main__':
+    raise SystemExit(main())

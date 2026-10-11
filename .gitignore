@@ -1,6 +1,8 @@
 # Ignore all dotfiles and dot directories
 .*
 !.gitignore
+!.github/
+!.github/**
 
 # Explicitly ignore common agent/IDE/Stitch dotdirs
 .agents/
@@ -29,6 +31,17 @@ __pycache__/
 dist/test_*
 dist/*verified*
 tests/test_output/
+
+# Runtime dependencies, local data and review artifacts
+node_modules/
+boards/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+dashboard_runtime/web/dist/
+runtime-source.tar.gz
+runtime-tests.txt
+runtime-screenshot.png
 
 # System files
 .DS_Store

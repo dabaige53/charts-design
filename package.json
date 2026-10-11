@@ -3,11 +3,16 @@
   "version": "1.0.3",
   "description": "McKinsey-grade executive charts, KPI metric cards, interactive pivot tables, and dashboard generator. 麦肯锡风格图表设计与高管决策看板套件。",
   "bin": {
-    "charts-design": "./bin/cli.js"
+    "charts-design": "./bin/cli.js",
+    "charts-design-runtime": "./bin/dashboard-runtime.js"
   },
   "scripts": {
     "test": "python3 -m pytest -q",
-    "check": "node --check bin/cli.js && node --check skills/executive-charts/scripts/runtime_inspector.spec.js && python3 -m py_compile skills/executive-charts/scripts/dashboard_workspace.py skills/executive-charts/scripts/generate_dashboard.py skills/executive-charts/scripts/core/*.py"
+    "check": "node --check bin/cli.js && node --check skills/executive-charts/scripts/runtime_inspector.spec.js && python3 -m py_compile skills/executive-charts/scripts/dashboard_workspace.py skills/executive-charts/scripts/generate_dashboard.py skills/executive-charts/scripts/core/*.py",
+    "runtime:build": "npm --prefix runtime-ui install && npm --prefix runtime-ui run build",
+    "runtime:test": "python3 -m pytest tests/runtime -q && node --test tests/runtime/engine.test.mjs",
+    "runtime:serve": "python3 -m dashboard_runtime serve",
+    "runtime:mcp": "python3 -m dashboard_runtime mcp"
   },
   "files": [
     "bin/",
@@ -17,6 +22,12 @@
     "skills/executive-charts/scripts/runtime_inspector.spec.js",
     "skills/executive-charts/scripts/core/*.py",
     "skills/executive-charts/scripts/README.md",
+    "dashboard_runtime/",
+    "runtime-ui/*.mjs",
+    "runtime-ui/package.json",
+    "docs/dashboard-runtime.md",
+    "pyproject.toml",
+    "mcp.json",
     "README.md"
   ],
   "keywords": [
@@ -29,7 +40,8 @@
     "tailwindcss",
     "data-visualization",
     "business-intelligence",
-    "pivot-table"
+    "pivot-table",
+    "mcp"
   ],
   "repository": {
     "type": "git",

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "charts-design-runtime"
+version = "0.3.0"
+description = "Versioned ECharts dashboard runtime with CLI, local web editor and MCP Apps"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.28,<2"]
+test = ["pytest>=8,<9"]
+
+[project.scripts]
+charts-design-runtime = "dashboard_runtime.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["dashboard_runtime*"]
+
+[tool.setuptools.package-data]
+dashboard_runtime = ["web/*.mjs", "web/*.css", "web/dist/*.js", "web/dist/*.css"]
