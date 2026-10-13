@@ -31,3 +31,10 @@ test('null measurements are missing, never coerced to zero',()=>{
 test('CSV quotes values and neutralizes formula injection',()=>{
   assert.ok(csv([{label:'=HYPERLINK("x")',value:-3}]).includes("'=HYPERLINK"));
 });
+test('declared search recomputes only its explicit consumers',()=>{
+  const d=structuredClone(doc);d.manifest.filters=[{id:'search',op:'contains',field:'region',values:['EA'],componentIds:['total','trend']}];
+  assert.equal(visibleRows(d,'total').length,3);
+  assert.equal(aggregate(visibleRows(d,'total'),d.manifest.metrics.revenue),278);
+  assert.equal(visibleRows(d,'details').length,6);
+  d.manifest.filters[0].values=['no match'];assert.equal(visibleRows(d,'total').length,0);
+});

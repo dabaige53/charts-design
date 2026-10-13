@@ -4,7 +4,7 @@ export function visibleRows(doc, id) {
   const c = doc.manifest.components[id];
   const rows = doc.snapshot.datasets[c.datasetId] || [];
   const filters = doc.manifest.filters.filter(f => f.componentIds.includes(id) && f.values.length);
-  return rows.filter(row => filters.every(f => f.op === 'in' ? f.values.some(v => v === row[f.field]) : row[f.field] != null && row[f.field] >= f.values[0] && row[f.field] <= f.values[1]));
+  return rows.filter(row => filters.every(f => f.op === 'in' ? f.values.some(v => v === row[f.field]) : f.op === 'contains' ? String(row[f.field]??'').toLocaleLowerCase().includes(f.values[0].toLocaleLowerCase()) : row[f.field] != null && row[f.field] >= f.values[0] && row[f.field] <= f.values[1]));
 }
 export function aggregate(rows, metric) {
   const numbers = key => rows.map(r => r[key]).filter(v => typeof v === 'number' && Number.isFinite(v));
@@ -59,7 +59,7 @@ export function format(value, metric = {}) {
 export function optionFor(doc, id) {
   const c = doc.manifest.components[id], data = grouped(doc,id), type = c.chartType;
   const reason = compatible(doc,c,type); if (reason) throw Error(reason);
-  const dark = doc.manifest.theme === 'dark';
+  const dark = false;
   const colors = ['#123b5d','#628ea8','#a17b45','#638878','#a65d58','#8d7f9d'];
   const text = dark ? '#e4e9ed' : '#293440', line = dark ? '#35404c' : '#e8edf1';
   const base = {animation:false,color:colors,textStyle:{fontFamily:'system-ui',color:text},

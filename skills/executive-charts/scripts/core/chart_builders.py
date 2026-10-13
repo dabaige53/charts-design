@@ -55,7 +55,7 @@ CHARTS_JS_DEFINITIONS = {
                 ],
                 series: [
                     { name: seriesLabels[0], type: 'bar', barWidth: gran === 'month' ? 14 : 26, data: cur.revenue, itemStyle: { color: tokens.palette.primary } },
-                    { name: seriesLabels[1], type: 'line', yAxisIndex: 1, data: cur.yieldGrowth, lineStyle: { color: tokens.palette.positive, width: 2.5 }, itemStyle: { color: tokens.palette.positive, borderColor: '#FFF', borderWidth: 2 }, symbolSize: 6, label: { show: true, position: 'top', distance: 6, formatter: params => `${params.value}${units[1] || ''}`, color: tokens.palette.positive, fontSize: 10, fontWeight: 'bold' } }
+                    { name: seriesLabels[1], type: 'line', yAxisIndex: 1, data: cur.yieldGrowth, lineStyle: { color: tokens.palette.positive, width: 2.5 }, itemStyle: { color: tokens.palette.positive, borderColor: '#FFF', borderWidth: 2 }, symbolSize: 6, label: { show: true, position: 'top', distance: 6, formatter: params => params.value == null ? '—' : `${new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(params.value)}${units[1] || ''}`, color: tokens.palette.positive, fontSize: 10, fontWeight: 'bold' } }
                 ]
             };
         },

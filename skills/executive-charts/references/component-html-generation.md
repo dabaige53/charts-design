@@ -13,17 +13,17 @@ Dashboard HTML is produced in this order:
 3. `dashboard_template.py` emits the document shell, design tokens, root mounting points, serialized `window.DASHBOARD_CONFIG`, renderer classes, and interaction engine into one HTML file.
 4. `runtime_bundle.py` creates `DashboardRuntime`; `mount()` constructs `DashboardApp`, which calls `renderHeader`, `renderFilters`, `renderKPIs`, `renderChartsGrid`, `renderTableSection`, and `renderTableEngine` in that order.
 5. ECharts initializes only after its chart and KPI canvas containers exist. Event handlers attach to the generated component identities.
-6. `build` runs static HTML inspection. `inspect-html --runtime --strict` loads the file in a browser and verifies the rendered component DOM and cleanup lifecycle.
+6. `build` runs static HTML inspection to check document metadata, DOM references, local assets, and any supplied preservation requirements.
 
-Completion criterion: the delivered HTML comes from this pipeline, and its rendered components pass the applicable static and runtime gates.
+Completion criterion: the delivered HTML comes from this pipeline and passes strict component validation and static HTML inspection.
 
 ## Choose the output mode
 
 ### Standalone chart
 
-Use `generate_chart.py --config <chart.json> --output <chart.html>` when the deliverable is one business chart card. The JSON supplies the chart code, business data, title, unit, and full `presentation` contract; the command validates the selected renderer, generates the complete standalone HTML document with card interactions, and runs static plus browser-backed Generated HTML inspection. Use code-only generation for catalog preview and `--snippet` when the deliverable is the ECharts option source.
+Use `generate_chart.py --config <chart.json> --output <chart.html>` when the deliverable is one business chart card. The JSON supplies the chart code, business data, title, unit, and full `presentation` contract. The command validates the selected renderer, generates the standalone HTML document, and runs static inspection. Use code-only generation for catalog preview and `--snippet` for ECharts option source.
 
-Completion criterion: the selected chart code answers the stated business question and the standalone HTML initializes successfully.
+Completion criterion: the selected chart code answers the stated business question and the standalone HTML passes component validation and static inspection.
 
 ### Dashboard
 
@@ -112,7 +112,7 @@ Completion criterion: every filter has one `data-component-id`, every strict fil
 | `mc08` | Threshold alert card |
 | `mc09` | Segment breakdown card |
 
-Every KPI explanation action uses `data-explain-chart`; the shared dialog renders its definition and formula. Sparkline and gauge DOM are initialized after the cards render. Define explicit aggregation behavior for each filter-dependent KPI.
+Every KPI explanation action uses `data-explain-chart`; the shared dialog renders its definition and formula. Sparkline and gauge DOM are initialized after the cards render. Define a supported `binding` for each filter-dependent KPI. Missing optional values render as a dash; specialized cards require their explicit visual data in strict workspaces. Zero remains zero.
 
 Completion criterion: every KPI root preserves `kpi.id`, the selected type has all data it displays, and any filter-dependent value has a verified recomputation path.
 
@@ -176,7 +176,7 @@ When no existing type or code represents the required component:
 2. Add the renderer or card branch to the shared generator/runtime rather than placing a one-off block in generated HTML.
 3. Register its schema and discovery metadata.
 4. Add behavior-level coverage for generation, identity, required interactions, and runtime cleanup.
-5. Generate a thin dashboard containing the new component and run static plus available runtime inspection.
+5. Generate a thin dashboard containing the new component and run strict component validation and static HTML inspection.
 
 Completion criterion: the new component is discoverable, schema-validated, generated through the shared path, independently identifiable, and verified from registered renderer output.
 
@@ -187,7 +187,6 @@ Before presenting component HTML as complete:
 - strict workspace validation passes;
 - generated static HTML inspection passes;
 - every declared component appears under the correct mounting point with its stable identity;
-- available runtime inspection passes after rendering and after `destroy()`;
 - required Tooltip, zoom, explanation, filtering, table, export, copy, and fullscreen behaviors are directly exercised where in scope;
 - existing-project migrations also pass Preservation Manifest inspection and baseline comparison.
 

@@ -56,18 +56,19 @@ python3 -m dashboard_runtime --root ./boards serve --port 8765
 CLI workspace 将筛选器、KPI、图表和表格拆成独立小文件。Agent 可以逐块添加、检查和验证，只在 `build` 阶段于内存中合并完整配置。
 
 ```bash
-# 1. 创建空 workspace，不注入行业案例数据
+# 演示数据仅用于验证工具；业务交付时换成已确认的数据
+CHARTS_DEMO="skills/executive-charts/references/quickstart"
 python3 skills/executive-charts/scripts/dashboard_workspace.py init ./sales-board \
-  --title "销售经营看板" --org "经营分析部"
-
-# 2. 每次添加一个指标或图表
+  --title "销售经营看板（示例）" --org "经营分析部"
 python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./sales-board revenue \
-  --label "营业收入" --value 224 --unit "万元"
+  --from "$CHARTS_DEMO/revenue.kpi.json"
 python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./sales-board regional-sales \
-  --code c01 --title "各区域营业收入" --unit "万元" \
-  --data-file ./regional-sales.json
-
-# 3. 有界检查、严格校验，再生成 HTML
+  --from "$CHARTS_DEMO/regional-sales.chart.json"
+python3 skills/executive-charts/scripts/dashboard_workspace.py table set ./sales-board \
+  --from "$CHARTS_DEMO/sales.table.json"
+python3 skills/executive-charts/scripts/dashboard_workspace.py add filter ./sales-board region \
+  --label "区域" --type multi-select --option 华东=华东 --option 华南=华南 \
+  --field region --consumer revenue --consumer regional-sales
 python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./sales-board --json
 python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./sales-board --strict --json
 python3 skills/executive-charts/scripts/dashboard_workspace.py build ./sales-board --output ./dist/sales.html

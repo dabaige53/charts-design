@@ -1,7 +1,6 @@
 """Declaration discovery must reflect accepted runtime data, not renderer guesses."""
 import json
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 
@@ -10,7 +9,7 @@ import pytest
 from dashboard_runtime import declarations
 from dashboard_runtime.contract import CONTRACT
 from dashboard_runtime.declarations import declaration_contract
-from dashboard_runtime.model import DashboardError, TYPES, apply_operations, new_document, validate
+from dashboard_runtime.model import DashboardError, apply_operations, new_document, validate
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -18,61 +17,6 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture(scope='module')
 def reference():
     return declaration_contract()
-
-
-@pytest.mark.parametrize('chart_type', TYPES)
-def test_every_native_example_is_complete_and_valid(reference, chart_type):
-    chart = reference['nativeCharts'][chart_type]
-    example = chart['example']
-    document = apply_operations(new_document('example', 'Declaration example'), example['operations'])
-    component = document['manifest']['components'][example['componentId']]
-    assert component['chartType'] == chart_type
-    assert set(chart['componentSchema']['required']) <= set(component)
-    assert validate(document) is document
-    assert document['snapshot']['status'] == 'fixture'
-    assert document['manifest']['sources']['example-source']['kind'] == 'fixture'
-
-
-@pytest.mark.skipif(not shutil.which('node'), reason='Node is needed to check the native renderer')
-def test_native_examples_produce_real_render_options(reference):
-    documents = []
-    for name, chart in reference['nativeCharts'].items():
-        example = chart['example']
-        documents.append({'componentId': example['componentId'],
-                          'document': apply_operations(new_document('example', name), example['operations'])})
-    engine = (ROOT / 'dashboard_runtime/web/engine.mjs').as_uri()
-    script = f'''import {{optionFor}} from {json.dumps(engine)};
-import {{readFileSync}} from 'node:fs';
-for (const sample of JSON.parse(readFileSync(0, 'utf8'))) {{
-  const option = optionFor(sample.document, sample.componentId);
-  if (!option.series?.length || option.series.some(s => !s.data?.length)) throw Error(sample.componentId);
-}}
-console.log('8 rendered declarations');'''
-    result = subprocess.run(['node', '--input-type=module', '-e', script],
-                            input=json.dumps(documents), text=True, capture_output=True)
-    assert result.returncode == 0, result.stderr
-    assert '8 rendered declarations' in result.stdout
-
-
-@pytest.mark.parametrize('chart_type,change', [
-    ('heatmap', 'remove-series'), ('scatter', 'nonnumeric-x'),
-    ('waterfall', 'remove-delta'), ('pie', 'nonadditive'), ('funnel', 'nonadditive'),
-])
-def test_documented_native_constraints_are_enforced(reference, chart_type, change):
-    example = reference['nativeCharts'][chart_type]['example']
-    document = apply_operations(new_document('example', 'Constraints'), example['operations'])
-    component = document['manifest']['components'][example['componentId']]
-    metric = document['manifest']['metrics']['example-value']
-    if change == 'remove-series':
-        del component['series']
-    elif change == 'nonnumeric-x':
-        component['x'] = 'region'
-    elif change == 'remove-delta':
-        del metric['semantic']
-    else:
-        metric['aggregation'] = 'avg'
-    with pytest.raises(DashboardError):
-        validate(document)
 
 
 @pytest.mark.parametrize('family', ['chart', 'kpi', 'table'])
@@ -101,8 +45,10 @@ def test_legacy_registry_and_catalog_are_distinguished(reference):
     if not legacy['available']:
         pytest.skip('Original repository is required for registry assertions')
     registry = declarations._registry()
+    assert registry is not None
     catalog = json.loads((ROOT / declarations.LEGACY_CATALOG_SOURCE).read_text())
-    assert legacy['catalogEntries'] == catalog
+    assert [{key: value for key, value in entry.items() if key != 'filterBinding'} for entry in legacy['catalogEntries']] == catalog
+    assert all('filterBinding' in entry for entry in legacy['catalogEntries'])
     assert legacy['counts'] == {
         'catalogEntries': 45, 'registeredChartCodes': 40, 'registeredKpiTypes': 9}
     assert set(legacy['chartCodes']) == set(registry.CHART_CODES)
@@ -121,17 +67,14 @@ def test_legacy_registry_and_catalog_are_distinguished(reference):
             for name, kind in registry.CHART_ARRAY_FIELDS.get(code, ())]
 
 
-def test_compact_index_and_native_selection(reference):
+def test_index_only_advertises_original_charts(reference):
     index = declaration_contract(summary=True)
-    assert len(json.dumps(index)) < 4000
     assert index['summary'] is True
-    assert index['nativeCharts'] == list(TYPES)
-    assert index['resource'] == CONTRACT['declarationsResource']
-    selected = declaration_contract(chart_type='heatmap')
-    assert list(selected['nativeCharts']) == ['heatmap']
-    assert selected['nativeCharts']['heatmap'] == reference['nativeCharts']['heatmap']
-    assert 'legacy' not in selected
-    assert len(json.dumps(selected)) < 15000
+    assert 'nativeCharts' not in index and 'nativeCharts' not in reference
+    assert len(index['legacy']['chartCodes']) == 40
+    assert 'chartType' not in reference['common']['componentSchema']['properties']
+    with pytest.raises(DashboardError):
+        declaration_contract(chart_type='bar')
 
 
 def test_legacy_selection_never_substitutes_a_different_code_example():
@@ -140,9 +83,11 @@ def test_legacy_selection_never_substitutes_a_different_code_example():
     selected = declaration_contract(legacy_code='t06')
     assert list(selected['legacy']['chartCodes']) == ['t06']
     family = selected['legacy']['families']['chart']
-    assert 'example' not in family
+    example = family['example']
+    document = apply_operations(new_document('example', 't06'), example['operations'])
+    assert document['manifest']['components'][example['componentId']]['config']['code'] == 't06'
     assert family['componentSchema']['properties']['config']['properties']['code'] == {'const': 't06'}
-    assert 'exampleNote' in family
+    assert selected['legacy']['chartCodes']['t06']['filterBinding']['supported'] is True
 
 
 @pytest.mark.parametrize('arguments', [
@@ -157,18 +102,18 @@ def test_invalid_selections_fail_explicitly(arguments):
 def test_discovery_is_detached_json_data(reference):
     encoded = json.dumps(reference, allow_nan=False)
     assert json.loads(encoded) == reference
-    changed = declaration_contract(chart_type='bar')
-    changed['nativeCharts']['bar']['example']['operations'].clear()
-    assert declaration_contract(chart_type='bar')['nativeCharts']['bar']['example']['operations']
+    changed = declaration_contract(legacy_code='c01')
+    changed['legacy']['families']['chart']['example']['operations'].clear()
+    assert declaration_contract(legacy_code='c01')['legacy']['families']['chart']['example']['operations']
 
 
-def test_missing_legacy_sources_preserves_native_discovery(tmp_path, monkeypatch):
+def test_missing_original_sources_has_no_alternative_chart_system(tmp_path, monkeypatch):
     monkeypatch.setattr(declarations, 'REPO', tmp_path)
     reference = declaration_contract()
     assert reference['legacy']['available'] is False
     assert reference['legacy']['counts'] == {
         'catalogEntries': 0, 'registeredChartCodes': 0, 'registeredKpiTypes': 0}
-    assert set(reference['nativeCharts']) == set(TYPES)
+    assert 'nativeCharts' not in reference
     with pytest.raises(DashboardError) as failure:
         declaration_contract(legacy_code='c01')
     assert failure.value.code == 'LEGACY_UNAVAILABLE'
@@ -176,8 +121,9 @@ def test_missing_legacy_sources_preserves_native_discovery(tmp_path, monkeypatch
 
 def test_contract_exposes_conditional_native_and_legacy_fields():
     fields = CONTRACT['operations']['put_component']['value']
-    assert {'series', 'family', 'config', 'sourceId', 'binding'} <= set(fields)
+    assert {'family', 'config', 'sourceId', 'binding'} <= set(fields)
     assert {'code', 'type', 'data', 'presentation', 'columns', 'rows'} <= set(fields['config'])
+    assert 'chartType' not in fields and 'set_chart' not in CONTRACT['operations']
     assert 'conditional' in ' '.join(CONTRACT['rules'])
 
 
@@ -196,17 +142,6 @@ assert CONTRACT['declarationsResource'] == 'charts://declarations'
 
 def test_advertised_shape_schemas_accept_their_examples(reference):
     jsonschema = pytest.importorskip('jsonschema')
-    for chart in reference['nativeCharts'].values():
-        schema = chart['componentSchema']
-        jsonschema.Draft202012Validator.check_schema(schema)
-        component = next(op['value'] for op in chart['example']['operations'] if op['op'] == 'put_component')
-        jsonschema.validate(component, schema)
-        for operation in chart['example']['operations']:
-            common_schema = {'put_source': 'sourceSchema', 'put_metric': 'metricSchema',
-                             'put_dataset': 'datasetMetaSchema'}.get(operation['op'])
-            if common_schema:
-                value = operation.get('meta', operation.get('value'))
-                jsonschema.validate(value, reference['common'][common_schema])
     for family in reference['legacy']['families'].values():
         schema = family['componentSchema']
         jsonschema.Draft202012Validator.check_schema(schema)
@@ -214,3 +149,22 @@ def test_advertised_shape_schemas_accept_their_examples(reference):
         jsonschema.validate(component, schema)
     for name in ('sourceSchema', 'metricSchema', 'datasetMetaSchema', 'componentSchema'):
         jsonschema.Draft202012Validator.check_schema(reference['common'][name])
+
+
+@pytest.mark.parametrize('code', ['t06', 'm01'])
+def test_advanced_examples_are_legal_own_code_configs(code):
+    selected = declaration_contract(legacy_code=code)
+    example = selected['legacy']['families']['chart']['example']
+    doc = apply_operations(new_document('example', code), example['operations'])
+    assert doc['manifest']['components'][example['componentId']]['config']['code'] == code
+    assert validate(doc) is doc
+    capability = selected['legacy']['chartCodes'][code]['filterBinding']
+    assert capability['snapshotOnly'] is (code == 'm01')
+
+
+def test_public_metadata_and_table_heading_contract(reference):
+    assert set(reference['common']['metaSchema']['properties']) == {'subtitle', 'org', 'system', 'statusText', 'iconKey'}
+    assert 'subtitle' in reference['common']['componentSchema']['properties']
+    assert 'contains' in reference['common']['filterSchema']['properties']['op']['enum']
+    columns = reference['legacy']['families']['table']['componentSchema']['properties']['config']['properties']['columns']
+    assert {'title', 'label', 'key'} <= set(columns['items']['properties'])

@@ -1,9 +1,11 @@
+import {inlineEdit,clearInlineEdit} from './inline-edit.mjs';
 import {reportMarkdown,renderReport} from './report.mjs';
+import {whileVisible} from './lifecycle.mjs';
 import {icon,iconButton,openMenu,adaptiveActions} from './icons.mjs';
 import {initializeOriginal,mountOriginal,catalog} from './original.mjs';
 import {visibleRows,csv,chartTypes} from './engine.mjs';
 import {mountStatisticalImage,updateStatisticalArtifacts} from './statistical.mjs';
-const T={edit:'编辑',view:'阅读',add:'添加组件',import:'导入数据',undo:'撤销',redo:'重做',reload:'重新读取',export:'导出',close:'关闭',save:'保存',data:'数据',semantic:'指标语义',settings:'图表设置',source:'查询来源',remove:'删除',copy:'复制',empty:'导入数据，或通过 CLI / MCP 添加组件。'};
+const T={edit:'编辑',view:'退出编辑',add:'添加组件',import:'导入数据',undo:'撤销',redo:'重做',reload:'重新读取',export:'导出',close:'关闭',save:'保存',data:'数据',semantic:'指标语义',settings:'图表设置',source:'查询来源',remove:'删除',copy:'复制',empty:'导入数据，或通过 CLI / MCP 添加组件。'};
 const el=(tag,cls='',text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 const button=(label,fn,cls='')=>{const b=el('button',cls,label);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
 function showError(error){const n=document.getElementById('notice');if(n){n.textContent=error.message||String(error);n.className='notice error';}else console.error(error);}
@@ -27,8 +29,8 @@ function table(rows){
 export async function start({echarts,GridStack,App}){
   initializeOriginal(echarts);
   const boot=window.__DASHBOARD_BOOT__||{},root=el('div','workspace');document.body.append(root);
-  const top=el('header','topbar'),brand=el('div','brand','CHARTS / WORKSPACE'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
-  notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');const heading=el('div','dashboard-heading'),hidden=el('div');hidden.hidden=true;heading.append(brand,title,notice);top.append(heading,toolbar);hidden.append(filters);canvas.append(gridEl);root.append(top,hidden,canvas);toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Dashboard actions');
+  const top=el('header','topbar'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
+  notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');const description=el('div','dashboard-description'),context=el('div','dashboard-context'),badge=el('span','dashboard-status'),heading=el('div','dashboard-heading'),mark=el('div','document-mark');mark.append(icon('chart'));heading.append(mark,title,description,context,notice);top.append(heading,badge,toolbar);filters.setAttribute('role','region');filters.setAttribute('aria-label','筛选条件');canvas.append(gridEl);root.append(top,filters,canvas);toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Dashboard actions');
   let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,app=null;
   let lastBreakpoint=null,transport,originalInstances=[],disposeToolbar=null,disposeReport=null;
   let statisticalArtifacts=updateStatisticalArtifacts(Object.create(null),boot),renderedStatisticalArtifacts=null;
@@ -40,7 +42,14 @@ export async function start({echarts,GridStack,App}){
   const unpack=result=>accept(result.structuredContent || (result.content?.[0]?.text?JSON.parse(result.content[0].text):result));
   if(boot.mode==='mcp'){
     app=new App({name:'Charts Design Dashboard',version:'0.4.0'},{},{autoResize:true});
-    app.ontoolresult=result=>{try{const previous=statisticalArtifacts,value=unpack(result);if(value.document)doc=value.document;if(value.document||previous!==statisticalArtifacts)render();}catch(e){showError(e);}};
+    app.ontoolresult=result=>{try{
+      const incoming=result.structuredContent || (result.content?.[0]?.text?JSON.parse(result.content[0].text):result);
+      if(incoming.document&&doc&&incoming.document.id===doc.id&&incoming.document.revision<doc.revision)return;
+      const previous=statisticalArtifacts,value=unpack(result);
+      if(value.document){if(doc&&(doc.id!==value.document.id||doc.revision!==value.document.revision)){undo=[];redo=[];}doc=value.document;}
+      if(value.document||previous!==statisticalArtifacts)render();
+    }catch(e){showError(e);}};
+    app.onhostcontextchanged=context=>{if(doc&&context.displayMode)render();};
     transport=async(name,args)=>unpack(await app.callServerTool({name,arguments:args}));await app.connect();
   }else if(boot.mode==='offline'){
     doc=boot.document;transport=async()=>{throw Error('Offline snapshot: use Export JSON and import it through CLI to persist server-side changes.');};editing=false;
@@ -61,38 +70,58 @@ export async function start({echarts,GridStack,App}){
     const run=async()=>{busy++;const previous=doc.revision;try{const request=typeof args==='function'?args():args;const result=await transport(name,{...request,dashboardId:doc.id,expectedRevision:request.expectedRevision??doc.revision});if(result.document){if(pushUndo){undo.push(previous);redo=[];}doc=result.document;const pending=reportDrafts.get(doc.id);if(pending&&reportMarkdown(doc)===pending.saved)pending.revision=doc.revision;if(rerender)render();else{statusLine();const u=toolbar.querySelector('[aria-label="'+T.undo+'"]');if(u)u.disabled=!undo.length;}}return result;}catch(e){render();showError(e);throw e;}finally{busy--;}};
     const next=queue.then(run,run);queue=next.catch(()=>{});return next;
   }
+  function applyFilters(value){if(editing)return patch([{op:'set_filters',value}]);doc={...doc,manifest:{...doc.manifest,filters:value}};render();return Promise.resolve();}
   const patch=operations=>mutate('dashboard_patch',()=>({operations:typeof operations==='function'?operations():operations}));
   async function restore(direction){const from=direction==='undo'?undo:redo,to=direction==='undo'?redo:undo;if(!from.length)return;const target=from.pop(),current=doc.revision;try{await mutate('dashboard_restore',{revision:target},false);to.push(current);render();}catch(e){from.push(target);throw e;}}
   async function reload(){if(!doc)return;if(reportDrafts.get(doc.id)?.dirty&&!confirm('重新读取会放弃未保存的 Markdown，继续？'))return;const next=(await transport('dashboard_get',{dashboardId:doc.id})).document;reportDrafts.delete(doc.id);if(next.revision!==doc.revision){undo=[];redo=[];}doc=next;render();}
   title.onchange=()=>patch([{op:'set_title',value:title.value}]).catch(showError);
-  function statusLine(){status(`${doc.snapshot.status==='fixture'?'示例数据 / ':''}${boot.mode==='offline'?'离线快照 / ':''}v${doc.revision} / ${doc.snapshot.updatedAt}`);}
+  function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?'离线快照 · ':''}v${doc.revision}`);}
   function render(){
-    if(!doc){status('Create a dashboard with CLI / MCP, then reload this page.');return;}
+    if(!doc){status(boot.mode==='mcp'?'正在等待图表数据…':'请创建或打开仪表盘。');return;}
     renderedStatisticalArtifacts=statisticalArtifacts;
-    root.classList.toggle('paper-reading',doc.manifest.viewMode==='report'&&!editing);document.documentElement.dataset.theme=doc.manifest.theme;document.title=doc.manifest.title;title.value=doc.manifest.title;title.disabled=!editing;
+    root.classList.toggle('paper-reading',doc.manifest.viewMode==='report'&&!editing);root.classList.toggle('report-page',doc.manifest.viewMode==='report');document.documentElement.dataset.theme='light';document.title=doc.manifest.title;title.value=doc.manifest.title;title.disabled=!editing;
+    const meta=doc.manifest.meta??doc.manifest.originalWorkspace?.meta??{};
+    description.textContent=meta.subtitle||'';description.hidden=!description.textContent&&!editing;notice.hidden=!editing;
+    clearInlineEdit(description);if(editing)inlineEdit(description,{label:'页面描述',value:meta.subtitle||'',save:value=>patch([{op:'set_meta',value:{...meta,subtitle:value}}])});
+    context.textContent=[meta.org,meta.system].filter(Boolean).join(' · ');context.hidden=!context.textContent;badge.textContent=meta.statusText||'';badge.hidden=!badge.textContent;mark.replaceChildren(icon(meta.iconKey==='plane'?'plane':'chart'));
     disposeToolbar?.();toolbar.replaceChildren();
-    const oldSwitch=heading.querySelector('.view-switch');oldSwitch?.remove();const modes=el('nav','view-switch');modes.setAttribute('aria-label','呈现模式');for(const [mode,label,glyph] of [['dashboard','仪表盘','catalog'],['report','分析报告','semantic']]){const b=button(label,()=>switchMode(mode));b.prepend(icon(glyph));b.setAttribute('aria-pressed',String((doc.manifest.viewMode||'dashboard')===mode));modes.append(b);}heading.append(modes);
-    const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown。离开编辑模式？原文会保留。'))return;editing=!editing;render();});edit.disabled=boot.mode==='offline';toolbar.append(edit);
-    if(editing&&doc.manifest.viewMode!=='report'){const u=iconButton('undo',T.undo,()=>restore('undo')),r=iconButton('redo',T.redo,()=>restore('redo'));u.disabled=!undo.length;r.disabled=!redo.length;toolbar.append(iconButton('add',T.add,()=>componentEditor()),iconButton('catalog','原版组件',catalogDialog),iconButton('import',T.import,importData),u,r);}
-    if(doc.manifest.filters.length||editing){const f=iconButton('filter','筛选',()=>openMenu(f,[],{label:'筛选',content:filters}));toolbar.append(f);}
-    if(boot.mode!=='offline')toolbar.append(iconButton('sql','SQL',queryEditor),iconButton(doc.manifest.theme==='dark'?'light':'dark',doc.manifest.theme==='dark'?'Light':'Dark',()=>patch([{op:'set_theme',value:doc.manifest.theme==='dark'?'light':'dark'}])),iconButton('refresh',T.reload,reload));
-    toolbar.append(iconButton('export',T.export,exportDialog));disposeToolbar=adaptiveActions(top,toolbar);statusLine();
-    filters.replaceChildren();
-    for(const f of doc.manifest.filters){const c=doc.manifest.components[f.componentIds[0]],rows=doc.snapshot.datasets[c.datasetId];
+    const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑？'))return;editing=!editing;render();});edit.disabled=boot.mode==='offline';edit.classList.remove('icon-button');edit.classList.add('mode-toggle');edit.append(el('span','',editing?T.view:T.edit));toolbar.append(edit);
+    if(editing)toolbar.append(iconButton('comment','页面批注',()=>annotationDialog(null)));
+    if(editing){const u=iconButton('undo',T.undo,()=>restore('undo')),r=iconButton('redo',T.redo,()=>restore('redo'));u.disabled=!undo.length;r.disabled=!redo.length;toolbar.append(u,r);}
+
+
+    if(app){const context=app.getHostContext(),full=context?.displayMode==='fullscreen',mode=full?'inline':'fullscreen';
+      if(!editing&&context?.availableDisplayModes?.includes(mode))toolbar.append(iconButton(full?'minimize':'maximize',full?'返回对话':'全屏查看',async()=>{await app.requestDisplayMode({mode});render();}));}
+    if(!editing)toolbar.append(iconButton('export',T.export,exportDialog));disposeToolbar=adaptiveActions(top,toolbar);statusLine();
+    filters.replaceChildren();filters.hidden=doc.manifest.viewMode==='report'||(!doc.manifest.filters.length&&!editing);
+    for(const f of doc.manifest.filters){const c=doc.manifest.components[f.componentIds[0]],rows=f.componentIds.flatMap(id=>doc.snapshot.datasets[doc.manifest.components[id].datasetId]||[]);
       if(f.op==='in'){
-        const values=[...new Map(rows.map(r=>[JSON.stringify(r[f.field]),r[f.field]])).values()],group=el('fieldset','filter-options'),legend=el('legend','',f.label||f.field),choices=[];
-        group.append(legend);for(const value of values){const label=el('label','filter-choice'),check=input('','checkbox');check.checked=f.values.length===0||f.values.some(v=>JSON.stringify(v)===JSON.stringify(value));check.disabled=boot.mode==='offline';label.append(check,el('span','',String(value??'—')));group.append(label);choices.push({check,value});}
-        const apply=iconButton('save','应用筛选',()=>{const selected=choices.filter(v=>v.check.checked).map(v=>v.value);if(!selected.length)throw Error('至少选择一项，或使用重置恢复全部');const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=selected.length===values.length?[]:selected;return patch([{op:'set_filters',value:fs}]);});
-        const reset=iconButton('refresh','重置筛选',()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=[];return patch([{op:'set_filters',value:fs}]);});apply.disabled=reset.disabled=boot.mode==='offline';const actions=el('div','filter-actions');actions.append(reset,apply);group.append(actions);filters.append(group);
-      }else{const a=input(f.values[0]??''),b=input(f.values[1]??''),numeric=doc.manifest.datasets[c.datasetId].fields[f.field].type==='number';const apply=()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=a.value===''||b.value===''?[]:[numeric?Number(a.value):a.value,numeric?Number(b.value):b.value];return patch([{op:'set_filters',value:fs}]);};const submit=iconButton('save','应用范围',apply);a.disabled=b.disabled=submit.disabled=boot.mode==='offline';filters.append(field(f.label||f.field,a),b,submit);}
+        const values=[...new Map(rows.map(r=>[JSON.stringify(r[f.field]),r[f.field]])).values()],group=el('div','filter-panel'),heading=el('div','filter-panel-heading'),count=el('span','filter-count'),list=el('div','filter-choice-list'),choices=[];
+        heading.append(el('strong','',f.label||f.field),count);group.append(heading,list);
+        for(const value of values){const label=el('label','filter-choice'),check=input('','checkbox');check.checked=f.values.length===0||f.values.some(v=>JSON.stringify(v)===JSON.stringify(value));check.disabled=boot.mode==='offline';label.append(check,el('span','',String(value??'—')));list.append(label);choices.push({check,value});}
+        const apply=button('应用筛选',()=>{const selected=choices.filter(v=>v.check.checked).map(v=>v.value);if(!selected.length)return;const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=selected.length===values.length?[]:selected;return applyFilters(fs);},'filter-apply');
+        const reset=button('重置筛选',()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=[];return applyFilters(fs);},'filter-clear');reset.disabled=boot.mode==='offline';
+        const update=()=>{const n=choices.filter(v=>v.check.checked).length;count.textContent=`已选 ${n} / ${values.length}`;apply.disabled=boot.mode==='offline'||!n;};choices.forEach(({check})=>check.addEventListener('change',update));update();
+        const actions=el('div','filter-actions');actions.append(reset,apply);group.append(actions);const summary=f.values.length?f.values.map(v=>String(v??'—')).join('、'):'全部';const trigger=button((f.label||f.field)+'：'+summary,()=>openMenu(trigger,[],{label:f.label||f.field,content:group,align:'start'}),'filter-trigger');trigger.setAttribute('aria-haspopup','dialog');trigger.title=trigger.textContent;trigger.append(icon('down'));filters.append(trigger);
+      }else if(f.op==='contains'){const search=input(f.values[0]??''),wrap=el('div','filter-search');search.placeholder=f.label||'搜索';search.setAttribute('aria-label',f.label||f.field);search.disabled=boot.mode==='offline';const apply=()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=search.value.trim()?[search.value.trim()]:[];return applyFilters(fs);};search.onkeydown=e=>{if(e.key==='Enter')apply().catch(showError);};const submit=iconButton('search','应用搜索',apply);submit.disabled=boot.mode==='offline';wrap.append(search,submit);filters.append(wrap);
+      }else{
+        const a=input(f.values[0]??''),b=input(f.values[1]??''),fieldType=doc.manifest.datasets[c.datasetId].fields[f.field].type,numeric=fieldType==='number';
+        const apply=()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=a.value===''||b.value===''?[]:[numeric?Number(a.value):a.value,numeric?Number(b.value):b.value];return applyFilters(fs);};
+        const submit=button('应用范围',apply,'filter-apply'),reset=button('重置筛选',()=>{a.value=b.value='';return apply();},'filter-clear');a.disabled=b.disabled=submit.disabled=reset.disabled=boot.mode==='offline';
+        const range=el('div','filter-panel'),heading=el('div','filter-panel-heading'),fields=el('div','filter-range-fields'),actions=el('div','filter-actions');heading.append(el('strong','',f.label||f.field));
+        a.setAttribute('aria-label',(f.label||f.field)+'起始');b.setAttribute('aria-label',(f.label||f.field)+'结束');if(fieldType==='date'){a.type=b.type='date';}else if(numeric){a.type=b.type='number';}
+        for(const [caption,control] of [['起始',a],['结束',b]]){const label=el('label','filter-range-field');label.append(el('span','',caption),control);fields.append(label);}
+        actions.append(reset,submit);range.append(heading,fields,actions);const summary=f.values.length?f.values.join(' — '):(fieldType==='date'?'全部月份':'全部'),trigger=button((f.label||f.field)+'：'+summary,()=>openMenu(trigger,[],{label:f.label||f.field,content:range,align:'start'}),'filter-trigger');trigger.setAttribute('aria-haspopup','dialog');trigger.append(icon('down'));filters.append(trigger);
+      }
     }
-    if(editing)filters.append(button('筛选设置',()=>jsonEditor('Filters',doc.manifest.filters,value=>patch([{op:'set_filters',value}]))));
+    if(doc.manifest.filters.length){const summary=el('span','filter-summary','已生效条件：'+doc.manifest.filters.filter(f=>f.values.length).length),reset=button('一键重置',()=>applyFilters(doc.manifest.filters.map(f=>({...f,values:[]}))),'filter-reset');reset.prepend(icon('refresh'));reset.disabled=boot.mode==='offline'||!doc.manifest.filters.some(f=>f.values.length);filters.append(summary,reset);}
+
     if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null;}
     originalInstances.forEach(x=>x.destroy());originalInstances=[];
     if(grid){grid.destroy(false);grid=null;}gridEl.replaceChildren();disposeReport?.();disposeReport=null;canvas.querySelector('.markdown-workspace')?.remove();canvas.classList.toggle('report-canvas',doc.manifest.viewMode==='report');
     if(doc.manifest.viewMode==='report'){lastBreakpoint=bp();const draft=currentDraft();if(!draft.dirty){draft.text=reportMarkdown(doc);draft.saved=draft.text;draft.revision=doc.revision;}disposeReport=renderReport({host:canvas,doc,editing,mount:(card,id)=>mountComponent(card,id,true),draft,onChange:text=>{draft.text=text;draft.dirty=text!==draft.saved;},onSave:saveMarkdown,onDiscard:()=>{draft.text=reportMarkdown(doc);draft.saved=draft.text;draft.dirty=false;draft.revision=doc.revision;render();},onDownload:text=>download(doc.id+'.md',text,'text/markdown;charset=utf-8'),onDisposeCharts:()=>{originalInstances.forEach(x=>x.destroy());originalInstances=[];}});return;}
     const breakpoint=bp();lastBreakpoint=breakpoint;const columns={desktop:12,tablet:8,mobile:4}[breakpoint];
-    grid=GridStack.init({column:columns,cellHeight:48,margin:8,float:true,disableDrag:!editing,disableResize:!editing,draggable:{handle:'.layout-handle',cancel:'input,select,textarea,a'},resizable:{handles:'e,se,s,sw,w'},minRow:1},gridEl);
+    grid=GridStack.init({column:columns,cellHeight:48,margin:12,float:false,disableDrag:!editing,disableResize:true,draggable:{handle:'.layout-handle',cancel:'input,select,textarea,a'},resizable:{handles:'e,se,s,sw,w'},minRow:1},gridEl);
     for(const position of doc.manifest.layout[breakpoint]){
       const id=position.id,c=doc.manifest.components[id],item=el('div','grid-stack-item'),card=el('section','grid-stack-item-content card original-host');
       item.dataset.componentId=id;card.classList.toggle('is-editing',editing);item.append(card);gridEl.append(item);
@@ -107,61 +136,83 @@ export async function start({echarts,GridStack,App}){
   function mountComponent(card,id,quiet=false){
     const c=doc.manifest.components[id];
     try{
-        if(c.kind==='text'){card.classList.add('text-card');const h=el('div','text-card-header'),text=el('div','text-card-heading'),actions=el('div','text-card-actions');text.append(el('h2','text-heading',c.title));if(c.subtitle)text.append(el('p','component-description',c.subtitle));if(editing)actions.append(iconButton('edit',T.edit,()=>componentEditor(id)));h.append(text,actions);card.append(h,el('div','text-block',c.text));}
-        else if(c.kind==='statistical'){
-          card.classList.add('statistical-card');
-          if(!quiet){const header=el('div','card-header'),actions=el('div','card-actions');header.append(el('h2','',c.title));actions.append(iconButton('semantic','SQL / 语义',()=>inspect(id)));if(editing)actions.append(iconButton('edit',T.edit,()=>componentEditor(id)));header.append(actions);card.append(header);}
-          mountStatisticalImage(card,c,statisticalArtifacts[id]);
+        if(c.kind==='text'||c.kind==='statistical'){
+          const statistical=c.kind==='statistical';card.classList.add(statistical?'statistical-card':'text-card');
+          if(!quiet){const h=el('div','text-card-header'),heading=el('div','text-card-heading'),name=el('h2','text-heading',c.title),subtitle=el('p','component-description',c.subtitle||''),actions=el('div','text-card-actions');heading.append(name);if(c.subtitle||editing)heading.append(subtitle);actions.append(iconButton('info','指标定义与语义',()=>inspect(id)));if(editing){inlineEdit(name,{label:'图表标题',value:c.title,maxLength:240,save:value=>updateText(id,{title:value})});inlineEdit(subtitle,{label:'图表描述',value:c.subtitle||'',save:value=>updateText(id,{subtitle:value})});actions.append(iconButton('comment','图表批注',()=>annotationDialog(id)));}h.append(heading,actions);card.append(h);}
+          if(statistical)mountStatisticalImage(card,c,statisticalArtifacts[id]);else card.append(el('div','text-block',c.text));
         }
-        else originalInstances.push(mountOriginal(card,{doc,id,editing:quiet?false:editing,readOnly:quiet||boot.mode==='offline',onInspect:inspect,onEdit:componentEditor,onBinding:bindingEditor,onType:(id,chartType)=>patch([{op:'set_chart',id,chartType}]).catch(showError),
+        else originalInstances.push(mountOriginal(card,{doc,id,editing:quiet?false:editing,readOnly:quiet||!editing||boot.mode==='offline',onInspect:inspect,onEdit:componentEditor,onAnnotate:annotationDialog,onText:updateText,onType:(id,code)=>patch([{op:'set_original_chart',id,code}]).catch(showError),
           onPresentation:(id,changes)=>{const old=doc.manifest.components[id],base=old.kind==='legacy'?old.config:old.presentation||{};
             if(Object.keys(changes).some(k=>JSON.stringify(base[k])!==JSON.stringify(changes[k]))){const value=old.kind==='legacy'?{...old,config:{...base,...changes}}:{...old,presentation:{...base,...changes}};return mutate('dashboard_patch',{operations:[{op:'put_component',id,value}]},true,false).catch(showError);}}
         }));
-      if(quiet&&card.shadowRoot){const style=el('style');style.textContent='.component-actions,.component-header{display:none!important}.section-card{box-shadow:none!important;border:0!important;border-radius:0!important;padding:0!important;background:transparent!important}.card-body-wrap{height:100%!important;margin:0!important}';card.shadowRoot.append(style);if(c.kind==='chart'&&['bar','line'].includes(c.chartType)){const instance=originalInstances.at(-1)?.app.state.chartInstances['original-'+id];if(instance){const option=instance.getOption();instance.setOption({color:['#444444','#999999','#666666','#bbbbbb'],textStyle:{fontFamily:'Noto Serif CJK SC, Songti SC, serif',color:'#444'},legend:{show:(option.series||[]).length>1},series:(option.series||[]).map((series,index)=>({type:series.type,label:{show:['line','bar'].includes(series.type),color:'#444',position:'top',fontFamily:'Noto Serif CJK SC, serif'},lineStyle:{color:['#444','#999','#666','#bbb'][index%4],width:2},itemStyle:{color:['#444','#999','#666','#bbb'][index%4]},symbolSize:6}))});}}}
+      if(quiet&&card.shadowRoot){const style=el('style');style.textContent='.component-actions,.component-header,.component-details{display:none!important}.section-card{box-shadow:none!important;border:0!important;border-radius:0!important;padding:0!important;background:transparent!important}.card-body-wrap{height:100%!important;margin:0!important}';card.shadowRoot.append(style);if(c.kind==='chart'&&['bar','line'].includes(c.chartType)){const instance=originalInstances.at(-1)?.app.state.chartInstances['original-'+id];if(instance){const option=instance.getOption();instance.setOption({color:['#444444','#999999','#666666','#bbbbbb'],textStyle:{fontFamily:'Noto Serif CJK SC, Songti SC, serif',color:'#444'},legend:{show:(option.series||[]).length>1},series:(option.series||[]).map((series,index)=>({type:series.type,label:{show:['line','bar'].includes(series.type),color:'#444',position:'top',fontFamily:'Noto Serif CJK SC, serif'},lineStyle:{color:['#444','#999','#666','#bbb'][index%4],width:2},itemStyle:{color:['#444','#999','#666','#bbb'][index%4]},symbolSize:6}))});}}}
       }catch(error){card.append(el('p','error',error.message));}
   }
-  async function switchMode(mode){
-    if(mode===(doc.manifest.viewMode||'dashboard'))return;
-    if(boot.mode==='offline'){doc.manifest.viewMode=mode;render();return;}
-    await patch([{op:'set_view_mode',value:mode}]);
-  }
+  function updateText(id,changes){return patch(()=>{const old=doc.manifest.components[id],value={...old,...changes};if(old.kind==='legacy'){value.config={...old.config};if('title'in changes){value.config.title=changes.title;if(old.family==='kpi')value.config.label=changes.title;}if('subtitle'in changes){value.config.subtitle=changes.subtitle;if('description'in value.config)value.config.description=changes.subtitle;}}return [{op:'put_component',id,value}];});}
   async function saveMarkdown(source){
     const draft=currentDraft();
     await mutate('dashboard_patch',()=>({expectedRevision:draft.revision,operations:[{op:'set_report_markdown',value:source}]}),true,false);
     draft.saved=source;draft.dirty=draft.text!==source;draft.revision=doc.revision;
   }
   function jsonEditor(name,value,save){const {d,body}=dialog(name),area=textarea(value);body.append(area,button(T.save,async()=>{await save(JSON.parse(area.value));d.close();}));}
+  function pageEditor(){
+    const meta=doc.manifest.meta??doc.manifest.originalWorkspace?.meta??{}, {d,body}=dialog('页面标题与描述'),name=input(doc.manifest.title),subtitle=textarea(meta.subtitle||''),org=input(meta.org||''),system=input(meta.system||'');
+    name.maxLength=240;subtitle.maxLength=1000;name.setAttribute('aria-label','页面标题');subtitle.setAttribute('aria-label','页面描述');
+    body.append(field('标题',name),field('描述',subtitle),field('机构',org),field('系统',system),button(T.save,async()=>{const value=Object.fromEntries(Object.entries(meta).filter(([key])=>['subtitle','org','system','statusText','iconKey'].includes(key)));await patch([{op:'set_title',value:name.value},{op:'set_meta',value:{...value,subtitle:subtitle.value,org:org.value,system:system.value}}]);d.close();}));
+  }
   function componentEditor(id){
-    const statistical=id?doc.manifest.components[id]:null;
-    if(statistical?.kind==='statistical'){
-      const {d,body}=dialog(T.settings+' / statistical'),area=textarea(statistical);area.setAttribute('aria-label','Statistical component JSON');
-      body.append(el('p','muted','编辑统计图声明。图片由服务端生成；plot 和 analysis 会随声明一并保存。'),area,button(T.save,async()=>{const value=JSON.parse(area.value);if(!value||Array.isArray(value)||value.kind!=='statistical')throw Error('请保留 kind: statistical；此编辑器仅保存统计图声明。');await patch([{op:'put_component',id,value}]);d.close();}),button(T.copy,async()=>{await patch([{op:'put_component',id:id+'-'+Date.now().toString(36),value:structuredClone(statistical)}]);d.close();}),button(T.remove,async()=>{if(!confirm('Remove this component?'))return;await patch([{op:'remove_component',id}]);d.close();},'danger'));
-      return;
+    const old=doc.manifest.components[id];if(!old)return;
+    const {d,body}=dialog('标题与描述'),name=input(old.title),subtitle=textarea(old.subtitle??old.config?.subtitle??old.config?.description??'');name.maxLength=240;subtitle.maxLength=1000;name.setAttribute('aria-label','图表标题');subtitle.setAttribute('aria-label','图表描述');
+    body.append(field('标题',name),field('描述',subtitle),button(T.save,async()=>{await patch(()=>{const current=doc.manifest.components[id],value={...current,title:name.value,subtitle:subtitle.value};if(current.kind==='legacy'){value.config={...current.config,title:name.value,subtitle:subtitle.value};if(current.family==='kpi')value.config.label=name.value;}return [{op:'put_component',id,value}];});d.close();}));
+  }
+  function annotationDialog(componentId){
+    const {body}=dialog(componentId?'图表批注':'页面批注'),list=el('div','annotation-list'),draft=textarea('');draft.setAttribute('aria-label','新增批注');draft.maxLength=4000;
+    const writable=editing&&boot.mode!=='offline';
+    const update=async transform=>{await patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]);draw();};
+    function draw(){list.replaceChildren();const notes=(doc.manifest.annotations||[]).filter(n=>n.componentId===componentId);if(!notes.length)list.append(el('p','muted','暂无批注'));
+      for(const note of notes){const row=el('section','annotation-item'),area=textarea(note.text);area.setAttribute('aria-label','批注内容');area.maxLength=4000;area.disabled=!writable;row.append(el('p','muted',new Date(note.createdAt).toLocaleString('zh-CN')),area);if(writable)row.append(button('保存批注',()=>update(notes=>notes.map(n=>n.id===note.id?{...n,text:area.value}:n))),button('删除批注',()=>update(notes=>notes.filter(n=>n.id!==note.id))));list.append(row);}
     }
-    const old=id?doc.manifest.components[id]:null,{d,body}=dialog(old?T.settings:T.add),key=input(id||'card-'+Date.now().toString(36)),kind=select(['chart','kpi','table','text','legacy'].map(v=>[v,v]),old?.kind||'chart'),name=input(old?.title||'New chart'),subtitle=input(old?.subtitle||old?.config?.subtitle||'');key.disabled=!!id;
-    const datasets=Object.keys(doc.manifest.datasets),ds=select(datasets.map(v=>[v,v]),old?.datasetId),mapping=el('div');
-    let x,group,measures,type,text,config,family,presentation;
-    function fields(){mapping.replaceChildren();const selected=ds.value,meta=doc.manifest.datasets[selected];
-      if(kind.value==='text'){text=textarea(old?.text||'');mapping.append(field('Text',text));return;}
-      if(kind.value==='legacy'){family=select([['chart','原版图表'],['kpi','原版 KPI'],['table','原版明细表']],old?.family||'chart');mapping.append(field('组件类型',family));config=textarea(old?.config||{code:'c01',title:name.value,unit:'',data:{categories:[],values:[]},presentation:{axisLabels:{x:'Value',y:'Category'},seriesLabels:['Value'],tooltipValueLabels:['Value'],units:[''],tableHeaders:['Category','Value']}});mapping.append(field('Complete legacy chart config (no sample data fallback)',config));return;}
-      if(!meta){mapping.append(el('p','error','Import a dataset first.'));return;}
-      if(kind.value==='chart'){type=select(chartTypes.map(v=>[v,v]),old?.chartType||'bar');x=select(Object.keys(meta.fields).map(v=>[v,meta.fields[v].label||v]),old?.x);group=select([['','None'],...Object.keys(meta.fields).map(v=>[v,v])],old?.series||'');mapping.append(field('Chart type',type),field('X / category',x),field('Series / heatmap Y',group));}
-      if(['chart','kpi'].includes(kind.value)){measures=select(Object.entries(doc.manifest.metrics).filter(([,m])=>m.datasetId===selected).map(([k,m])=>[k,m.label]),old?.measures?.[0]);measures.multiple=kind.value==='chart';measures.size=4;if(old?.measures)for(const o of measures.options)o.selected=old.measures.includes(o.value);mapping.append(field('Measures',measures));}
-    }
-    kind.onchange=fields;ds.onchange=fields;body.append(field('Component ID',key),field('Kind',kind),field('Title',name),field('Description',subtitle),field('Dataset',ds),mapping);fields();
-    if(old&&old.kind!=='legacy'&&old.kind!=='text'){presentation=textarea(old.presentation||{});mapping.append(field('显示设置（保留原版 KPI / 表格参数）',presentation));}
-    body.append(button(T.save,async()=>{let value={...(old||{}),kind:kind.value,title:name.value,subtitle:subtitle.value};if(kind.value==='text')value.text=text.value;else if(kind.value==='legacy'){value.family=family.value;value.config=JSON.parse(config.value);if(family.value==='kpi')value.config.label=name.value;else value.config.title=name.value;value.config.subtitle=subtitle.value;}else{value.datasetId=ds.value;if(measures)value.measures=[...measures.selectedOptions].map(o=>o.value);if(kind.value==='chart'){value.chartType=type.value;value.x=x.value;if(group.value)value.series=group.value;else delete value.series;}}if(presentation)value.presentation=JSON.parse(presentation.value);await patch([{op:'put_component',id:key.value,value}]);d.close();}));
-    if(id)body.append(button(T.copy,async()=>{await patch([{op:'put_component',id:id+'-'+Date.now().toString(36),value:structuredClone(old)}]);d.close();}),button(T.remove,async()=>{if(!confirm('Remove this component?'))return;await patch([{op:'remove_component',id}]);d.close();},'danger'));
+    body.append(list);if(writable)body.append(field('新增批注',draft),button('添加批注',async()=>{if(!draft.value.trim())throw Error('请输入批注');await update(notes=>[...notes,{id:'note-'+crypto.randomUUID(),componentId,text:draft.value.trim(),createdAt:new Date().toISOString()}]);draft.value='';}));draw();
   }
   async function inspect(id){
-    const c=doc.manifest.components[id],{body}=dialog(c.title),tabs=el('nav','tabs'),content=el('div');body.append(tabs,content);
-    async function display(tab){content.replaceChildren();
-      if(tab==='data'){let rows=visibleRows(doc,id);if(c.kind==='legacy'&&!c.binding){const instance=originalInstances.find(i=>i.app.config.charts.some(ch=>ch.instanceId==='original-'+id));if(c.family==='table')rows=c.config.rows;else if(instance){const ch=instance.app.config.charts[0],data=ch.resolvedTable?.();if(data)rows=data.rows.map(r=>Object.fromEntries(data.headers.map((h,i)=>[h,r[i]])));}else rows=[{value:c.config.value,unit:c.config.unit||''}];}content.append(el('p','muted',`Snapshot: ${rows.length} rows`),table(rows));}
-      if(tab==='source'){const result=boot.mode==='offline'?{source:doc.manifest.sources[doc.manifest.datasets[c.datasetId]?.sourceId||c.sourceId]}:await transport('query_inspect',{dashboardId:doc.id,componentId:id});content.append(el('pre','code',JSON.stringify(result,null,2)));}
-      if(tab==='semantic'){if(c.kind==='statistical'){content.append(el('h3','','统计分析口径'),el('pre','code',JSON.stringify({plot:c.plot,analysis:c.analysis},null,2)));return;}for(const mid of c.measures||[]){const metric=doc.manifest.metrics[mid];content.append(el('h3','',metric.label),el('pre','code',JSON.stringify(metric,null,2)));if(editing)content.append(button(T.edit,()=>jsonEditor(mid,metric,value=>patch([{op:'put_metric',id:mid,value}]))));}if(!c.measures?.length)content.append(el('p','muted','原版组件快照：展示说明与已认证指标是两件事。'),el('pre','code',JSON.stringify(c.config?.explanation||c.config?.presentation||c.config||{},null,2)));}
-      if(tab==='settings')content.append(button(T.settings,()=>componentEditor(id)),el('pre','code',JSON.stringify(c,null,2)));
+    const c=doc.manifest.components[id],{body}=dialog(c.title),tabs=el('nav','tabs'),content=el('div','inspector-content');body.classList.add('inspector-reference');body.append(tabs,content);
+    const instance=originalInstances.find(i=>i.shadow.host.closest('[data-component-id]')?.dataset.componentId===id),config=c.config||{},explainKey=instance?.app.config.kpis?.[0]?.explainKey||instance?.app.config.charts?.[0]?.explainKey||config.code||config.type;
+    const metricIds=[...new Set([...(c.measures||[]),...Object.values(c.binding?.measures||{})])],metrics=metricIds.map(mid=>({id:mid,...doc.manifest.metrics[mid]}));
+    // Bound business metrics take precedence over the catalog's example explanations.
+    const explanation=config.explanation||(!metrics.length?instance?.app.config.explanations?.[explainKey]:null)||{};
+    const labels={name:'名称',definition:'定义',formula:'计算公式',rule:'统计规则',desc:'说明',meaning:'含义',range:'范围',xAxis:'横轴',yAxis:'纵轴',series:'系列',type:'图表类型',period:'统计周期',comparison:'比较范围',structure:'图表结构'};
+    function prose(value){const node=el('div','inspector-prose');if(Array.isArray(value)){for(const item of value)node.append(prose(item));}else if(value&&typeof value==='object'){const list=el('dl','inspector-fields');for(const [key,item] of Object.entries(value)){const detail=el('dd');detail.append(prose(item));list.append(el('dt','',labels[key]||key),detail);}node.append(list);}else node.textContent=String(value??'');return node;}
+    const paragraph=(label,value,unit)=>{if(value==null||value==='')return;const section=el('section','inspector-section'),heading=el('div','inspector-section-heading');heading.append(el('h3','',label));if(unit)heading.append(el('span','inspector-unit',`单位：${unit}`));section.append(heading,prose(value));content.append(section);};
+    const formula=m=>m.aggregation==='ratio'?`SUM(${m.numerator}) / SUM(${m.denominator})`:m.aggregation==='count'?'COUNT(*)':`${m.aggregation.toUpperCase()}(${m.field})`;
+    const tabButtons=new Map();
+    async function display(tab){content.replaceChildren();for(const [key,b] of tabButtons)b.setAttribute('aria-pressed',String(key===tab));
+      if(tab==='overview'){
+        paragraph('业务说明',explanation.overview||c.subtitle||config.subtitle||'暂无业务说明');
+        for(const [key,label] of [['interpretation','解读方法'],['notes','注意事项'],['limitations','局限']])paragraph(label,explanation[key]);
+        const extra=Object.fromEntries(Object.entries(explanation).filter(([key])=>!['title','overview','metrics','interpretation','notes','limitations'].includes(key)));if(Object.keys(extra).length){const details=el('details'),summary=el('summary','','完整说明');details.append(summary,prose(extra));content.append(details);}
+        for(const note of doc.manifest.annotations||[])if(note.componentId===id)content.append(el('p','inspector-note',note.text));
+      }
+      if(tab==='definitions'){
+        if(metrics.length){for(const metric of metrics)paragraph(metric.label||metric.id,metric.definition||'未提供指标定义',metric.unit||(metric.format==='percent'?'百分比':'无单位'));}
+        else if(c.kind==='statistical')paragraph('指标定义',c.analysis?.definition||'未提供指标定义',c.analysis?.unit);
+        else if(Array.isArray(explanation.metrics)&&explanation.metrics.length){for(const metric of explanation.metrics){const {name,...fields}=metric;paragraph(name||'指标定义',fields);}}
+        else if(explanation.metrics)paragraph('指标定义',explanation.metrics);
+        else paragraph('指标定义','此组件尚未提供指标定义。');
+      }
+      if(tab==='data'){let rows=visibleRows(doc,id);if(c.kind==='legacy'&&!c.binding){if(c.family==='table')rows=config.rows;else if(c.family==='chart'&&instance){const data=instance.app.config.charts[0].resolvedTable?.();if(data)rows=data.rows.map(r=>Object.fromEntries(data.headers.map((h,i)=>[h,r[i]])));}else rows=[{value:config.value,unit:config.unit||''}];}content.append(el('p','muted',`当前数据：${rows.length} 条`),table(rows));}
+      if(tab==='source'){const result=boot.mode==='offline'?{source:doc.manifest.sources[doc.manifest.datasets[c.datasetId]?.sourceId||c.sourceId]}:await transport('query_inspect',{dashboardId:doc.id,componentId:id});const source=result.source;paragraph('数据来源',source?.name||'未提供来源说明');paragraph('SQL',source?.query?.sql||'此组件未提供 SQL 记录');const details=el('details');details.append(el('summary','','查看来源记录'),el('pre','code',JSON.stringify(result,null,2)));content.append(details);}
+      if(tab==='semantic'){
+        if(c.kind==='statistical'){paragraph('统计口径',c.analysis?.definition,c.analysis?.unit);return;}
+        for(const metric of metrics)paragraph(metric.label||metric.id,{'指标标识':metric.id,'数据集':metric.datasetId,'计算方式':formula(metric),'数值格式':metric.format==='percent'?'百分比（比例值 × 100%）':'数值'},metric.unit||(metric.format==='percent'?'百分比':'无单位'));
+        if(!metrics.length)paragraph('指标语义','此组件未绑定可计算的指标，不能从标题推断计算口径。');
+        const binding=c.binding,dataset=doc.manifest.datasets[c.datasetId];
+        if(binding?.categoryField){const key=binding.categoryField;paragraph('分组字段',`${dataset?.fields[key]?.label||key}（${key}）`);}
+        if(binding?.timeGrain)paragraph('时间粒度',instance?.app.state.chartGranularities['original-'+id]==='quarter'?'季度':'月度');
+        if(binding?.scale)paragraph('展示换算',Object.entries(binding.scale).map(([target,scale])=>`${doc.manifest.metrics[binding.measures[target]]?.label||target} × ${scale}`).join('；'));
+        const filters=doc.manifest.filters.filter(f=>f.componentIds.includes(id));paragraph('筛选范围',filters.length?filters.map(f=>`${f.label||f.field}：${f.values.length?f.values.join(f.op==='range'?' 至 ':'、'):'全部'}`).join('；'):'未绑定页面筛选');
+      }
     }
-    for(const tab of ['data','source','semantic','settings'])tabs.append(button(T[tab],()=>display(tab)));await display('semantic');
+    for(const [tab,label] of [['overview','业务说明'],['definitions','指标定义'],['semantic','查看语义'],['source','SQL 与来源'],['data','数据']]){const b=button(label,()=>display(tab));tabButtons.set(tab,b);tabs.append(b);}await display('overview');
   }
   function catalogDialog(){
     const {body}=dialog('原版组件目录'),search=input(''),list=el('div','catalog-list');search.placeholder='搜索图表名称、编号';body.append(el('p','muted','40 款原版图表 + 9 类 KPI。使用原版组件 JSON 或导入 Workspace，不用通用图表替换原配置。'),search,list);
@@ -183,7 +234,8 @@ export async function start({echarts,GridStack,App}){
   function queryEditor(){const {d,body}=dialog('SQL / read-only'),alias=input('analytics'),ds=input('query-result'),sql=textarea('SELECT * FROM your_table LIMIT 100'),params=textarea('{}');body.append(el('p','muted','Only explicitly configured SQLite aliases are executable. No query runs on preview or chart switching.'),field('Connection alias',alias),field('Dataset ID',ds),field('SQL',sql),field('Parameters',params),button('执行只读查询',async()=>{if(!confirm('Execute this read-only query and save a new snapshot?'))return;await mutate('query_execute',{connection:alias.value,datasetId:ds.value,sql:sql.value,parameters:JSON.parse(params.value)});d.close();}));}
   function exportDialog(){const {body}=dialog(T.export);body.append(button('JSON artifact',()=>download(doc.id+'.json',JSON.stringify(doc,null,2))));if(boot.exportFile)body.append(button('Self-contained HTML',()=>boot.exportFile(doc.id)));if(boot.mode!=='offline')body.append(button('Version history',async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id});body.append(el('pre','code',JSON.stringify(result,null,2)));}));}
   window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!layoutTimer&&!busy)render();});
-  if(boot.mode==='web')setInterval(async()=>{if(!doc||busy||layoutTimer||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision||renderedStatisticalArtifacts!==statisticalArtifacts){if(current.revision!==doc.revision){undo=[];redo=[];}doc=current;render();}}catch(e){showError(e);}},5000);
+  if(boot.mode==='web')whileVisible(async()=>{if(!doc||busy||layoutTimer||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision||renderedStatisticalArtifacts!==statisticalArtifacts){if(current.revision!==doc.revision){undo=[];redo=[];}doc=current;render();}}catch(e){showError(e);}},5000);
+  if(boot.mode!=='offline')whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3));
   window.addEventListener('beforeunload',event=>{if(doc&&reportDrafts.get(doc.id)?.dirty){event.preventDefault();event.returnValue='';}});
   window.addEventListener('charts-error',event=>showError(event.detail));render();
 }

@@ -2,9 +2,57 @@
 from __future__ import annotations
 
 from typing import Any
+import math
+import re
 
 
 KPI_TYPES = frozenset(f"mc{index:02d}" for index in range(1, 10))
+
+
+def validate_kpi_presentation(kpi: dict[str, Any], path: str) -> list[dict[str, str]]:
+    """Require the data rendered by specialized KPI cards, preserving zero."""
+    errors = []
+
+    def error(field, message):
+        errors.append({"code": "KPI_PRESENTATION_INVALID", "path": f"{path}.{field}", "message": message})
+
+    card_type = kpi.get("type")
+    if card_type in ("mc04", "mc05"):
+        value = str(kpi.get("value", "")).replace(",", "")
+        if not re.match(r"^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)", value):
+            error("value", "Progress and gauge cards need a numeric display value")
+    if card_type == "mc03":
+        months, data = kpi.get("sparkMonths"), kpi.get("sparkData")
+        if not isinstance(months, list) or not months or not all(isinstance(m, str) for m in months):
+            error("sparkMonths", "Declare non-empty sparkline period labels")
+        if not isinstance(data, list) or not data or not all(
+            type(v) in (int, float) and math.isfinite(v) for v in data
+        ):
+            error("sparkData", "Declare explicit finite sparkline values")
+        elif isinstance(months, list) and len(months) != len(data):
+            error("sparkData", "Sparkline periods and values must have equal lengths")
+    if card_type == "mc06":
+        for field in ("leftTitle", "leftVal", "rightTitle", "rightVal"):
+            if kpi.get(field) in (None, ""):
+                error(field, "Declare both metrics and their labels")
+    if card_type == "mc09":
+        widths = []
+        for field in ("segLeftWidth", "segRightWidth"):
+            try:
+                value = float(str(kpi.get(field, "")).removesuffix("%"))
+            except ValueError:
+                value = float("nan")
+            if not math.isfinite(value) or not 0 <= value <= 100:
+                error(field, "Declare a segment percentage from 0 to 100")
+            widths.append(value)
+        if all(math.isfinite(v) for v in widths) and not math.isclose(sum(widths), 100):
+            error("segLeftWidth", "Segment percentages must sum to 100")
+        for field in ("subLabel", "subVal"):
+            if kpi.get(field) in (None, ""):
+                error(field, "Declare the segment label and value")
+    return errors
+
+
 CHART_CODES = (
     "c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08",
     "d01", "d02", "d03", "d04", "f01", "f02", "f03",

@@ -49,7 +49,7 @@ def test_mode_initializes_reading_order_without_changing_grid_or_components():
     changed = apply_operations(doc, [{'op': 'set_view_mode', 'value': 'report'}])
     assert changed['manifest']['viewMode'] == 'report'
     assert report_chart_references(changed['manifest']['report']['markdown']) == ['load', 'total', 'trend', 'regions', 'details']
-    for key in ('components', 'layout', 'datasets', 'metrics', 'sources', 'filters'):
+    for key in ('layout', 'datasets', 'metrics', 'sources', 'filters'):
         assert changed['manifest'][key] == doc['manifest'][key]
     assert changed['snapshot'] == doc['snapshot']
     assert 'report' not in doc['manifest']
@@ -363,8 +363,9 @@ def test_demo_is_markdown_document_with_two_shared_charts_and_synthetic_label():
     assert all(set(figure) == {'componentId', 'caption', 'source'} for figure in figures)
     assert all(figure['caption'] and '合成' in figure['source'] for figure in figures)
     dashboard = document()
-    for key in ('components', 'layout', 'datasets', 'metrics', 'sources', 'filters'):
+    for key in ('layout', 'datasets', 'metrics', 'sources', 'filters'):
         assert m[key] == dashboard['manifest'][key]
+    assert [(m['components'][key]['kind'], m['components'][key]['config']['code']) for key in ('trend', 'regions')] == [('legacy', 't01'), ('legacy', 'c01')]
     assert doc['snapshot']['datasets'] == dashboard['snapshot']['datasets']
     assert 'blocks' not in m['report']
 
@@ -400,10 +401,14 @@ def test_offline_export_escapes_source_and_single_component_resets_report(tmp_pa
     doc = patch_markdown(report_document(), '# Literal content\n' + payload + '\n\n' + fence('trend'))
     html = assets.export_document(doc)
     assert payload not in html
-    boot = json.loads(re.search(r'window.__DASHBOARD_BOOT__=(.*?);</script>', html).group(1))
+    match = re.search(r'window.__DASHBOARD_BOOT__=(.*?);</script>', html)
+    assert match is not None
+    boot = json.loads(match.group(1))
     assert boot['mode'] == 'offline' and boot['document'] == doc
     html = assets.export_component(doc, 'trend')
-    single = json.loads(re.search(r'window.__DASHBOARD_BOOT__=(.*?);</script>', html).group(1))['document']
+    match = re.search(r'window.__DASHBOARD_BOOT__=(.*?);</script>', html)
+    assert match is not None
+    single = json.loads(match.group(1))['document']
     assert set(single['manifest']['components']) == {'trend'}
     assert single['manifest']['viewMode'] == 'dashboard' and 'report' not in single['manifest']
     assert validate(single)

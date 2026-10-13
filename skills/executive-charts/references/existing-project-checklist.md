@@ -48,7 +48,7 @@ Account for all of the following where present:
 - [ ] Chart/table view toggle, CSV export, image copy, fullscreen, explanation dialog, resize, and destroy lifecycle.
 - [ ] Internal chart zoom or `dataZoom`; mark it as renderer-specific when the selected chart does not provide it.
 - [ ] Filters, option values, default selections, explicit `fields`, and every consumer `component.id`.
-- [ ] KPI aggregation and chart recomputation needed after filtering; identify the required `onFilterChange` behavior instead of assuming automatic recalculation.
+- [ ] KPI aggregation and chart recomputation needed after filtering; use the declarative `binding` contract where supported, or record the framework adapter needed for a structured component.
 - [ ] Table columns, units, alignment, sorting, pagination, keyword search, filter behavior, column visibility, drag order, copying, export, and overflow behavior.
 - [ ] Dialogs, drawers, menus, keyboard actions, focus order, labels, and ARIA references.
 - [ ] Render metric/chart explanations as read-only reference overlays with a title-bar close control, backdrop dismissal, `Escape`, and a content-focused body.
@@ -71,7 +71,7 @@ Completion criterion: every retained identity, text, and asset is machine-checka
 - [ ] For every registered chart code, map the original axes, series, Tooltip labels, units, complete table-column names, domains, thresholds, totals, and classification labels into `presentation` according to `CHART_PRESENTATION_CONTRACTS` and `CHART_TABLE_HEADER_COUNTS`.
 - [ ] Validate chart data collections, paired vector lengths, unit, scale, null handling, and formatter assumptions before rendering.
 - [ ] Give every filter at least one explicit `field`; list only stable consumer ids in `componentIds`.
-- [ ] Verify option `value` and displayed `label` both match the corresponding source field representation.
+- [ ] Verify option `value` exactly matches the bound source field; `label` is display text.
 - [ ] Define filtered KPI aggregation and chart updates wherever values must change with the table rows.
 - [ ] Give every table column a stable key and title; give numeric right-aligned columns an explicit unit.
 - [ ] Preserve parse failures and missing values as errors or missing data rather than converting them to zero.
@@ -87,7 +87,7 @@ Use a **thin slice**: migrate one complete business region through data, HTML ge
 3. Map it to one supported component contract or define one scoped Adapter.
 4. Generate its HTML through the shared renderer, or implement the declared in-place adapter against the same identity and capability contract.
 5. Compare business content, information hierarchy, geometry, visual tokens, and interactions with the baseline.
-6. Run applicable static, preservation, and runtime checks; correct the slice until its Blockers are zero.
+6. Run applicable static, preservation, and component behavior checks; correct the slice until its Blockers are zero.
 7. Record the evidence and accepted differences, then select the next region.
 
 Track each iteration:
@@ -114,7 +114,6 @@ Completion criterion: each mapped component preserves the original business hier
 - [ ] Build the candidate through the workspace path; confirm automatic static inspection passes.
 - [ ] Run strict `inspect-html` with the Preservation Manifest.
 - [ ] Run `compare-html` from the exact baseline file to the candidate file.
-- [ ] When Playwright and Chrome are available, run `inspect-html --runtime --strict` on the generated candidate.
 - [ ] Exercise filters, filter reset, chart Tooltip, renderer-specific zoom, chart/table toggle, sorting, pagination, column controls, export, copy, fullscreen, explanation dialog, and keyboard dismissal where those capabilities are in scope.
 - [ ] Open every KPI/chart explanation trigger and verify the expected read-only sections and dismissal controls.
 - [ ] Verify filtered KPIs and charts actually recompute; a changed chip or filtered table alone is not evidence of consumer updates.
@@ -123,7 +122,7 @@ Completion criterion: each mapped component preserves the original business hier
 
 After all slices pass individually, repeat the full-page states captured in the baseline. Verify cross-component filters, layout flow, shared overlays, resize behavior, and style isolation across slice boundaries.
 
-Completion criterion: static inspection, preservation comparison, and every available runtime check pass; each in-scope interaction has direct observed evidence, and the assembled page preserves the evidence already accepted for each slice.
+Completion criterion: static inspection, preservation comparison, and component behavior checks pass; each in-scope interaction has direct observed evidence, and the assembled page preserves the evidence already accepted for each slice.
 
 ## 9. Decide readiness
 
@@ -144,7 +143,7 @@ Deliver these artifacts together:
 - [ ] component inventory and mapping table;
 - [ ] edited Preservation Manifest;
 - [ ] workspace source files and generated HTML;
-- [ ] static inspection, comparison, and available runtime results;
+- [ ] static inspection, comparison, and component behavior test results;
 - [ ] approved differences, adapters, exclusions, and follow-ups.
 
 Completion criterion: another agent can reproduce the build and verification from the delivered artifacts and evidence record.

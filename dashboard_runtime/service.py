@@ -1,9 +1,10 @@
 """Transport-independent command service. Mutation arguments are always explicit."""
 from __future__ import annotations
 import copy
-from .model import TYPES, DashboardError, compatibility, identifier, inferred_fields, require, validate
+from .model import DashboardError, identifier, inferred_fields, require, validate
 from .query import QueryRunner
 from .store import Store
+from .declarations import declaration_contract
 
 class Service:
     def __init__(self, root, sources_file=None):
@@ -18,6 +19,8 @@ class Service:
 
     def _call(self, tool, args):
         require(isinstance(args, dict), 'Tool arguments must be an object')
+        if tool == 'runtime_keepalive':
+            return {'ok': True}
         board = args.get('dashboardId')
         if tool == 'statistical_render':
             from .statistical import render_statistical
@@ -27,11 +30,12 @@ class Service:
             from .generation import generation_examples
             return generation_examples(args.get('caseId'))
         if tool == 'chart_declarations':
-            from .declarations import declaration_contract
             return declaration_contract(chart_type=args.get('chartType'), legacy_code=args.get('code'), summary=not (args.get('chartType') or args.get('code')))
         if tool == 'dashboard_list':
             return {'dashboards': self.store.list()}
         if tool == 'dashboard_create':
+            if args.get('document'):
+                require(not any(c.get('kind') == 'chart' for c in args['document'].get('manifest', {}).get('components', {}).values()), 'New charts must use the original 40 codes (kind=legacy, family=chart)', 'UNSUPPORTED_CHART_FAMILY')
             doc = args.get('document')
             if doc is not None:
                 doc = copy.deepcopy(doc)
@@ -44,8 +48,14 @@ class Service:
             return {'valid': bool(validate(args.get('document') or self.store.get(board)))}
         if tool == 'dashboard_patch':
             ops = copy.deepcopy(args.get('operations'))
+            current = self.store.get(board)
             require(isinstance(ops, list), 'operations must be an array')
             for op in ops:
+                if isinstance(op, dict) and op.get('op') == 'set_chart':
+                    require(False, 'Use set_original_chart with an original code', 'UNSUPPORTED_CHART_FAMILY')
+                if isinstance(op, dict) and op.get('op') == 'put_component' and isinstance(op.get('value'), dict) and op['value'].get('kind') == 'chart':
+                    old = current['manifest']['components'].get(op.get('id'), {})
+                    require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'New charts must use the original 40 codes', 'UNSUPPORTED_CHART_FAMILY')
                 if isinstance(op, dict) and op.get('op') == 'put_source' and isinstance(op.get('value'), dict):
                     op['value']['verification'] = 'supplied'
             return {'document': self.store.mutate(board, args.get('expectedRevision'), ops)}
@@ -54,13 +64,8 @@ class Service:
         if tool == 'dashboard_restore':
             return {'document': self.store.mutate(board, args.get('expectedRevision'), restore_revision=args.get('revision'))}
         if tool == 'chart_catalog':
-            charts = [{'type': t} for t in TYPES]
-            if board and args.get('componentId'):
-                doc = self.store.get(board)
-                component = doc['manifest']['components'].get(args['componentId'])
-                require(component is not None and component['kind'] in ('chart','legacy'), 'Chart not found')
-                charts = [] if component['kind']=='legacy' else [{'type': t, 'compatible': compatibility(doc, component, t) is None,
-                           'reason': compatibility(doc, component, t)} for t in TYPES]
+            reference = declaration_contract(summary=True)
+            charts = [{'code': code} for code in reference['legacy']['chartCodes']]
             from .legacy import catalog
             from .statistical import statistical_declarations
             return {'statistical': statistical_declarations(), 'charts': charts, 'legacy': catalog(), 'originalKpis': ['mc%02d'%i for i in range(1,10)], 'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
@@ -131,20 +136,22 @@ INT = {'type': 'integer', 'minimum': 1}
 BOARD = {'dashboardId': STR}
 TARGET = {**BOARD, 'componentId': STR}
 TOOLS = {
+    'runtime_keepalive': ('Keep the local runtime alive only while its preview is visible; do not poll from background agents', schema()),
     'dashboard_list': ('List saved dashboards', schema()),
     'dashboard_create': ('Create a dashboard with an optional reviewed artifact', schema({**BOARD, 'title': STR, 'document': {'type': 'object'}}, ('dashboardId',))),
     'dashboard_get': ('Read current canonical state before editing', schema(BOARD, ('dashboardId',))),
-    'dashboard_preview': ('Open an editable MCP App; non-UI hosts receive the canonical artifact', schema(BOARD, ('dashboardId',))),
+    'dashboard_preview': ('Open an interactive MCP App; non-UI hosts receive the canonical artifact', schema(BOARD, ('dashboardId',))),
     'dashboard_validate': ('Validate a stored dashboard or supplied artifact', schema({**BOARD, 'document': {'type': 'object'}})),
     'dashboard_patch': ('Apply atomic typed operations with optimistic concurrency', schema({**BOARD, 'expectedRevision': INT, 'operations': {'type': 'array', 'minItems': 1, 'maxItems': 200, 'items': {'type': 'object'}}}, ('dashboardId', 'expectedRevision', 'operations'))),
     'dashboard_history': ('List the last 100 revisions', schema(BOARD, ('dashboardId',))),
     'dashboard_restore': ('Restore a revision as a new revision; never overwrite history', schema({**BOARD, 'expectedRevision': INT, 'revision': INT}, ('dashboardId', 'expectedRevision', 'revision'))),
-    'chart_catalog': ('List compatible native types and installed original chart codes', schema(TARGET)),
+    'chart_catalog': ('List the 40 installed original chart codes and component catalog', schema(TARGET)),
     'query_inspect': ('Inspect actual or supplied SQL provenance, without execution', schema(TARGET, ('dashboardId', 'componentId'))),
     'semantic_inspect': ('Inspect stored metric definitions, units and aggregation', schema(TARGET, ('dashboardId', 'componentId'))),
     'query_execute': ('Execute a bounded read-only SQLite query on a configured alias and atomically save its snapshot', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'connection': STR, 'sql': STR, 'parameters': {'type': ['object', 'array']}}, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql')))
 }
 READ_ONLY = {'dashboard_list', 'dashboard_get', 'dashboard_preview', 'dashboard_validate', 'dashboard_history', 'chart_catalog', 'query_inspect', 'semantic_inspect'}
+READ_ONLY.add('runtime_keepalive')
 TOOLS.update({
     'dataset_import': ('Import explicit JSON rows or CSV; inferred measures remain unverified', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'rows': {'type':'array', 'items':{'type':'object'}}, 'csvText':STR, 'name':STR}, ('dashboardId','expectedRevision','datasetId'))),
     'legacy_render': ('Export one original component with the shared bundled UI and only its required data sources', schema(TARGET, ('dashboardId','componentId')))
@@ -153,7 +160,7 @@ READ_ONLY.add('legacy_render')
 
 TOOLS.update({
     'generation_examples': ('Discover Dashboard and analytical-report generation cases; select caseId for reusable atomic declarations and the academic Markdown master. All case data is synthetic.', schema({'caseId': {'type':'string','enum':['executive-dashboard','academic-report']}})),
-    'chart_declarations': ('Discover available declaration types; select chartType or original code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'chartType': {'type':'string','enum':list(TYPES)}, 'code':STR}))
+    'chart_declarations': ('Discover available declaration types; select an original chart/KPI code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'code':STR}))
 })
 READ_ONLY.update({'generation_examples','chart_declarations'})
 

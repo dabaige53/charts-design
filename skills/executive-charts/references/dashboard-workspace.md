@@ -28,12 +28,6 @@ python3 "$WORKSPACE_SCRIPT" import-csv ./board --csv ./data.csv --title "渠道�
 
 python3 "$WORKSPACE_SCRIPT" meta set ./board --subtitle "2026 年 7 月" --system "月度经营复盘"
 
-python3 "$WORKSPACE_SCRIPT" add filter ./board region \
-  --label "大区" --type multi-select \
-  --option east=华东 --option south=华南 \
-  --default east --default south \
-  --field region --consumer revenue --consumer regional-sales
-
 python3 "$WORKSPACE_SCRIPT" add kpi ./board revenue \
   --label "营业收入" --value 224 --unit "万元" --yoy "+12.6% YoY"
 
@@ -48,8 +42,7 @@ python3 "$WORKSPACE_SCRIPT" table set ./board --from ./store-table.json
 
 python3 "$WORKSPACE_SCRIPT" inspect ./board --json
 python3 "$WORKSPACE_SCRIPT" validate ./board --strict --json
-python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html \
-  --manifest ./preservation.json --json
+python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html --json
 ```
 
 When the skill is installed outside this repository, set `WORKSPACE_SCRIPT` to the `scripts/dashboard_workspace.py` beside the active `SKILL.md`.
@@ -67,12 +60,18 @@ Use `--replace` for an intentional replacement of an existing KPI or chart with 
   "label": "综合毛利率",
   "value": "32.3%",
   "unit": "%",
-  "yoy": "+1.8 pts YoY",
-  "status": "positive"
+  "yoy": "+1.8 pts YoY"
 }
 ```
 
-Keep the display value and unit consistent. For complex cards, add only fields used by that `mc` card type.
+Keep the display value and unit consistent. Optional comparisons render as a dash when omitted. Comparison fields such as `yoy` and `mom` take their color from their sign (红涨绿跌): start increases with `+` and decreases with `-`; unsigned or zero values stay neutral. Strict mode also checks the primary visual data of specialized cards:
+
+- `mc03`: non-empty `sparkMonths` and finite `sparkData` arrays of equal length;
+- `mc04` / `mc05`: a numeric display value, including zero;
+- `mc06`: explicit `leftTitle`, `leftVal`, `rightTitle`, and `rightVal`;
+- `mc09`: `segLeftWidth` and `segRightWidth` percentages totaling 100, with explicit `subLabel` and `subVal`.
+
+These fields have no sample-data fallback.
 
 ### Chart
 
@@ -87,6 +86,13 @@ Keep the display value and unit consistent. For complex cards, add only fields u
     "categories": ["华东", "华南"],
     "values": [128, 96],
     "unit": "万元"
+  },
+  "presentation": {
+    "axisLabels": {"x": "区域", "y": "营业收入"},
+    "seriesLabels": ["营业收入"],
+    "tooltipValueLabels": ["营业收入"],
+    "units": ["万元"],
+    "tableHeaders": ["区域", "营业收入"]
   }
 }
 ```
@@ -142,6 +148,34 @@ The exact per-code field counts live in `scripts/core/component_schemas.py` as `
 
 `fields` is the explicit table-data binding. `componentIds` lists consumers by stable component id; chart code remains the renderer selection. An empty `filters.json` renders the dashboard with an empty filter region.
 
+### Filter bindings
+
+Load the table before strict validation. Every filter field must name a declared table column present in each row, and each consumer must exist and declare a supported `binding`. An empty `componentIds` array means table-only filtering. Each consumer uses only its assigned dimension filters; keyword search and chart cross-filtering apply globally. Clearing all multi-select options selects zero rows.
+
+For a KPI whose main value is the sum of table `sales`, add:
+
+```json
+"binding": {"field": "sales", "aggregate": "sum", "precision": 0}
+```
+
+Main-value bindings support `mc01`, `mc02`, `mc04`, `mc05`, and `mc08`. Supplemental comparisons remain explicit configuration. Cards with sparkline, dual-metric, ranking, or segment data need a framework adapter for those additional calculations and cannot declare this main-value binding.
+
+For a `c01` chart grouped by table `region`, add:
+
+```json
+"binding": {
+  "groupBy": "region",
+  "category": "categories",
+  "series": {"values": {"field": "sales", "aggregate": "sum"}}
+}
+```
+
+`category` names the renderer's category vector; `series` must bind every numeric vector in its registered schema. This path supports schemas with one string vector and one or more numeric vectors. Structured, multi-period, graph, and hierarchical shapes require an adapter; validation reports unsupported bindings instead of accepting a filter that cannot update the chart.
+
+Aggregations are `sum`, `mean`, `min`, `max`, and `count` (non-null field values). Numeric aggregations require finite numbers already expressed in the component's display unit; they perform no string parsing or scaling. With zero matching rows, sum/count return zero and mean/min/max render as a dash. Binding recomputation updates the underlying chart data so chart view, table view, and CSV export share the same rows.
+
+The [sample KPI](quickstart/revenue.kpi.json), [sample chart](quickstart/regional-sales.chart.json), and [sample table](quickstart/sales.table.json) form a complete runnable example. Use them only to verify tooling. The repository README provides the CLI sequence; replace example data for business delivery.
+
 ### Table
 
 ```json
@@ -166,7 +200,7 @@ For large tables, generate `table.json` from source data with a deterministic sc
 - workspace references stay inside the workspace and resolve to valid JSON;
 - component ids are unique;
 - filter definitions use the array schema;
-- strict filters declare one or more data fields, and optional consumers are component-id arrays;
+- strict filter fields resolve to table columns and rows; consumers resolve to components with valid aggregation bindings;
 - chart codes exist and each chart provides explicit data;
 - KPI and chart units are declared;
 - table columns have stable keys and titles;
@@ -190,15 +224,14 @@ The workspace contract covers all shipped component families:
 
 `build` always runs strict static inspection. Use the standalone commands for an existing page or CI:
 
+For a migration, first create and review the Preservation Manifest from the baseline, then pass the existing file to `build --manifest`. New dashboards build without this option.
+
 ```bash
 python3 "$WORKSPACE_SCRIPT" inventory-html ./before.html --output ./preservation.json --json
 python3 "$WORKSPACE_SCRIPT" inspect-html ./dist/board.html --strict --manifest ./preservation.json --json
-python3 "$WORKSPACE_SCRIPT" inspect-html ./dist/board.html --runtime --strict --manifest ./preservation.json --json
 python3 "$WORKSPACE_SCRIPT" compare-html ./before.html ./dist/board.html --manifest ./preservation.json --json
 ```
 
 A Preservation Manifest may declare `requiredIds`, `requiredText`, `forbiddenText`, `requiredAssets` and `components`. Inspection checks document metadata, duplicate ids, broken DOM references, missing local assets and manifest requirements. Comparison additionally catches baseline ids, visible text and asset references lost during migration.
 
-`--runtime` uses Playwright with the installed Chrome channel. It loads the generated file, waits for `DashboardRuntime`, checks every rendered KPI/chart/filter/table identity and chart-card actions, rejects browser errors or duplicate rendered ids, and verifies `destroy()` clears the mounted app.
-
-When browser execution is unavailable, record that gate as unavailable and report strict validation, static inspection, generated inline-script syntax, and lifecycle unit-test evidence separately.
+Report strict validation, static inspection, generated inline-script syntax, and component behavior test results with the delivery.

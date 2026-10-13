@@ -15,7 +15,8 @@ from typing import Any
 
 from generate_dashboard import CHARTS_MAP, generate_dashboard
 from core.csv_profiler import profile_csv
-from core.component_schemas import CHART_SCHEMA_REGISTRY, KPI_TYPES, validate_chart_data
+from core.component_schemas import CHART_SCHEMA_REGISTRY, KPI_TYPES, validate_chart_data, validate_kpi_presentation
+from core.filter_bindings import validate_filter_bindings
 from core.html_inspector import compare_html, inspect_html, inventory_html
 
 
@@ -225,13 +226,15 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
             error("KPI_ID_INVALID", f"{path}.id", "KPI id must be present and unique")
         else:
             seen_ids.add(item_id)
-        for field in ("label", "value"):
+        for field in (("label",) if item.get("type") == "mc06" else ("label", "value")):
             if item.get(field) in (None, ""):
                 error("KPI_FIELD_MISSING", f"{path}.{field}", f"KPI {field} is required")
         if item.get("type") not in KPI_TYPES:
             error("KPI_TYPE_INVALID", f"{path}.type", "KPI type must be one of mc01 through mc09")
         if strict and not item.get("unit"):
             error("KPI_UNIT_MISSING", f"{path}.unit", "Declare a unit for the KPI")
+        if strict:
+            errors.extend(validate_kpi_presentation(item, path))
 
     for index, item in enumerate(resolved.get("charts", [])):
         path = f"charts[{index}]"
@@ -274,6 +277,8 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
                 elif column.get("align") == "right" and not column.get("unit"):
                     error("TABLE_UNIT_MISSING", f"table.columns[{index}].unit", "Numeric table columns must declare a unit")
 
+    if strict:
+        errors.extend(validate_filter_bindings(resolved))
     return errors, warnings
 
 
@@ -564,7 +569,6 @@ def cmd_inspect_html(args: argparse.Namespace) -> None:
     emit_html_result(inspect_html(
         Path(args.html), strict=args.strict,
         manifest_path=Path(args.manifest) if args.manifest else None,
-        runtime=args.runtime,
     ), args.json)
 
 
@@ -630,7 +634,6 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_html_parser.add_argument("html")
     inspect_html_parser.add_argument("--strict", action="store_true")
     inspect_html_parser.add_argument("--manifest", help="Preservation Manifest JSON path")
-    inspect_html_parser.add_argument("--runtime", action="store_true", help="Request browser-backed runtime checks")
     add_json_flag(inspect_html_parser)
     inspect_html_parser.set_defaults(func=cmd_inspect_html)
 

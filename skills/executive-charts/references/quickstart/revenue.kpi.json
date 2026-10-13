@@ -1,0 +1,8 @@
+{
+  "id": "revenue",
+  "type": "mc01",
+  "label": "营业收入（示例）",
+  "value": "224 万元",
+  "unit": "万元",
+  "binding": {"field": "sales", "aggregate": "sum", "precision": 0}
+}

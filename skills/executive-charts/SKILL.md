@@ -45,7 +45,7 @@ For any task that creates, restyles, migrates, or embeds component HTML, read [r
      --config ./regional-sales.chart.json --output ./dist/regional-sales.html
    ```
 
-   The command validates the selected renderer contract, writes the HTML, and runs static plus browser-backed Generated HTML inspection.
+   The command validates the selected renderer contract, writes the HTML, and runs static Generated HTML inspection.
 
 2. Create an empty workspace outside this skill directory:
 
@@ -63,22 +63,23 @@ For any task that creates, restyles, migrates, or embeds component HTML, read [r
      --label "营业收入" --value 224 --unit "万元"
    python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./board regional-sales \
      --from ./regional-sales.chart.json
-   python3 skills/executive-charts/scripts/dashboard_workspace.py add filter ./board region \
-     --label "大区" --option east=华东 --field region \
-     --consumer revenue --consumer regional-sales
    ```
 
    Put the chart's `code`, title, unit, data, and complete `presentation` contract in `regional-sales.chart.json`. After each meaningful block, run `inspect --json`. Proceed when the current values and display semantics match the business requirement.
+
+   When adding filters, first load table rows and declare each consumer's aggregation `binding` using [dashboard-workspace.md](references/dashboard-workspace.md#filter-bindings). Validation checks the referenced columns, consumers, and supported aggregation shape.
 
 4. Validate early and build thin slices:
 
    ```bash
    python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./board --strict --json
    python3 skills/executive-charts/scripts/dashboard_workspace.py build ./board \
-     --output ./dist/board.html --manifest ./preservation.json
+     --output ./dist/board.html
    ```
 
    Every workspace build runs the static Generated HTML Inspector. Build after the first useful KPI or chart, then iterate. Generation is complete when strict validation and HTML inspection pass and every rendered block supports a stated management question.
+
+   For migrations, create and review the Preservation Manifest from the baseline with `inventory-html`, then add `--manifest <existing-file>` to build. New dashboards do not need a preservation file.
 
 For command shapes and component schemas, read [references/dashboard-workspace.md](references/dashboard-workspace.md) when assembling a dashboard.
 
@@ -92,7 +93,7 @@ For command shapes and component schemas, read [references/dashboard-workspace.m
 - **Business-owned data:** Final workspaces contain explicit user/business data. Use catalog and preset data for structural preview.
 - **Business-owned presentation:** Declare `presentation` metadata for axes, series, Tooltip values, units, complete `tableHeaders`, and renderer-specific domains, thresholds, or labels.
 - **Bounded context:** Use `inspect --json` for summaries and edit one component file at a time.
-- **Visual system:** Generate chart-code badges, explicit units, the restrained categorical palette, and positive/negative/attention semantics. Read [references/design_standards.md](references/design_standards.md) when changing visual behavior.
+- **Visual system:** Generate chart-code badges, explicit units, the restrained categorical palette, and 红涨绿跌 semantics: red (`positive`) for increases, green (`negative`) for decreases, and neither for status or series identity. Colors come from `scripts/core/palette.py`. Read [references/design_standards.md](references/design_standards.md) when changing visual behavior.
 
 Select codes from [references/chart_catalog.json](references/chart_catalog.json). Use its metadata for chart choice and CLI-generated previews for visual comparison. Final component markup follows the component JSON → shared renderer → Runtime pipeline.
 

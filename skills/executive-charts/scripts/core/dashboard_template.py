@@ -3,6 +3,8 @@ import os
 import re
 
 from .runtime_bundle import render_runtime_bundle
+from .filter_bindings import FILTER_BINDINGS_JS
+from .palette import categorical_js, echarts_palette_js, tailwind_colors_js
 from .explanation_dialog import (
     EXPLANATION_DIALOG_CSS,
     EXPLANATION_DIALOG_RENDERER_JS,
@@ -22,19 +24,7 @@ TEMPLATE = """<!DOCTYPE html>
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        primary: '#123B5D',
-                        'primary-strong': '#0B2A42',
-                        'primary-soft': '#DCE8F0',
-                        ink: '#17212B',
-                        'ink-muted': '#52606D',
-                        'ink-subtle': '#7B8794',
-                        positive: '#A4453C',
-                        negative: '#2F6B55',
-                        attention: '#9A6A18',
-                        gridline: '#E6EAED',
-                        rule: '#C9D1D8'
-                    },
+                    colors: __TAILWIND_COLORS__,
                     fontFamily: {
                         sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "'PingFang SC'", "'Segoe UI'", "sans-serif"],
                         mono: ["'JetBrains Mono'", "Menlo", "Monaco", "Consolas", "monospace"]
@@ -262,25 +252,10 @@ __DASHBOARD_CONFIG_CODE__
 
         // 1. McKinsey / Bloomberg Design Tokens
         const TOKENS = {
-            palette: {
-                primary: '#123B5D',        // 旗舰深海蓝 (主序列/核心强调)
-                primaryStrong: '#0B2A42',  // 墨蓝黑 (高对比主标题/关键标签)
-                primarySoft: '#DCE8F0',    // 冰川淡蓝 (辅助对比/背景底槽)
-                secondary: '#2C6485',      // 钢蓝 (次级对比序列)
-                tertiary: '#628EA8',       // 浅灰蓝 (第三对比序列)
-                slate: '#8C9DAE',          // 雾板岩灰 (第四对比序列)
-                ink: '#0F172A',            // 炭黑正文
-                inkMuted: '#52606D',       // 板岩深灰 (副标题/坐标刻度)
-                inkSubtle: '#7B8794',      // 板岩淡灰 (注脚/量纲)
-                positive: '#2F6B55',       // 咨询墨绿 (正向增长/达标/盈利)
-                negative: '#A4453C',       // 咨询绯红 (负向承压/收缩/预警)
-                attention: '#9A6A18',      // 咨询琥珀金 (重点关注/待研判)
-                gridline: '#E2E8F0',
-                rule: '#CBD5E1',
-                categorical: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC']
-            },
+            // Generated from scripts/core/palette.py: positive = 红涨, negative = 绿跌.
+            palette: __ECHARTS_PALETTE__,
             commonOption: {
-                color: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC'],
+                color: __CATEGORICAL_COLORS__,
                 animation: true,
                 animationDuration: 350,
                 grid: { top: 40, bottom: 40, left: 12, right: 24, containLabel: true },
@@ -310,7 +285,7 @@ __DASHBOARD_CONFIG_CODE__
             trendingUp: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
             compass: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
             award: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>',
-            checkCircle: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#2F6B55" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>',
+            checkCircle: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>',
             maximize: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>',
             minimize: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/></svg>',
             viewToggle: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>',
@@ -487,9 +462,11 @@ __DASHBOARD_CONFIG_CODE__
         }
 
         // 3. Global State Management (100% Dynamic & Zero-Data BI Engine)
+__FILTER_BINDINGS_JS__
+
         class StateStore {
             constructor(config) {
-                this.config = config || {};
+                this.config = {...(config || {}), kpis: (config?.kpis || []).map(kpi => ({...kpi}))};
                 const usedChartInstanceIds = new Set();
                 this.config.charts = (this.config.charts || []).map((chart, index) => {
                     const rawIdentity = chart.instanceId || chart.id || chart.code || `component-${index + 1}`;
@@ -613,6 +590,34 @@ __DASHBOARD_CONFIG_CODE__
         }
 
         // 4. UI Renderer with Multi-Style High-Impact KPI Cards & Consulting Design Tokens
+        function parseKPIValue(value) {
+            const number = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
+            return Number.isFinite(number) ? number : null;
+        }
+
+        // 红涨绿跌: signed changes color by direction; unsigned values stay neutral.
+        function trendDirection(value) {
+            if (typeof value === 'number') return value > 0 ? 1 : value < 0 ? -1 : 0;
+            const text = String(value ?? '').trim();
+            if (/^[↑▲]/.test(text)) return 1;
+            if (/^[↓▼]/.test(text)) return -1;
+            const match = text.match(/^([-+＋−－])[ ]*[¥$€]?[ ]*([0-9.,]+)/);
+            if (!match || !(Number.parseFloat(match[2].replace(/,/g, '')) > 0)) return 0;
+            return '+＋'.includes(match[1]) ? 1 : -1;
+        }
+
+        function trendTextClass(value, neutralClass = 'text-ink-muted') {
+            const direction = trendDirection(value);
+            return direction > 0 ? 'text-positive' : direction < 0 ? 'text-negative' : neutralClass;
+        }
+
+        function trendBadgeClass(value) {
+            const direction = trendDirection(value);
+            if (direction > 0) return 'bg-positive/10 text-positive border-positive/20';
+            if (direction < 0) return 'bg-negative/10 text-negative border-negative/20';
+            return 'bg-slate-100 text-ink-muted border-slate-200';
+        }
+
         class DashboardRenderer {
             constructor(state, root = document) {
                 this.state = state;
@@ -654,7 +659,7 @@ __DASHBOARD_CONFIG_CODE__
                         </div>
                         <div class="flex items-center gap-3 text-xs">
                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#123B5D]/6 border border-[#123B5D]/15 text-[#123B5D] text-xs font-mono font-medium">
-                                <span class="w-1.5 h-1.5 rounded-full bg-[#2F6B55]"></span>
+                                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
                                 ${meta.statusText || '全域多维数据实时协同'}
                             </span>
                         </div>
@@ -797,19 +802,19 @@ __DASHBOARD_CONFIG_CODE__
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
                                     <div class="flex items-center gap-1.5">
-                                        <span class="inline-flex items-center gap-1.5 text-[10px] text-[#2F6B55] bg-[#2F6B55]/8 border border-[#2F6B55]/20 px-2 py-0.5 rounded font-medium">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-[#2F6B55]"></span>${kpi.statusBadge || '核算中'}
+                                        <span class="inline-flex items-center gap-1.5 text-[10px] text-primary bg-primary/5 border border-primary/15 px-2 py-0.5 rounded font-medium">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>${kpi.statusBadge || '核算中'}
                                         </span>
                                         <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc01'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                     </div>
                                 </div>
                                 <div class="flex items-baseline gap-2 my-1">
-                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
-                                    <span class="text-xs font-semibold ${kpi.isPositive ? 'text-positive' : 'text-negative'} font-mono">${kpi.yoy}</span>
+                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                    <span class="text-xs font-semibold ${trendTextClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '统计口径'}</span>
-                                    <span class="text-primary font-semibold">${kpi.subVal || '-'}</span>
+                                    <span class="text-primary font-semibold">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -824,15 +829,15 @@ __DASHBOARD_CONFIG_CODE__
                                     <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc02'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline gap-2 my-1">
-                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
+                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
                                 </div>
                                 <div class="flex items-center gap-1.5 my-1">
-                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-[#A4453C]/10 text-positive border border-[#A4453C]/20 font-mono">${kpi.yoy || '+4.8% YoY'}</span>
-                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-ink-muted border border-slate-200 font-mono">${kpi.mom || '+1.2% MoM'}</span>
+                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${trendBadgeClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
+                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${trendBadgeClass(kpi.mom)} font-mono">${kpi.mom ?? '—'}</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '同比增量'}</span>
-                                    <span class="text-positive font-semibold">${kpi.subVal || '-'}</span>
+                                    <span class="${trendTextClass(kpi.subVal, 'text-primary')} font-semibold">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -848,15 +853,15 @@ __DASHBOARD_CONFIG_CODE__
                                 </div>
                                 <div class="flex items-baseline justify-between gap-2">
                                     <div class="flex items-baseline gap-1.5">
-                                        <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
-                                        <span class="text-xs font-bold text-positive font-mono">${kpi.yoy}</span>
+                                        <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                        <span class="text-xs font-bold ${trendTextClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
                                     </div>
-                                    <span class="text-[10px] text-[#2F6B55] font-semibold bg-[#2F6B55]/8 border border-[#2F6B55]/20 px-1.5 py-0.5 rounded font-mono">↑ 稳步攀升</span>
+                                    <span class="text-[10px] font-semibold border ${trendBadgeClass(kpi.trendLabel)} px-1.5 py-0.5 rounded font-mono">${kpi.trendLabel ?? '—'}</span>
                                 </div>
                                 <div id="kpi-spark-${kpi.id}" class="w-full h-11 my-1"></div>
                                 <div class="pt-1.5 border-t border-slate-100 text-[10px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '周期均值'}</span>
-                                    <span class="text-ink-muted font-semibold">${kpi.subVal || '-'}</span>
+                                    <span class="text-ink-muted font-semibold">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -864,8 +869,8 @@ __DASHBOARD_CONFIG_CODE__
 
                     // 4. mc04: Goal & Progress Bar Card
                     if (cardType === 'mc04') {
-                        const progress = parseFloat(kpi.value) || 88.6;
-                        const barWidth = Math.min(100, progress);
+                        const progress = parseKPIValue(kpi.value);
+                        const barWidth = Math.max(0, Math.min(100, progress ?? 0));
                         return `
                             <div class="section-card p-4 flex flex-col justify-between">
                                 <div class="flex items-center justify-between mb-1">
@@ -873,15 +878,15 @@ __DASHBOARD_CONFIG_CODE__
                                     <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc04'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline justify-between my-0.5">
-                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
-                                    <span class="text-[11px] font-bold text-primary font-mono">${kpi.yoy || '达成领跑'}</span>
+                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                    <span class="text-[11px] font-bold ${trendTextClass(kpi.yoy, 'text-primary')} font-mono">${kpi.yoy ?? '—'}</span>
                                 </div>
                                 <div class="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden my-1.5">
                                     <div class="bg-primary h-full rounded-full transition-all" style="width: ${barWidth}%;"></div>
                                 </div>
                                 <div class="pt-1.5 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '考核目标'}</span>
-                                    <span class="text-positive font-bold">${kpi.subVal || '-'}</span>
+                                    <span class="${trendTextClass(kpi.subVal, 'text-primary')} font-bold">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -897,14 +902,14 @@ __DASHBOARD_CONFIG_CODE__
                                 </div>
                                 <div class="flex items-baseline justify-between gap-2">
                                     <div class="flex items-baseline gap-1.5">
-                                        <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
+                                        <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
                                     </div>
-                                    <span class="text-[10px] text-primary font-semibold bg-primary/8 border border-primary/20 px-1.5 py-0.5 rounded font-mono">${kpi.gaugeSub || '领跑全行业'}</span>
+                                    <span class="text-[10px] text-primary font-semibold bg-primary/8 border border-primary/20 px-1.5 py-0.5 rounded font-mono">${kpi.gaugeSub ?? '—'}</span>
                                 </div>
                                 <div id="kpi-gauge-${kpi.id}" class="w-full h-11 my-1"></div>
                                 <div class="pt-1.5 border-t border-slate-100 text-[10px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '行业基准'}</span>
-                                    <span class="text-negative font-semibold">${kpi.subVal || '-'}</span>
+                                    <span class="${trendTextClass(kpi.subVal)} font-semibold">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -921,18 +926,18 @@ __DASHBOARD_CONFIG_CODE__
                                 <div class="grid grid-cols-2 gap-2 divide-x divide-slate-100 my-1">
                                     <div>
                                         <span class="text-[10px] text-ink-subtle block">${kpi.leftTitle || '规模指标'}</span>
-                                        <div class="text-lg font-extrabold text-primary-strong font-mono tabular-nums">${kpi.leftVal || '-'}</div>
-                                        <span class="text-[10px] text-positive font-bold font-mono">${kpi.leftYoy || '+12.4%'}</span>
+                                        <div class="text-lg font-extrabold text-primary-strong font-mono tabular-nums">${kpi.leftVal ?? '—'}</div>
+                                        <span class="text-[10px] ${trendTextClass(kpi.leftYoy)} font-bold font-mono">${kpi.leftYoy ?? '—'}</span>
                                     </div>
                                     <div class="pl-2">
                                         <span class="text-[10px] text-ink-subtle block">${kpi.rightTitle || '效能指标'}</span>
-                                        <div class="text-lg font-extrabold text-primary font-mono tabular-nums">${kpi.rightVal || '-'}</div>
-                                        <span class="text-[10px] text-positive font-bold font-mono">${kpi.rightYoy || '+18.2%'}</span>
+                                        <div class="text-lg font-extrabold text-primary font-mono tabular-nums">${kpi.rightVal ?? '—'}</div>
+                                        <span class="text-[10px] ${trendTextClass(kpi.rightYoy)} font-bold font-mono">${kpi.rightYoy ?? '—'}</span>
                                     </div>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '周转匹配率'}</span>
-                                    <span class="text-primary font-semibold">${kpi.subVal || '86.8%'}</span>
+                                    <span class="text-primary font-semibold">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -952,15 +957,15 @@ __DASHBOARD_CONFIG_CODE__
                                             ${LUCIDE_ICONS.award}
                                         </span>
                                         <div>
-                                            <span class="text-sm font-extrabold text-primary-strong">${kpi.value}</span>
-                                            <p class="text-[10px] text-ink-subtle">${kpi.rankSub || '全行业领跑'}</p>
+                                            <span class="text-sm font-extrabold text-primary-strong">${kpi.value ?? '—'}</span>
+                                            <p class="text-[10px] text-ink-subtle">${kpi.rankSub ?? '—'}</p>
                                         </div>
                                     </div>
-                                    <span class="px-2 py-0.5 rounded bg-primary text-white text-[11px] font-mono font-bold">S 级标杆</span>
+                                    <span class="px-2 py-0.5 rounded bg-primary text-white text-[11px] font-mono font-bold">${kpi.rankBadge ?? '—'}</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '市场占有率'}</span>
-                                    <span class="text-primary font-semibold">${kpi.subVal || '32.8% (+5.4%)'}</span>
+                                    <span class="text-primary font-semibold">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -978,12 +983,12 @@ __DASHBOARD_CONFIG_CODE__
                                     <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc08'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline gap-2 my-1">
-                                    <span class="text-2xl font-extrabold text-[#0B2A42] tracking-tight font-mono tabular-nums">${kpi.value}</span>
-                                    <span class="px-2 py-0.5 rounded bg-[#9A6A18]/15 border border-[#9A6A18]/30 text-[#9A6A18] text-[10px] font-bold font-mono">预算红线 5%</span>
+                                    <span class="text-2xl font-extrabold text-[#0B2A42] tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                    <span class="px-2 py-0.5 rounded bg-[#9A6A18]/15 border border-[#9A6A18]/30 text-[#9A6A18] text-[10px] font-bold font-mono">${kpi.alertLabel ?? '—'}</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-[#9A6A18]/20 text-[11px] text-ink-muted flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '成本占比'}</span>
-                                    <span class="font-bold text-[#9A6A18]">${kpi.subVal || '-'}</span>
+                                    <span class="font-bold text-[#9A6A18]">${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -998,16 +1003,16 @@ __DASHBOARD_CONFIG_CODE__
                                     <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc09'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                                 </div>
                                 <div class="flex items-baseline justify-between my-0.5">
-                                    <span class="text-xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
-                                    <span class="text-[10px] text-ink-subtle font-mono">${kpi.yoy || '结构均衡'}</span>
+                                    <span class="text-xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                    <span class="text-[10px] ${trendTextClass(kpi.yoy, 'text-ink-subtle')} font-mono">${kpi.yoy ?? '—'}</span>
                                 </div>
                                 <div class="w-full h-2.5 rounded-full overflow-hidden flex my-1.5 shadow-inner bg-slate-100">
-                                    <div class="bg-primary h-full transition-all" style="width: ${kpi.segLeftWidth || '72%'};"></div>
-                                    <div class="bg-[#8EA4B8] h-full transition-all" style="width: ${kpi.segRightWidth || '28%'};"></div>
+                                    <div class="bg-primary h-full transition-all" style="width: ${parseKPIValue(kpi.segLeftWidth) ?? 0}%;"></div>
+                                    <div class="bg-[#8EA4B8] h-full transition-all" style="width: ${parseKPIValue(kpi.segRightWidth) ?? 0}%;"></div>
                                 </div>
                                 <div class="pt-1.5 border-t border-slate-100 text-[10px] text-ink-subtle flex items-center justify-between font-mono">
-                                    <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span>${kpi.subLabel || '国内: 72%'}</span>
-                                    <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#8EA4B8]"></span>${kpi.subVal || '国际: 28%'}</span>
+                                    <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span>${kpi.subLabel ?? '—'}</span>
+                                    <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#8EA4B8]"></span>${kpi.subVal ?? '—'}</span>
                                 </div>
                             </div>
                         `;
@@ -1021,12 +1026,12 @@ __DASHBOARD_CONFIG_CODE__
                                 <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc01'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
                             </div>
                             <div class="flex items-baseline gap-2 my-1">
-                                <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>
-                                <span class="text-xs font-semibold ${kpi.isPositive ? 'text-positive' : 'text-negative'} font-mono">${kpi.yoy}</span>
+                                <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                <span class="text-xs font-semibold ${trendTextClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
                             </div>
                             <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
-                                <span>${kpi.subLabel}</span>
-                                <span class="text-primary font-semibold">${kpi.subVal}</span>
+                                <span>${kpi.subLabel ?? '—'}</span>
+                                <span class="text-primary font-semibold">${kpi.subVal ?? '—'}</span>
                             </div>
                         </div>
                     `;
@@ -1283,6 +1288,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
 
                 // Bind Global Event Listeners
                 this.bindEvents();
+                this.updateKPIsAndChartsFromFilters();
                 return this;
             }
 
@@ -1293,10 +1299,11 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     if (kpi.type === 'mc03') {
                         const dom = this.getById(`kpi-spark-${kpi.id}`);
                         if (dom) {
+                            const months = kpi.sparkMonths;
+                            const seriesData = kpi.sparkData;
+                            if (!Array.isArray(months) || !Array.isArray(seriesData) || !seriesData.length || months.length !== seriesData.length) return;
                             const inst = echarts.init(dom);
                             this.state.chartInstances[`kpi-spark-${kpi.id}`] = inst;
-                            const months = kpi.sparkMonths || ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-                            const seriesData = kpi.sparkData || [81.5, 82.4, 83.0, 84.5, 85.2, 85.8, 86.2, 87.8, 85.5, 86.0, 86.4, 86.8];
                             const minVal = Math.floor(Math.min(...seriesData) * 0.95);
                             const maxVal = Math.ceil(Math.max(...seriesData) * 1.05);
 
@@ -1313,7 +1320,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                                     extraCssText: 'box-shadow: 0 2px 8px rgba(18, 59, 93, 0.08); border-radius: 4px; z-index: 50;',
                                     formatter: params => {
                                         const p = params[0];
-                                        return `<div class="text-[11px] font-mono"><span class="font-bold text-primary">${p.name}:</span> <span class="font-bold text-ink">${p.value}${p.value > 10 ? '%' : ''}</span></div>`;
+                                        return `<div class="text-[11px] font-mono"><span class="font-bold text-primary">${p.name}:</span> <span class="font-bold text-ink">${p.value}${kpi.unit ? ' ' + kpi.unit : ''}</span></div>`;
                                     }
                                 },
                                 xAxis: { type: 'category', show: false, data: months },
@@ -1340,9 +1347,10 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     if (kpi.type === 'mc05') {
                         const dom = this.getById(`kpi-gauge-${kpi.id}`);
                         if (dom) {
+                            const val = parseKPIValue(kpi.value);
+                            if (val === null) return;
                             const inst = echarts.init(dom);
                             this.state.chartInstances[`kpi-gauge-${kpi.id}`] = inst;
-                            const val = parseFloat(kpi.value) || 92.4;
                             inst.setOption({
                                 animation: true,
                                 series: [{
@@ -1842,38 +1850,35 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 const rows = this.getFilteredTableRows();
                 const allRows = this.config.table?.rows || [];
                 const isFiltered = rows.length < allRows.length;
-                const scopedConsumerIds = new Set(
-                    this.state.filterDefs.flatMap(filter => Array.isArray(filter.componentIds) ? filter.componentIds : [])
-                );
-
-                // 1. Dynamically update KPI Cards
-                if (rows.length > 0) {
-                    (this.config.kpis || []).forEach(kpi => {
-                        if (scopedConsumerIds.size > 0 && !scopedConsumerIds.has(kpi.id)) return;
-                        const kpiCard = this.query(`[data-explain-chart="${kpi.explainKey}"]`)?.closest('.section-card');
-                        if (!kpiCard) return;
-
-                        const valEl = kpiCard.querySelector('.font-mono.tabular-nums');
-                        if (!valEl) return;
-
-                        if (!kpi._origValue) kpi._origValue = kpi.value;
-                        if (!isFiltered) {
-                            valEl.textContent = kpi._origValue;
+                const boundKPIs = (this.config.kpis || []).filter(kpi => kpi.binding);
+                boundKPIs.forEach(kpi => {
+                    kpi.value = ComponentBindings.kpiValue(this.getFilteredTableRows(kpi.id), kpi);
+                });
+                if (boundKPIs.length) {
+                    // Rebuild the cards so text, progress bars, and widgets agree.
+                    Object.keys(this.state.chartInstances).forEach(id => {
+                        if (id.startsWith('kpi-spark-') || id.startsWith('kpi-gauge-')) {
+                            this.state.chartInstances[id]?.dispose();
+                            delete this.state.chartInstances[id];
                         }
                     });
+                    this.renderer.renderKPIs();
+                    this.initKPIWidgets();
                 }
 
                 // 2. Dynamically update Charts (Generic & Clean)
                 const charts = this.config.charts || [];
                 charts.forEach(chartCfg => {
                     const instanceId = chartCfg.instanceId;
-                    if (scopedConsumerIds.size > 0 && !scopedConsumerIds.has(instanceId)) return;
                     const inst = this.state.chartInstances[instanceId];
                     if (!inst) return;
                     const gran = this.state.chartGranularities[instanceId] || 'month';
 
                     try {
-                        if (typeof chartCfg.onFilterChange === 'function') {
+                        if (chartCfg.binding) {
+                            chartCfg.data = ComponentBindings.chartData(this.getFilteredTableRows(instanceId), chartCfg);
+                            inst.setOption(chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg), true);
+                        } else if (typeof chartCfg.onFilterChange === 'function') {
                             chartCfg.onFilterChange(rows, isFiltered, inst, TOKENS);
                         } else if (typeof chartCfg.optionBuilder === 'function') {
                             const opt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg);
@@ -2144,18 +2149,19 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 this.renderTableEngine();
             }
 
-            getFilteredTableRows() {
+            getFilteredTableRows(componentId = null) {
                 let rows = [...(this.config.table?.rows || [])];
 
                 // 1. Dynamic Attribute Filtering
                 this.state.filterDefs.forEach(f => {
+                    if (componentId && !f.componentIds?.includes(componentId)) return;
                     const curVal = this.state.filterValues[f.key];
                     const declaredFields = Array.isArray(f.fields) && f.fields.length > 0 ? f.fields : null;
                     const candidateEntries = row => declaredFields
                         ? declaredFields.map(field => [field, row[field]]).filter(([, value]) => value !== undefined)
                         : Object.entries(row).filter(([key]) => !key.startsWith('raw') && !key.startsWith('_'));
                     if (f.type === 'multi-select') {
-                        if (curVal instanceof Set && curVal.size > 0 && curVal.size < f.options.length) {
+                        if (curVal instanceof Set && (declaredFields || curVal.size < f.options.length)) {
                             rows = rows.filter(r => {
                                 return candidateEntries(r).some(([, value]) => curVal.has(String(value)));
                             });
@@ -2164,7 +2170,9 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                         if (curVal !== undefined && curVal !== 'ALL' && curVal !== 'all' && curVal !== '') {
                             const curLabel = this.state.filterLabels[f.key] || '';
                             rows = rows.filter(r => {
-                                return candidateEntries(r).some(([, value]) => String(value).includes(String(curVal)) || (curLabel && String(value).includes(curLabel)));
+                                return candidateEntries(r).some(([, value]) => declaredFields
+                                    ? String(value) === String(curVal)
+                                    : String(value).includes(String(curVal)) || (curLabel && String(value).includes(curLabel)));
                             });
                         }
                     }
@@ -2243,15 +2251,17 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     tbody.innerHTML = currentRows.map(row => `
                         <tr onmouseenter="window.App.onTableRowHover('${row.name}')" onmouseleave="window.App.onTableRowLeave()" class="hover:bg-slate-50/80 transition-colors">
                             ${visibleCols.map(col => {
-                                let val = row[col.key] || '-';
-                                let cellStyle = '';
-                                if (col.key === 'yoy' && String(val).startsWith('+')) cellStyle = 'text-positive font-bold';
+                                const raw = row[col.key];
+                                const hasValue = raw !== undefined && raw !== null && raw !== '';
+                                let val = hasValue ? String(raw) : '-';
+                                const trendClass = hasValue && ['yoy', 'mom'].includes(col.key) ? trendTextClass(raw, '') : '';
+                                let cellStyle = trendClass ? `${trendClass} font-bold` : '';
                                 if (col.key === 'rating') {
                                     if (val.includes('S')) val = `<span class="px-2 py-0.5 rounded bg-[#123B5D]/10 text-primary border border-[#123B5D]/20 font-bold text-[10px] whitespace-nowrap">${val}</span>`;
-                                    else if (val.includes('A')) val = `<span class="px-2 py-0.5 rounded bg-[#2F6B55]/10 text-negative border border-[#2F6B55]/20 font-bold text-[10px] whitespace-nowrap">${val}</span>`;
+                                    else if (val.includes('A')) val = `<span class="px-2 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20 font-bold text-[10px] whitespace-nowrap">${val}</span>`;
                                     else val = `<span class="px-2 py-0.5 rounded bg-slate-100 text-ink-muted border border-slate-200 text-[10px] whitespace-nowrap">${val}</span>`;
                                 }
-                                return `<td onclick="window.App.copyCell('${row[col.key] || ''}')" class="px-3.5 py-2 text-${col.align} font-mono text-[11px] cursor-pointer hover:underline whitespace-nowrap ${cellStyle}" title="点击复制">${val}</td>`;
+                                return `<td onclick="window.App.copyCell('${hasValue ? raw : ''}')" class="px-3.5 py-2 text-${col.align} font-mono text-[11px] cursor-pointer hover:underline whitespace-nowrap ${cellStyle}" title="点击复制">${val}</td>`;
                             }).join('')}
                         </tr>
                     `).join('');
@@ -2295,7 +2305,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 const visibleCols = this.state.table.orderedColumns.filter(c => this.state.table.visibleCols.has(c.key));
                 const allRows = this.getFilteredTableRows();
                 const header = visibleCols.map(c => `"${c.title}"`).join(',');
-                const rows = allRows.map(r => visibleCols.map(c => `"${r[c.key] || ''}"`).join(','));
+                const rows = allRows.map(r => visibleCols.map(c => `"${r[c.key] ?? ''}"`).join(','));
                 const csv = '\\uFEFF' + [header, ...rows].join('\\r\\n');
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
@@ -2345,8 +2355,12 @@ __DASHBOARD_RUNTIME_BUNDLE__
 def generate_dashboard_html(config_js_code, page_title):
     return (TEMPLATE
             .replace('__PAGE_TITLE__', page_title)
+            .replace('__TAILWIND_COLORS__', tailwind_colors_js())
+            .replace('__ECHARTS_PALETTE__', echarts_palette_js())
+            .replace('__CATEGORICAL_COLORS__', categorical_js())
             .replace('__DASHBOARD_CONFIG_CODE__', config_js_code)
             .replace('__DASHBOARD_RUNTIME_BUNDLE__', render_runtime_bundle())
+            .replace('__FILTER_BINDINGS_JS__', FILTER_BINDINGS_JS)
             .replace('__EXPLANATION_DIALOG_CSS__', EXPLANATION_DIALOG_CSS)
             .replace('__EXPLANATION_DIALOG_SHELL__', EXPLANATION_DIALOG_SHELL)
             .replace('__EXPLANATION_DIALOG_RENDERER_JS__', EXPLANATION_DIALOG_RENDERER_JS)

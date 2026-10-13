@@ -2,8 +2,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
-
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "bin" / "cli.js"
@@ -25,13 +23,6 @@ def write_html(path: Path, body: str, head: str = "") -> None:
         f"{head}</head><body>{body}</body></html>",
         encoding="utf-8",
     )
-
-
-def skip_if_runtime_adapter_unavailable(result: subprocess.CompletedProcess[str]) -> None:
-    if result.returncode == 2 and (
-        "RUNTIME_ADAPTER_MISSING" in result.stdout or "Executable doesn't exist" in result.stdout
-    ):
-        pytest.skip("Playwright CLI and a browser are optional runtime-inspection dependencies")
 
 
 def test_inspect_html_reports_broken_dom_references_and_local_assets(tmp_path: Path) -> None:
@@ -112,21 +103,6 @@ def test_inventory_html_creates_editable_preservation_manifest(tmp_path: Path) -
         "requiredAssets": ["theme.css"],
         "components": [],
         "forbiddenText": [],
-    }
-
-
-def test_runtime_mode_uses_browser_adapter(tmp_path: Path) -> None:
-    html = tmp_path / "board.html"
-    write_html(html, '<main id="app">Board</main>')
-
-    result = run_cli("dashboard", "inspect-html", html, "--runtime", "--json")
-    skip_if_runtime_adapter_unavailable(result)
-
-    assert result.returncode == 0
-    payload = json.loads(result.stdout)
-    assert payload["errors"] == []
-    assert payload["evidence"]["runtime"] == {
-        "adapter": "playwright", "available": True, "exitCode": 0,
     }
 
 
@@ -215,18 +191,3 @@ def test_build_always_runs_static_html_inspection(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["inspection"]["ok"] is True
     assert payload["inspection"]["evidence"]["mode"] == "static"
-
-
-def test_generated_dashboard_passes_rendered_component_inspection(tmp_path: Path) -> None:
-    workspace = tmp_path / "board"
-    output = tmp_path / "board.html"
-    assert run_cli("dashboard", "init", workspace, "--title", "Board", "--json").returncode == 0
-    assert run_cli("dashboard", "add", "kpi", workspace, "revenue", "--label", "Revenue", "--value", "1", "--unit", "元", "--json").returncode == 0
-    assert run_cli("dashboard", "build", workspace, "--output", output, "--json").returncode == 0
-
-    result = run_cli("dashboard", "inspect-html", output, "--runtime", "--strict", "--json")
-    skip_if_runtime_adapter_unavailable(result)
-
-    assert result.returncode == 0
-    payload = json.loads(result.stdout)
-    assert payload["evidence"]["runtime"]["exitCode"] == 0

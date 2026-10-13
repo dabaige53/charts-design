@@ -1,10 +1,14 @@
 {
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "charts-design": {
       "type": "stdio",
-      "command": "python3",
-      "args": ["${PLUGIN_ROOT}/bin/dashboard_runtime.py", "--root", "${PLUGIN_ROOT}/.charts-runtime", "mcp"]
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/bin/dashboard-runtime.js",
+        "--root",
+        "${PLUGIN_ROOT}/.charts-runtime",
+        "mcp"
+      ]
     }
   }
 }

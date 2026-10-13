@@ -5,7 +5,7 @@ import DOMPurify from 'dompurify';
 import {createOriginalComponents} from '../../runtime-ui/generated/original-engine.mjs';
 import originalStyle from '../../runtime-ui/generated/original-style.mjs';
 import catalog from '../../runtime-ui/generated/catalog.json';
-import {aggregate,visibleRows,format,optionFor,chartTable,csv,chartTypes,compatible} from './engine.mjs';
+import {aggregate,visibleRows,format,optionFor,chartTable,csv} from './engine.mjs';
 
 export {catalog};
 const methods=new Set(['onColumnVisibilityChange','onTablePageSizeChange','resetDefaultColumns','sortTable','toggleColumnDrawer','prevTablePage','nextTablePage','copyCell','exportTableToCSV','onTableRowHover','onTableRowLeave','onSearchInput','onSearchKeyDown','showSearchSuggestions','applySearchKeyword','clearSearchKeyword']);
@@ -37,11 +37,10 @@ function setOriginalHtml(node,markup){
 const node=(tag,cls='',text='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;};
 function action(label,html,run){const b=node('button','chart-action-btn catalog-source-btn');b.type='button';b.title=label;b.setAttribute('aria-label',label);if(html)setOriginalHtml(b,html);else b.textContent=label;b.addEventListener('click',e=>{e.stopPropagation();Promise.resolve().then(run).catch(error=>window.dispatchEvent(new CustomEvent('charts-error',{detail:error})));});return b;}
 function download(name,body,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-const names={bar:'柱状图',line:'折线图',area:'面积图',pie:'环形图',scatter:'散点图',heatmap:'热力图',funnel:'漏斗图',waterfall:'瀑布图'};
 let api=null;
 export function initializeOriginal(echarts){api=createOriginalComponents(echarts,setOriginalHtml);const fallback=api.ChartDataToTableConverter.convert;api.ChartDataToTableConverter.convert=(inst,c)=>c?.resolvedTable?c.resolvedTable():fallback(inst,c);return api;}
-export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentation,onBinding,editing=false,readOnly=false}){
-  const c=doc.manifest.components[id],shadow=host.attachShadow({mode:'open'}),style=node('style');style.textContent=originalStyle;shadow.append(style);host.dataset.theme=doc.manifest.theme;
+export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentation,onBinding,onAnnotate,onText,editing=false,readOnly=false}){
+  const c=doc.manifest.components[id],shadow=host.attachShadow({mode:'open'}),style=node('style');style.textContent=originalStyle;shadow.append(style);host.dataset.theme='light';
   const cfg={meta:{title:c.title},filters:[],kpis:[],charts:[],table:{columns:[],rows:[]},explanations:{...api.explanations}};
   let family=c.kind==='legacy'?(c.family||'chart'):c.kind;
   const key='original-'+id;let raw=c.kind==='legacy'?resolveOriginal(doc,id,c.config.defaultGranularity||'month'):c.config,rows=[];
@@ -49,7 +48,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
     let chart;
     if(c.kind==='legacy'){
       if(!api.builders[raw.code])throw Error('Unknown original chart code: '+raw.code);
-      chart={...api.builders[raw.code],...structuredClone(raw),id:key,instanceId:key,title:c.title};
+      chart={...api.builders[raw.code],...structuredClone(raw),id:key,instanceId:key,title:c.title,subtitle:c.subtitle??raw.subtitle??''};
       chart.data=structuredClone(raw.data);chart.presentation=structuredClone(raw.presentation);
     }else{
       chart={id:key,instanceId:key,code:c.chartType,title:c.title,subtitle:c.subtitle||'',hasGranularity:false,
@@ -68,6 +67,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
     if(c.kind!=='legacy'){
       const m=doc.manifest.metrics[c.measures[0]],value=aggregate(visibleRows(doc,id),m);
       raw={...(c.presentation||{}),type:c.presentation?.type||'mc01',label:c.title,value:format(value,m),yoy:c.presentation?.yoy??'—',statusBadge:m.status==='reviewed'?'已复核':'待复核',subLabel:c.presentation?.subLabel||'统计口径',subVal:c.presentation?.subVal||({sum:'合计',ratio:'分子 / 分母',avg:'平均',count:'计数'}[m.aggregation]||m.aggregation)};
+      if(doc.manifest.filters.some(f=>f.componentIds.includes(id)&&f.values.length)){for(const key of ['yoy','mom','subVal','leftVal','rightVal','trendLabel','gaugeSub'])if(key in raw)raw[key]='—';raw.subLabel='当前筛选范围';}
       if(raw.type==='mc03'&&c.presentation?.timeField){const groups=new Map();for(const row of visibleRows(doc,id)){const k=row[c.presentation.timeField];if(!groups.has(k))groups.set(k,[]);groups.get(k).push(row);}raw.sparkMonths=[...groups.keys()];raw.sparkData=[...groups.values()].map(r=>{const v=aggregate(r,m);return m.format==='percent'&&v!=null?v*100:v;});}
       cfg.explanations[key]={title:m.label,overview:m.definition,type:raw.type,period:m.period||'当前筛选范围',metrics:[{name:m.label,definition:m.definition,formula:m.aggregation==='ratio'?`SUM(${m.numerator}) / SUM(${m.denominator})`:`${m.aggregation.toUpperCase()}(${m.field||'*'})`,rule:'展示样式不代表指标已认证'}]};
     }
@@ -77,6 +77,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   }else if(family==='table'){
     rows=c.kind==='legacy'?raw.rows:visibleRows(doc,id);
     cfg.table={...(raw||c.presentation||{}),id:key,title:c.title,rows,columns:raw?.columns||c.presentation?.columns||Object.entries(doc.manifest.datasets[c.datasetId].fields).map(([key,meta])=>({key,title:meta.label||key,align:meta.type==='number'?'right':'left'}))};
+    cfg.table.columns=cfg.table.columns.map(col=>({...col,title:col.title??col.label??col.key}));
     const container=node('section','section-card');container.id='app-table-section';shadow.append(container);
   }
   const overlay=node('dialog','explanation-dialog');overlay.id='app-explain-dialog';shadow.append(overlay);
@@ -88,6 +89,8 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   },{signal:controller.signal,capture:event==='focus'||event==='mouseenter'||event==='mouseleave'});
   app.setTableCrossFilter=()=>{};
   app.init();
+  if(family==='kpi'&&['mc01','mc02','mc03','mc04','mc05'].includes(raw.type)){for(const span of shadow.querySelectorAll('#app-kpis span'))if(span.textContent.trim()==='—'&&!span.classList.contains('text-2xl'))span.hidden=true;}
+
   if(family==='table'){
     const saved=(c.kind==='legacy'?c.config:c.presentation)?.tableState;
     if(saved){if(Array.isArray(saved.columns))app.state.table.orderedColumns=saved.columns.map(k=>cfg.table.columns.find(col=>col.key===k)).filter(Boolean);
@@ -107,12 +110,13 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   }
   const actions=shadow.querySelector('.card-header-wrap>div:last-child')||shadow.querySelector('.section-card>div:first-child>div:last-child')||shadow.querySelector('.section-card>div:first-child');
   if(actions){
-    actions.append(action('SQL / 语义',null,()=>onInspect(id)));
-    if(family==='chart'&&c.kind!=='legacy'){
+    if(editing&&family==='chart'&&c.kind==='legacy'){
       const choice=node('select');choice.setAttribute('aria-label','Chart type');choice.disabled=readOnly;
-      for(const t of chartTypes){const o=node('option','',names[t]);o.value=t;o.disabled=!!compatible(doc,c,t);choice.append(o);}choice.value=c.chartType;choice.onchange=()=>onType(id,choice.value);const wrap=node('span','catalog-actions');wrap.append(choice);actions.prepend(wrap);
+      const compatible=['c01','c02'].includes(raw.code)?['c01','c02']:[raw.code];
+      for(const code of compatible){const option=node('option','',catalog.find(entry=>entry.id===code)?.nameZh||'当前图表');option.value=code;choice.append(option);}
+      if(compatible.length===1){const unavailable=node('option','','暂无兼容类型，保留当前数据结构');unavailable.value='';unavailable.disabled=true;choice.append(unavailable);}
+      choice.value=raw.code;choice.onchange=()=>onType(id,choice.value);actions.prepend(choice);
     }
-    if(editing)actions.append(action('编辑组件',api.LUCIDE_ICONS.layers,()=>onEdit(id)));
   }
   if(family==='chart'){
     shadow.addEventListener('click',e=>{
@@ -126,6 +130,6 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   const fullscreen=node('dialog');fullscreen.className='original-fullscreen';shadow.append(fullscreen);let placeholder=null;
   fullscreen.addEventListener('close',()=>{const card=fullscreen.querySelector('.section-card');if(card&&placeholder){card.classList.remove('card-fullscreen');placeholder.replaceWith(card);placeholder=null;const b=card.querySelector('.fullscreen-btn');if(b)setOriginalHtml(b,api.LUCIDE_ICONS.maximize);Object.values(app.state.chartInstances).forEach(i=>i.resize());}});
   shadow.addEventListener('click',e=>{const b=e.target.closest('.fullscreen-btn');if(!b)return;e.stopImmediatePropagation();if(fullscreen.open)fullscreen.close();else{const card=b.closest('.section-card');placeholder=document.createComment('original-card-position');card.replaceWith(placeholder);fullscreen.append(card);card.classList.add('card-fullscreen');setOriginalHtml(b,api.LUCIDE_ICONS.minimize);fullscreen.showModal();requestAnimationFrame(()=>Object.values(app.state.chartInstances).forEach(i=>i.resize()));}},{capture:true,signal:controller.signal});
-  const disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding});
+  const disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding,onAnnotate,onText});
   return {app,shadow,destroy(){disposeChrome();controller.abort();if(fullscreen.open)fullscreen.close();app.destroy();}};
 }

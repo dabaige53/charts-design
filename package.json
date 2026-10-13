@@ -7,12 +7,12 @@
     "charts-design-runtime": "./bin/dashboard-runtime.js"
   },
   "scripts": {
-    "test": "python3 -m pytest -q",
-    "check": "node --check bin/cli.js && node --check skills/executive-charts/scripts/runtime_inspector.spec.js && python3 -m py_compile skills/executive-charts/scripts/dashboard_workspace.py skills/executive-charts/scripts/generate_dashboard.py skills/executive-charts/scripts/core/*.py",
+    "test": "node bin/python-runtime.js -m pytest tests --ignore=tests/runtime -q && node bin/python-runtime.js -m pytest tests/runtime -q && node --test tests/runtime/*.test.mjs",
+    "check": "node --check bin/cli.js && node --check bin/python-runtime.js && node --check bin/mcp-runtime.js && node --check bin/dashboard-runtime.js && node bin/python-runtime.js -m py_compile skills/executive-charts/scripts/dashboard_workspace.py skills/executive-charts/scripts/generate_dashboard.py skills/executive-charts/scripts/core/*.py",
     "runtime:build": "npm --prefix runtime-ui install && npm --prefix runtime-ui run build",
-    "runtime:test": "python3 -m pytest tests/runtime -q && node --test tests/runtime/engine.test.mjs",
-    "runtime:serve": "python3 -m dashboard_runtime serve",
-    "runtime:mcp": "python3 -m dashboard_runtime mcp",
+    "runtime:test": "node bin/python-runtime.js -m pytest tests/runtime -q && node --test tests/runtime/*.test.mjs",
+    "runtime:serve": "node bin/dashboard-runtime.js serve",
+    "runtime:mcp": "node bin/dashboard-runtime.js mcp",
     "prepack": "npm --prefix runtime-ui run build"
   },
   "files": [
@@ -20,7 +20,6 @@
     "skills/executive-charts/SKILL.md",
     "skills/executive-charts/references/",
     "skills/executive-charts/scripts/*.py",
-    "skills/executive-charts/scripts/runtime_inspector.spec.js",
     "skills/executive-charts/scripts/core/*.py",
     "skills/executive-charts/scripts/README.md",
     "runtime-ui/*.mjs",

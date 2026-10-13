@@ -26,6 +26,8 @@
 
 # Python caches and compiled files
 __pycache__/
+*.egg-info/
+build/
 *.py[cod]
 *$py.class
 dist/test_*
@@ -42,6 +44,11 @@ dashboard_runtime/web/dist/
 runtime-source.tar.gz
 runtime-tests.txt
 runtime-screenshot.png
+component-review/
+report-preview.png
+runtime-bound-filter.png
+runtime-icons-gallery.png
+runtime-original-restored.png
 
 # System files
 .DS_Store

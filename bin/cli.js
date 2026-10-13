@@ -2,7 +2,8 @@
 // McKinsey-Grade Executive Charts & Dashboard CLI
 // Thin Node.js wrapper → auto-detects Python 3 → delegates to Python scripts
 
-const { execFileSync, execSync } = require("child_process");
+const { execFileSync } = require("child_process");
+const { pythonRuntime } = require('./python-runtime.js');
 const path = require("path");
 const fs = require("fs");
 
@@ -14,9 +15,9 @@ const PACKAGE_JSON = path.resolve(__dirname, "..", "package.json");
 
 // ── Detect Python 3 ──
 function findPython() {
-  for (const cmd of ["python3", "python"]) {
+  for (const cmd of [pythonRuntime().python, "python3", "python"]) {
     try {
-      const ver = execSync(`${cmd} --version 2>&1`, { encoding: "utf-8" }).trim();
+      const ver = execFileSync(cmd, ['--version'], { encoding: "utf-8" }).trim();
       if (/Python 3\.\d+/.test(ver)) return cmd;
     } catch (_) {}
   }
@@ -68,15 +69,15 @@ function printHelp() {
     dashboard init <dir> --title <title> [--org <org>]
     dashboard add filter <dir> <id> --label <label> --option value=label
     dashboard add kpi <dir> <id> --label <label> --value <value> --unit <unit>
-    dashboard add chart <dir> <id> --code <code> --title <title> --data-file <data.json>
+    dashboard add chart <dir> <id> --from <complete-chart.json>
     dashboard table set <dir> --from <table.json>
     dashboard inspect|validate <dir> [--json]
     dashboard build <dir> --output <file.html> [--open] [--json]
 
   Examples:
-    # 1. Start small and add one reviewed component at a time
+    # 1. Supply a complete chart JSON including data and presentation
     charts-design dashboard init ./sales-board --title "销售经营看板"
-    charts-design dashboard add chart ./sales-board regional-sales --code c01 --title "各区域销售额" --unit "万元" --data-file ./regional-sales.json
+    charts-design dashboard add chart ./sales-board regional-sales --from ./regional-sales.chart.json
     charts-design dashboard validate ./sales-board --strict --json
     charts-design dashboard build ./sales-board --output ./dist/sales.html
 
@@ -104,7 +105,8 @@ function printDoctor(jsonMode) {
     runtime: {
       node: process.version,
       python: python || null,
-      offline: true,
+      offlineGeneration: true,
+      htmlUsesRemoteAssets: true,
       authRequired: false,
     },
     paths: {
@@ -192,9 +194,11 @@ function main() {
   }
 
   try {
-    execFileSync(python, [targetScript, ...restArgs], {
+    const runtime = pythonRuntime();
+    execFileSync(python, [...(runtime.isolated ? ['-S'] : []), targetScript, ...restArgs], {
       stdio: "inherit",
       cwd: process.cwd(),
+      env: runtime.env,
     });
   } catch (err) {
     process.exit(err.status || 1);

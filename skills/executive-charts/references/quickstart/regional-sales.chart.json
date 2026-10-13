@@ -1,0 +1,19 @@
+{
+  "id": "regional-sales",
+  "code": "c01",
+  "title": "各区域营业收入（示例）",
+  "unit": "万元",
+  "data": {"categories": ["华东", "华南"], "values": [128, 96]},
+  "presentation": {
+    "axisLabels": {"x": "区域", "y": "营业收入"},
+    "seriesLabels": ["营业收入"],
+    "tooltipValueLabels": ["营业收入"],
+    "units": ["万元"],
+    "tableHeaders": ["区域", "营业收入"]
+  },
+  "binding": {
+    "groupBy": "region",
+    "category": "categories",
+    "series": {"values": {"field": "sales", "aggregate": "sum"}}
+  }
+}

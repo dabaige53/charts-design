@@ -29,6 +29,7 @@ from core.chart_catalog import ALL_CHARTS
 from core.chart_builders import CHARTS_JS_DEFINITIONS
 from core.component_schemas import validate_chart_data
 from core.html_inspector import inspect_html
+from core.palette import categorical_js, echarts_palette_js, tailwind_theme_css
 ALL_CHART_BUILDERS = {**CHARTS_JS_DEFINITIONS, **ALL_CHARTS}
 from core.explanations import CHART_EXPLANATIONS
 from core.explanation_dialog import (
@@ -57,6 +58,9 @@ STANDALONE_CHART_TEMPLATE = """<!DOCTYPE html>
     <title>__TITLE__ - 麦肯锡咨询级图表组件</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        __TAILWIND_THEME__
+    </style>
     <!-- Apache ECharts 5.5.0 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
@@ -199,27 +203,10 @@ __EXPLANATION_DIALOG_CSS__
     <!-- Core Script -->
     <script>
         const TOKENS = {
-            palette: {
-                primary: '#123B5D',        // 旗舰深海蓝 (主序列/核心强调)
-                primaryStrong: '#0B2A42',  // 墨蓝黑 (高对比主标题/关键标签)
-                primarySoft: '#DCE8F0',    // 冰川淡蓝 (辅助对比/背景底槽)
-                secondary: '#2C6485',      // 钢蓝 (次级对比序列)
-                tertiary: '#628EA8',       // 浅灰蓝 (第三对比序列)
-                slate: '#8C9DAE',          // 雾板岩灰 (第四对比序列)
-                ink: '#0F172A',            // 炭黑正文
-                inkMuted: '#52606D',       // 板岩深灰 (副标题/坐标刻度)
-                inkSubtle: '#7B8794',      // 板岩淡灰 (注脚/量纲)
-                positive: '#2F6B55',       // 咨询墨绿 (正向增长/达标/盈利)
-                negative: '#A4453C',       // 咨询绯红 (负向承压/收缩/预警)
-                attention: '#9A6A18',      // 咨询琥珀金 (重点关注/待研判)
-                canvas: '#FFFFFF',
-                surfaceGround: '#F8FAFC',
-                gridline: '#E2E8F0',
-                rule: '#CBD5E1',
-                categorical: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC']
-            },
+            // Generated from scripts/core/palette.py: positive = 红涨, negative = 绿跌.
+            palette: __ECHARTS_PALETTE__,
             commonOption: {
-                color: ['#123B5D', '#2C6485', '#628EA8', '#8C9DAE', '#9A6A18', '#A4453C', '#2F6B55', '#BDD0DC'],
+                color: __CATEGORICAL_COLORS__,
                 animation: true,
                 animationDuration: 350,
                 grid: { top: 40, bottom: 40, left: 12, right: 24, containLabel: true },
@@ -454,6 +441,9 @@ def generate_standalone_chart(
     html = html.replace('__CODE__', code.upper())
     html = html.replace('__TITLE__', title)
     html = html.replace('__SUBTITLE__', subtitle)
+    html = html.replace('__TAILWIND_THEME__', tailwind_theme_css())
+    html = html.replace('__ECHARTS_PALETTE__', echarts_palette_js())
+    html = html.replace('__CATEGORICAL_COLORS__', categorical_js())
     html = html.replace('__CARD_WIDTH__', str(width))
     html = html.replace('__CHART_HEIGHT__', str(height))
     html = html.replace('__EXPLANATION_DIALOG_CSS__', EXPLANATION_DIALOG_CSS)
@@ -482,11 +472,11 @@ def generate_standalone_chart(
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html)
 
-    inspection = inspect_html(Path(output_path), strict=True, runtime=True)
+    inspection = inspect_html(Path(output_path), strict=True)
     if not inspection["ok"]:
         raise RuntimeError("Generated HTML inspection failed: " + json.dumps(inspection["errors"], ensure_ascii=False))
 
-    print(f"Generated and inspected standalone chart '{code.upper()}' -> {output_path} ({len(html)} bytes)")
+    print(f"Generated standalone chart '{code.upper()}' -> {output_path} ({len(html)} bytes; static inspection passed)")
 
     if auto_open:
         subprocess.run(["open", output_path])

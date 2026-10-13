@@ -1,20 +1,19 @@
 """Self-contained UI bundle; snapshots cannot introduce executable markup."""
 from __future__ import annotations
-import html
 import json
 from pathlib import Path
 from .model import DashboardError, validate
 
 DIST = Path(__file__).parent / 'web' / 'dist'
 
-def render_html(mode='web', document=None, legacy=None):
+def render_html(mode='web', document=None, legacy=None, idle_timeout: float=60):
     js, css = DIST / 'app.js', DIST / 'app.css'
     if not js.exists() or not css.exists():
         raise DashboardError('ASSETS_NOT_BUILT', 'Build the UI first: npm --prefix runtime-ui install && npm --prefix runtime-ui run build', 503)
     if document is not None:
         validate(document)
     from .statistical import statistical_artifacts
-    boot = {'statisticalArtifacts': statistical_artifacts(document) if document else {}, 'mode': mode, 'document': document, 'legacy': legacy or {}}
+    boot = {'statisticalArtifacts': statistical_artifacts(document) if document else {}, 'mode': mode, 'document': document, 'legacy': legacy or {}, 'idleTimeout': idle_timeout}
     payload = json.dumps(boot, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     javascript = js.read_text().replace('</script', '<\\/script')
     styles = css.read_text().replace('</style', '<\\/style')

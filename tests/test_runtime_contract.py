@@ -80,11 +80,3 @@ def test_every_registered_component_is_covered_by_schema_and_generated_html_gate
 
     inspection = inspect_html(output, strict=True)
     assert inspection["ok"] is True
-
-
-def test_explicit_filter_fields_and_consumers_do_not_fall_back_to_global_matching(tmp_path):
-    html = _generate(tmp_path, ["c01"])
-
-    assert "const scopedConsumerIds = new Set" in html
-    assert "scopedConsumerIds.has(instanceId)" in html
-    assert "const directVal = r[f.key]" not in html

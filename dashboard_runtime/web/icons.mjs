@@ -1,10 +1,10 @@
 /* Named, tree-shaken Lucide SVGs. No text glyphs or icon fonts. */
-import {createElement, Pencil, Eye, Plus, Upload, Undo2, Redo2, RefreshCw, Download,
+import {createElement, MessageSquare, Plane, Pencil, Eye, Plus, Upload, Undo2, Redo2, RefreshCw, Download,
   Database, BookOpen, Settings2, Copy, Trash2, X, Check, Sun, Moon, GripVertical,
   ChartNoAxesCombined, Table2, CalendarDays, Columns3, Search, Maximize2,
   Minimize2, Image, Info, Ellipsis, ChevronLeft, ChevronRight, ListFilter,
   LayoutGrid, FileJson, History, Link2, SlidersHorizontal, ArrowUp, ArrowDown} from 'lucide';
-const nodes={edit:Pencil,view:Eye,add:Plus,import:Upload,undo:Undo2,redo:Redo2,
+const nodes={comment:MessageSquare,plane:Plane,edit:Pencil,view:Eye,add:Plus,import:Upload,undo:Undo2,redo:Redo2,
   refresh:RefreshCw,export:Download,sql:Database,semantic:BookOpen,settings:Settings2,
   copy:Copy,remove:Trash2,close:X,save:Check,light:Sun,dark:Moon,drag:GripVertical,
   chart:ChartNoAxesCombined,table:Table2,calendar:CalendarDays,columns:Columns3,
@@ -38,7 +38,7 @@ function tooltip(button){
 }
 let activeMenu=null;
 export function closeMenu(){activeMenu?.();}
-export function openMenu(anchor,entries,{label='',content=null}={}){
+export function openMenu(anchor,entries,{label='',content=null,align='end'}={}){
   closeMenu();hideTooltip();const menu=document.createElement('div');menu.className='ui-menu';
   menu.setAttribute('popover','auto');menu.setAttribute('role',content?'dialog':'menu');
   if(label)menu.setAttribute('aria-label',label);
@@ -55,7 +55,7 @@ export function openMenu(anchor,entries,{label='',content=null}={}){
     b.onclick=e=>{e.stopPropagation();cleanup();anchor.focus();Promise.resolve().then(entry.run).catch(report);};menu.append(b);
   }
   if(menu.showPopover)menu.showPopover();
-  const rect=(anchor.hidden&&anchor._menuAnchor?anchor._menuAnchor:anchor).getBoundingClientRect();menu.style.left=Math.max(8,Math.min(innerWidth-menu.offsetWidth-8,rect.right-menu.offsetWidth))+'px';menu.style.top=Math.max(8,Math.min(innerHeight-menu.offsetHeight-8,rect.bottom+6))+'px';
+  const rect=(anchor.hidden&&anchor._menuAnchor?anchor._menuAnchor:anchor).getBoundingClientRect();menu.style.left=Math.max(8,Math.min(innerWidth-menu.offsetWidth-8,align==='start'?rect.left:rect.right-menu.offsetWidth))+'px';menu.style.top=Math.max(8,Math.min(innerHeight-menu.offsetHeight-8,rect.bottom+6))+'px';
   menu.addEventListener('toggle',e=>{if(e.newState==='closed')cleanup();},{signal:controller.signal});
   menu.addEventListener('keydown',e=>{
     if(e.key==='Escape'){e.preventDefault();cleanup();anchor.focus();return;}

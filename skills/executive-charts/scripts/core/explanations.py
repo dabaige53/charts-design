@@ -244,7 +244,7 @@ CHART_EXPLANATIONS_DATA = {
         "structure": {
             "xAxis": { "name": "季度序列", "meaning": "历史决算期与未来预测期", "range": "6 个季度" },
             "yAxis": { "name": "可用座公里 ASK (亿座公里)", "meaning": "运力投放规模", "range": "0 ~ 12.0 亿座公里" },
-            "series": [{ "name": "历史实际运力", "desc": "实线深蓝" }, { "name": "未来预测运力", "desc": "虚线绿色" }]
+            "series": [{ "name": "历史实际运力", "desc": "实线深蓝" }, { "name": "未来预测运力", "desc": "虚线浅蓝" }]
         },
         "metrics": [{
             "name": "预测走廊 (Forecast Corridor)",

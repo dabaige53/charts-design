@@ -8,7 +8,7 @@ Author: Executive Charts Skill Suite
 Description:
     Generates complete, enterprise-grade responsive HTML dashboards
     featuring:
-    1. Top Global Multi-Dimensional Filter Bar (Seasons, Hubs/Regions, Segments, Channels)
+    1. Top Global Filter Bar bound to table columns (options derived from the table rows)
     2. 4 Top-Tier KPI Metric Cards (Sparklines, Progress, Trend badges)
     3. Responsive Sectioned Chart Grid (5-action toolbar, chart/table views, CSV export, PNG copy,
        fullscreen focus, explanation dialogs)
@@ -65,141 +65,74 @@ from core.csv_profiler import profile_csv
 CHARTS_MAP = {**CHARTS_JS_DEFINITIONS, **ALL_CHARTS}
 
 # =============================================================================
-# 行业多维筛选栏配置库 (Industry Filter Configurations)
+# 行业筛选维度 (Industry Filter Dimensions)
+# Each dimension binds one table column; options come from the resolved table rows.
 # =============================================================================
-AIRLINE_FILTERS_CONFIG = {
-    "labels": {
-        "time": "航季时段",
-        "hub": "枢纽基地",
-        "fleet": "机队机型",
-        "route": "航线网络"
-    },
-    "seasons": [
-        {"val": "2026S", "label": "2026夏秋航季"},
-        {"val": "2025W", "label": "2025冬春航季"},
-        {"val": "2025S", "label": "2025夏秋航季"},
-        {"val": "2024FY", "label": "2024全航季基准"}
-    ],
-    "hubs": [
-        {"val": "华东基地", "label": "华东基地 (虹桥 SHA / 浦东 PVG)", "desc": "长三角核心枢纽", "default": True},
-        {"val": "北方基地", "label": "北方基地 (大兴 PKX / 首都 PEK)", "desc": "京津冀战略枢纽", "default": True},
-        {"val": "华南基地", "label": "华南基地 (白云 CAN / 宝安 SZX)", "desc": "粤港澳大湾区", "default": True},
-        {"val": "西南基地", "label": "西南基地 (天府 TFU / 双流 CTU)", "desc": "成渝双城经济圈", "default": True}
-    ],
-    "fleets": [
-        {"val": "ALL", "label": "全部机型 (全机队)"},
-        {"val": "WIDE", "label": "远程宽体客机 (A350 / B787 / B777)"},
-        {"val": "NARROW", "label": "中短程窄体客机 (A321neo / B737)"},
-        {"val": "DOMESTIC", "label": "国产商用客机 (C919 / ARJ21)"}
-    ],
-    "routes": [
-        {"val": "ALL", "label": "全部航线网络 (全网)"},
-        {"val": "TRUNK", "label": "国内核心商务干线 (京沪/京广/沪深)"},
-        {"val": "REGIONAL", "label": "区域互联支线网络 (西部/海岛/旅游)"},
-        {"val": "INTL", "label": "国际及地区航线 (洲际远程/一带一路)"}
-    ]
-}
+AIRLINE_FILTER_DIMENSIONS = [
+    ("hub", "multi-select", "枢纽基地"),
+    ("routeType", "select", "航线网络"),
+    ("rating", "select", "航线评级"),
+]
 
-RETAIL_FILTERS_CONFIG = {
-    "labels": {
-        "time": "考核周期",
-        "hub": "所属大区",
-        "fleet": "门店业态",
-        "route": "商品品类"
-    },
-    "seasons": [
-        {"val": "2026Q2", "label": "2026年Q2 (4-6月)", "default": True},
-        {"val": "2026Q1", "label": "2026年Q1 (1-3月)"},
-        {"val": "2025Q4", "label": "2025年Q4 (10-12月)"},
-        {"val": "2025FY", "label": "2025全年度基准"}
-    ],
-    "hubs": [
-        {"val": "华东大区", "label": "华东大区 (上海/杭州/南京/苏州)", "desc": "核心高净值消费带", "default": True},
-        {"val": "华北大区", "label": "华北大区 (北京/天津/青岛)", "desc": "京津冀消费中心", "default": True},
-        {"val": "华南大区", "label": "华南大区 (广州/深圳/佛山)", "desc": "大湾区高频消费圈", "default": True},
-        {"val": "西南大区", "label": "西南大区 (成都/重庆/昆明)", "desc": "成渝新消费高地", "default": True}
-    ],
-    "fleets": [
-        {"val": "ALL", "label": "全部业态 (全渠道)"},
-        {"val": "HYPER", "label": "大型综合超市 (Hypermarket)"},
-        {"val": "SUPER", "label": "标准精品超市 (Supermarket)"},
-        {"val": "CVS", "label": "便利店/社区生鲜店 (CVS)"}
-    ],
-    "routes": [
-        {"val": "ALL", "label": "全部商品品类 (全品类)"},
-        {"val": "FRESH", "label": "生鲜与冷链精选 (Fresh Foods)"},
-        {"val": "FMCG", "label": "快消食品与酒饮 (FMCG & Beverage)"},
-        {"val": "HOME", "label": "家居日用与美妆 (Home & Personal)"}
-    ]
-}
+RETAIL_FILTER_DIMENSIONS = [
+    ("region", "multi-select", "所属大区"),
+    ("format", "select", "门店业态"),
+    ("rating", "select", "运营评级"),
+]
 
-SAAS_FILTERS_CONFIG = {
-    "labels": {
-        "time": "财年季度",
-        "hub": "全球战区",
-        "fleet": "客户梯队",
-        "route": "产品矩阵"
-    },
-    "seasons": [
-        {"val": "2026Q1", "label": "2026财年 Q1", "default": True},
-        {"val": "2025Q4", "label": "2025财年 Q4"},
-        {"val": "2025Q3", "label": "2025财年 Q3"},
-        {"val": "2025FY", "label": "2025全财年基准"}
-    ],
-    "hubs": [
-        {"val": "华东中心", "label": "华东区 (上海/杭州/南京)", "desc": "互联网与新零售高地", "default": True},
-        {"val": "华北中心", "label": "华北区 (北京/天津)", "desc": "央国企与金融总部", "default": True},
-        {"val": "华南中心", "label": "华南区 (深圳/广州)", "desc": "跨境电商与高科技制造", "default": True},
-        {"val": "出海业务", "label": "海外大区 (新加坡/北美/欧洲)", "desc": "全球化业务", "default": True}
-    ],
-    "fleets": [
-        {"val": "ALL", "label": "全部客户梯队 (全客群)"},
-        {"val": "KA", "label": "头部战略大客户 (Enterprise KA)"},
-        {"val": "MID", "label": "腰部行业成长客户 (Mid-Market)"},
-        {"val": "SMB", "label": "标准中小微企业 (SMB)"}
-    ],
-    "routes": [
-        {"val": "ALL", "label": "全部产品线 (全矩阵)"},
-        {"val": "CORE", "label": "云原生数据智能平台 (Core Cloud)"},
-        {"val": "AI", "label": "企业级 AI Agent 工作流 (AI Suite)"},
-        {"val": "SEC", "label": "数据合规与安全网关 (Security)"}
-    ]
-}
+SAAS_FILTER_DIMENSIONS = [
+    ("segment", "multi-select", "客户梯队"),
+    ("tier", "select", "订阅版本"),
+    ("health", "select", "健康度评级"),
+]
 
-FINANCIAL_FILTERS_CONFIG = {
-    "labels": {
-        "time": "决算周期",
-        "hub": "业务板块",
-        "fleet": "成本中心",
-        "route": "核算口径"
-    },
-    "seasons": [
-        {"val": "2025FY", "label": "2025全年度决算", "default": True},
-        {"val": "2026Q1", "label": "2026年Q1管理决算"},
-        {"val": "2025Q4", "label": "2025年Q4财务决算"},
-        {"val": "2024FY", "label": "2024全年度对比"}
-    ],
-    "hubs": [
-        {"val": "核心主营", "label": "数字化智能与云服务板块", "desc": "高毛利核心驱动", "default": True},
-        {"val": "硬件制造", "label": "消费电子与智能终端板块", "desc": "规模现金流业务", "default": True},
-        {"val": "智能物流", "label": "全球供应链与智能物流板块", "desc": "基础设施运营", "default": True},
-        {"val": "智慧零售", "label": "新零售与全渠道智慧消费", "desc": "新业态增长极", "default": True}
-    ],
-    "fleets": [
-        {"val": "ALL", "label": "全部成本中心 (全费用)"},
-        {"val": "TECH", "label": "研发与技术投入 (R&D Expense)"},
-        {"val": "SALES", "label": "市场拓展与销售费用 (S&M)"},
-        {"val": "OPS", "label": "运营与行政管理费用 (G&A)"}
-    ],
-    "routes": [
-        {"val": "ALL", "label": "全部核算口径 (综合)"},
-        {"val": "CAS", "label": "中国企业会计准则 (CAS/GAAP)"},
-        {"val": "MGMT", "label": "管理会计归因口径 (Management)"},
-        {"val": "TAX", "label": "税务与合规审计口径 (Tax Audit)"}
-    ]
-}
+FINANCIAL_FILTER_DIMENSIONS = [
+    ("segment", "multi-select", "业务板块"),
+    ("auditRating", "select", "风控评级"),
+]
 
-GLOBAL_FILTERS_CONFIG = AIRLINE_FILTERS_CONFIG
+# Legacy object filters: (group, label key, filter type).
+LEGACY_FILTER_GROUPS = (
+    ("seasons", "time", "select"),
+    ("hubs", "hub", "multi-select"),
+    ("fleets", "fleet", "select"),
+    ("routes", "route", "select"),
+)
+
+
+def table_filters(table, dimensions):
+    """Build array filters bound to table columns, taking options from the rows."""
+    columns = {column["key"]: column.get("title", column["key"]) for column in table.get("columns", [])}
+    rows = table.get("rows", [])
+    filters = []
+    for key, filter_type, label in dimensions:
+        if key not in columns:
+            continue
+        label = label or columns[key]
+        values = list(dict.fromkeys(row[key] for row in rows if row.get(key) not in (None, "")))
+        options = [{"value": value, "label": value, "default": filter_type == "multi-select"} for value in values]
+        if filter_type == "select":
+            options.insert(0, {"value": "ALL", "label": f"全部{label}", "default": True})
+        filters.append({"id": key, "key": key, "label": label, "type": filter_type,
+                        "fields": [key], "componentIds": [], "options": options})
+    return filters
+
+
+def legacy_filters_to_array(legacy, table):
+    """Bind each legacy filter group to the table column that holds its option values."""
+    labels = legacy.get("labels", {})
+    rows = table.get("rows", [])
+    dimensions = []
+    for group, label_key, filter_type in LEGACY_FILTER_GROUPS:
+        values = {str(option.get("value", option.get("val"))) for option in legacy.get(group, [])} - {"ALL"}
+        key = next((column["key"] for column in table.get("columns", [])
+                    if values & {str(row.get(column["key"])) for row in rows}), None)
+        if key and key not in {dimension[0] for dimension in dimensions}:
+            dimensions.append((key, filter_type, labels.get(label_key)))
+        elif values and not key:
+            print(f"⚠️ Warning: legacy filter group '{group}' matches no table column, skipping.")
+    return table_filters(table, dimensions)
+
 
 PRESET_CONFIGS = {
     "retail_ecommerce": {
@@ -209,7 +142,7 @@ PRESET_CONFIGS = {
         "periodTag": "2026 年 Q2 · 季度经营决算",
         "securityBadge": "内部战略研判 · 经营核心密级",
         "chartCodes": ["c01", "t06", "k01", "r01", "f01", "fn01", "m01", "k04"],
-        "filters": RETAIL_FILTERS_CONFIG,
+        "filterDimensions": RETAIL_FILTER_DIMENSIONS,
         "table": {
             "title": "全国连锁零售门店与全渠道运营效能透视表",
             "explainKey": "table_retail_main",
@@ -246,7 +179,7 @@ PRESET_CONFIGS = {
         "periodTag": "2026 财年 Q1 · 产品效能分析",
         "securityBadge": "内部研判 · 商用密级",
         "chartCodes": ["c02", "t04", "r02", "f01", "f03", "k01", "m02", "fn04"],
-        "filters": SAAS_FILTERS_CONFIG,
+        "filterDimensions": SAAS_FILTER_DIMENSIONS,
         "table": {
             "title": "SaaS 全生命周期客户运营与续约健康度透视表",
             "explainKey": "table_saas_main",
@@ -283,7 +216,7 @@ PRESET_CONFIGS = {
         "periodTag": "2025 全年度决算 · 财务归因审计",
         "securityBadge": "严格保密 · 财务核心决算",
         "chartCodes": ["fn01", "fn02", "fn03", "f02", "c04", "t05", "m03", "fn04"],
-        "filters": FINANCIAL_FILTERS_CONFIG,
+        "filterDimensions": FINANCIAL_FILTER_DIMENSIONS,
         "table": {
             "title": "集团各事业部经营效益与资金预算多维穿透表",
             "explainKey": "table_finance_main",
@@ -320,7 +253,7 @@ PRESET_CONFIGS = {
         "periodTag": "2026 夏秋航季 · 咨询级经营决算",
         "securityBadge": "内部战略研判 · 核心决算密级",
         "chartCodes": ["c01", "c02", "c08", "t06", "t01", "t04", "r01", "c06"],
-        "filters": AIRLINE_FILTERS_CONFIG,
+        "filterDimensions": AIRLINE_FILTER_DIMENSIONS,
         "table": {
             "title": "民航核心航线与机队运营效能全要素透视表",
             "explainKey": "table_airline_main",
@@ -357,7 +290,7 @@ PRESET_CONFIGS = {
         "periodTag": "2026 ~ 2028 战略规划周期",
         "securityBadge": "战略机密 · 决策委员会专阅",
         "chartCodes": ["r01", "r03", "r04", "r05", "k03", "d04", "m01", "c03"],
-        "filters": AIRLINE_FILTERS_CONFIG,
+        "filterDimensions": AIRLINE_FILTER_DIMENSIONS,
         "table": {
             "title": "战略航网与重点业务单元效能矩阵表",
             "explainKey": "table_airline_main",
@@ -394,7 +327,7 @@ PRESET_CONFIGS = {
         "periodTag": "企业级商业智能标准参考体系",
         "securityBadge": "公开标准 · 生产级交付物",
         "chartCodes": ["c01", "t06", "k01", "d04", "r01", "f02", "fn01", "m01", "k04", "c06"],
-        "filters": AIRLINE_FILTERS_CONFIG,
+        "filterDimensions": AIRLINE_FILTER_DIMENSIONS,
         "table": {
             "title": "全要素运营效能综合透视表",
             "explainKey": "table_airline_main",
@@ -431,7 +364,7 @@ PRESET_CONFIGS = {
         "periodTag": "2026 年 3 月 · 月度经营决算",
         "securityBadge": "内部研判 · 经营决算",
         "chartCodes": ["c01", "t01", "t06", "c08", "k01", "fn02", "r01", "m01"],
-        "filters": AIRLINE_FILTERS_CONFIG,
+        "filterDimensions": AIRLINE_FILTER_DIMENSIONS,
         "table": {
             "title": "月度核心业务单元运营决算透视表",
             "explainKey": "table_airline_main",
@@ -535,12 +468,8 @@ def generate_dashboard(
         "system": period_tag,
         "statusText": security_badge
     }
-
-    # Filters
-    if "filters" in custom_cfg:
-        filters_config = custom_cfg["filters"]
-    else:
-        filters_config = preset.get("filters") or (AIRLINE_FILTERS_CONFIG if allow_preset_fallback else [])
+    if custom_meta.get("iconKey"):
+        meta_dict["iconKey"] = custom_meta["iconKey"]
 
     # KPIs
     kpis_config = custom_cfg["kpis"] if "kpis" in custom_cfg else preset.get("kpis", [])
@@ -592,6 +521,15 @@ def generate_dashboard(
         }
     else:
         table_config = {"title": "数据明细", "columns": [], "rows": []}
+
+    # Filters bind to columns of the resolved table.
+    if "filters" in custom_cfg:
+        filters_config = custom_cfg["filters"]
+        if isinstance(filters_config, dict):
+            filters_config = legacy_filters_to_array(filters_config, table_config)
+    else:
+        dimensions = preset.get("filterDimensions") or (AIRLINE_FILTER_DIMENSIONS if allow_preset_fallback else [])
+        filters_config = table_filters(table_config, dimensions)
 
     # Explanations
     explanations_str = EXPLANATIONS_JSON_STRING if allow_preset_fallback else "{}"

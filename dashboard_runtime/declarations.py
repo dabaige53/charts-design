@@ -12,7 +12,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-from .model import AGGREGATES, ID, MAX_COMPONENTS, MAX_ROWS, TYPES, require
+from .model import AGGREGATES, ID, MAX_COMPONENTS, MAX_ROWS, require
 
 REPO = Path(__file__).resolve().parent.parent
 LEGACY_ROOT = Path('skills/executive-charts')
@@ -61,11 +61,11 @@ def _common():
          'then': {'required': ['scale'], 'properties': {'scale': {'const': 'fraction'}}}},
     ]
     component = _object({
-        'kind': {'enum': ['chart', 'kpi', 'table', 'text', 'legacy']},
+        'kind': {'enum': ['kpi', 'table', 'text', 'legacy']},
         'title': {'type': 'string', 'maxLength': 240},
+        'subtitle': {'type': 'string', 'maxLength': 1000, 'description': 'Saved component explanation shown with the title.'},
         'datasetId': _identifier(), 'x': field_name, 'series': field_name,
         'measures': {'type': 'array', 'items': _identifier(), 'minItems': 1, 'uniqueItems': True},
-        'chartType': {'enum': list(TYPES)},
         'presentation': {'type': 'object'}, 'text': string,
         'family': {'enum': ['chart', 'kpi', 'table']},
         'config': {'type': 'object'}, 'binding': {'type': 'object'},
@@ -73,6 +73,8 @@ def _common():
     }, ['kind', 'title'])
     return {
         'identifierSchema': _identifier(), 'sourceSchema': source,
+        'metaSchema': _object({**{key: {'type': 'string', 'maxLength': 1000} for key in ('subtitle', 'org', 'system', 'statusText')}, 'iconKey': {'enum': ['chart', 'plane']}}),
+        'filterSchema': _object({'id': _identifier(), 'label': string, 'field': field_name, 'op': {'enum': ['in', 'range', 'contains']}, 'values': {'type': 'array'}, 'componentIds': {'type': 'array', 'items': _identifier()}}, ['id', 'field', 'op', 'values', 'componentIds']),
         'datasetMetaSchema': _object({
             'sourceId': _identifier(),
             'fields': {'type': 'object', 'minProperties': 1,
@@ -94,92 +96,13 @@ def _common():
     }
 
 
-def _native_example(chart_type):
-    numeric_x = chart_type == 'scatter'
-    x = 'quantity' if numeric_x else 'category'
-    rows = [{x: 1 if numeric_x else 'A', 'region': 'East', 'value': 12},
-            {x: 2 if numeric_x else 'B', 'region': 'West', 'value': 8}]
-    if chart_type in ('bar', 'line', 'area', 'heatmap'):
-        rows = [{x: 'A', 'region': 'East', 'value': 12},
-                {x: 'B', 'region': 'East', 'value': 8},
-                {x: 'A', 'region': 'West', 'value': 10},
-                {x: 'B', 'region': 'West', 'value': 9}]
-    metric = {'datasetId': 'example-data', 'field': 'value', 'aggregation': 'sum',
-              'label': 'Example value', 'unit': 'units',
-              'definition': 'Sum of explicit synthetic example values; replace with reviewed business data.',
-              'status': 'unverified'}
-    if chart_type == 'waterfall':
-        metric['semantic'] = 'delta'
-        metric['definition'] = 'Additive synthetic changes in encounter order, starting from zero.'
-        rows[1]['value'] = -3
-    component = {'kind': 'chart', 'title': f'Example {chart_type}',
-                 'datasetId': 'example-data', 'x': x,
-                 'measures': ['example-value'], 'chartType': chart_type}
-    if chart_type in ('bar', 'line', 'area', 'heatmap'):
-        component['series'] = 'region'
-    return {
-        'status': 'fixture',
-        'usage': 'Apply these operations to a new empty dashboard, replacing the synthetic data and identifiers for real work. Read its current revision first.',
-        'componentId': f'example-{chart_type}',
-        'operations': [
-            {'op': 'put_source', 'id': 'example-source', 'value': {
-                'kind': 'fixture', 'name': 'Explicit synthetic declaration example'}},
-            {'op': 'put_dataset', 'id': 'example-data', 'meta': {
-                'sourceId': 'example-source', 'fields': {
-                    x: {'type': 'number' if numeric_x else 'string'},
-                    'region': {'type': 'string'}, 'value': {'type': 'number'}}}, 'rows': rows},
-            {'op': 'put_metric', 'id': 'example-value', 'value': metric},
-            {'op': 'put_component', 'id': f'example-{chart_type}', 'value': component},
-            {'op': 'set_status', 'value': 'fixture'},
-        ],
-    }
-
-
-def _native_charts(common):
-    result = {}
-    for chart_type in TYPES:
-        schema = copy.deepcopy(common['componentSchema'])
-        schema['properties']['kind'] = {'const': 'chart'}
-        schema['properties']['chartType'] = {'const': chart_type}
-        schema['required'] = ['kind', 'title', 'datasetId', 'x', 'measures', 'chartType']
-        one_measure = chart_type in ('pie', 'funnel', 'waterfall', 'heatmap', 'scatter')
-        if one_measure:
-            schema['properties']['measures']['maxItems'] = 1
-        series_policy = 'required' if chart_type == 'heatmap' else (
-            'forbidden' if chart_type in ('pie', 'funnel', 'waterfall') else 'optional')
-        if series_policy == 'required':
-            schema['required'].append('series')
-        if series_policy == 'forbidden':
-            schema['not'] = {'required': ['series']}
-        constraints = {
-            'measureCount': {'minimum': 1, **({'maximum': 1} if one_measure else {})},
-            'sameUnitAndFormat': True, 'series': series_policy,
-            'xFieldType': 'number' if chart_type == 'scatter' else 'declared field',
-        }
-        if chart_type in ('pie', 'funnel'):
-            constraints.update({'metricAggregations': ['sum', 'count'],
-                                'renderedValues': 'nonnegative; the renderer rejects negative values'})
-        if chart_type == 'waterfall':
-            constraints.update({'metricAggregations': ['sum'], 'metricSemantic': 'delta'})
-        result[chart_type] = {
-            'componentSchema': schema, 'constraints': constraints,
-            'notes': [
-                'series is a dataset field name for grouping, not an ECharts series array.',
-                'x and series must reference declared dataset fields. Categories follow snapshot encounter order.',
-                'Shape validation does not prove cross-reference or metric compatibility; use dashboard_validate or an atomic dashboard_patch.',
-            ],
-            'example': _native_example(chart_type),
-        }
-        if chart_type == 'heatmap':
-            result[chart_type]['notes'].append('Use x and series as the two category dimensions; both axes are rendered as categories.')
-    return result
-
-
 def _registry():
     path = REPO / LEGACY_SCHEMA_SOURCE
     if not path.is_file():
         return None
     spec = importlib.util.spec_from_file_location('_charts_declaration_schemas', path)
+    if spec is None or spec.loader is None:
+        return None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -198,6 +121,27 @@ def _legacy_example(family, config):
     ]}
 
 
+def _advanced_configs():
+    """Hand-authored legal examples, independent of preview HTML/catalog defaults."""
+    return {
+        't06': {'code': 't06', 'title': 'Synthetic monthly / quarterly revenue', 'unit': '10k CNY',
+            'data': {'month': {'categories': ['2026-07', '2026-08', '2026-09'], 'revenue': [140, 174, 170], 'yieldGrowth': [100 * 10 / 130, 100 * 44 / 130, 100 * 40 / 130]},
+                     'quarter': {'categories': ['2026-Q3'], 'revenue': [484], 'yieldGrowth': [100 * 94 / 390]}},
+            'presentation': {'axisLabels': {'x': 'Period', 'leftY': 'Revenue', 'rightY': 'Yield change'}, 'seriesLabels': ['Revenue', 'Yield change'], 'tooltipValueLabels': ['Revenue', 'Yield change'], 'units': ['10k CNY', '%'], 'tableHeaders': ['Period', 'Revenue', 'Yield change']}},
+        'm01': {'code': 'm01', 'title': 'Synthetic target attainment', 'unit': '%',
+            'data': {'metrics': ['Revenue', 'Passengers'], 'actual': [92, 104], 'target': 100},
+            'presentation': {'axisLabels': {'x': 'Attainment', 'y': 'Metric'}, 'seriesLabels': ['Actual'], 'tooltipValueLabels': ['Actual'], 'units': ['%'], 'labels': ['Below target', 'At / above target'], 'thresholds': {'target': 100}, 'tableHeaders': ['Metric', 'Actual', 'Target', 'Gap']}},
+    }
+
+
+def _binding_capability(code, family='chart'):
+    from .bindings import SERIES_TARGETS
+    supported = code in SERIES_TARGETS if family == 'chart' else code not in ('mc07', 'mc08', 'mc09')
+    return {'supported': supported, 'snapshotOnly': not supported,
+            'requiresExplicitBinding': True,
+            'description': 'Explicit dataset/metric binding recomputes after scoped filters.' if supported else 'Snapshot rendering only; filter binding requires a dedicated reviewed transform.'}
+
+
 def _legacy(common):
     module = _registry()
     catalog_path = REPO / LEGACY_CATALOG_SOURCE
@@ -207,8 +151,11 @@ def _legacy(common):
     entries = {entry['id']: entry for entry in catalog}
     chart_codes = {}
     for code in codes:
+        assert module is not None
         chart_codes[code] = {
             'family': 'chart', 'configSelector': {'code': code},
+            'filterBinding': _binding_capability(code),
+            **({'example': _legacy_example('chart', _advanced_configs()[code])} if code in _advanced_configs() else {}),
             'catalogEntry': entries.get(code),
             'schemaId': module.CHART_SCHEMA_REGISTRY[code],
             'schemaSource': LEGACY_SCHEMA_SOURCE,
@@ -241,6 +188,7 @@ def _legacy(common):
             config.pop('value')
             config.update({'leftLabel': 'Actual', 'leftVal': '12', 'rightLabel': 'Target', 'rightVal': '20'})
         kpi_configs[code] = {
+            'filterBinding': _binding_capability(code, 'kpi'),
             'configSelector': {'type': code}, 'required': ['label'] + (
                 ['leftVal', 'rightVal'] if code == 'mc06' else ['value']),
             'completeJsonSchema': False, 'exampleConfig': config,
@@ -276,11 +224,11 @@ def _legacy(common):
             example_config = kpi_configs['mc01']['exampleConfig'] if kpis else {'type': 'mc01', 'label': 'Synthetic value', 'value': '12'}
         else:
             config_schema = _object({
-                'columns': {'type': 'array', 'items': _object({'key': {'type': 'string'}, 'label': {'type': 'string'}}, ['key'])},
+                'columns': {'type': 'array', 'items': _object({'key': {'type': 'string'}, 'title': {'type': 'string', 'description': 'Preferred column heading; label is a backward-compatible alias.'}, 'label': {'type': 'string'}}, ['key'])},
                 'rows': {'type': 'array', 'items': {'type': 'object'}},
             }, ['columns', 'rows'])
             example_config = {'title': 'Synthetic regional detail', 'columns': [
-                {'key': 'region', 'label': 'Region'}, {'key': 'value', 'label': 'Value', 'type': 'number'}],
+                {'key': 'region', 'title': 'Region'}, {'key': 'value', 'title': 'Value', 'type': 'number'}],
                 'rows': [{'region': 'East', 'value': 12}, {'region': 'West', 'value': 8}]}
         schema['properties']['config'] = config_schema
         families[family] = {'componentSchema': schema, 'example': _legacy_example(family, example_config)}
@@ -288,10 +236,11 @@ def _legacy(common):
         'available': module is not None,
         'schemaSource': LEGACY_SCHEMA_SOURCE, 'catalogSource': LEGACY_CATALOG_SOURCE,
         'validator': 'dashboard_runtime.legacy.validate_original',
-        'catalogEntries': catalog,
+        'catalogEntries': [{**entry, 'filterBinding': _binding_capability(entry['id'], 'kpi' if entry['id'] in kpis else 'chart') if entry['id'] in codes or entry['id'] in kpis else {'supported': entry['id'] == 'tb01', 'snapshotOnly': entry['id'] != 'tb01', 'requiresExplicitBinding': True}} for entry in catalog],
         'counts': {'catalogEntries': len(catalog), 'registeredChartCodes': len(codes), 'registeredKpiTypes': len(kpis)},
         'chartCodes': chart_codes, 'kpiTypes': kpi_configs, 'families': families,
         'limits': [
+            'Annotations use manifest.annotations / set_annotations: up to 100 entries with unique id, componentId (existing component or null for page), text (1-4000 characters), and createdAt. Page metadata uses set_meta with subtitle/org/system/statusText/iconKey (chart or plane). Component subtitle is saved separately from title. Table column headings use title, then legacy label, then key. Filters use explicit consumers; contains takes one text value and an empty values list disables it.',
             'Catalog entries are discovery metadata, not a list of chart renderers: the bundled catalog has 45 entries including KPI and table entries. The bundled validator registry has 40 chart codes and 9 KPI types.',
             'Per-code requirements are extracted from the installed Python registry. They are partial guidance, not complete JSON Schemas. Nested object rules, matrix dimensions, scalar fields and specialized checks remain in the authoritative validator.',
             'registeredArrayFields does not enumerate every required data field: for example t06 requires month and quarter objects, m01 requires target, and m04 requires rate and target.',
@@ -299,7 +248,7 @@ def _legacy(common):
             'Use only registered chartCodes for family=chart, kpiTypes for family=kpi, and explicit columns/rows for family=table. Do not interpret all catalog IDs as config.code.',
             'Legacy family defaults to chart in the validator; declarations should always supply family explicitly.',
             'Legacy configs preserve original data paths and presentation. No catalog preview data is substituted for supplied business data.',
-            'Without the installed original repository, legacy schema discovery is unavailable; native declarations remain usable.',
+            'Without the installed original repository, legacy schema discovery is unavailable; original chart authoring is unavailable.',
         ],
         'bindings': {
             'schemaSource': 'dashboard_runtime/bindings.py',
@@ -321,16 +270,13 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             'Choose chartType or code, not both')
     require(not (summary and (chart_type is not None or legacy_code is not None)),
             'A declaration summary cannot also select a chartType or code')
-    require(chart_type is None or (isinstance(chart_type, str) and chart_type in TYPES),
-            'Unknown native chart type')
+    require(chart_type is None, 'Only original chart codes are supported; select code, not chartType', 'UNSUPPORTED_CHART_FAMILY')
     require(legacy_code is None or isinstance(legacy_code, str), 'Legacy code must be a string')
     common = _common()
     result = {
         'schemaVersion': 1,
         'documentSchemaVersion': 2,
         'authority': {
-            'nativeValidator': 'dashboard_runtime/model.py:validate and compatibility',
-            'nativeRenderer': 'dashboard_runtime/web/engine.mjs:optionFor',
             'legacyValidator': 'dashboard_runtime/legacy.py:validate_original',
             'scope': 'Authoring guidance and shape schemas, not a replacement for full document validation.',
         },
@@ -341,7 +287,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             {'tool': 'dashboard_validate', 'purpose': 'Validate the saved dashboard or a complete proposed document.'},
             {'tool': 'dashboard_preview', 'purpose': 'Render and inspect the result. A successful declaration check does not substitute for visual review.'},
         ],
-        'common': common, 'nativeCharts': _native_charts(common), 'legacy': _legacy(common),
+        'common': common, 'legacy': _legacy(common),
         'reportEmbedding': {
             'operation': 'set_report_markdown',
             'example': '## Observation\n\n```chart\n{"componentId":"example-bar","caption":"Synthetic comparison","source":"Explicit fixture data"}\n```\n',
@@ -358,8 +304,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             'documentSchemaVersion': result['documentSchemaVersion'],
             'statistical': {'backend':'seaborn','types':result['statistical']['types'],'component':result['statistical']['component'],'resource':'charts://declarations','renderTool':'statistical_render'},
             'summary': True, 'resource': 'charts://declarations',
-            'usage': 'Choose chartType for a native declaration or code for an original chart/KPI. The full resource also documents the table family.',
-            'nativeCharts': list(result['nativeCharts']),
+            'usage': 'Choose code for one of the 40 original charts or 9 KPI types. The full resource also documents the table family.',
             'legacy': {
                 'available': legacy['available'], 'counts': legacy['counts'],
                 'chartCodes': list(legacy['chartCodes']), 'kpiTypes': list(legacy['kpiTypes']),
@@ -368,10 +313,6 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
                 'limits': legacy['limits'][:2],
             },
         }
-    elif chart_type is not None:
-        result['selection'] = {'chartType': chart_type}
-        result['nativeCharts'] = {chart_type: result['nativeCharts'][chart_type]}
-        del result['legacy']
     elif legacy_code is not None:
         legacy = result['legacy']
         require(legacy['available'], 'Original schema registry is not installed', 'LEGACY_UNAVAILABLE')
@@ -379,7 +320,6 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
                 'Unknown original chart/KPI code; table catalog entries use family=table with explicit columns and rows')
         family = 'chart' if legacy_code in legacy['chartCodes'] else 'kpi'
         result['selection'] = {'code': legacy_code, 'family': family}
-        del result['nativeCharts']
         legacy['chartCodes'] = {legacy_code: legacy['chartCodes'][legacy_code]} if family == 'chart' else {}
         legacy['kpiTypes'] = {legacy_code: legacy['kpiTypes'][legacy_code]} if family == 'kpi' else {}
         legacy['catalogEntries'] = [entry for entry in legacy['catalogEntries'] if entry['id'] == legacy_code]
@@ -389,6 +329,8 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
         if family == 'kpi':
             selected_schema['required'].append('type')
             legacy['families'][family]['example'] = _legacy_example('kpi', legacy['kpiTypes'][legacy_code]['exampleConfig'])
+        elif legacy_code in _advanced_configs():
+            legacy['families'][family]['example'] = _legacy_example('chart', _advanced_configs()[legacy_code])
         elif legacy_code != 'c01':
             # c01 demonstrates only its own shape. Never advertise it as a
             # runnable config for a different code with different data paths.

@@ -1,0 +1,9 @@
+{
+  "id": "table",
+  "title": "区域收入明细（示例）",
+  "columns": [
+    {"key": "region", "title": "区域"},
+    {"key": "sales", "title": "营业收入", "unit": "万元", "align": "right"}
+  ],
+  "rows": [{"region": "华东", "sales": 128}, {"region": "华南", "sales": 96}]
+}

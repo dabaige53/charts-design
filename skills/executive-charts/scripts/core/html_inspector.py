@@ -2,9 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
-import shutil
-import subprocess
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
@@ -131,16 +128,12 @@ def check_manifest(parser: DashboardHTMLParser, source: str, manifest: dict[str,
     return errors
 
 
-def inspect_html(path: Path, strict: bool = False, manifest_path: Path | None = None, runtime: bool = False) -> dict[str, Any]:
+def inspect_html(path: Path, strict: bool = False, manifest_path: Path | None = None) -> dict[str, Any]:
     html_path = path.expanduser().resolve()
     parser, source, errors = parse_html(html_path)
     warnings: list[Issue] = []
     manifest, manifest_errors = read_manifest(manifest_path)
     errors.extend(manifest_errors)
-    runtime_evidence: dict[str, Any] | None = None
-    if runtime and html_path.is_file():
-        runtime_errors, runtime_evidence = inspect_runtime(html_path)
-        errors.extend(runtime_errors)
     if parser is None:
         return result("dashboard.inspect-html", html_path, errors, warnings, {}, manifest_path)
     duplicates = sorted(value for value, count in Counter(parser.ids).items() if count > 1)
@@ -163,53 +156,7 @@ def inspect_html(path: Path, strict: bool = False, manifest_path: Path | None = 
     if manifest is not None:
         errors.extend(check_manifest(parser, source, manifest))
     summary = {"ids": len(parser.ids), "duplicateIds": len(duplicates), "assets": len(parser.assets), "localAssets": len(local_assets), "domReferences": len(parser.references)}
-    payload = result("dashboard.inspect-html", html_path, errors, warnings, summary, manifest_path)
-    if runtime_evidence is not None:
-        payload["evidence"]["runtime"] = runtime_evidence
-    return payload
-
-
-def inspect_runtime(html_path: Path) -> tuple[list[Issue], dict[str, Any]]:
-    executable = shutil.which("playwright")
-    if not executable:
-        return [issue(
-            "RUNTIME_ADAPTER_MISSING",
-            "runtime.playwright",
-            "Install the Playwright CLI and a Chromium browser to run generated DOM checks",
-        )], {"adapter": "playwright", "available": False}
-    spec = Path(__file__).parents[1] / "runtime_inspector.spec.js"
-    env = os.environ.copy()
-    env["EXECUTIVE_CHARTS_HTML"] = str(html_path)
-    chrome_candidates = (
-        Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-        Path("/usr/bin/google-chrome"),
-        Path("/usr/bin/google-chrome-stable"),
-    )
-    if any(candidate.is_file() for candidate in chrome_candidates):
-        env["EXECUTIVE_CHARTS_BROWSER_CHANNEL"] = "chrome"
-    playwright_module_root = str(Path(executable).resolve().parents[1])
-    env["NODE_PATH"] = os.pathsep.join(filter(None, (playwright_module_root, env.get("NODE_PATH"))))
-    completed = subprocess.run(
-        [executable, "test", str(spec), "--reporter=line", "--workers=1"],
-        cwd=Path(__file__).parents[4],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    evidence = {
-        "adapter": "playwright",
-        "available": True,
-        "exitCode": completed.returncode,
-    }
-    if completed.returncode == 0:
-        return [], evidence
-    output = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part.strip())
-    return [issue(
-        "RUNTIME_INSPECTION_FAILED",
-        "runtime.playwright",
-        output[-2000:] or "Playwright runtime inspection failed",
-    )], evidence
+    return result("dashboard.inspect-html", html_path, errors, warnings, summary, manifest_path)
 
 
 def compare_html(before: Path, after: Path, manifest_path: Path | None = None) -> dict[str, Any]:

@@ -296,7 +296,7 @@
                 <button id="toggleAxisTitlesBtn" onclick="toggleAxisTitles()" 
                         class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border border-primary/30 bg-white text-primary hover:bg-primary-soft/50 shadow-sm transition-all whitespace-nowrap cursor-pointer"
                         title="点击一键切换全图表 XY 轴标题显示/隐藏">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="w-2 h-2 rounded-full bg-primary"></span>
                     <span id="axisTitleBtnText">XY轴标题: 显示 (ON)</span>
                 </button>
 
@@ -304,7 +304,7 @@
                 <button id="toggleLegendBtn" onclick="toggleLegends()" 
                         class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded border border-primary/30 bg-white text-primary hover:bg-primary-soft/50 shadow-sm transition-all whitespace-nowrap cursor-pointer"
                         title="点击一键切换全图表图例显示/隐藏">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="w-2 h-2 rounded-full bg-primary"></span>
                     <span id="legendBtnText">图例: 显示 (ON)</span>
                 </button>
 
@@ -342,12 +342,12 @@
                     <span>主色 (深蓝 #123B5D)</span>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <span class="w-3.5 h-3.5 rounded-sm bg-[#2F6B55] inline-block border border-slate-300"></span>
-                    <span>正向 (松石绿 #2F6B55)</span>
+                    <span class="w-3.5 h-3.5 rounded-sm bg-[#A4453C] inline-block border border-slate-300"></span>
+                    <span>上涨 (克制红 #A4453C)</span>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <span class="w-3.5 h-3.5 rounded-sm bg-[#A4453C] inline-block border border-slate-300"></span>
-                    <span>负向 (克制红 #A4453C)</span>
+                    <span class="w-3.5 h-3.5 rounded-sm bg-[#2F6B55] inline-block border border-slate-300"></span>
+                    <span>下跌 (松石绿 #2F6B55)</span>
                 </div>
                 <div class="flex items-center space-x-2">
                     <span class="w-3.5 h-3.5 rounded-sm bg-[#9A6A18] inline-block border border-slate-300"></span>
@@ -1103,7 +1103,7 @@
                 <div class="echarts-box mt-3 flex flex-col justify-center px-4 py-3 bg-slate-50/70 rounded border border-slate-100">
                     <div class="flex items-center justify-between text-xs text-ink-subtle mb-1">
                         <span class="font-medium text-ink-muted">2025年度累计总营收</span>
-                        <span class="inline-flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 正常核算</span>
+                        <span class="inline-flex items-center gap-1 text-[11px] text-primary bg-primary/5 px-1.5 py-0.5 rounded"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> 正常核算</span>
                     </div>
                     <div class="flex items-baseline gap-1.5 my-2">
                         <span class="text-xs text-ink-muted font-medium">¥</span>
@@ -1143,11 +1143,11 @@
                         <span class="text-xs text-ink-muted font-medium">元/座公里</span>
                     </div>
                     <div class="flex items-center gap-2 my-1">
-                        <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700">
+                        <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-positive/10 text-positive">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
                             +18.4% YoY
                         </span>
-                        <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700">
+                        <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-positive/10 text-positive">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
                             +3.2% MoM
                         </span>
@@ -1180,10 +1180,10 @@
                             <span class="text-xs font-medium text-ink-muted block">全网综合客座率 (PLF)</span>
                             <div class="flex items-baseline gap-1 mt-0.5">
                                 <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">88.4%</span>
-                                <span class="text-[11px] text-rose-600 font-bold font-mono ml-1">+4.2% YoY</span>
+                                <span class="text-[11px] text-positive font-bold font-mono ml-1">+4.2% YoY</span>
                             </div>
                         </div>
-                        <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700">↑ 稳步攀升</span>
+                        <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-positive/10 text-positive">↑ 稳步攀升</span>
                     </div>
                     <div id="chart-mc03" class="h-20 w-full my-1"></div>
                     <div class="pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] text-ink-subtle font-mono">
@@ -1252,7 +1252,7 @@
                     <div id="chart-mc05" class="h-28 w-full"></div>
                     <div class="w-full pt-1 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-ink-subtle">
                         <span>行业五星基准: 90.0%</span>
-                        <span class="text-emerald-700 font-semibold font-mono">已超标 +1.5%</span>
+                        <span class="text-positive font-semibold font-mono">已超标 +1.5%</span>
                     </div>
                 </div>
             </div>
@@ -1277,12 +1277,12 @@
                         <div>
                             <span class="text-[11px] text-ink-muted font-medium block">可用座公里 (ASK)</span>
                             <div class="text-xl font-extrabold text-primary-strong font-mono tabular-nums mt-0.5">525.0<span class="text-xs font-normal ml-0.5">亿</span></div>
-                            <span class="text-[10px] text-rose-600 font-mono font-bold">+12.4% YoY</span>
+                            <span class="text-[10px] text-positive font-mono font-bold">+12.4% YoY</span>
                         </div>
                         <div class="pl-3">
                             <span class="text-[11px] text-ink-muted font-medium block">收入客公里 (RPK)</span>
                             <div class="text-xl font-extrabold text-primary font-mono tabular-nums mt-0.5">464.2<span class="text-xs font-normal ml-0.5">亿</span></div>
-                            <span class="text-[10px] text-rose-600 font-mono font-bold">+18.2% YoY</span>
+                            <span class="text-[10px] text-positive font-mono font-bold">+18.2% YoY</span>
                         </div>
                     </div>
                     <div class="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-ink-subtle">
@@ -1567,7 +1567,7 @@
                                 </td>
                                 <td class="py-3 px-2.5 text-right font-mono font-bold text-negative">-4.8%</td>
                                 <td class="py-3 px-2.5 text-right font-mono text-negative">-2.1%</td>
-                                <td class="py-3 px-2.5 text-right font-mono text-negative font-medium">42.0%</td>
+                                <td class="py-3 px-2.5 text-right font-mono text-ink font-medium">42.0%</td>
                                 <td class="py-3 px-3 text-right font-mono text-ink font-medium">¥0.1425</td>
                                 <td class="py-3 px-2.5 text-right font-mono text-ink-muted">0.4 万户</td>
                                 <td class="py-3 px-3 text-right font-mono text-ink">¥44.1 万</td>
@@ -1771,7 +1771,7 @@
                                     </td>
                                     <td class="py-3 px-2.5 text-right font-mono font-bold text-negative">-4.8%</td>
                                     <td class="py-3 px-2.5 text-right font-mono text-negative">-2.1%</td>
-                                    <td class="py-3 px-2.5 text-right font-mono text-negative font-medium">92.0%</td>
+                                    <td class="py-3 px-2.5 text-right font-mono text-ink font-medium">92.0%</td>
                                     <td class="py-3 px-3 text-right font-mono text-ink font-medium">¥0.1425</td>
                                     <td class="py-3 px-2.5 text-right font-mono text-ink">¥44.1 万</td>
                                     <td class="py-3 px-3 text-right font-mono text-ink-subtle">¥6,800 万</td>
@@ -2219,7 +2219,7 @@
                 nodeGap: 10,
                 label: { fontSize: 10, color: colorPalette.ink, fontWeight: 500 },
                 lineStyle: { color: 'gradient', curveness: 0.5, opacity: 0.35 },
-                data: [{ name: '软件订阅 (6.0亿)', itemStyle: { color: '#0B2A42' } }, { name: '专业咨询 (4.0亿)', itemStyle: { color: '#123B5D' } }, { name: '营业总额 (10.0亿)', itemStyle: { color: '#123B5D' } }, { name: '综合毛利 (6.5亿)', itemStyle: { color: '#2F6B55' } }, { name: '各项支出 (4.3亿)', itemStyle: { color: '#52606D' } }, { name: '净利润 (2.2亿)', itemStyle: { color: '#2F6B55' } }],
+                data: [{ name: '软件订阅 (6.0亿)', itemStyle: { color: '#0B2A42' } }, { name: '专业咨询 (4.0亿)', itemStyle: { color: '#123B5D' } }, { name: '营业总额 (10.0亿)', itemStyle: { color: '#123B5D' } }, { name: '综合毛利 (6.5亿)', itemStyle: { color: '#A4453C' } }, { name: '各项支出 (4.3亿)', itemStyle: { color: '#52606D' } }, { name: '净利润 (2.2亿)', itemStyle: { color: '#A4453C' } }],
                 links: [
                     { source: '软件订阅 (6.0亿)', target: '营业总额 (10.0亿)', value: 6 },
                     { source: '专业咨询 (4.0亿)', target: '营业总额 (10.0亿)', value: 4 },
@@ -2319,7 +2319,7 @@
             xAxis: { type: 'category', name: '监控节点', nameLocation: 'middle', nameGap: 24, nameTextStyle: axisTitleStyleX, data: ['节点甲', '节点乙', '节点丙', '节点丁', '节点戊'], axisTick: { show: false } },
             yAxis: { type: 'value', name: '超时率 (%)', nameLocation: 'end', nameTextStyle: axisTitleStyleY, axisLabel: { formatter: '{value}%' }, splitLine: { lineStyle: { color: colorPalette.gridline } } },
             series: [
-                { type: 'bar', barWidth: 24, data: [{ value: 2.1, itemStyle: { color: colorPalette.primary } }, { value: 3.5, itemStyle: { color: colorPalette.primary } }, { value: 7.6, itemStyle: { color: colorPalette.negative } }, { value: 1.8, itemStyle: { color: colorPalette.primary } }, { value: 8.2, itemStyle: { color: colorPalette.negative } }], markLine: { symbol: 'none', data: [{ yAxis: 5.0, lineStyle: { color: colorPalette.negative, type: 'dashed' }, label: { formatter: '5%红线', color: colorPalette.negative } }] } }
+                { type: 'bar', barWidth: 24, data: [{ value: 2.1, itemStyle: { color: colorPalette.primary } }, { value: 3.5, itemStyle: { color: colorPalette.primary } }, { value: 7.6, itemStyle: { color: colorPalette.positive } }, { value: 1.8, itemStyle: { color: colorPalette.primary } }, { value: 8.2, itemStyle: { color: colorPalette.positive } }], markLine: { symbol: 'none', data: [{ yAxis: 5.0, lineStyle: { color: colorPalette.positive, type: 'dashed' }, label: { formatter: '5%红线', color: colorPalette.positive } }] } }
             ]
         };
 
@@ -2531,7 +2531,9 @@
                 const dom = document.getElementById('chart-' + key);
                 if (dom && !instances[key]) {
                     instances[key] = echarts.init(dom);
-                    instances[key].setOption(chartOptions[key]);
+                    // Metric-card entries carry display metadata (title, value, unit) that ECharts must not read.
+                    const { metricType, title, value, unit, target, ...metricOption } = chartOptions[key];
+                    instances[key].setOption(metricType ? metricOption : chartOptions[key]);
                     
                     if (window.ResizeObserver) {
                         const ro = new ResizeObserver(() => {
@@ -2702,7 +2704,7 @@
             const txt = document.getElementById('axisTitleBtnText');
 
             if (isAxisTitleVisible) {
-                dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                dot.className = 'w-2 h-2 rounded-full bg-primary';
                 txt.innerText = 'XY轴标题: 显示 (ON)';
                 btn.classList.remove('bg-slate-100', 'text-ink-muted', 'border-slate-200');
                 btn.classList.add('bg-white', 'text-primary', 'border-primary/30');
@@ -2772,7 +2774,7 @@
             const txt = document.getElementById('legendBtnText');
 
             if (isLegendVisible) {
-                dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                dot.className = 'w-2 h-2 rounded-full bg-primary';
                 txt.innerText = '图例: 显示 (ON)';
                 btn.classList.remove('bg-slate-100', 'text-ink-muted', 'border-slate-200');
                 btn.classList.add('bg-white', 'text-primary', 'border-primary/30');

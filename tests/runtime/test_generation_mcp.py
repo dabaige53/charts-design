@@ -10,6 +10,8 @@ import pytest
 pytest.importorskip('mcp', reason='Install the optional official MCP SDK')
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import TextResourceContents
+from pydantic import AnyUrl
 
 
 def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
@@ -17,13 +19,15 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
         params = StdioServerParameters(
             command=sys.executable,
             args=['-m', 'dashboard_runtime', '--root', str(tmp_path / 'state'), 'mcp'],
-            env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[2])},
+            env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')},
         )
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 tools = {tool.name: tool for tool in (await session.list_tools()).tools}
                 assert {'chart_declarations', 'generation_examples', 'dashboard_patch'} <= tools.keys()
+                assert tools['generation_examples'].annotations is not None
+                assert tools['chart_declarations'].annotations is not None
                 assert tools['generation_examples'].annotations.readOnlyHint is True
                 assert tools['chart_declarations'].annotations.readOnlyHint is True
                 resources = {str(resource.uri) for resource in (await session.list_resources()).resources}
@@ -31,13 +35,15 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                     'charts://examples/academic-report', 'charts://examples/executive-dashboard'}
                 assert expected_resources <= resources
                 for uri in expected_resources:
-                    result = await session.read_resource(uri)
+                    result = await session.read_resource(AnyUrl(uri))
                     assert result.contents[0].mimeType == 'application/json'
+                    assert isinstance(result.contents[0], TextResourceContents)
                     assert json.loads(result.contents[0].text)
 
                 async def call(name, arguments):
                     result = await session.call_tool(name, arguments)
                     assert not result.isError, result
+                    assert result.structuredContent is not None
                     return result.structuredContent
 
                 examples = await call('generation_examples', {})
@@ -45,8 +51,8 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 case = await call('generation_examples', {'caseId': 'academic-report'})
                 assert case['synthetic'] and case['operations'] and case['markdown']
                 assert (await call('chart_declarations', {}))['summary'] is True
-                selected = await call('chart_declarations', {'chartType': 'line'})
-                assert selected['nativeCharts']['line']['example']['operations']
+                selected = await call('chart_declarations', {'code': 'c01'})
+                assert selected['legacy']['families']['chart']['example']['operations']
                 # Reading guidance must not instantiate demo boards or add data.
                 assert (await call('dashboard_list', {}))['dashboards'] == []
                 created = (await call('dashboard_create', {'dashboardId': 'fresh-report',
@@ -100,8 +106,9 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                         'label': '收入', 'unit': '万元', 'definition': 'Sum of synthetic revenue',
                         'status': 'unverified'}},
                     {'op': 'put_component', 'id': 'trend', 'value': {
-                        'kind': 'chart', 'title': '月度收入', 'datasetId': 'fresh-data',
-                        'x': 'month', 'measures': ['revenue'], 'chartType': 'line'}},
+                        'kind': 'legacy', 'family': 'chart', 'title': '月度收入', 'sourceId': 'fresh-source',
+                        'config': {'code': 'c01', 'unit': '万元', 'data': {'categories': ['2025-01', '2025-02'], 'values': [10, 15]}, 'presentation': {'axisLabels': {'x': '月份', 'y': '收入'}, 'seriesLabels': ['收入'], 'tooltipValueLabels': ['收入'], 'units': ['万元'], 'tableHeaders': ['月份', '收入']}},
+                        'binding': {'datasetId': 'fresh-data', 'categoryField': 'month', 'categoryTarget': 'categories', 'measures': {'values': 'revenue'}}}},
                     {'op': 'set_report_markdown', 'value': markdown},
                     {'op': 'set_view_mode', 'value': 'report'},
                     {'op': 'set_status', 'value': 'fixture'},
@@ -122,8 +129,10 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                         'value': '```chart\n{"componentId":"missing"}\n```'}]})
                 assert invalid.isError
                 assert (await call('dashboard_get', {'dashboardId': 'fresh-report'}))['document'] == doc
+                assert tools['dashboard_preview'].meta is not None
                 preview_uri = tools['dashboard_preview'].meta['ui']['resourceUri']
-                preview_resource = await session.read_resource(preview_uri)
+                preview_resource = await session.read_resource(AnyUrl(preview_uri))
                 assert preview_resource.contents[0].mimeType == 'text/html;profile=mcp-app'
+                assert isinstance(preview_resource.contents[0], TextResourceContents)
                 assert '<html' in preview_resource.contents[0].text.lower()
     asyncio.run(check())

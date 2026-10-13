@@ -1204,7 +1204,7 @@ ALL_CHARTS = {
                 { name: '机场起降与保障', itemStyle: { color: '#7B8794' } },
                 { name: '机组薪酬与折旧', itemStyle: { color: '#94A3B8' } },
                 { name: '企业所得税', itemStyle: { color: '#CBD5E1' } },
-                { name: '航线净利润', itemStyle: { color: '#2F6B55' } }
+                { name: '航线净利润', itemStyle: { color: '#A4453C' } }
             ],
             links: [
                 { source: '客运机票主收入', target: '主营业务总营收', value: 10.5 },
@@ -1547,7 +1547,7 @@ ALL_CHARTS = {
             yAxis: { type: 'value', min: 80, max: 240, name: '增长指数 (Base=100)', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: '{value}' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
             series: [
                 { name: '华东基地', type: 'line', data: d.east, lineStyle: { color: tokens.palette.primary, width: 2.5 }, itemStyle: { color: tokens.palette.primary } },
-                { name: '华南基地', type: 'line', data: d.south, lineStyle: { color: tokens.palette.positive, width: 2 }, itemStyle: { color: tokens.palette.positive } },
+                { name: '华南基地', type: 'line', data: d.south, lineStyle: { color: tokens.palette.tertiary, width: 2 }, itemStyle: { color: tokens.palette.tertiary } },
                 { name: '北方基地', type: 'line', data: d.north, lineStyle: { color: tokens.palette.inkMuted, width: 1.8 }, itemStyle: { color: tokens.palette.inkMuted } },
                 { name: '西南基地', type: 'line', data: d.west, lineStyle: { color: tokens.palette.inkSubtle, width: 1.5, type: 'dashed' }, itemStyle: { color: tokens.palette.inkSubtle } }
             ]
@@ -2011,7 +2011,7 @@ ALL_CHARTS = {
             yAxis: { type: 'value', min: 30, max: 75, name: 'ASK 运力 (亿座公里)', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: '{value}' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
             series: [
                 { name: '历史实测运力', type: 'line', data: d.actual, lineStyle: { color: tokens.palette.primary, width: 2.5 }, itemStyle: { color: tokens.palette.primary, borderColor: '#FFF', borderWidth: 2 } },
-                { name: '未来预测走廊', type: 'line', data: d.forecast, lineStyle: { color: tokens.palette.positive, width: 2.5, type: 'dashed' }, itemStyle: { color: tokens.palette.positive, borderColor: '#FFF', borderWidth: 2 } }
+                { name: '未来预测走廊', type: 'line', data: d.forecast, lineStyle: { color: tokens.palette.tertiary, width: 2.5, type: 'dashed' }, itemStyle: { color: tokens.palette.tertiary, borderColor: '#FFF', borderWidth: 2 } }
             ]
         });
             [['x', option.xAxis], ['y', option.yAxis]].forEach(([key, axisOption]) => {
@@ -2432,8 +2432,8 @@ ALL_CHARTS = {
                     label: { show: true, position: 'right', distance: 6, formatter: '{c}%', color: tokens.palette.ink, fontSize: 10, fontWeight: 600 },
                     markLine: {
                         symbol: 'none',
-                        lineStyle: { type: 'dashed', color: tokens.palette.positive, width: 2 },
-                        data: [{ xAxis: 100, label: { formatter: '100% 目标线', position: 'start', color: tokens.palette.positive, fontSize: 10, fontWeight: 600, padding: [2, 6], backgroundColor: '#FFFFFF', borderColor: tokens.palette.positive, borderWidth: 1, borderRadius: 4 } }]
+                        lineStyle: { type: 'dashed', color: tokens.palette.ink, width: 2 },
+                        data: [{ xAxis: 100, label: { formatter: '100% 目标线', position: 'start', color: tokens.palette.ink, fontSize: 10, fontWeight: 600, padding: [2, 6], backgroundColor: '#FFFFFF', borderColor: tokens.palette.ink, borderWidth: 1, borderRadius: 4 } }]
                     }
                 }
             ]

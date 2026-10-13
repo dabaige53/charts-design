@@ -5,7 +5,6 @@ import datetime as dt
 import json
 import math
 import re
-from typing import Any
 
 MAX_BYTES = 16 * 1024 * 1024
 MAX_ROWS = 20_000
@@ -252,7 +251,14 @@ def validate(doc):
     require(type(doc.get('revision')) is int and doc['revision'] >= 0, 'Invalid revision')
     m, s = doc.get('manifest'), doc.get('snapshot')
     require(isinstance(m, dict) and isinstance(s, dict), 'manifest and snapshot are required')
+    assert isinstance(m, dict) and isinstance(s, dict)
     require(isinstance(m.get('title'), str) and 0 < len(m['title']) <= 240, 'Title must contain 1-240 characters')
+    metadata = m.get('meta', {})
+    require(isinstance(metadata, dict), 'manifest.meta must be an object')
+    require(set(metadata) <= {'subtitle', 'org', 'system', 'statusText', 'iconKey'}, 'Unknown page metadata field')
+    for name, value in metadata.items():
+        require(isinstance(value, str) and len(value) <= 1000, f'meta.{name} must contain 0-1000 characters')
+    require(metadata.get('iconKey', 'chart') in ('chart', 'plane'), 'Page iconKey must be chart or plane')
     require(m.get('theme') in ('light', 'dark'), 'Unknown theme')
     require(m.get('viewMode', 'dashboard') in VIEW_MODES, 'Unknown view mode')
     for name in ('components', 'datasets', 'metrics', 'sources', 'layout'):
@@ -312,6 +318,7 @@ def validate(doc):
         identifier(key, 'component id')
         require(isinstance(c, dict) and c.get('kind') in ('chart', 'kpi', 'table', 'text', 'legacy', 'statistical'), f'{key}: invalid component kind')
         require(isinstance(c.get('title'), str) and len(c['title']) <= 240, f'{key}: title required')
+        require(isinstance(c.get('subtitle', ''), str) and len(c.get('subtitle', '')) <= 1000, f'{key}: subtitle must contain 0-1000 characters')
         presentation = c.get('config', {}) if c['kind'] == 'legacy' else c.get('presentation', {})
         require(isinstance(presentation, dict), 'Presentation must be an object')
         state = presentation.get('tableState')
@@ -354,9 +361,29 @@ def validate(doc):
                 require(mid in m['metrics'] and m['metrics'][mid]['datasetId'] == ds, f'{key}: metric/dataset mismatch')
             if c['kind'] == 'kpi':
                 require(len(c['measures']) == 1, 'KPI must have one headline measure')
+                card_type = presentation.get('type', 'mc01')
+                require(isinstance(card_type, str) and card_type in {f'mc{i:02}' for i in range(1, 10)}, 'Unknown KPI presentation type')
+                if presentation.get('type') == 'mc03':
+                    if 'timeField' in presentation:
+                        field(m['datasets'][ds], presentation['timeField'])
+                    else:
+                        require(isinstance(presentation.get('sparkData', presentation.get('sparkline')), list), 'mc03 requires timeField or explicit sparkData')
+                if presentation.get('type') == 'mc06':
+                    require('leftVal' in presentation and 'rightVal' in presentation, 'mc06 requires explicit leftVal and rightVal')
             else:
                 problem = compatibility(doc, c, c.get('chartType'))
                 require(problem is None, f'{key}: {problem}', 'INCOMPATIBLE_CHART')
+    annotations = m.get('annotations', [])
+    require(isinstance(annotations, list) and len(annotations) <= 100, 'At most 100 annotations per document')
+    annotation_ids = set()
+    for note in annotations:
+        require(isinstance(note, dict), 'Annotation must be an object')
+        identifier(note.get('id'), 'annotation id')
+        require(note['id'] not in annotation_ids, 'Duplicate annotation id')
+        annotation_ids.add(note['id'])
+        require(note.get('componentId') is None or note['componentId'] in m['components'], 'Unknown annotation component')
+        require(isinstance(note.get('text'), str) and bool(note['text'].strip()) and len(note['text']) <= 4000, 'Annotation text must contain 1-4000 characters')
+        require(isinstance(note.get('createdAt'), str) and 0 < len(note['createdAt']) <= 100, 'Annotation timestamp required')
     if 'report' in m:
         validate_report(m['report'], m['components'])
     require(isinstance(m.get('filters'), list) and len(m['filters']) <= 30, 'Invalid filters')
@@ -366,10 +393,12 @@ def validate(doc):
         identifier(f.get('id'), 'filter id')
         require(f['id'] not in seen, 'Duplicate filter id')
         seen.add(f['id'])
-        require(f.get('op') in ('in', 'range'), 'Unknown filter operation')
+        require(f.get('op') in ('in', 'range', 'contains'), 'Unknown filter operation')
         require(isinstance(f.get('values'), list), 'Filter values must be an array')
         require(all(type(v) in (str, int, float, bool) or v is None for v in f['values']), 'Filter values must be scalar')
         require(f['op'] != 'range' or len(f['values']) in (0, 2), 'Range filter needs two bounds')
+        if f['op'] == 'contains':
+            require(len(f['values']) <= 1 and all(isinstance(v, str) and len(v) <= 1000 for v in f['values']), 'Search filter requires at most one text value (0-1000 characters)')
         targets = f.get('componentIds')
         require(isinstance(targets, list) and targets, 'Declare explicit filter consumers')
         for target in targets:
@@ -380,6 +409,8 @@ def validate(doc):
             metadata = m['datasets'][c['datasetId']]
             field(metadata, f.get('field'))
             kind = metadata['fields'][f['field']]['type']
+            if f['op'] == 'contains':
+                require(kind == 'string', 'Search filter requires a string field')
             for value in f['values']:
                 require(value is None or (kind == 'number' and type(value) in (int, float)) or (kind in ('string', 'date') and isinstance(value, str)) or (kind == 'boolean' and type(value) is bool), 'Filter value type differs from its field')
             if f['op'] == 'range' and f['values']:
@@ -438,6 +469,8 @@ def apply_operations(doc, operations):
                         f'Component "{key}" is referenced in report Markdown; remove its chart fence before deleting it',
                         'REPORT_COMPONENT_REFERENCED')
             del m['components'][key]
+            if 'annotations' in m:
+                m['annotations'] = [note for note in m['annotations'] if note['componentId'] != key]
             for bp in COLS:
                 m['layout'][bp] = [p for p in m['layout'][bp] if p['id'] != key]
             for f in m['filters']:
@@ -445,6 +478,17 @@ def apply_operations(doc, operations):
             m['filters'] = [f for f in m['filters'] if f['componentIds']]
             if 'report' in m and 'markdown' not in m['report']:
                 m['report']['blocks'] = [b for b in m['report']['blocks'] if b['componentId'] != key]
+        elif kind == 'set_original_chart':
+            key, code = op.get('id'), op.get('code')
+            require(key in m['components'], 'Chart not found')
+            component = m['components'][key]
+            require(component.get('kind') == 'legacy' and component.get('family') == 'chart', 'Original chart required')
+            current = component['config']['code']
+            require(current in ('c01', 'c02') and code in ('c01', 'c02'), 'No reviewed conversion between these original codes', 'INCOMPATIBLE_CHART')
+            if current != code:
+                component['config']['code'] = code
+                axes = component['config']['presentation']['axisLabels']
+                axes['x'], axes['y'] = axes['y'], axes['x']
         elif kind == 'set_chart':
             key = op.get('id')
             require(key in m['components'] and m['components'][key]['kind'] == 'chart', 'Chart not found')
@@ -453,7 +497,7 @@ def apply_operations(doc, operations):
             bp = op.get('breakpoint', 'desktop')
             require(bp in COLS, 'Unknown breakpoint')
             m['layout'][bp] = copy.deepcopy(op.get('value'))
-        elif kind in ('set_title', 'set_theme', 'set_filters'):
+        elif kind in ('set_title', 'set_theme', 'set_filters', 'set_meta', 'set_annotations'):
             m[kind[4:]] = copy.deepcopy(op.get('value'))
         elif kind == 'set_view_mode':
             value = op.get('value')

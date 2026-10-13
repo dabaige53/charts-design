@@ -19,8 +19,8 @@ colors:
   surface-emphasis: "#EEF2F5"
   rule: "#C9D1D8"
   gridline: "#E6EAED"
-  positive: "#2F6B55"
-  negative: "#A4453C"
+  positive: "#A4453C"
+  negative: "#2F6B55"
   attention: "#9A6A18"
   on-primary: "#FFFFFF"
 
@@ -138,7 +138,7 @@ components:
 ### 核心原则 (Core Tenets)
 1. **结论先行 (Judgment-First)**：标题即核心判断，副标题即统计口径与时间窗口，避免“销售额趋势”等无意义标签。
 2. **证据闭环 (Evidence-Chain)**：图表紧跟业务判断提供可视化佐证，表格提供行动决议（Action Items）与责任人跟进。
-3. **极简克制 (Restrained Elegance)**：全屏以“纸白（#FFFFFF）”为底，炭黑（#17212B）为字，单一海军蓝（#123B5D）为主调，正负情绪色（#2F6B55 松石绿、#A4453C 克制红）严格服务于业务偏离。
+3. **极简克制 (Restrained Elegance)**：全屏以“纸白（#FFFFFF）”为底，炭黑（#17212B）为字，单一海军蓝（#123B5D）为主调，涨跌色按红涨绿跌（#A4453C 克制红表示上涨、#2F6B55 松石绿表示下跌），只用于有方向的业务变动，规则见 `design_standards.md`。
 4. **全端防遮挡与零碰撞 (Zero-Collision Layout)**：所有坐标轴、数值标签、图例均遵循严格的几何避让规范，确保在任何分辨率下无叠字、无裁剪。
 
 ---

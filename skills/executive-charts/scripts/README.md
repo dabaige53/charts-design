@@ -9,18 +9,22 @@
 ## 0. 积木式 Dashboard Workspace（推荐）
 
 ```bash
-python3 skills/executive-charts/scripts/dashboard_workspace.py init ./board --title "经营决策看板"
-python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./board revenue \
-  --label "营业收入" --value 224 --unit "万元"
-python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./board regional-sales \
-  --code c01 --title "各区域营业收入" --unit "万元" \
-  --data-file ./regional-sales.json
-python3 skills/executive-charts/scripts/dashboard_workspace.py add filter ./board region \
-  --label "大区" --option east=华东 --field region \
-  --consumer revenue --consumer regional-sales
-python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./board --json
-python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./board --strict --json
-python3 skills/executive-charts/scripts/dashboard_workspace.py build ./board --output ./dist/board.html
+# 演示数据仅用于验证工具；业务交付时换成已确认的数据
+CHARTS_DEMO="skills/executive-charts/references/quickstart"
+python3 skills/executive-charts/scripts/dashboard_workspace.py init ./sales-board \
+  --title "销售经营看板（示例）" --org "经营分析部"
+python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./sales-board revenue \
+  --from "$CHARTS_DEMO/revenue.kpi.json"
+python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./sales-board regional-sales \
+  --from "$CHARTS_DEMO/regional-sales.chart.json"
+python3 skills/executive-charts/scripts/dashboard_workspace.py table set ./sales-board \
+  --from "$CHARTS_DEMO/sales.table.json"
+python3 skills/executive-charts/scripts/dashboard_workspace.py add filter ./sales-board region \
+  --label "区域" --type multi-select --option 华东=华东 --option 华南=华南 \
+  --field region --consumer revenue --consumer regional-sales
+python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./sales-board --json
+python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./sales-board --strict --json
+python3 skills/executive-charts/scripts/dashboard_workspace.py build ./sales-board --output ./dist/sales.html
 ```
 
 CSV 自动推断先生成可审查草稿，不直接作为最终图表证据：
@@ -40,6 +44,8 @@ python3 skills/executive-charts/scripts/dashboard_workspace.py import-csv ./boar
 - 单文件自带 Tailwind CSS、ECharts 5.5.0 与 Lucide 矢量图标，开箱即用；
 - 具备图表/表格视图切换、CSV/Excel 导出、高清 PNG 图片一键复制至 PPT、全屏研判与业务口径弹窗。
 
+单图与批量生成执行静态 HTML 检查。`--open` 控制是否打开结果页面。生成 HTML 使用远程样式和图表资源，浏览页面需要网络。
+
 ### 常用命令示例
 ```bash
 # 1. 查看全部 40 款图表编号及中文释义
@@ -51,8 +57,8 @@ python3 skills/executive-charts/scripts/generate_chart.py --code c01 --output ./
 # 3. 自定义图表标题并生成后自动在浏览器中打开
 python3 skills/executive-charts/scripts/generate_chart.py --code t06 --title "2026年客运总收入与客公里收益走势" --output ./dist/my_t06.html --open
 
-# 4. 批量生成全部 40 款独立图表 HTML
-python3 skills/executive-charts/scripts/generate_chart.py --batch --outdir ./dist/all_charts/
+# 4. 批量生成指定的候选图表
+python3 skills/executive-charts/scripts/generate_chart.py --batch "c01,t06,r01" --output-dir ./dist/charts/
 
 # 5. 打印指定图表的原始 JavaScript ECharts 配置代码片段
 python3 skills/executive-charts/scripts/generate_chart.py --code r01 --snippet
