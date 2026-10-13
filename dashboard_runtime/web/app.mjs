@@ -31,7 +31,7 @@ export async function start({echarts,GridStack,App}){
   const boot=window.__DASHBOARD_BOOT__||{},root=el('div','workspace');document.body.append(root);
   const top=el('header','topbar'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
   notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');const description=el('div','dashboard-description'),context=el('div','dashboard-context'),badge=el('span','dashboard-status'),heading=el('div','dashboard-heading'),mark=el('div','document-mark');mark.append(icon('chart'));heading.append(mark,title,description,context,notice);top.append(heading,badge,toolbar);filters.setAttribute('role','region');filters.setAttribute('aria-label','筛选条件');canvas.append(gridEl);root.append(top,filters,canvas);toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Dashboard actions');
-  let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,app=null;
+  let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,pendingLayout=null,dragging=false,renderQueued=false,app=null;
   let lastBreakpoint=null,transport,originalInstances=[],disposeToolbar=null,disposeReport=null;
   let statisticalArtifacts=updateStatisticalArtifacts(Object.create(null),boot),renderedStatisticalArtifacts=null;
   const reportDrafts=new Map();
@@ -67,16 +67,21 @@ export async function start({echarts,GridStack,App}){
   }
   async function mutate(name,args,pushUndo=true,rerender=true){
     if(!doc)throw Error('Create a dashboard first');
-    const run=async()=>{busy++;const previous=doc.revision;try{const request=typeof args==='function'?args():args;const result=await transport(name,{...request,dashboardId:doc.id,expectedRevision:request.expectedRevision??doc.revision});if(result.document){if(pushUndo){undo.push(previous);redo=[];}doc=result.document;const pending=reportDrafts.get(doc.id);if(pending&&reportMarkdown(doc)===pending.saved)pending.revision=doc.revision;if(rerender)render();else{statusLine();const u=toolbar.querySelector('[aria-label="'+T.undo+'"]');if(u)u.disabled=!undo.length;}}return result;}catch(e){render();showError(e);throw e;}finally{busy--;}};
+    const run=async()=>{busy++;const previous=doc.revision;try{const request=typeof args==='function'?args():args;const result=await transport(name,{...request,dashboardId:doc.id,expectedRevision:request.expectedRevision??doc.revision});if(result.document){if(pushUndo){undo.push(previous);redo=[];}doc=result.document;const pending=reportDrafts.get(doc.id);if(pending&&reportMarkdown(doc)===pending.saved)pending.revision=doc.revision;if(rerender)render();else{statusLine();const u=toolbar.querySelector('[aria-label="'+T.undo+'"]'),r=toolbar.querySelector('[aria-label="'+T.redo+'"]');if(u)u.disabled=!undo.length;if(r)r.disabled=!redo.length;}}return result;}catch(e){render();showError(e);throw e;}finally{busy--;}};
     const next=queue.then(run,run);queue=next.catch(()=>{});return next;
   }
   function applyFilters(value){if(editing)return patch([{op:'set_filters',value}]);doc={...doc,manifest:{...doc.manifest,filters:value}};render();return Promise.resolve();}
-  const patch=operations=>mutate('dashboard_patch',()=>({operations:typeof operations==='function'?operations():operations}));
+  const patch=(operations,rerender=true)=>mutate('dashboard_patch',()=>({operations:typeof operations==='function'?operations():operations}),true,rerender);
+  // The grid already shows the dropped layout; re-rendering would tear down GridStack under the pointer.
+  function saveLayout(rerender=false){clearTimeout(layoutTimer);layoutTimer=null;const pending=pendingLayout;pendingLayout=null;if(!pending||pending.dashboardId!==doc?.id)return false;patch([{op:'set_layout',breakpoint:pending.breakpoint,value:pending.value}],rerender).catch(showError);return true;}
   async function restore(direction){const from=direction==='undo'?undo:redo,to=direction==='undo'?redo:undo;if(!from.length)return;const target=from.pop(),current=doc.revision;try{await mutate('dashboard_restore',{revision:target},false);to.push(current);render();}catch(e){from.push(target);throw e;}}
   async function reload(){if(!doc)return;if(reportDrafts.get(doc.id)?.dirty&&!confirm('重新读取会放弃未保存的 Markdown，继续？'))return;const next=(await transport('dashboard_get',{dashboardId:doc.id})).document;reportDrafts.delete(doc.id);if(next.revision!==doc.revision){undo=[];redo=[];}doc=next;render();}
   title.onchange=()=>patch([{op:'set_title',value:title.value}]).catch(showError);
   function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?'离线快照 · ':''}v${doc.revision}`);}
   function render(){
+    // Never rebuild GridStack mid-drag; flush an unsaved drop before replacing the grid.
+    if(dragging){renderQueued=true;return;}renderQueued=false;
+    if(pendingLayout&&saveLayout(true))return;
     if(!doc){status(boot.mode==='mcp'?'正在等待图表数据…':'请创建或打开仪表盘。');return;}
     renderedStatisticalArtifacts=statisticalArtifacts;
     root.classList.toggle('paper-reading',doc.manifest.viewMode==='report'&&!editing);root.classList.toggle('report-page',doc.manifest.viewMode==='report');document.documentElement.dataset.theme='light';document.title=doc.manifest.title;title.value=doc.manifest.title;title.disabled=!editing;
@@ -116,7 +121,6 @@ export async function start({echarts,GridStack,App}){
     }
     if(doc.manifest.filters.length){const summary=el('span','filter-summary','已生效条件：'+doc.manifest.filters.filter(f=>f.values.length).length),reset=button('一键重置',()=>applyFilters(doc.manifest.filters.map(f=>({...f,values:[]}))),'filter-reset');reset.prepend(icon('refresh'));reset.disabled=boot.mode==='offline'||!doc.manifest.filters.some(f=>f.values.length);filters.append(summary,reset);}
 
-    if(layoutTimer){clearTimeout(layoutTimer);layoutTimer=null;}
     originalInstances.forEach(x=>x.destroy());originalInstances=[];
     if(grid){grid.destroy(false);grid=null;}gridEl.replaceChildren();disposeReport?.();disposeReport=null;canvas.querySelector('.markdown-workspace')?.remove();canvas.classList.toggle('report-canvas',doc.manifest.viewMode==='report');
     if(doc.manifest.viewMode==='report'){lastBreakpoint=bp();const draft=currentDraft();if(!draft.dirty){draft.text=reportMarkdown(doc);draft.saved=draft.text;draft.revision=doc.revision;}disposeReport=renderReport({host:canvas,doc,editing,mount:(card,id)=>mountComponent(card,id,true),draft,onChange:text=>{draft.text=text;draft.dirty=text!==draft.saved;},onSave:saveMarkdown,onDiscard:()=>{draft.text=reportMarkdown(doc);draft.saved=draft.text;draft.dirty=false;draft.revision=doc.revision;render();},onDownload:text=>download(doc.id+'.md',text,'text/markdown;charset=utf-8'),onDisposeCharts:()=>{originalInstances.forEach(x=>x.destroy());originalInstances=[];}});return;}
@@ -130,7 +134,9 @@ export async function start({echarts,GridStack,App}){
       mountComponent(card,id);
     }
     if(!Object.keys(doc.manifest.components).length)gridEl.append(el('div','empty',T.empty));
-    grid.on('change',()=>{if(!editing)return;clearTimeout(layoutTimer);const value=grid.engine.nodes.map(n=>({id:String(n.id),x:n.x,y:n.y,w:n.w,h:n.h}));layoutTimer=setTimeout(()=>{layoutTimer=null;patch([{op:'set_layout',breakpoint,value}]).catch(showError);},250);});
+    grid.on('dragstart',()=>{dragging=true;});
+    grid.on('dragstop',()=>{dragging=false;if(renderQueued)setTimeout(render);});
+    grid.on('change',()=>{if(!editing)return;clearTimeout(layoutTimer);pendingLayout={dashboardId:doc.id,breakpoint,value:grid.engine.nodes.map(n=>({id:String(n.id),x:n.x,y:n.y,w:n.w,h:n.h}))};layoutTimer=setTimeout(()=>saveLayout(),250);});
   }
 
   function mountComponent(card,id,quiet=false){
@@ -233,8 +239,8 @@ export async function start({echarts,GridStack,App}){
   function importData(){const {d,body}=dialog(T.import),name=input('dataset-'+Date.now().toString(36)),area=textarea('[]'),file=input('','file'),formatSelect=select([['json','JSON rows'],['csv','CSV']],'json');file.accept='.json,.csv';file.onchange=async()=>{area.value=await file.files[0].text();formatSelect.value=file.files[0].name.endsWith('.csv')?'csv':'json';};body.append(field('Dataset ID',name),file,formatSelect,area,button(T.save,async()=>{await mutate('dataset_import',{datasetId:name.value,...(formatSelect.value==='csv'?{csvText:area.value}:{rows:JSON.parse(area.value)}),name:file.files[0]?.name||name.value});d.close();}));}
   function queryEditor(){const {d,body}=dialog('SQL / read-only'),alias=input('analytics'),ds=input('query-result'),sql=textarea('SELECT * FROM your_table LIMIT 100'),params=textarea('{}');body.append(el('p','muted','Only explicitly configured SQLite aliases are executable. No query runs on preview or chart switching.'),field('Connection alias',alias),field('Dataset ID',ds),field('SQL',sql),field('Parameters',params),button('执行只读查询',async()=>{if(!confirm('Execute this read-only query and save a new snapshot?'))return;await mutate('query_execute',{connection:alias.value,datasetId:ds.value,sql:sql.value,parameters:JSON.parse(params.value)});d.close();}));}
   function exportDialog(){const {body}=dialog(T.export);body.append(button('JSON artifact',()=>download(doc.id+'.json',JSON.stringify(doc,null,2))));if(boot.exportFile)body.append(button('Self-contained HTML',()=>boot.exportFile(doc.id)));if(boot.mode!=='offline')body.append(button('Version history',async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id});body.append(el('pre','code',JSON.stringify(result,null,2)));}));}
-  window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!layoutTimer&&!busy)render();});
-  if(boot.mode==='web')whileVisible(async()=>{if(!doc||busy||layoutTimer||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision||renderedStatisticalArtifacts!==statisticalArtifacts){if(current.revision!==doc.revision){undo=[];redo=[];}doc=current;render();}}catch(e){showError(e);}},5000);
+  window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!pendingLayout&&!dragging&&!busy)render();});
+  if(boot.mode==='web')whileVisible(async()=>{if(!doc||busy||pendingLayout||dragging||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision||renderedStatisticalArtifacts!==statisticalArtifacts){if(current.revision!==doc.revision){undo=[];redo=[];}doc=current;render();}}catch(e){showError(e);}},5000);
   if(boot.mode!=='offline')whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3));
   window.addEventListener('beforeunload',event=>{if(doc&&reportDrafts.get(doc.id)?.dirty){event.preventDefault();event.returnValue='';}});
   window.addEventListener('charts-error',event=>showError(event.detail));render();
