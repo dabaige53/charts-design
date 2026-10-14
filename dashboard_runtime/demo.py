@@ -106,8 +106,8 @@ def executive_document(board_id='executive-demo'):
     ops.append({'op': 'set_filters', 'value': [{'id': 'region', 'label': '区域', 'field': 'region', 'op': 'in', 'values': [], 'componentIds': consumers}, {'id': 'period', 'label': '月份范围', 'field': 'month', 'op': 'range', 'values': [], 'componentIds': consumers}, {'id': 'search', 'label': '搜索区域', 'field': 'region', 'op': 'contains', 'values': [], 'componentIds': consumers}]})
     for bp, cols, card_cols in [('desktop', 12, 3), ('tablet', 8, 4), ('mobile', 4, 4)]:
         card_rows = len(ids) // (cols // card_cols)
-        positions = [{'id': key, 'x': (index % (cols // card_cols)) * card_cols, 'y': (index // (cols // card_cols)) * 5, 'w': card_cols, 'h': 5} for index, key in enumerate(ids)]
-        y = card_rows * 5
+        positions = [{'id': key, 'x': (index % (cols // card_cols)) * card_cols, 'y': (index // (cols // card_cols)) * 4, 'w': card_cols, 'h': 4} for index, key in enumerate(ids)]
+        y = card_rows * 4
         if bp == 'desktop':
             positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': 6, 'h': 9}, {'id': 'regions', 'x': 6, 'y': y, 'w': 6, 'h': 9}, {'id': 'details', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}]
         else:

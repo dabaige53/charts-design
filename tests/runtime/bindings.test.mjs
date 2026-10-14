@@ -15,5 +15,9 @@ test('original KPI ratio recomputes numerator/denominator',()=>{
 });
 test('quarterly dual-axis ratio is not an average of monthly percentages',()=>{
  const d=structuredClone(source);d.manifest.components.dual={kind:'legacy',family:'chart',datasetId:'ds',config:{code:'t06',data:{}},binding:{datasetId:'ds',categoryField:'date',categoryTarget:'categories',timeGrain:true,measures:{revenue:'revenue',yieldGrowth:'ratio'},scale:{yieldGrowth:100}}};
- const r=resolveOriginal(d,'dual','quarter');assert.deepEqual(r.data.month.categories,['2026 Q1']);assert.equal(r.data.month.revenue[0],155);assert.ok(Math.abs(r.data.month.yieldGrowth[0]-98/120*100)<1e-9);
+ const r=resolveOriginal(d,'dual','quarter');assert.deepEqual(r.data.month.categories,['2026 Q1']);assert.equal(r.data.month.revenue[0],155);assert.equal(r.data.month.yieldGrowth[0],81.67);
+});
+test('metric decimals set the shown precision after scaling',()=>{
+ const d=structuredClone(source);d.manifest.metrics.ratio={...d.manifest.metrics.ratio,decimals:0};d.manifest.components.dual={kind:'legacy',family:'chart',datasetId:'ds',config:{code:'t06',data:{}},binding:{datasetId:'ds',categoryField:'date',categoryTarget:'categories',timeGrain:true,measures:{revenue:'revenue',yieldGrowth:'ratio'},scale:{yieldGrowth:100}}};
+ assert.equal(resolveOriginal(d,'dual','quarter').data.month.yieldGrowth[0],82);
 });

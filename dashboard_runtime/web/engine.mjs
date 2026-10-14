@@ -53,8 +53,9 @@ export function compatible(doc, c, type) {
 }
 export function format(value, metric = {}) {
   if (value == null || !Number.isFinite(value)) return '\u2014';
-  if (metric.format === 'percent') return new Intl.NumberFormat('zh-CN',{style:'percent',maximumFractionDigits:2}).format(value);
-  return new Intl.NumberFormat('zh-CN',{maximumFractionDigits:2}).format(value) + (metric.unit ? ` ${metric.unit}` : '');
+  const digits = metric.decimals ?? 2;
+  if (metric.format === 'percent') return new Intl.NumberFormat('zh-CN',{style:'percent',maximumFractionDigits:digits}).format(value);
+  return new Intl.NumberFormat('zh-CN',{maximumFractionDigits:digits}).format(value) + (metric.unit ? ` ${metric.unit}` : '');
 }
 export function optionFor(doc, id) {
   const c = doc.manifest.components[id], data = grouped(doc,id), type = c.chartType;

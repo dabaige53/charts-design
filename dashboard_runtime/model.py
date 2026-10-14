@@ -308,6 +308,7 @@ def validate(doc):
         if metric.get('format') == 'percent':
             require(metric.get('scale') == 'fraction', 'Percent metrics must declare fractional scale')
         require(metric.get('status', 'unverified') in ('unverified', 'reviewed'), 'Unsupported metric status')
+        require(type(metric.get('decimals', 2)) is int and 0 <= metric.get('decimals', 2) <= 6, f'{key}: decimals must be an integer 0-6')
         if metric['aggregation'] == 'ratio':
             field(m['datasets'][ds], metric.get('numerator'), True)
             field(m['datasets'][ds], metric.get('denominator'), True)
@@ -427,11 +428,12 @@ def validate(doc):
                 require(not overlap, f'{bp}: overlapping cards {p["id"]} and {q["id"]}')
     return doc
 
-def place_new(m, key):
+def place_new(m, key, c):
+    height = 4 if c.get('kind') == 'kpi' or c.get('family') == 'kpi' else 6
     for bp, cols in COLS.items():
         layout = m['layout'][bp]
         y = max((p['y'] + p['h'] for p in layout), default=0)
-        layout.append({'id': key, 'x': 0, 'y': y, 'w': cols, 'h': 6})
+        layout.append({'id': key, 'x': 0, 'y': y, 'w': cols, 'h': height})
 
 def apply_operations(doc, operations):
     require(isinstance(operations, list) and 0 < len(operations) <= 200, 'Expected 1-200 operations')
@@ -446,7 +448,7 @@ def apply_operations(doc, operations):
             collection = {'put_source': 'sources', 'put_metric': 'metrics', 'put_component': 'components'}[kind]
             require(isinstance(op.get('value'), dict), 'Operation value must be an object')
             if kind == 'put_component' and key not in m['components']:
-                place_new(m, key)
+                place_new(m, key, op['value'])
                 if 'report' in m and 'markdown' not in m['report']:
                     append_report_component(m['report'], key)
             m[collection][key] = copy.deepcopy(op['value'])

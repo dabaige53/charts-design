@@ -40,7 +40,7 @@ def test_display_preserves_chart_switch_and_service_updates(tmp_path):
             assert page.get_by_role("button", name="添加组件", exact=True).count() == 0
             title = page.get_by_label("Dashboard title")
             assert title.is_disabled()
-            assert page.locator('.layout-handle').count() == 0
+            assert page.locator('.is-draggable').count() == 0
             service.store.mutate("demo", 1, [{"op": "set_title", "value": "Updated through MCP"}])
             page.reload()
             page.wait_for_function("document.querySelector('.dashboard-title').value==='Updated through MCP'")

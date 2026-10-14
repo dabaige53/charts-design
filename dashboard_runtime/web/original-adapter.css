@@ -26,7 +26,7 @@
 .column-content{width:268px;max-width:calc(100vw - 40px);padding:8px}.column-content #colCheckboxesContainer{max-height:300px;overflow:auto}.column-content button{font:inherit}
 .column-content input[type=checkbox]{width:14px;height:14px;flex:0 0 14px;margin:0;accent-color:#123b5d}.column-content .drag-col-item{min-height:34px;gap:8px}.column-content .drag-col-item>div{flex:1;min-width:0}.column-content .drag-col-item .truncate{white-space:normal;overflow-wrap:anywhere}.column-content>div:first-child{flex-wrap:wrap;gap:8px}.column-content>div:first-child>div{flex-wrap:wrap}
 .ui-menu .catalog-search{min-width:210px;font:12px/1.5 inherit}.component-table>div:last-child>div:first-child{max-height:100%}
-:host(.is-editing) .component-actions{padding-right:48px}
+
 
 .component-granularity{display:flex;gap:4px;margin-top:0;width:max-content;background:#f1f5f9;padding:3px;border-radius:6px}.component-granularity button{border:0;padding:4px 10px;cursor:pointer}.component-heading>.catalog-search{margin-top:8px}
 
@@ -42,6 +42,9 @@
 
 .component-kpi.kpi-aligned{grid-template-columns:minmax(0,1fr);justify-content:stretch!important}.kpi-aligned .kpi-footer,.kpi-aligned .kpi-aux{width:100%;min-width:0}
 
-:host(.is-editing) .kpi-aligned{grid-template-rows:52px 32px minmax(0,1fr) 26px}.kpi-aux{overflow:hidden}
+.kpi-aux{overflow:hidden}
 
 .component-kpi .component-header{flex-wrap:nowrap!important}.component-kpi .component-heading{flex:1 1 0}.component-kpi .component-actions{flex-shrink:0}.component-kpi .component-status{margin-left:0}
+/* Compact KPI rhythm: a 4-row grid cell still leaves ~46px for sparklines and progress bars. */
+.component-kpi.kpi-aligned{grid-template-rows:auto auto minmax(0,1fr) auto;gap:2px}:host(.is-editing) .kpi-aligned{grid-template-rows:auto auto minmax(0,1fr) auto}.kpi-aligned .kpi-aux>div{margin-top:0!important;margin-bottom:0!important}.kpi-aligned .kpi-footer{padding-top:6px!important}
+:host(.is-editing) .section-card{cursor:inherit}:host(.is-editing) .component-actions,:host(.is-editing) .inline-edit{cursor:auto}

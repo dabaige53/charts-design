@@ -51,6 +51,8 @@ def _common():
         'scale': string, 'semantic': string,
         'numerator': field_name, 'denominator': field_name,
         'status': {'enum': ['unverified', 'reviewed'], 'default': 'unverified'},
+        'decimals': {'type': 'integer', 'minimum': 0, 'maximum': 6, 'default': 2,
+                     'description': 'Digits shown after binding scale is applied; labels, tooltips, tables and KPIs all use it.'},
     }, ['datasetId', 'aggregation', 'label', 'unit', 'definition'])
     metric['allOf'] = [
         {'if': {'properties': {'aggregation': {'const': 'ratio'}}},

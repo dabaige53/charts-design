@@ -32,16 +32,17 @@ def test_drag_handle_moves_and_saves_without_resizing(tmp_path, grab):
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/?board=drag#drag-test")
             page.get_by_role("button", name="编辑", exact=True).click()
-            handle = page.locator("[data-component-id=total] .layout-handle")
-            target = page.locator("[data-component-id=load] .layout-handle")
-            start, end = handle.bounding_box(), target.bounding_box()
+            card = page.locator("[data-component-id=total] .grid-stack-item-content")
+            target = page.locator("[data-component-id=load] .grid-stack-item-content")
+            start, end = card.bounding_box(), target.bounding_box()
             assert start is not None and end is not None
-            assert start["width"] >= 44 and start["height"] >= 44
-            offset = 3 if grab == "button-edge" else start["width"] / 2
+            assert page.locator(".layout-handle").count() == 0
+            # Any non-control point of the card grabs it: the centre, or just inside the border.
+            offset = 6 if grab == "button-edge" else start["width"] / 2
             x, y = start["x"] + offset, start["y"] + start["height"] / 2
             dx, dy = end["x"] - start["x"], end["y"] - start["y"]
             assert page.evaluate(
-                "([x,y])=>document.elementFromPoint(x,y).classList.contains('layout-handle')",
+                "([x,y])=>!!document.elementFromPoint(x,y).closest('[data-component-id=total].is-draggable')",
                 [x, y],
             )
             if touch:
@@ -77,7 +78,7 @@ def test_drag_handle_moves_and_saves_without_resizing(tmp_path, grab):
                 assert service.store.get("drag")["manifest"]["layout"][breakpoint] == old_layout
             page.reload()
             page.locator("[data-component-id=total] canvas, [data-component-id=trend] canvas").first.wait_for()
-            assert page.locator(".layout-handle").count() == 0
+            assert page.locator(".is-draggable").count() == 0
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert not errors, errors
             browser.close()
@@ -112,12 +113,12 @@ def test_second_drag_survives_inflight_layout_save(tmp_path):
             page.get_by_role("button", name="编辑", exact=True).click()
 
             def grab(source):
-                box = page.locator(f"[data-component-id={source}] .layout-handle").bounding_box()
+                box = page.locator(f"[data-component-id={source}] .grid-stack-item-content").bounding_box()
                 page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
                 page.mouse.down()
 
             def drop_on(target):
-                box = page.locator(f"[data-component-id={target}] .layout-handle").bounding_box()
+                box = page.locator(f"[data-component-id={target}] .grid-stack-item-content").bounding_box()
                 page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=15)
                 page.mouse.up()
 
@@ -135,7 +136,7 @@ def test_second_drag_survives_inflight_layout_save(tmp_path):
             )
             stored = service.store.get("drag")["manifest"]["layout"]["desktop"]
             assert sorted(map(tuple, shown)) == sorted((n["id"], n["x"], n["y"]) for n in stored)
-            assert page.locator(".layout-handle").count() == len(stored)
+            assert page.locator(".is-draggable").count() == len(stored)
             assert not errors, errors
             browser.close()
     finally:

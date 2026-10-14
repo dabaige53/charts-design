@@ -170,7 +170,7 @@ def test_complete_executive_case_has_visible_month_quarter_controls(tmp_path):
             chart.get_by_role("button", name="季度", exact=True).click()
             assert service.store.get("executive")['revision'] == 1
             assert page.get_by_role('button', name='图表批注', exact=True).count() == 0
-            assert page.locator('.layout-handle').count() == 0
+            assert page.locator('.is-draggable').count() == 0
             alignment = page.evaluate("""()=>{const ids=['total','load','passengers','goal'];const values=ids.map(id=>document.querySelector(`[data-component-id=${id}] .card`).shadowRoot.querySelector('.text-2xl').getBoundingClientRect().top);return Math.max(...values)-Math.min(...values);}""")
             assert alignment < 1
             assert page.locator('.component-code').count() == 0
@@ -205,7 +205,8 @@ def test_complete_executive_case_has_visible_month_quarter_controls(tmp_path):
             assert service.store.get('executive')['manifest']['components']['regions']['config']['code'] == 'c02'
             page.set_viewport_size({'width': 390, 'height': 844})
             regions.get_by_role('button', name='切换图表类型', exact=True).wait_for()
-            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            # GridStack animates cards into the narrow layout; assert once it settles, not mid-transition.
+            page.wait_for_function('document.documentElement.scrollWidth <= innerWidth', timeout=3000)
             for label in ['切换图表类型', '导出数据', '复制图片', '全屏查看', '指标定义与语义']:
                 assert regions.get_by_role('button', name=label, exact=True).is_visible()
             regions.get_by_role('button', name='切换图表类型', exact=True).click()

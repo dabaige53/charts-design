@@ -8,7 +8,7 @@ import {mountStatisticalImage,updateStatisticalArtifacts} from './statistical.mj
 const T={edit:'编辑',view:'退出编辑',add:'添加组件',import:'导入数据',undo:'撤销',redo:'重做',reload:'重新读取',export:'导出',close:'关闭',save:'保存',data:'数据',semantic:'指标语义',settings:'图表设置',source:'查询来源',remove:'删除',copy:'复制',empty:'导入数据，或通过 CLI / MCP 添加组件。'};
 const el=(tag,cls='',text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 const button=(label,fn,cls='')=>{const b=el('button',cls,label);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
-function showError(error){const n=document.getElementById('notice');if(n){n.textContent=error.message||String(error);n.className='notice error';}else console.error(error);}
+function showError(error){const n=document.getElementById('notice');if(n){if(n.closest('.toolbar'))document.querySelector('.dashboard-heading')?.append(n);n.textContent=error.message||String(error);n.className='notice error';}else console.error(error);}
 function download(name,body,type='application/json'){const a=el('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function field(label,node){const wrap=el('label','field');wrap.append(el('span','',label),node);return wrap;}
 function input(value='',kind='text'){const n=el('input');n.type=kind;n.value=value;return n;}
@@ -31,7 +31,7 @@ export async function start({echarts,GridStack,App}){
   const boot=window.__DASHBOARD_BOOT__||{},root=el('div','workspace');document.body.append(root);
   const top=el('header','topbar'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
   notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');const description=el('div','dashboard-description'),context=el('div','dashboard-context'),badge=el('span','dashboard-status'),heading=el('div','dashboard-heading'),mark=el('div','document-mark');mark.append(icon('chart'));heading.append(mark,title,description,context,notice);top.append(heading,badge,toolbar);filters.setAttribute('role','region');filters.setAttribute('aria-label','筛选条件');canvas.append(gridEl);root.append(top,filters,canvas);toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Dashboard actions');
-  let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,pendingLayout=null,dragging=false,renderQueued=false,app=null;
+  let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,pendingLayout=null,dragging=false,renderQueued=false,linkage=null,app=null;
   let lastBreakpoint=null,transport,originalInstances=[],disposeToolbar=null,disposeReport=null;
   let statisticalArtifacts=updateStatisticalArtifacts(Object.create(null),boot),renderedStatisticalArtifacts=null;
   const reportDrafts=new Map();
@@ -73,22 +73,62 @@ export async function start({echarts,GridStack,App}){
   function applyFilters(value){if(editing)return patch([{op:'set_filters',value}]);doc={...doc,manifest:{...doc.manifest,filters:value}};render();return Promise.resolve();}
   const patch=(operations,rerender=true)=>mutate('dashboard_patch',()=>({operations:typeof operations==='function'?operations():operations}),true,rerender);
   // The grid already shows the dropped layout; re-rendering would tear down GridStack under the pointer.
+  // Click-to-link is a reading aid: a temporary filter derived from the clicked category, never saved.
+  // Components that cannot compute that field stay visible but are greyed out with the reason.
+  function linkStatus(id){
+    const c=doc.manifest.components[id];
+    if(c.kind==='text')return null;
+    if(!linkage||id===linkage.sourceId)return {ok:true};
+    if(c.kind==='statistical')return {ok:false,reason:'统计图基于原始观测，不支持筛选'};
+    const ds=c.kind==='legacy'?c.binding?.datasetId:c.datasetId;
+    if(!ds)return {ok:false,reason:'未绑定数据'};
+    if(ds!==linkage.datasetId||!doc.manifest.datasets[ds]?.fields?.[linkage.field])return {ok:false,reason:`数据中没有「${linkage.label}」字段`};
+    return {ok:true};
+  }
+  function viewDoc(){
+    if(!linkage||editing)return doc;
+    const ids=Object.keys(doc.manifest.components).filter(id=>id!==linkage.sourceId&&linkStatus(id)?.ok);
+    return {...doc,manifest:{...doc.manifest,filters:[...doc.manifest.filters,{id:'__linkage',label:linkage.label,field:linkage.field,op:linkage.op,values:linkage.values,componentIds:ids}]}};
+  }
+  function toggleLinkage(id,category){
+    if(linkage?.sourceId===id&&linkage.category===category){linkage=null;render();return;}
+    const b=doc.manifest.components[id].binding,field=b.categoryField,declared=doc.manifest.filters.find(f=>f.field===field);
+    let op='in',values=[category];
+    if(b.timeGrain){const q=/^(\d{4}) Q([1-4])$/.exec(category),pad=n=>String(n).padStart(2,'0');op='range';
+      values=q?[`${q[1]}-${pad(q[2]*3-2)}`,`${q[1]}-${pad(q[2]*3)}\uffff`]:[category,category+'\uffff'];}
+    const label=declared?.label||doc.manifest.datasets[b.datasetId]?.fields?.[field]?.label||field;
+    linkage={docId:doc.id,sourceId:id,datasetId:b.datasetId,field,label,category,op,values};render();
+  }
+  function wireLinkage(id,instance){
+    const c=doc.manifest.components[id];
+    if(editing||!instance||c.kind!=='legacy'||c.family!=='chart'||!c.binding?.categoryField)return;
+    instance.on('click',params=>{if(params.name!=null&&params.name!=='')toggleLinkage(id,String(params.name));});
+    if(linkage?.sourceId!==id)return;
+    const option=instance.getOption(),axis=[...(option.xAxis||[]),...(option.yAxis||[])].find(a=>a.type==='category'),categories=(axis?.data||[]).map(v=>typeof v==='object'&&v?v.value:v).map(String);
+    instance.setOption({series:(option.series||[]).map(series=>({data:(series.data||[]).map((point,i)=>({value:point&&typeof point==='object'&&'value'in point?point.value:point,itemStyle:{opacity:categories[i]===linkage.category?1:.22}}))}))});
+  }
+  // The whole card is the drag surface; presses on controls (also inside original shadow roots) stay with the control.
+  const CONTROLS='button,a,input,select,textarea,label,summary,[contenteditable],[role=button],[role=tab],[role=menuitem]';
+  function keepControlsInteractive(e){if(e.composedPath().some(n=>n instanceof Element&&n.matches(CONTROLS)))e.stopPropagation();}
   function saveLayout(rerender=false){clearTimeout(layoutTimer);layoutTimer=null;const pending=pendingLayout;pendingLayout=null;if(!pending||pending.dashboardId!==doc?.id)return false;patch([{op:'set_layout',breakpoint:pending.breakpoint,value:pending.value}],rerender).catch(showError);return true;}
   async function restore(direction){const from=direction==='undo'?undo:redo,to=direction==='undo'?redo:undo;if(!from.length)return;const target=from.pop(),current=doc.revision;try{await mutate('dashboard_restore',{revision:target},false);to.push(current);render();}catch(e){from.push(target);throw e;}}
   async function reload(){if(!doc)return;if(reportDrafts.get(doc.id)?.dirty&&!confirm('重新读取会放弃未保存的 Markdown，继续？'))return;const next=(await transport('dashboard_get',{dashboardId:doc.id})).document;reportDrafts.delete(doc.id);if(next.revision!==doc.revision){undo=[];redo=[];}doc=next;render();}
   title.onchange=()=>patch([{op:'set_title',value:title.value}]).catch(showError);
-  function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?'离线快照 · ':''}v${doc.revision}`);}
+  function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?'离线快照 · ':''}版本 v${doc.revision}`);}
   function render(){
     // Never rebuild GridStack mid-drag; flush an unsaved drop before replacing the grid.
     if(dragging){renderQueued=true;return;}renderQueued=false;
     if(pendingLayout&&saveLayout(true))return;
+    if(linkage&&(editing||!doc||linkage.docId!==doc.id||!doc.manifest.components[linkage.sourceId]))linkage=null;
     if(!doc){status(boot.mode==='mcp'?'正在等待图表数据…':'请创建或打开仪表盘。');return;}
+    // Rebuilding empties the grid for a moment; hold its height so the reader keeps their scroll position.
+    const keepY=window.scrollY;canvas.style.minHeight=canvas.offsetHeight+'px';requestAnimationFrame(()=>requestAnimationFrame(()=>{canvas.style.minHeight='';if(Math.abs(window.scrollY-keepY)>1)window.scrollTo(0,keepY);}));
     renderedStatisticalArtifacts=statisticalArtifacts;
     root.classList.toggle('paper-reading',doc.manifest.viewMode==='report'&&!editing);root.classList.toggle('report-page',doc.manifest.viewMode==='report');document.documentElement.dataset.theme='light';document.title=doc.manifest.title;title.value=doc.manifest.title;title.disabled=!editing;
     const meta=doc.manifest.meta??doc.manifest.originalWorkspace?.meta??{};
     description.textContent=meta.subtitle||'';description.hidden=!description.textContent&&!editing;notice.hidden=!editing;
     clearInlineEdit(description);if(editing)inlineEdit(description,{label:'页面描述',value:meta.subtitle||'',save:value=>patch([{op:'set_meta',value:{...meta,subtitle:value}}])});
-    context.textContent=[meta.org,meta.system].filter(Boolean).join(' · ');context.hidden=!context.textContent;badge.textContent=meta.statusText||'';badge.hidden=!badge.textContent;mark.replaceChildren(icon(meta.iconKey==='plane'?'plane':'chart'));
+    clearInlineEdit(badge);context.replaceChildren();if(editing){const setMeta=key=>value=>patch([{op:'set_meta',value:{...meta,[key]:value}}]);const org=el('span'),system=el('span');inlineEdit(org,{label:'组织',value:meta.org||'',save:setMeta('org')});inlineEdit(system,{label:'系统',value:meta.system||'',save:setMeta('system')});context.append(org,el('span','context-separator',' · '),system);context.hidden=false;inlineEdit(badge,{label:'状态标签',value:meta.statusText||'',save:setMeta('statusText')});badge.hidden=false;}else{context.textContent=[meta.org,meta.system].filter(Boolean).join(' · ');context.hidden=!context.textContent;badge.textContent=meta.statusText||'';badge.hidden=!badge.textContent;}mark.replaceChildren(icon(meta.iconKey==='plane'?'plane':'chart'));
     disposeToolbar?.();toolbar.replaceChildren();
     const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑？'))return;editing=!editing;render();});edit.disabled=boot.mode==='offline';edit.classList.remove('icon-button');edit.classList.add('mode-toggle');edit.append(el('span','',editing?T.view:T.edit));toolbar.append(edit);
     if(editing)toolbar.append(iconButton('comment','页面批注',()=>annotationDialog(null)));
@@ -98,6 +138,8 @@ export async function start({echarts,GridStack,App}){
     if(app){const context=app.getHostContext(),full=context?.displayMode==='fullscreen',mode=full?'inline':'fullscreen';
       if(!editing&&context?.availableDisplayModes?.includes(mode))toolbar.append(iconButton(full?'minimize':'maximize',full?'返回对话':'全屏查看',async()=>{await app.requestDisplayMode({mode});render();}));}
     if(!editing)toolbar.append(iconButton('export',T.export,exportDialog));disposeToolbar=adaptiveActions(top,toolbar);statusLine();
+    // The version sits inline beside the edit toggle; long error messages keep their own line under the heading.
+    if(editing&&!notice.classList.contains('error'))toolbar.prepend(notice);else heading.append(notice);
     filters.replaceChildren();filters.hidden=doc.manifest.viewMode==='report'||(!doc.manifest.filters.length&&!editing);
     for(const f of doc.manifest.filters){const c=doc.manifest.components[f.componentIds[0]],rows=f.componentIds.flatMap(id=>doc.snapshot.datasets[doc.manifest.components[id].datasetId]||[]);
       if(f.op==='in'){
@@ -121,16 +163,21 @@ export async function start({echarts,GridStack,App}){
     }
     if(doc.manifest.filters.length){const summary=el('span','filter-summary','已生效条件：'+doc.manifest.filters.filter(f=>f.values.length).length),reset=button('一键重置',()=>applyFilters(doc.manifest.filters.map(f=>({...f,values:[]}))),'filter-reset');reset.prepend(icon('refresh'));reset.disabled=boot.mode==='offline'||!doc.manifest.filters.some(f=>f.values.length);filters.append(summary,reset);}
 
+    root.querySelector('.linkage-chip')?.remove();
+    if(linkage){const chip=el('div','linkage-chip');chip.setAttribute('role','status');
+      chip.append(icon('link'),el('span','',`联动：${linkage.label} = ${linkage.category}`),iconButton('close','取消联动',()=>{linkage=null;render();}));root.append(chip);}
     originalInstances.forEach(x=>x.destroy());originalInstances=[];
     if(grid){grid.destroy(false);grid=null;}gridEl.replaceChildren();disposeReport?.();disposeReport=null;canvas.querySelector('.markdown-workspace')?.remove();canvas.classList.toggle('report-canvas',doc.manifest.viewMode==='report');
     if(doc.manifest.viewMode==='report'){lastBreakpoint=bp();const draft=currentDraft();if(!draft.dirty){draft.text=reportMarkdown(doc);draft.saved=draft.text;draft.revision=doc.revision;}disposeReport=renderReport({host:canvas,doc,editing,mount:(card,id)=>mountComponent(card,id,true),draft,onChange:text=>{draft.text=text;draft.dirty=text!==draft.saved;},onSave:saveMarkdown,onDiscard:()=>{draft.text=reportMarkdown(doc);draft.saved=draft.text;draft.dirty=false;draft.revision=doc.revision;render();},onDownload:text=>download(doc.id+'.md',text,'text/markdown;charset=utf-8'),onDisposeCharts:()=>{originalInstances.forEach(x=>x.destroy());originalInstances=[];}});return;}
     const breakpoint=bp();lastBreakpoint=breakpoint;const columns={desktop:12,tablet:8,mobile:4}[breakpoint];
-    grid=GridStack.init({column:columns,cellHeight:48,margin:12,float:false,disableDrag:!editing,disableResize:true,draggable:{handle:'.layout-handle',cancel:'input,select,textarea,a'},resizable:{handles:'e,se,s,sw,w'},minRow:1},gridEl);
+    grid=GridStack.init({column:columns,cellHeight:48,margin:12,float:false,disableDrag:!editing,disableResize:true,draggable:{handle:'.grid-stack-item-content'},resizable:{handles:'e,se,s,sw,w'},minRow:1},gridEl);
     for(const position of doc.manifest.layout[breakpoint]){
       const id=position.id,c=doc.manifest.components[id],item=el('div','grid-stack-item'),card=el('section','grid-stack-item-content card original-host');
       item.dataset.componentId=id;card.classList.toggle('is-editing',editing);item.append(card);gridEl.append(item);
-      if(editing){const handle=iconButton('drag','拖动组件');handle.classList.add('drag-handle','layout-handle');item.append(handle);}
+      if(editing){item.classList.add('is-draggable');for(const type of ['mousedown','touchstart'])item.addEventListener(type,keepControlsInteractive,true);}
       grid.makeWidget(item,{...position,minW:2,minH:c.kind==='kpi'||c.family==='kpi'?3:5});
+      const link=linkage&&!editing?linkStatus(id):null;if(link&&!link.ok){item.classList.add('linkage-off');const note=el('div','linkage-off-note'),tag=el('span','','未参与联动');tag.title=link.reason;tag.setAttribute('aria-label',`${c.title||id}未参与联动：${link.reason}`);note.append(tag);item.append(note);}
+      if(linkage?.sourceId===id&&!editing)item.classList.add('linkage-source');
       mountComponent(card,id);
     }
     if(!Object.keys(doc.manifest.components).length)gridEl.append(el('div','empty',T.empty));
@@ -147,10 +194,11 @@ export async function start({echarts,GridStack,App}){
           if(!quiet){const h=el('div','text-card-header'),heading=el('div','text-card-heading'),name=el('h2','text-heading',c.title),subtitle=el('p','component-description',c.subtitle||''),actions=el('div','text-card-actions');heading.append(name);if(c.subtitle||editing)heading.append(subtitle);actions.append(iconButton('info','指标定义与语义',()=>inspect(id)));if(editing){inlineEdit(name,{label:'图表标题',value:c.title,maxLength:240,save:value=>updateText(id,{title:value})});inlineEdit(subtitle,{label:'图表描述',value:c.subtitle||'',save:value=>updateText(id,{subtitle:value})});actions.append(iconButton('comment','图表批注',()=>annotationDialog(id)));}h.append(heading,actions);card.append(h);}
           if(statistical)mountStatisticalImage(card,c,statisticalArtifacts[id]);else card.append(el('div','text-block',c.text));
         }
-        else originalInstances.push(mountOriginal(card,{doc,id,editing:quiet?false:editing,readOnly:quiet||!editing||boot.mode==='offline',onInspect:inspect,onEdit:componentEditor,onAnnotate:annotationDialog,onText:updateText,onType:(id,code)=>patch([{op:'set_original_chart',id,code}]).catch(showError),
+        else originalInstances.push(mountOriginal(card,{doc:quiet?doc:viewDoc(),id,editing:quiet?false:editing,readOnly:quiet||!editing||boot.mode==='offline',onInspect:inspect,onEdit:componentEditor,onAnnotate:annotationDialog,onText:updateText,onType:(id,code)=>patch([{op:'set_original_chart',id,code}]).catch(showError),
           onPresentation:(id,changes)=>{const old=doc.manifest.components[id],base=old.kind==='legacy'?old.config:old.presentation||{};
             if(Object.keys(changes).some(k=>JSON.stringify(base[k])!==JSON.stringify(changes[k]))){const value=old.kind==='legacy'?{...old,config:{...base,...changes}}:{...old,presentation:{...base,...changes}};return mutate('dashboard_patch',{operations:[{op:'put_component',id,value}]},true,false).catch(showError);}}
         }));
+      if(!quiet&&c.kind==='legacy')wireLinkage(id,originalInstances.at(-1)?.app.state.chartInstances['original-'+id]);
       if(quiet&&card.shadowRoot){const style=el('style');style.textContent='.component-actions,.component-header,.component-details{display:none!important}.section-card{box-shadow:none!important;border:0!important;border-radius:0!important;padding:0!important;background:transparent!important}.card-body-wrap{height:100%!important;margin:0!important}';card.shadowRoot.append(style);if(c.kind==='chart'&&['bar','line'].includes(c.chartType)){const instance=originalInstances.at(-1)?.app.state.chartInstances['original-'+id];if(instance){const option=instance.getOption();instance.setOption({color:['#444444','#999999','#666666','#bbbbbb'],textStyle:{fontFamily:'Noto Serif CJK SC, Songti SC, serif',color:'#444'},legend:{show:(option.series||[]).length>1},series:(option.series||[]).map((series,index)=>({type:series.type,label:{show:['line','bar'].includes(series.type),color:'#444',position:'top',fontFamily:'Noto Serif CJK SC, serif'},lineStyle:{color:['#444','#999','#666','#bbb'][index%4],width:2},itemStyle:{color:['#444','#999','#666','#bbb'][index%4]},symbolSize:6}))});}}}
       }catch(error){card.append(el('p','error',error.message));}
   }
@@ -239,6 +287,7 @@ export async function start({echarts,GridStack,App}){
   function importData(){const {d,body}=dialog(T.import),name=input('dataset-'+Date.now().toString(36)),area=textarea('[]'),file=input('','file'),formatSelect=select([['json','JSON rows'],['csv','CSV']],'json');file.accept='.json,.csv';file.onchange=async()=>{area.value=await file.files[0].text();formatSelect.value=file.files[0].name.endsWith('.csv')?'csv':'json';};body.append(field('Dataset ID',name),file,formatSelect,area,button(T.save,async()=>{await mutate('dataset_import',{datasetId:name.value,...(formatSelect.value==='csv'?{csvText:area.value}:{rows:JSON.parse(area.value)}),name:file.files[0]?.name||name.value});d.close();}));}
   function queryEditor(){const {d,body}=dialog('SQL / read-only'),alias=input('analytics'),ds=input('query-result'),sql=textarea('SELECT * FROM your_table LIMIT 100'),params=textarea('{}');body.append(el('p','muted','Only explicitly configured SQLite aliases are executable. No query runs on preview or chart switching.'),field('Connection alias',alias),field('Dataset ID',ds),field('SQL',sql),field('Parameters',params),button('执行只读查询',async()=>{if(!confirm('Execute this read-only query and save a new snapshot?'))return;await mutate('query_execute',{connection:alias.value,datasetId:ds.value,sql:sql.value,parameters:JSON.parse(params.value)});d.close();}));}
   function exportDialog(){const {body}=dialog(T.export);body.append(button('JSON artifact',()=>download(doc.id+'.json',JSON.stringify(doc,null,2))));if(boot.exportFile)body.append(button('Self-contained HTML',()=>boot.exportFile(doc.id)));if(boot.mode!=='offline')body.append(button('Version history',async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id});body.append(el('pre','code',JSON.stringify(result,null,2)));}));}
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkage&&!document.querySelector('dialog[open]')){linkage=null;render();}});
   window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!pendingLayout&&!dragging&&!busy)render();});
   if(boot.mode==='web')whileVisible(async()=>{if(!doc||busy||pendingLayout||dragging||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{const current=(await transport('dashboard_get',{dashboardId:doc.id})).document;if(current.revision!==doc.revision||renderedStatisticalArtifacts!==statisticalArtifacts){if(current.revision!==doc.revision){undo=[];redo=[];}doc=current;render();}}catch(e){showError(e);}},5000);
   if(boot.mode!=='offline')whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3));
