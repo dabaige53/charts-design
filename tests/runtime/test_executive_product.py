@@ -76,6 +76,9 @@ def test_visible_filters_union_search_kpi_and_table_export(tmp_path):
             )
             page.locator("[data-component-id=trend] canvas").wait_for()
             assert page.get_by_role("region", name="筛选条件").is_visible()
+            clear = page.get_by_role("button", name="清除所有筛选", exact=True)
+            assert clear.is_visible() and clear.is_disabled()
+            assert page.locator(".filter-reset").count() == 0
             page.get_by_role("button", name="Region：全部", exact=True).click()
             assert page.locator(".filter-choice").filter(has_text="North").count() == 1
             for choice in page.locator(".filter-choice input").all():
@@ -96,10 +99,12 @@ def test_visible_filters_union_search_kpi_and_table_export(tmp_path):
             assert kpi.get_by_text("+12% YoY", exact=True).count() == 0
             assert kpi.get_by_text("+3% MoM", exact=True).count() == 0
             assert kpi.get_by_text("fixed baseline", exact=True).count() == 0
-            page.get_by_role("button", name="清除全部筛选", exact=True).click()
+            page.get_by_role("button", name="清除所有筛选", exact=True).click()
             page.wait_for_function(
                 "document.querySelector('.filter-summary').textContent==='已生效条件：0'"
             )
+            assert clear.is_visible() and clear.is_disabled()
+            assert "484" in kpi.locator(".text-2xl").inner_text()
             page.get_by_label("搜索区域", exact=True).fill("nor")
             page.get_by_role("button", name="应用搜索", exact=True).click()
             page.wait_for_function(

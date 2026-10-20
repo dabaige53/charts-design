@@ -18,10 +18,10 @@ def test_running_worker_announces_new_ui_resource(tmp_path):
     javascript.write_text('first build')
     (assets / 'app.css').write_text('body{}')
     source = (
-        'import asyncio; from pathlib import Path; '
+        'import asyncio; from pathlib import Path; import dashboard_runtime.assets as assets; '
         'import dashboard_runtime.mcp_server as server; '
         'from dashboard_runtime.service import Service; '
-        f'server.DIST=Path({str(assets)!r}); '
+        f'assets.DIST=Path({str(assets)!r}); '
         f'asyncio.run(server.run(Service(Path({str(tmp_path / "store")!r}))))'
     )
 

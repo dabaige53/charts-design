@@ -37,13 +37,15 @@ def test_chart_click_links_compatible_components_and_blurs_the_rest(tmp_path):
             regions = page.locator("[data-component-id=regions] canvas").first
             regions.wait_for()
             box = regions.bounding_box()
+            assert box is not None
             grid_top = page.evaluate("document.querySelector('.grid-stack').getBoundingClientRect().top")
             # At 1440px the chart renders vertical bars; 华东基地 is the left bar, its lower body is safely clickable.
             page.mouse.click(box["x"] + box["width"] * 0.32, box["y"] + box["height"] * 0.65)
             chip = page.locator(".linkage-chip")
             chip.wait_for()
-            assert "区域 = 华东基地" in chip.text_content()
-            assert "生效" not in chip.text_content()
+            chip_text = chip.inner_text()
+            assert "区域 = 华东基地" in chip_text
+            assert "生效" not in chip_text
             off = page.locator(".linkage-off")
             assert off.count() == 1 and off.get_attribute("data-component-id") == "goal"
             tag = page.locator(".linkage-off-note span")
@@ -56,6 +58,24 @@ def test_chart_click_links_compatible_components_and_blurs_the_rest(tmp_path):
                 ".shadowRoot.querySelectorAll('tbody tr')].map(r=>r.children[1].textContent.trim())"
             )
             assert regions_in_table and set(regions_in_table) == {"华东基地"}
+            clear = page.get_by_role("button", name="清除所有筛选", exact=True)
+            assert clear.is_visible() and clear.is_enabled()
+            assert page.locator(".filter-summary").inner_text() == "已生效条件：1"
+            clear.click()
+            page.wait_for_function("!document.querySelector('.linkage-chip')")
+            assert page.locator(".linkage-off").count() == 0
+            assert clear.is_visible() and clear.is_disabled()
+            regions_in_table = page.evaluate(
+                "[...document.querySelector('[data-component-id=details] .grid-stack-item-content')"
+                ".shadowRoot.querySelectorAll('tbody tr')].map(r=>r.children[1].textContent.trim())"
+            )
+            assert len(set(regions_in_table)) > 1
+            # Escape remains available for cancelling the next chart selection.
+            regions = page.locator("[data-component-id=regions] canvas").first
+            box = regions.bounding_box()
+            assert box is not None
+            page.mouse.click(box["x"] + box["width"] * 0.32, box["y"] + box["height"] * 0.65)
+            chip.wait_for()
             page.keyboard.press("Escape")
             page.wait_for_function("!document.querySelector('.linkage-chip')")
             assert page.locator(".linkage-off").count() == 0

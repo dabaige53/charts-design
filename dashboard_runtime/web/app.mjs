@@ -208,7 +208,7 @@ export async function start({echarts,GridStack,App}){
     if(!editing)toolbar.append(iconButton('export',T.export,exportDialog));disposeToolbar=adaptiveActions(top,toolbar);statusLine();
     // The version sits inline beside the edit toggle; long error messages keep their own line under the heading.
     if(editing&&!notice.classList.contains('error'))toolbar.prepend(notice);else heading.append(notice);
-    filters.replaceChildren();filters.hidden=doc.manifest.viewMode==='report'||(!doc.manifest.filters.length&&!editing);
+    filters.replaceChildren();filters.hidden=doc.manifest.viewMode==='report'||(!doc.manifest.filters.length&&!linkage&&!editing);
     for(const f of doc.manifest.filters){const c=doc.manifest.components[f.componentIds[0]],rows=f.componentIds.flatMap(id=>doc.snapshot.datasets[doc.manifest.components[id].datasetId]||[]);
       if(f.op==='in'){
         if(f.selectionMode==='single'){
@@ -231,7 +231,11 @@ export async function start({echarts,GridStack,App}){
         actions.append(reset,submit);range.append(heading,fields,actions);const summary=f.values.length?f.values.join(' — '):(fieldType==='date'?'全部月份':'全部'),trigger=button((f.label||f.field)+'：'+summary,()=>openMenu(trigger,[],{label:f.label||f.field,content:range,align:'start'}),'filter-trigger');trigger.setAttribute('aria-haspopup','dialog');trigger.append(icon('down'));filters.append(trigger);
       }
     }
-    if(doc.manifest.filters.length){const summary=el('span','filter-summary','已生效条件：'+doc.manifest.filters.filter(f=>f.values.length).length),reset=button('清除全部筛选',()=>{linkage=null;return applyFilters(clearFilterValues(doc.manifest.filters));},'filter-reset');reset.prepend(icon('refresh'));reset.disabled=boot.mode==='offline'||(!linkage&&!doc.manifest.filters.some(f=>f.values.length));filters.prepend(reset);filters.append(summary);}
+    if(doc.manifest.filters.length||linkage){
+      const active=doc.manifest.filters.filter(f=>f.values.length).length+(linkage?1:0),overview=el('div','filter-overview'),summary=el('span','filter-summary','已生效条件：'+active);
+      const clear=button('清除所有筛选',()=>{linkage=null;return applyFilters(clearFilterValues(doc.manifest.filters));},'filter-clear-all');
+      clear.disabled=boot.mode==='offline'||!active;overview.append(summary,clear);filters.append(overview);
+    }
 
     root.querySelector('.linkage-chip')?.remove();
     if(linkage){const chip=el('div','linkage-chip');chip.setAttribute('role','status');

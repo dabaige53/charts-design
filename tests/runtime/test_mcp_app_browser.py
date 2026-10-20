@@ -68,6 +68,34 @@ def test_embedded_app_edits_persists_and_reopens(tmp_path):
                         await expect(app.get_by_role('button', name='编辑', exact=True)).to_be_visible()
                         title = app.get_by_label('Dashboard title')
                         await expect(title).to_be_disabled()
+                        # One action clears combined reader conditions through the real MCP bridge.
+                        clear = app.get_by_role('button', name='清除所有筛选', exact=True)
+                        await expect(clear).to_be_visible()
+                        await expect(clear).to_be_disabled()
+                        await expect(app.locator('.filter-reset')).to_have_count(0)
+                        await app.get_by_role('button', name='区域：全部', exact=True).click()
+                        await app.get_by_role('button', name='取消全选', exact=True).click()
+                        await app.locator('.filter-choice').filter(has_text='华东基地').locator('input').check()
+                        await app.get_by_role('button', name='应用', exact=True).click()
+                        await expect(app.locator('.filter-summary')).to_have_text('已生效条件：1')
+                        await app.get_by_role('button', name='月份范围：全部月份', exact=True).click()
+                        await app.get_by_label('月份范围起始', exact=True).fill('2026-08-01')
+                        await app.get_by_label('月份范围结束', exact=True).fill('2026-09-01')
+                        await app.get_by_role('button', name='应用范围', exact=True).click()
+                        await expect(app.locator('.filter-summary')).to_have_text('已生效条件：2')
+                        await app.get_by_label('搜索区域', exact=True).fill('华东')
+                        await app.get_by_role('button', name='应用搜索', exact=True).click()
+                        await expect(app.locator('.filter-summary')).to_have_text('已生效条件：3')
+                        await clear.click()
+                        await expect(app.locator('.filter-summary')).to_have_text('已生效条件：0')
+                        await expect(clear).to_be_disabled()
+                        await expect(app.get_by_label('搜索区域', exact=True)).to_have_value('')
+                        await expect(app.get_by_role('button', name='区域：全部', exact=True)).to_be_visible()
+                        await expect(app.get_by_role('button', name='月份范围：全部月份', exact=True)).to_be_visible()
+                        assert 'dashboard_view' in calls
+                        canonical = await session.call_tool('dashboard_get', {'dashboardId': 'embedded'})
+                        assert canonical.structuredContent is not None
+                        assert canonical.structuredContent['document']['revision'] == 1
                         # Exercise real exports through stdio, not only button presence.
                         await app.get_by_role('button', name='导出', exact=True).click()
                         for format in ('JSON', 'HTML', 'PDF'):
