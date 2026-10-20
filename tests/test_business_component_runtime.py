@@ -29,7 +29,7 @@ def run_runtime(scenario):
         f"const columnChart = ({CHARTS_MAP['c01']});",
         scenario,
     ])
-    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, check=True)
+    result = subprocess.run(["node", "-"], input=program, capture_output=True, text=True, check=True)
     return json.loads(result.stdout)
 
 

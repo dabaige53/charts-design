@@ -23,7 +23,7 @@ def _catalog_components() -> dict[str, dict]:
         f"{json.dumps(code)}: ({source})" for code, source in CHARTS_MAP.items()
     )
     program = f"const charts = {{{definitions}}}; console.log(JSON.stringify(Object.fromEntries(Object.entries(charts).map(([code, component]) => [code, {{ data: component.data, defaultGranularity: component.defaultGranularity }}]))));"
-    completed = subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
+    completed = subprocess.run(["node", "-"], input=program, check=True, capture_output=True, text=True)
     return json.loads(completed.stdout)
 
 
@@ -136,7 +136,7 @@ def test_every_registered_renderer_consumes_explicit_headers_and_builds_consiste
         "}",
         "console.log(JSON.stringify(rendered));",
     ])
-    completed = subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
+    completed = subprocess.run(["node", "-"], input=program, check=True, capture_output=True, text=True)
     rendered = json.loads(completed.stdout)
 
     for code, result in rendered.items():
@@ -192,7 +192,7 @@ def test_structured_chart_tooltips_keep_shape_specific_business_labels() -> None
         "}",
         "console.log(JSON.stringify(output));",
     ])
-    completed = subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
+    completed = subprocess.run(["node", "-"], input=program, check=True, capture_output=True, text=True)
     rendered = json.loads(completed.stdout)
     for code, tooltip in rendered.items():
         assert configs[code]["presentation"]["tooltipValueLabels"][0] in tooltip, code

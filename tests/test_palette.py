@@ -29,7 +29,7 @@ def run_renderer(scenario):
         "const {DashboardApp, DashboardRenderer, StateStore, trendTextClass} = window.testAPI;",
         scenario,
     ])
-    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, check=True)
+    result = subprocess.run(["node", "-"], input=program, capture_output=True, text=True, check=True)
     return json.loads(result.stdout)
 
 
