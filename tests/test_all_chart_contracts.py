@@ -1,3 +1,4 @@
+# ruff: noqa: E402 -- imports follow the shared generator search path.
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -71,6 +72,7 @@ def _presentation(code: str, data: dict) -> dict:
         table_count = len(data["months"]) + 1
     elif table_count == "stages+1":
         table_count = len(data["stages"]) + 1
+    assert isinstance(table_count, int)
     presentation["tableHeaders"] = [f"{code}-column-{index}" for index in range(table_count)]
     return presentation
 

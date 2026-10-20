@@ -24,4 +24,4 @@ include = ["dashboard_runtime*"]
 dashboard_runtime = ["examples/*.md", "web/*.mjs", "web/*.css", "web/dist/*.js", "web/dist/*.css"]
 
 [tool.pyright]
-extraPaths = [".mcp-test-deps"]
+extraPaths = [".mcp-test-deps", "skills/executive-charts/scripts"]

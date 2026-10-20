@@ -1,3 +1,4 @@
+# ruff: noqa: E402 -- imports follow the shared generator search path.
 from copy import deepcopy
 import json
 from pathlib import Path
