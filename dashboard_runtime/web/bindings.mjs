@@ -1,4 +1,4 @@
-import {aggregate,visibleRows,format} from './engine.mjs';
+import {aggregate,visibleRows,format,formatComparison} from './engine.mjs';
 // Metric precision is part of the metric definition: round once here so labels, tooltips and tables agree.
 function rounded(value,metric){return value==null?null:Number(value.toFixed(metric?.decimals??2));}
 function period(value,grain){
@@ -6,6 +6,7 @@ function period(value,grain){
   return grain==='quarter'?value.slice(0,4)+' Q'+Math.ceil(Number(value.slice(5,7))/3):value.slice(0,7);
 }
 export function resolveOriginal(doc,id,granularity='month'){
+  if(doc.computed?.components?.[id])return structuredClone(doc.computed.components[id]);
   const c=doc.manifest.components[id],b=c.binding,raw=structuredClone(c.config);
   if(!b)return raw;
   const rows=visibleRows(doc,id),metrics=doc.manifest.metrics;
@@ -14,7 +15,7 @@ export function resolveOriginal(doc,id,granularity='month'){
     for(const target of ['yoy','mom','subVal','leftVal','rightVal'])if(target in raw&&!b.measures[target])raw[target]='\u2014';
     for(const [target,mid]of Object.entries(b.measures)){
       const metric=metrics[mid],n=aggregate(rows,metric),scaled=n==null?null:n*(b.scale?.[target]??1);const shown=target==='percent'?rounded(scaled,metric):scaled;
-      raw[target]=target==='percent'?shown:format(scaled,metric);
+      raw[target]=target==='percent'?shown:(['yoy','mom'].includes(target)?formatComparison(scaled,metric):format(scaled,metric));
     }
     if(raw.type==='mc03'){
       const groups=new Map();for(const r of rows){const k=r[b.timeField];if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);}
@@ -27,6 +28,9 @@ export function resolveOriginal(doc,id,granularity='month'){
   for(const row of rows){const category=b.timeGrain?period(row[b.categoryField],granularity):row[b.categoryField];
     if(category==null)continue;if(!groups.has(category))groups.set(category,[]);groups.get(category).push(row);}
   const keys=[...groups.keys()];if(b.timeGrain)keys.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  if(b.orderBy){const metric=metrics[b.measures[b.orderBy.target]],sign=b.orderBy.direction==='desc'?-1:1;
+    keys.sort((a,c)=>{const av=aggregate(groups.get(a),metric),cv=aggregate(groups.get(c),metric);
+      return av==null?(cv==null?String(a).localeCompare(String(c)):1):cv==null?-1:sign*(av-cv)||String(a).localeCompare(String(c));});}
   if(raw.code==='t06')raw.data={};
   raw.data[b.categoryTarget]=keys;
   for(const [target,mid]of Object.entries(b.measures))raw.data[target]=keys.map(k=>{const value=aggregate(groups.get(k),metrics[mid]);return value==null?null:rounded(value*(b.scale?.[target]??1),metrics[mid]);});

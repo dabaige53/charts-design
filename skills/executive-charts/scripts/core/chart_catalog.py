@@ -1,3 +1,5 @@
+from .chart_interactions import with_chart_interactions
+
 # Complete chart builders dictionary for all 30+ charts across the 6 dashboard files
 
 ALL_CHARTS = {
@@ -3755,5 +3757,9 @@ ALL_CHARTS = {
         }
     }"""
 }
+
+
+
+ALL_CHARTS = {code: with_chart_interactions(builder) for code, builder in ALL_CHARTS.items()}
 
 ALL_CHART_BUILDERS = ALL_CHARTS

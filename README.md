@@ -6,6 +6,10 @@ Enterprise-grade, McKinsey/Bloomberg/FT-caliber business charts, KPI decision ca
 
 ---
 
+## 当前版本：1.1.0（runtime 0.5.0）
+
+密集柱状图和折线图默认提供缩放窗口；筛选弹窗支持全选与取消全选；MCP 阅读界面支持手动刷新和版本检查。见 [运行时与刷新说明](docs/dashboard-runtime.md)。更新源码后执行 `npm --prefix runtime-ui ci && npm --prefix runtime-ui run build`，重新连接 MCP 后打开最新预览。用户数据目录可以继续使用。
+
 ## 两条 Skills 与 MCP 生成路径
 
 - **Dashboard**：保留 [executive-charts Skill](skills/executive-charts/SKILL.md) 和原有案例；MCP 案例 `charts://examples/executive-dashboard`。

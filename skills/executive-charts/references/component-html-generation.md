@@ -17,6 +17,8 @@ Dashboard HTML is produced in this order:
 
 Completion criterion: the delivered HTML comes from this pipeline and passes strict component validation and static HTML inspection.
 
+For an interactive preview, also check the rendered target page. Server-side JSON parsing and static inspection do not verify host decoding or frontend rendering. On failure, separate serialization, transport, decoding and rendering evidence; retain the error and response size, and do not claim a fix merely because reducing data made a local JSON check pass. Synthetic prototypes should reuse a bounded dataset across charts and tables, with row counts and response size reviewed before preview. Preserve required filter choices and aggregation semantics; do not silently truncate real data.
+
 ## Choose the output mode
 
 ### Standalone chart
@@ -155,6 +157,8 @@ The shared table shell owns keyword filtering, active cross-filter state, column
 Completion criterion: the root has one stable component identity, every visible header maps to a declared column key, and filtering, sorting, pagination, column controls, overflow, and export operate on the same resolved rows.
 
 ### Shared overlays and feedback
+
+Author business definitions, scope, formulas and decision rules using [metric-definitions.md](metric-definitions.md). Do not use a metric title, SQL expression or generic policy sentence as its business definition.
 
 Explanation content is generated into `#app-explain-dialog` when a KPI or chart explanation action fires. Render it as a read-only reference overlay with a title-bar close control, backdrop dismissal, `Escape` support, and a content-focused body. Toasts are appended to `#app-toast-container` for transient action feedback. Fullscreen changes the owning chart card state while preserving its component identity.
 

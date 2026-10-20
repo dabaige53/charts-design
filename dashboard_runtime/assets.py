@@ -1,10 +1,19 @@
 """Self-contained UI bundle; snapshots cannot introduce executable markup."""
 from __future__ import annotations
 import json
+import hashlib
 from pathlib import Path
 from .model import DashboardError, validate
 
 DIST = Path(__file__).parent / 'web' / 'dist'
+
+def ui_build_id():
+    digest = hashlib.sha256()
+    for name in ('app.js', 'app.css'):
+        path = DIST / name
+        if path.exists():
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
 
 def render_html(mode='web', document=None, legacy=None, idle_timeout: float=60):
     js, css = DIST / 'app.js', DIST / 'app.css'
@@ -13,7 +22,7 @@ def render_html(mode='web', document=None, legacy=None, idle_timeout: float=60):
     if document is not None:
         validate(document)
     from .statistical import statistical_artifacts
-    boot = {'statisticalArtifacts': statistical_artifacts(document) if document else {}, 'mode': mode, 'document': document, 'legacy': legacy or {}, 'idleTimeout': idle_timeout}
+    boot = {'uiBuildId': ui_build_id(), 'statisticalArtifacts': statistical_artifacts(document) if document else {}, 'mode': mode, 'document': document, 'legacy': legacy or {}, 'idleTimeout': idle_timeout}
     payload = json.dumps(boot, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     javascript = js.read_text().replace('</script', '<\\/script')
     styles = css.read_text().replace('</style', '<\\/style')
@@ -44,6 +53,13 @@ def export_component(document, component_id):
     dataset_ids = {component.get('datasetId')} | {v['datasetId'] for v in m['metrics'].values()}
     m['datasets'] = {k: v for k, v in m['datasets'].items() if k in dataset_ids}
     s['datasets'] = {k: v for k, v in s['datasets'].items() if k in dataset_ids}
+    if 'datasetRefs' in s:
+        s['datasetRefs'] = {k: v for k, v in s['datasetRefs'].items() if k in dataset_ids}
+    if 'componentDataRefs' in s:
+        s['componentDataRefs'] = {k: v for k, v in s['componentDataRefs'].items() if k == component_id}
+    if 'computed' in result:
+        for collection in ('components', 'tables', 'grouped'):
+            result['computed'][collection] = {k: v for k, v in result['computed'].get(collection, {}).items() if k == component_id}
     source_ids = {component.get('sourceId')} | {v['sourceId'] for v in m['datasets'].values()}
     m['sources'] = {k: v for k, v in m['sources'].items() if k in source_ids}
     m['filters'] = [{**f, 'componentIds': [component_id]} for f in m['filters'] if component_id in f['componentIds']]

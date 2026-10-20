@@ -53,3 +53,7 @@ runtime-original-restored.png
 # System files
 .DS_Store
 Thumbs.db
+
+# Local acceptance reports may contain user data and machine paths.
+dist/local-data-acceptance/
+core-tests.txt

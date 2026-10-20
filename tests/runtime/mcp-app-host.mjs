@@ -5,6 +5,13 @@ frame.id='app';frame.title='Charts MCP App';frame.style='width:100%;height:900px
 frame.setAttribute('sandbox','allow-scripts allow-same-origin');document.body.append(frame);
 const bridge=new AppBridge(null,{name:'Charts acceptance host',version:'1.0.0'},{serverTools:{}});
 bridge.oncalltool=params=>window.mcpCallTool(params);
+bridge.ondownloadfile=async({contents})=>{
+  if(window.rejectDownloads)return {isError:true};
+  const resource=contents[0].resource,a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([Uint8Array.from(atob(resource.blob),c=>c.charCodeAt(0))],{type:resource.mimeType}));
+  a.download=resource.uri.split('/').pop();a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  return {};
+};
 bridge.onrequestdisplaymode=async({mode})=>{
   document.body.dataset.displayMode=mode;
   bridge.setHostContext({displayMode:mode,availableDisplayModes:['inline','fullscreen']});

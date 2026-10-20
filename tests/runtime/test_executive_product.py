@@ -2,6 +2,7 @@
 
 import csv
 import io
+from pathlib import Path
 import threading
 
 import pytest
@@ -82,7 +83,7 @@ def test_visible_filters_union_search_kpi_and_table_export(tmp_path):
             page.locator(".filter-choice").filter(has_text="East").locator(
                 "input"
             ).check()
-            page.get_by_role("button", name="应用筛选", exact=True).click()
+            page.get_by_role("button", name="应用", exact=True).click()
             page.wait_for_function(
                 "document.querySelector('.filter-summary').textContent==='已生效条件：1'"
             )
@@ -95,7 +96,7 @@ def test_visible_filters_union_search_kpi_and_table_export(tmp_path):
             assert kpi.get_by_text("+12% YoY", exact=True).count() == 0
             assert kpi.get_by_text("+3% MoM", exact=True).count() == 0
             assert kpi.get_by_text("fixed baseline", exact=True).count() == 0
-            page.get_by_role("button", name="一键重置", exact=True).click()
+            page.get_by_role("button", name="清除全部筛选", exact=True).click()
             page.wait_for_function(
                 "document.querySelector('.filter-summary').textContent==='已生效条件：0'"
             )
@@ -108,11 +109,12 @@ def test_visible_filters_union_search_kpi_and_table_export(tmp_path):
             assert table.locator("tbody").get_by_text("North", exact=True).count() == 1
             assert "地区" in table.locator("thead").inner_text()
             assert table.get_by_label("搜索明细", exact=True).is_visible()
-            with page.expect_download() as download:
+            with page.expect_response("**/api/tools/dataset_export") as download:
                 table.get_by_role("button", name="导出表格 CSV", exact=True).click()
-            content = open(download.value.path(), encoding="utf-8-sig").read()
+            exported = download.value.json()["export"]
+            content = Path(exported["path"]).read_text(encoding="utf-8-sig")
             records = list(csv.DictReader(io.StringIO(content)))
-            assert records == [{"地区": "North", "收入": "80"}]
+            assert records == [{"region": "North", "revenue": "80"}]
             page.screenshot(path=".runtime-cache/executive-product.png", full_page=True)
             page.set_viewport_size({"width": 390, "height": 844})
             page.wait_for_function("document.documentElement.scrollWidth<=window.innerWidth")
@@ -177,11 +179,11 @@ def test_complete_executive_case_has_visible_month_quarter_controls(tmp_path):
             assert page.locator('.component-details').count() == 0
             assert chart.get_by_role('button', name='切换图表类型', exact=True).count() == 0
             chart.get_by_role('button', name='指标定义与语义', exact=True).click()
-            page.get_by_role('button', name='指标定义', exact=True).click()
+            assert page.get_by_role('heading', name='核心指标业务口径与数学公式', exact=True).is_visible()
             assert page.get_by_text(doc['manifest']['metrics']['revenue']['definition'], exact=True).is_visible()
-            page.get_by_role('button', name='查看语义', exact=True).click()
-            assert page.get_by_text('SUM(revenue)', exact=True).is_visible()
-            assert page.get_by_text('SUM(yieldDelta) / SUM(yieldBase)', exact=True).is_visible()
+            assert page.get_by_role('heading', name='查看语义', exact=True).is_visible()
+            assert page.get_by_text('SUM(revenue)', exact=True).first.is_visible()
+            assert page.get_by_text('SUM(yieldDelta) / SUM(yieldBase)', exact=True).first.is_visible()
             assert page.get_by_role('dialog').get_by_text('季度', exact=True).is_visible()
             assert page.get_by_text('区域：全部；月份范围：全部；搜索区域：全部', exact=True).is_visible()
             page.get_by_role('button', name='关闭', exact=True).click()

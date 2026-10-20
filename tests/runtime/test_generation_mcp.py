@@ -118,17 +118,21 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 assert doc['revision'] == 2
                 assert doc['manifest']['viewMode'] == 'report'
                 assert doc['manifest']['report']['markdown'] == markdown != case['markdown']
-                assert doc['snapshot']['datasets']['fresh-data'] == rows
+                assert doc['snapshot']['datasets'] == {}
+                assert doc['snapshot']['datasetRefs']['fresh-data']['rowCount'] == len(rows)
                 assert (await call('dashboard_validate', {'dashboardId': 'fresh-report'}))['valid']
                 for tool in ('dashboard_get', 'dashboard_preview'):
-                    assert (await call(tool, {'dashboardId': 'fresh-report'}))['document'] == doc
+                    loaded = (await call(tool, {'dashboardId': 'fresh-report'}))['document']
+                    assert {k: v for k, v in loaded.items() if k != 'computed'} == {k: v for k, v in doc.items() if k != 'computed'}
+                    assert loaded['computed']['components']['trend']['data']['values'] == [10, 15]
                 semantics = await call('semantic_inspect', {'dashboardId': 'fresh-report', 'componentId': 'trend'})
                 assert semantics['metrics']['revenue']['definition'] == 'Sum of synthetic revenue'
                 invalid = await session.call_tool('dashboard_patch', {'dashboardId': 'fresh-report',
                     'expectedRevision': 2, 'operations': [{'op': 'set_report_markdown',
                         'value': '```chart\n{"componentId":"missing"}\n```'}]})
                 assert invalid.isError
-                assert (await call('dashboard_get', {'dashboardId': 'fresh-report'}))['document'] == doc
+                unchanged = (await call('dashboard_get', {'dashboardId': 'fresh-report'}))['document']
+                assert {k: v for k, v in unchanged.items() if k != 'computed'} == {k: v for k, v in doc.items() if k != 'computed'}
                 assert tools['dashboard_preview'].meta is not None
                 preview_uri = tools['dashboard_preview'].meta['ui']['resourceUri']
                 preview_resource = await session.read_resource(AnyUrl(preview_uri))

@@ -1,5 +1,6 @@
 """Verify the single color source and the 红涨绿跌 direction rule."""
 import json
+import importlib
 from pathlib import Path
 import re
 import subprocess
@@ -8,9 +9,11 @@ import sys
 SCRIPTS = Path(__file__).parents[1] / "skills" / "executive-charts" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from core.dashboard_template import TEMPLATE, generate_dashboard_html
-from core.palette import CATEGORICAL, PALETTE
-from generate_chart import generate_standalone_chart
+template = importlib.import_module('core.dashboard_template')
+TEMPLATE, generate_dashboard_html = template.TEMPLATE, template.generate_dashboard_html
+palette = importlib.import_module('core.palette')
+CATEGORICAL, PALETTE = palette.CATEGORICAL, palette.PALETTE
+generate_standalone_chart = importlib.import_module('generate_chart').generate_standalone_chart
 
 RED, GREEN = "#A4453C", "#2F6B55"
 
@@ -43,8 +46,11 @@ def test_series_identity_colors_never_reuse_change_colors():
 
 def test_generated_documents_share_the_palette(tmp_path):
     dashboard = generate_dashboard_html("", "Palette")
-    tailwind = json.loads(re.search(r"colors: (\{.*?\}),", dashboard).group(1))
-    echarts = json.loads(re.search(r"palette: (\{.*?\}),\n", dashboard).group(1))
+    tailwind_match = re.search(r"colors: (\{.*?\}),", dashboard)
+    echarts_match = re.search(r"palette: (\{.*?\}),\n", dashboard)
+    assert tailwind_match is not None and echarts_match is not None
+    tailwind = json.loads(tailwind_match.group(1))
+    echarts = json.loads(echarts_match.group(1))
     assert tailwind["positive"] == echarts["positive"] == RED
     assert tailwind["negative"] == echarts["negative"] == GREEN
     assert "slate" not in tailwind
@@ -84,6 +90,20 @@ console.log(JSON.stringify({classes, card: container.innerHTML}));
         assert classes[value] == "neutral"
 
     card = result["card"]
-    assert "text-positive border-positive/20 font-mono\">+12.6%" in card
-    assert "text-negative border-negative/20 font-mono\">-1.2%" in card
+    assert "text-positive border-positive/20 font-mono\">同比 +12.6%" in card
+    assert "text-negative border-negative/20 font-mono\">环比 -1.2%" in card
     assert "text-positive font-semibold\">+¥24 万" in card
+
+
+def test_numeric_comparisons_show_sign_and_direction():
+    result = run_renderer("""
+const container = {innerHTML: '', children: []};
+new DashboardRenderer({config: {kpis: [
+  {id: 'numeric', type: 'mc02', label: '销量', value: 100, yoy: 12.4, mom: -1}
+]}}, {getElementById: () => container}).renderKPIs();
+console.log(JSON.stringify(container.innerHTML));
+""")
+    assert '同比 +12.4' in result
+    assert '环比 -1' in result
+    assert 'text-positive border-positive/20' in result
+    assert 'text-negative border-negative/20' in result

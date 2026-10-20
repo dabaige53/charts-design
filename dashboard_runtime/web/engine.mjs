@@ -10,6 +10,20 @@ export function aggregate(rows, metric) {
   const numbers = key => rows.map(r => r[key]).filter(v => typeof v === 'number' && Number.isFinite(v));
   const total = values => values.reduce((a,b) => a+b, 0);
   if (metric.aggregation === 'count') return rows.length;
+  if (metric.aggregation === 'entity_ratio') {
+    const entities=new Map();
+    for(const row of rows){const key=row[metric.entityField];if(key==null)continue;
+      if(!entities.has(key))entities.set(key,{n:[],d:[]});const entry=entities.get(key);
+      for(const [part,field] of [['n',metric.numerator],['d',metric.denominator]]){
+        const value=row[field];if(typeof value==='number'&&Number.isFinite(value))entry[part].push(value);
+      }
+    }
+    let n=0,d=0;for(const entry of entities.values()){
+      if(entry.n.length&&total(entry.n)>0)n++;
+      if(entry.d.length&&total(entry.d)>0)d++;
+    }
+    return d?n/d:null;
+  }
   if (metric.aggregation === 'ratio') {
     const numerator = numbers(metric.numerator), denominator = numbers(metric.denominator);
     if (!numerator.length || !denominator.length) return null;
@@ -27,6 +41,7 @@ export function aggregate(rows, metric) {
   }
 }
 export function grouped(doc, id) {
+  if(doc.computed?.grouped?.[id])return doc.computed.grouped[id];
   const c = doc.manifest.components[id], groups = new Map();
   for (const row of visibleRows(doc,id)) {
     const x = row[c.x] ?? null, group = c.series ? row[c.series] ?? null : null;
@@ -56,6 +71,14 @@ export function format(value, metric = {}) {
   const digits = metric.decimals ?? 2;
   if (metric.format === 'percent') return new Intl.NumberFormat('zh-CN',{style:'percent',maximumFractionDigits:digits}).format(value);
   return new Intl.NumberFormat('zh-CN',{maximumFractionDigits:digits}).format(value) + (metric.unit ? ` ${metric.unit}` : '');
+}
+// Round through the metric formatter first: a displayed zero must stay neutral.
+export function formatComparison(value, metric = {}) {
+  const shown = format(value, metric);
+  const number = shown.match(/^-?[\d,.]+/);
+  if (!number) return shown;
+  if (Number(number[0].replaceAll(',', '')) === 0) return shown.replace(/^-/, '');
+  return value > 0 ? '+' + shown : shown;
 }
 export function optionFor(doc, id) {
   const c = doc.manifest.components[id], data = grouped(doc,id), type = c.chartType;

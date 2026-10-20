@@ -45,11 +45,11 @@ def test_original_filter_binding_and_persisted_table(tmp_path):
                 "title": "Bound revenue",
                 "config": {
                     "label": "Bound revenue",
-                    "type": "mc01",
+                    "type": "mc02",
                     "value": "old",
                     "yoy": "stale",
                 },
-                "binding": {"datasetId": ds, "measures": {"value": "revenue"}},
+                "binding": {"datasetId": ds, "measures": {"value": "revenue", "yoy": "load-factor"}},
             },
         },
         {
@@ -97,7 +97,7 @@ def test_original_filter_binding_and_persisted_table(tmp_path):
             page.locator(".filter-choice").filter(has_text=chosen).locator(
                 "input"
             ).check()
-            page.get_by_role("button", name="应用筛选", exact=True).click()
+            page.get_by_role("button", name="应用", exact=True).click()
             page.wait_for_function(
                 "document.querySelector('.filter-summary').textContent==='已生效条件：1'"
             )
@@ -110,6 +110,9 @@ def test_original_filter_binding_and_persisted_table(tmp_path):
                 "[data-component-id=bound-kpi] .text-2xl"
             ).inner_text()
             assert str(expected) in content, (expected, content)
+            comparison = page.locator('[data-component-id=bound-kpi] .text-positive').filter(has_text='同比')
+            assert comparison.inner_text().startswith('同比 +')
+            assert comparison.evaluate('(node)=>getComputedStyle(node).color') == 'rgb(164, 69, 60)'
             chart.locator(".view-toggle-btn").click()
             assert chosen in chart.locator(".card-table-pane").inner_text()
             table = page.locator("[data-component-id=bound-table]")

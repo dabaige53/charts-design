@@ -11,6 +11,8 @@ The goal is a reusable business-component generation system whose deliverable is
 
 ## Runtime MCP reference case
 
+For local datasets that must remain outside the preview, read [local-data.md](references/local-data.md). Use `dataset_attach` to stream an operator-configured SQLite table into a versioned local dataset; bind components to that dataset. MCP returns local aggregate results and table pages by default. Use `dashboard_view` for unsaved reader filters, pagination, sorting and time-grain changes; `dataset_export` streams every matching row to a managed local CSV. Do not expand rows per chart, send full observations in component configs, or launch an HTTP service. Inspect data versions, row counts and sizes with `dashboard_data_inspect`.
+
 This is the Dashboard generation track. Preserve the existing Gallery and `examples/` cases. For the local runtime, call `generation_examples` with `{"caseId":"executive-dashboard"}` or read `charts://examples/executive-dashboard`: it returns synthetic KPI/chart/table/filter declarations ready for an atomic patch. Read `charts://declarations` for chart contracts and `charts://contract` for mutation rules; create, patch with the latest revision, validate, then preview.
 
 For Markdown-first analytical documents, use [analytical-reports](../analytical-reports/SKILL.md) and its approved academic master instead of composing a dashboard grid. Both tracks reuse existing chart definitions and source/data semantics.
@@ -25,6 +27,8 @@ For Markdown-first analytical documents, use [analytical-reports](../analytical-
 - For CSV input, use `import-csv` as a draft, then review the inferred fields before adding charts.
 
 Resolve the directory containing this `SKILL.md` once, then invoke its sibling scripts with `python3` as the execution interface.
+
+In this source repository, `skills/executive-charts/` is the maintained implementation. Point local agent skill installations at that directory; do not maintain independent renderer copies in `.agents/skills/`. Verify the resolved script path before generating or diagnosing output.
 
 For any task that creates, restyles, migrates, or embeds component HTML, read [references/component-html-generation.md](references/component-html-generation.md) before writing markup. It defines which layer generates each component, the stable DOM contract, and the completion gate.
 
@@ -85,8 +89,13 @@ For command shapes and component schemas, read [references/dashboard-workspace.m
 
 ## Decision rules
 
+Before authoring or revising metric explanations, read [metric-definitions.md](references/metric-definitions.md). Business definitions must explain the business object, scope and meaning in plain Chinese; keep SQL and field expressions in calculation semantics. Define inclusion/exclusion rules only from confirmed evidence.
+
 - **Evidence chain:** Choose each chart for a specific comparison, trend, composition, distribution, relationship, flow, attribution, or target question. Prefer the smallest set that closes the decision narrative.
 - **Typed metrics:** Give every displayed number a semantic type, unit, scale and precision. Record source parsing outcomes explicitly.
+- **KPI comparisons:** Keep numeric comparisons numeric until formatting; use metric bindings for units and precision. Legacy display strings must include their actual direction (`+12.4%`, `-1%`); never guess a sign from an unsigned string. Zero and missing values stay neutral. Run strict validation and check positive, negative, zero, missing and filtered states. Preserve signs during recomputation and label YoY/MoM explicitly.
+- **Prototype data:** Start from the smallest explicit fixture that covers the required states and filter choices. Reuse one dataset for calculations and tables; do not expand every dimension combination or duplicate rows for each visualization. Label synthetic data. Inspect row counts and serialized response size before preview; never silently sample real business data or narrow required filter coverage.
+- **Preview failures:** Separate JSON serialization, MCP transport, frontend decoding and rendering. Record the failing response and error position when available. A smaller response or a successful server JSON parse does not prove the preview is repaired; verify the target preview or report that verification is pending.
 - **Dynamic filters:** Represent filters as an array of 0–N business dimensions. Use business field keys rather than industry aliases.
 - **Explicit filter scope:** Declare every consumed data field with `--field` and every affected component with `--consumer`. Strict validation confirms this field-to-consumer mapping.
 - **Stable component identity:** Component `id` is the runtime and DOM identity. Chart `code` selects the visual renderer and may repeat across independently identified instances.

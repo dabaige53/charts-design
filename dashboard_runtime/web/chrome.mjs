@@ -22,6 +22,7 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
     use(old.querySelector('.view-toggle-btn'),'table');
   }
   if(family==='table'){
+    const notice=old.querySelector('.component-snapshot-notice');if(notice)heading.append(notice);
     const search=shadow.querySelector('.catalog-search');if(search){search.title='仅搜索本表明细；全页搜索请使用页面筛选栏';heading.append(search);}
     const col=old.querySelector('#colDrawerBtn'),drawer=old.querySelector('#colDrawerMenu');
     if(col&&drawer){col.removeAttribute('data-original-click');col.textContent='自定义列配置';col.setAttribute('aria-label','列配置');col.className='component-text-button';actions.append(col);drawer.className='column-content';storage.append(drawer);
@@ -38,7 +39,7 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
   if(editing&&onAnnotate)use(iconButton('comment','图表批注',()=>onAnnotate(id)),'comment','图表批注');
   header.id=old.id;header.append(heading,actions);old.replaceWith(header);
   card.classList.add('component-'+family);card.dataset.chrome='icons-v1';
-  if(family==='table'){const body=[...card.children].find(child=>child!==header);body?.classList.add('component-table-body');}
+  if(family==='table'){const table=card.querySelector('#main14ColTable'),body=[...card.children].find(child=>child!==header&&child.contains(table));body?.classList.add('component-table-body');}
   if(family==='kpi'&&['mc01','mc02','mc03','mc04'].includes(app.config.kpis?.[0]?.type)){
     const sections=[...card.children].filter(n=>n!==header),value=sections.shift(),footer=sections.pop(),aux=text('div','kpi-aux');aux.append(...sections);if(value)value.classList.add('kpi-headline');if(footer)footer.classList.add('kpi-footer');card.replaceChildren(header,...(value?[value]:[]),aux,...(footer?[footer]:[]));card.classList.add('kpi-aligned');
   }

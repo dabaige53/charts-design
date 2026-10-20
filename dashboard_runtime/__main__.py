@@ -52,7 +52,9 @@ def parser():
     export = sub.add_parser("export")
     export.add_argument("id")
     export.add_argument("--output", required=True)
-    export.add_argument("--format", choices=["json", "html"], default="html")
+    export.add_argument("--format", choices=["json", "html", "csv"], default="html")
+    export.add_argument("--dataset", help="Dataset ID for a complete streaming CSV export")
+    export.add_argument("--component", help="Table component ID for a complete streaming CSV export")
     imported = sub.add_parser("import")
     imported.add_argument("id")
     imported.add_argument("--file", required=True)
@@ -151,14 +153,21 @@ def main(argv=None):
         elif command == "export":
             from .assets import export_document
 
-            doc = service.store.get(args.id)
+            doc = service.store.get(args.id, hydrate=False)
+            path = Path(args.output).expanduser()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if args.format == 'csv':
+                import shutil
+                exported = service.call('dataset_export', {'dashboardId': args.id, 'datasetId': args.dataset, 'componentId': args.component})['export']
+                shutil.copyfile(exported['path'], path)
+                print(json.dumps({'output': str(path.resolve()), 'revision': doc['revision'], 'format': 'csv', **{k: v for k, v in exported.items() if k != 'path'}}))
+                return 0
+            doc = service.store.hydrate(doc)
             content = (
                 json.dumps(doc, ensure_ascii=False, indent=2)
                 if args.format == "json"
                 else export_document(doc)
             )
-            path = Path(args.output).expanduser()
-            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
             result = {
                 "output": str(path.resolve()),

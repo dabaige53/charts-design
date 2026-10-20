@@ -37,6 +37,10 @@ def validate_statistical(doc, component):
     require(isinstance(analysis, dict) and set(analysis) == {'definition','unit'}, 'Statistical analysis requires exactly definition and unit')
     require(isinstance(analysis['definition'], str) and 1 <= len(analysis['definition']) <= 1000, 'Supply the observation grain and measurement definition (1–1000 characters)')
     require(isinstance(analysis['unit'], str) and len(analysis['unit']) <= 100, 'Unit must be text up to 100 characters')
+    if ds not in doc['snapshot']['datasets']:
+        ref = doc['snapshot'].get('datasetRefs', {}).get(ds)
+        require(ref is not None and ref['rowCount'] <= MAX_STAT_ROWS, 'Statistical plots accept at most 5000 raw rows')
+        return []  # Store validates the actual immutable observations before saving.
     rows = doc['snapshot']['datasets'][ds]
     require(len(rows) <= MAX_STAT_ROWS, 'Statistical plots accept at most 5000 raw rows')
     used = [r for r in rows if all(r.get(k) is not None for k in (spec['x'],) + ((spec['y'],) if 'y' in spec else ()))]
@@ -45,7 +49,8 @@ def validate_statistical(doc, component):
         for k in (spec['x'],) + ((spec['y'],) if 'y' in spec else ()):
             v = r[k]
             require(not isinstance(v, str) or len(v) <= 100, 'Statistical category labels are limited to 100 characters')
-            require(type(v) not in (int,float) or abs(v) <= 1e12, 'Statistical numeric values must be within ±1e12')
+            if isinstance(v, (int, float)):
+                require(abs(v) <= 1e12, 'Statistical numeric values must be within ±1e12')
     if kind == 'boxplot':
         require(len({r[spec['x']] for r in used}) <= 20, 'Boxplot accepts at most 20 categories')
     if kind == 'regression':
@@ -57,6 +62,7 @@ def render_statistical(doc, component_id, format='svg'):
     require(format in ('svg','png'), 'Statistical format must be svg or png')
     c = doc['manifest']['components'].get(component_id)
     require(c is not None and c['kind'] == 'statistical', 'Statistical component not found')
+    assert c is not None
     used = validate_statistical(doc, c)
     meta = doc['manifest']['datasets'][c['datasetId']]
     source = doc['manifest']['sources'][meta['sourceId']]
@@ -100,7 +106,8 @@ def _render(raw, format):
                     sns.scatterplot(data=data, x=p['x'], y=p['y'], color='#444444', s=22, alpha=0.65, ax=ax)
                     line_x, line_y = regression_line(data[p['x']].to_numpy(), data[p['y']].to_numpy())
                     ax.plot(line_x, line_y, color='#444444', linewidth=1.5)
-                label = lambda key: str(value['fields'][key].get('label',key))[:200]
+                def label(key):
+                    return str(value['fields'][key].get('label', key))[:200]
                 unit = f" ({c['analysis']['unit']})" if c['analysis']['unit'] else ''
                 ax.set_xlabel(label(p['x']) + (unit if p['type']=='histogram' else ''))
                 ax.set_ylabel('Count' if p['type']=='histogram' else label(p['y']) + unit)
@@ -136,8 +143,10 @@ def statistical_schema():
     variants=[]
     for kind in PLOT_TYPES:
         properties={'type':{'const':kind},'x':field_name}
-        if kind=='histogram': properties['bins']={'type':'integer','minimum':1,'maximum':100,'default':20}
-        else: properties['y']=field_name
+        if kind=='histogram':
+            properties['bins']={'type':'integer','minimum':1,'maximum':100,'default':20}
+        else:
+            properties['y']=field_name
         variants.append({'type':'object','additionalProperties':False,'properties':properties,'required':['type','x']+([] if kind=='histogram' else ['y'])})
     return {'type':'object','additionalProperties':False,'required':['kind','title','datasetId','plot','analysis'],'properties':{
         'kind':{'const':'statistical'},'title':{'type':'string','maxLength':240},'subtitle':{'type':'string','maxLength':1000},

@@ -1,5 +1,6 @@
 """Exercise the generated runtime without starting a browser."""
 import json
+import importlib
 from pathlib import Path
 import re
 import subprocess
@@ -10,9 +11,9 @@ import pytest
 SCRIPTS = Path(__file__).parents[1] / "skills" / "executive-charts" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from core.dashboard_template import generate_dashboard_html
-from dashboard_workspace import validate_resolved
-from generate_dashboard import CHARTS_MAP
+generate_dashboard_html = importlib.import_module('core.dashboard_template').generate_dashboard_html
+validate_resolved = importlib.import_module('dashboard_workspace').validate_resolved
+CHARTS_MAP = importlib.import_module('generate_dashboard').CHARTS_MAP
 
 
 def run_runtime(scenario):
@@ -126,6 +127,21 @@ def test_strict_filter_validation_rejects_unresolvable_bindings(mutation, code):
 
 def test_complete_binding_is_accepted():
     assert validate_resolved(bound_config(), strict=True)[0] == []
+
+
+@pytest.mark.parametrize('value', ['12.4%', '1%', '1.2.3%', float('nan'), True, {}])
+def test_strict_kpi_rejects_ambiguous_comparisons(value):
+    config = bound_config()
+    config['kpis'][0]['yoy'] = value
+    errors, _ = validate_resolved(config, strict=True)
+    assert any(e['code'] == 'KPI_COMPARISON_INVALID' and e['path'] == 'kpis[0].yoy' for e in errors)
+
+
+@pytest.mark.parametrize('value', [12.4, -1, 0, '+12.4%', '-1%', '0%', None, '—', '持平'])
+def test_strict_kpi_accepts_numeric_signed_and_empty_comparisons(value):
+    config = bound_config()
+    config['kpis'][0]['yoy'] = value
+    assert validate_resolved(config, strict=True)[0] == []
 
 
 def test_each_component_uses_only_its_declared_filters():

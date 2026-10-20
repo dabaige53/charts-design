@@ -1,12 +1,15 @@
 name: Dashboard runtime
 on:
   push:
-    branches: [feat/dashboard-runtime-mcp-cli]
+    branches: [main, feat/dashboard-runtime-mcp-cli]
   pull_request:
     paths:
       - 'dashboard_runtime/**'
       - 'runtime-ui/**'
       - 'tests/runtime/**'
+      - 'skills/executive-charts/scripts/**'
+      - 'bin/**'
+      - 'package.json'
       - 'pyproject.toml'
       - '.github/workflows/dashboard-runtime.yml'
 permissions:
@@ -32,9 +35,12 @@ jobs:
         run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate --json > runtime-audit.json
       - name: Build the shared browser and MCP App bundle
         run: npm --prefix runtime-ui run build
+      - name: Check shared source syntax
+        run: npm run check
       - name: Core, MCP protocol, original component fidelity and real browser acceptance
         run: |
           set -o pipefail
+          python -m pytest tests --ignore=tests/runtime -q | tee core-tests.txt
           python -m pytest tests/runtime -q | tee runtime-tests.txt
           node --test tests/runtime/*.test.mjs
       - name: Package source and built UI for review
@@ -49,6 +55,7 @@ jobs:
           path: |
             runtime-source.tar.gz
             runtime-tests.txt
+            core-tests.txt
             runtime-audit.json
             report-preview.png
             runtime-screenshot.png

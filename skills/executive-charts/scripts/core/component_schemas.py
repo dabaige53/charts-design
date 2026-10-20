@@ -9,9 +9,37 @@ import re
 KPI_TYPES = frozenset(f"mc{index:02d}" for index in range(1, 10))
 
 
+def validate_kpi_comparisons(kpi: dict[str, Any], path: str) -> list[dict[str, str]]:
+    """Do not silently turn an ambiguous nonzero comparison into a neutral badge."""
+    errors = []
+    for field in ("yoy", "mom", "leftYoy", "rightYoy"):
+        value = kpi.get(field)
+        message = None
+        if value is None:
+            continue
+        if type(value) in (int, float):
+            if not math.isfinite(value):
+                message = "Comparison must be finite or null"
+        elif isinstance(value, str):
+            text = value.strip()
+            match = re.match(r"^[¥$€]?\s*([0-9][0-9.,]*)", text)
+            if match:
+                try:
+                    nonzero = float(match[1].replace(',', '')) != 0
+                except ValueError:
+                    nonzero = True
+                if nonzero:
+                    message = "Nonzero comparison text needs an explicit + or - sign; use a numeric value when available"
+        else:
+            message = "Comparison must be a number, signed display text, or null"
+        if message:
+            errors.append({"code": "KPI_COMPARISON_INVALID", "path": f"{path}.{field}", "message": message})
+    return errors
+
+
 def validate_kpi_presentation(kpi: dict[str, Any], path: str) -> list[dict[str, str]]:
     """Require the data rendered by specialized KPI cards, preserving zero."""
-    errors = []
+    errors = validate_kpi_comparisons(kpi, path)
 
     def error(field, message):
         errors.append({"code": "KPI_PRESENTATION_INVALID", "path": f"{path}.{field}", "message": message})
