@@ -34,3 +34,27 @@ def test_symlink_cannot_escape_export_directory(tmp_path):
     with patch('dashboard_runtime.exports.subprocess.run') as run, pytest.raises(DashboardError):
         open_export(tmp_path, 'board', 'b' * 32, 'pdf', 'open')
     run.assert_not_called()
+
+
+def test_report_pdf_contains_only_referenced_tables(tmp_path):
+    import copy
+    import subprocess
+    from dashboard_runtime.demo import executive_document
+    from dashboard_runtime.model import apply_operations
+    from dashboard_runtime.service import Service
+
+    doc = executive_document('report-export')
+    hidden = copy.deepcopy(doc['manifest']['components']['details'])
+    hidden['title'] = 'PRIVATE-UNREFERENCED-TABLE'
+    doc = apply_operations(doc, [
+        {'op': 'put_component', 'id': 'hidden-details', 'value': hidden},
+        {'op': 'set_view_mode', 'value': 'report'},
+        {'op': 'set_report_markdown', 'value': '# Public report\n\n```chart\n{"componentId":"details"}\n```'},
+    ])
+    service = Service(tmp_path)
+    service.call('dashboard_create', {'dashboardId': 'report-export', 'document': doc})
+    result = service.call('dashboard_export', {'dashboardId': 'report-export', 'format': 'pdf'})['export']
+    assert result['tableRows'] == {'details': len(doc['snapshot']['datasets']['sales'])}
+    text = subprocess.check_output(['pdftotext', result['path'], '-'], text=True)
+    assert 'Public report' in text
+    assert hidden['title'] not in text

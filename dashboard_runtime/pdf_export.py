@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 
-from .model import require
+from .model import report_chart_references, report_markdown, require
 
 STYLE = '''body{font-family:-apple-system,"PingFang SC",sans-serif;color:#17212b;font-size:11px;margin:0}
 h1{font-size:24px;color:#123b5d;margin:0 0 10px}h2{font-size:16px;color:#123b5d;margin:0 0 12px}
@@ -31,6 +31,7 @@ def render_pdf(path: Path, document: dict, html: str, data):
     require(merger is not None, '完整 PDF 导出需要本机 pdfunite，当前没有可用的 PDF 合并工具')
     assert merger is not None
     manifest = document['manifest']
+    references = report_chart_references(report_markdown(manifest), manifest['components']) if manifest.get('viewMode') == 'report' else None
     computed = document.get('computed', {})
     options = {'format': 'A3', 'landscape': True, 'print_background': True,
                'margin': {'top': '12mm', 'bottom': '12mm', 'left': '10mm', 'right': '10mm'}}
@@ -59,6 +60,8 @@ def render_pdf(path: Path, document: dict, html: str, data):
             tables = []
             for position in sorted(manifest['layout']['desktop'], key=lambda p: (p['y'], p['x'])):
                 key = position['id']
+                if references is not None and key not in references:
+                    continue
                 component = manifest['components'][key]
                 if component.get('family', component['kind']) == 'table':
                     tables.append((key, component))

@@ -12,7 +12,6 @@
 #app-toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;max-width:min(440px,90vw)}
 .card-fullscreen{height:100vh!important;padding:28px!important}.card-fullscreen .card-body-wrap{min-height:250px}
 .catalog-actions{display:flex;align-items:center;gap:6px}.catalog-actions select{max-width:126px;font-size:11px;line-height:1.5;color:#52606D;background:white;border:1px solid #E2E8F0;border-radius:5px;padding:3px 6px}
-.catalog-source-btn{font-size:10px;font-weight:600;width:auto;padding:0 6px;font-family:inherit}
 .catalog-search{font:inherit;font-size:12px;padding:6px 10px;border:1px solid #E2E8F0;border-radius:6px;min-width:0;width:200px;color:#17212B}
 .catalog-summary{font-size:10px;color:#7B8794;line-height:1.6;margin-top:6px}
 .component-snapshot-notice{flex:0 0 auto;margin:4px 0 0;font-size:11px;line-height:1.5;color:#7B8794}

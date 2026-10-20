@@ -128,7 +128,7 @@ class Store:
         return [{'id': r['id'], 'revision': r['revision'], 'title': json.loads(r['document'])['manifest']['title']} for r in rows]
 
     def history(self, board_id):
-        self.get(board_id)
+        self.get(board_id, hydrate=False)
         with self.connect() as db:
             rows = db.execute('SELECT revision,created_at,action FROM revisions WHERE board_id=? ORDER BY revision DESC LIMIT 100', (board_id,)).fetchall()
         return [dict(row) for row in rows]

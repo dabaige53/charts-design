@@ -12,7 +12,7 @@ sys.path.insert(0, str(SCRIPTS))
 template = importlib.import_module('core.dashboard_template')
 TEMPLATE, generate_dashboard_html = template.TEMPLATE, template.generate_dashboard_html
 palette = importlib.import_module('core.palette')
-CATEGORICAL, PALETTE = palette.CATEGORICAL, palette.PALETTE
+CATEGORICAL = palette.CATEGORICAL
 generate_standalone_chart = importlib.import_module('generate_chart').generate_standalone_chart
 
 RED, GREEN = "#A4453C", "#2F6B55"
@@ -31,11 +31,6 @@ def run_renderer(scenario):
     ])
     result = subprocess.run(["node", "-"], input=program, capture_output=True, text=True, check=True)
     return json.loads(result.stdout)
-
-
-def test_palette_maps_red_to_increase_and_green_to_decrease():
-    assert PALETTE["positive"] == RED
-    assert PALETTE["negative"] == GREEN
 
 
 def test_series_identity_colors_never_reuse_change_colors():

@@ -2,23 +2,17 @@
 from __future__ import annotations
 import asyncio
 import json
-import hashlib
 import sys
 from .lifecycle import IdleLifetime, DEFAULT_IDLE_TIMEOUT
 from . import __version__
-from .assets import DIST, render_html
+from .assets import render_html, ui_build_id
 from .model import DashboardError, MAX_BYTES
 from .service import READ_ONLY, TOOLS
 
 LEGACY_URI = f'ui://charts-design/dashboard-v{__version__}.html'
 def current_ui_uri():
     """Frontend rebuilds also change resource identity in a running worker."""
-    bundle = hashlib.sha256()
-    for asset in ('app.js', 'app.css'):
-        path = DIST / asset
-        if path.exists():
-            bundle.update(path.read_bytes())
-    return f'ui://charts-design/dashboard-v{__version__}-{bundle.hexdigest()[:12]}.html'
+    return f'ui://charts-design/dashboard-v{__version__}-{ui_build_id()}.html'
 
 URI = current_ui_uri()
 MIME = 'text/html;profile=mcp-app'

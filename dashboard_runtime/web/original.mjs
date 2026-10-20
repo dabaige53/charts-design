@@ -35,7 +35,6 @@ function setOriginalHtml(node,markup){
   else node.replaceChildren(DOMPurify.sanitize(text,options));
 }
 const node=(tag,cls='',text='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;};
-function action(label,html,run){const b=node('button','chart-action-btn catalog-source-btn');b.type='button';b.title=label;b.setAttribute('aria-label',label);if(html)setOriginalHtml(b,html);else b.textContent=label;b.addEventListener('click',e=>{e.stopPropagation();Promise.resolve().then(run).catch(error=>window.dispatchEvent(new CustomEvent('charts-error',{detail:error})));});return b;}
 function download(name,body,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 let api=null;
 export function initializeOriginal(echarts){api=createOriginalComponents(echarts,setOriginalHtml);const fallback=api.ChartDataToTableConverter.convert;api.ChartDataToTableConverter.convert=(inst,c)=>c?.resolvedTable?c.resolvedTable():fallback(inst,c);return api;}
