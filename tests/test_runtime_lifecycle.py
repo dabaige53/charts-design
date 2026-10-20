@@ -1,4 +1,5 @@
 import json
+import importlib
 from pathlib import Path
 import subprocess
 import sys
@@ -7,7 +8,7 @@ import sys
 SCRIPTS = Path(__file__).parents[1] / "skills" / "executive-charts" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from core.runtime_bundle import render_runtime_bundle
+render_runtime_bundle = importlib.import_module('core.runtime_bundle').render_runtime_bundle
 
 
 def _run_lifecycle_scenario(script):
@@ -24,6 +25,7 @@ class DashboardApp {{
     constructions.push({{ config, root }});
   }}
   init() {{ this._mounted = true; return this; }}
+  updateConfig(config) {{ this.config = config; return this; }}
   destroy() {{ this._mounted = false; }}
 }}
 {runtime}
@@ -52,6 +54,7 @@ console.log(JSON.stringify({
   roots: constructions.map(item => item.root?.name),
   configs: constructions.map(item => item.config.id),
   identities: [first === second, second === third],
+  updatedConfig: second.config.id,
   mounted: [first._mounted, second._mounted, third._mounted]
 }));
 """
@@ -59,9 +62,10 @@ console.log(JSON.stringify({
 
     assert result == {
         "runtimeRoot": "dashboard-root",
-        "roots": ["dashboard-root", "dashboard-root", "dashboard-root"],
-        "configs": ["first", "second", "second"],
-        "identities": [False, False],
+        "roots": ["dashboard-root", "dashboard-root"],
+        "configs": ["first", "second"],
+        "identities": [True, False],
+        "updatedConfig": "second",
         "mounted": [False, False, True],
     }
 

@@ -2,7 +2,7 @@
 from __future__ import annotations
 import copy
 import time
-from .model import DashboardError, apply_operations, identifier, inferred_fields, require, validate
+from .model import DashboardError, apply_operations, identifier, inferred_fields, json_bytes, require, validate
 from .query import QueryRunner
 from .store import Store
 from .declarations import declaration_contract
@@ -21,11 +21,18 @@ class Service:
             doc = result['document']
             if tool in ('dashboard_preview', 'dashboard_view', 'dashboard_refresh', 'dashboard_migration_rollback') or args.get('dataMode') == 'local' or doc['snapshot'].get('localMode') or doc['snapshot'].get('datasetRefs'):
                 doc = self.store.compact(doc)
-                doc = self.views.prepare(doc, None if tool == 'dashboard_refresh' else args.get('filters'), args.get('tableStates'), args.get('granularities'))
+                tables, grains = args.get('tableStates'), args.get('granularities')
+                if tool == 'dashboard_refresh':
+                    components = doc['manifest']['components']
+                    tables = {key: value for key, value in (tables or {}).items() if key in components}
+                    grains = {key: value for key, value in (grains or {}).items() if key in components}
+                doc = self.views.prepare(doc, None if tool == 'dashboard_refresh' else args.get('filters'), tables, grains)
                 result['document'] = doc
             result["statisticalArtifacts"] = statistical_artifacts(self.store.statistical_document(doc))
             if doc.get('computed'):
                 doc['computed']['totalDurationMs'] = (time.perf_counter()-started)*1000
+        if 'computed' in result:
+            result['computed']['totalDurationMs'] = (time.perf_counter()-started)*1000
         return result
 
     def _call(self, tool, args):
@@ -37,7 +44,7 @@ class Service:
             from .assets import ui_build_id
             from . import __version__
             return {'version': __version__, 'uiBuildId': ui_build_id(),
-                    'dashboardRevision': self.store.get(board, hydrate=False)['revision'] if board else None}
+                    'dashboardRevision': self.store.revision(board) if board else None}
         if tool == 'dashboard_refresh':
             doc = self.store.get(board, hydrate=False)
             incoming = args.get('filters')
@@ -50,7 +57,12 @@ class Service:
                 for declared in doc['manifest']['filters']:
                     if declared['id'] in values:
                         declared['values'] = copy.deepcopy(values[declared['id']])
-                doc['manifest']['filters'].extend(copy.deepcopy(item) for item in incoming if item.get('id') == 'runtime-linkage')
+                for item in incoming:
+                    if item.get('id') == 'runtime-linkage':
+                        item = copy.deepcopy(item)
+                        item['componentIds'] = [key for key in item.get('componentIds', []) if key in doc['manifest']['components']]
+                        if item['componentIds']:
+                            doc['manifest']['filters'].append(item)
                 doc = validate(doc)
             return {'document': doc}
         if tool == 'statistical_render':
@@ -73,7 +85,27 @@ class Service:
             view = self.views.prepare(doc, args.get('filters'), args.get('tableStates'), args.get('granularities'))
             return export_dashboard(self.store.root, view, args.get('format'), self.store.data)
         if tool == 'dashboard_view':
-            return {'document': self.store.get(board, hydrate=False)}
+            doc = self.store.get(board, hydrate=False)
+            if args.get('expectedRevision', doc['revision']) != doc['revision']:
+                raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
+            require(args.get('responseMode', 'full') in ('full', 'patch'), 'Invalid response mode')
+            if args.get('responseMode') == 'patch':
+                ids = args.get('componentIds', list(doc['manifest']['components']))
+                require(isinstance(ids, list) and all(isinstance(k, str) for k in ids), 'componentIds must be an array of strings')
+                require(type(args.get('includeFilterOptions', False)) is bool, 'includeFilterOptions must be boolean')
+                ids = list(dict.fromkeys(ids))
+                doc = self.views.prepare(self.store.compact(doc), args.get('filters'), args.get('tableStates'), args.get('granularities'), ids, args.get('includeFilterOptions', False))
+                statistical = [key for key in ids if doc['manifest']['components'][key].get('kind') == 'statistical']
+                artifacts = {}
+                if statistical:
+                    from .statistical import statistical_artifacts
+                    selected_doc = copy.deepcopy(doc)
+                    selected_doc['manifest']['components'] = {key: doc['manifest']['components'][key] for key in statistical}
+                    artifacts = statistical_artifacts(self.store.statistical_document(selected_doc))
+                result = {'id': doc['id'], 'revision': doc['revision'], 'componentIds': ids, 'computed': doc['computed'], 'statisticalArtifacts': artifacts}
+                result['computed']['responseBytes'] = len(json_bytes(result))
+                return result
+            return {'document': doc}
         if tool == 'dashboard_filter_options':
             doc = self.store.compact(self.store.get(board, hydrate=False))
             return self.views.filter_options(doc, args.get('filterId'), args.get('search', ''), args.get('offset', 0), args.get('limit', 100))
@@ -116,7 +148,9 @@ class Service:
             active = [f for f in checked['manifest']['filters'] if key in f['componentIds'] and f['values']]
             offset, limit = args.get('offset', 0), args.get('limit', 1000)
             require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 1000, 'Invalid data range')
-            return self.store.data.rows(ref, active, offset=offset, limit=limit)
+            search = args.get('search', '')
+            require(isinstance(search, str) and len(search) <= 1000, 'Table search must contain at most 1000 characters')
+            return self.store.data.rows(ref, active, sort=args.get('sort'), search=search, offset=offset, limit=limit)
         if tool == 'dataset_export':
             import uuid
             doc = self.store.compact(self.store.get(board, hydrate=False))
@@ -248,7 +282,7 @@ TOOLS = {
     'dashboard_history': ('List the last 100 revisions', schema(BOARD, ('dashboardId',))),
     'dashboard_restore': ('Restore a revision as a new revision; never overwrite history', schema({**BOARD, 'expectedRevision': INT, 'revision': INT}, ('dashboardId', 'expectedRevision', 'revision'))),
     'chart_catalog': ('List the 40 installed original chart codes and component catalog', schema(TARGET)),
-    'component_data': ('Read a bounded page of component snapshot rows using the current filters', schema({**TARGET, 'expectedRevision': INT, 'filters': {'type': 'array', 'items': {'type': 'object'}}, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 1000}}, ('dashboardId', 'componentId'))),
+    'component_data': ('Read a bounded page of component snapshot rows using the current filters', schema({**TARGET, 'expectedRevision': INT, 'filters': {'type': 'array', 'items': {'type': 'object'}}, 'sort': {'type': 'array', 'items': {'type': 'object'}}, 'search': STR, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 1000}}, ('dashboardId', 'componentId'))),
     'query_inspect': ('Inspect actual or supplied SQL provenance, without execution', schema(TARGET, ('dashboardId', 'componentId'))),
     'semantic_inspect': ('Inspect stored metric definitions, units and aggregation', schema(TARGET, ('dashboardId', 'componentId'))),
     'query_execute': ('Execute a bounded read-only SQLite query on a configured alias and atomically save its snapshot', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'connection': STR, 'sql': STR, 'parameters': {'type': ['object', 'array']}}, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql')))
@@ -275,7 +309,7 @@ TOOLS['runtime_info'] = ('Read installed UI build identity and current dashboard
 TOOLS['dashboard_refresh'] = ('Refresh the latest dashboard while preserving reader filter values and table state; never saves reader overrides', schema(VIEW, ('dashboardId',)))
 READ_ONLY.update({'runtime_info', 'dashboard_refresh'})
 TOOLS.update({
-    'dashboard_view': ('Compute a local preview from immutable versions; returns only aggregate results and table pages, without saving reader filters', schema(VIEW, ('dashboardId',))),
+    'dashboard_view': ('Compute a local preview from immutable versions; returns only aggregate results and table pages, without saving reader filters', schema({**VIEW, 'responseMode': {'enum': ['full', 'patch']}, 'componentIds': {'type': 'array', 'items': STR}, 'expectedRevision': INT, 'includeFilterOptions': {'type': 'boolean'}}, ('dashboardId',))),
     'dashboard_data_inspect': ('Inspect dataset versions, row counts, sizes and shared versions without reading full rows', schema(BOARD, ('dashboardId',))),
     'dashboard_filter_options': ('Search and page the full selection universe without reducing filter scope', schema({**BOARD, 'filterId': STR, 'search': STR, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 1000}}, ('dashboardId', 'filterId'))),
     'dataset_attach': ('Stream an operator-configured local SQLite table into an immutable data version; never send full data through MCP', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'connection': STR, 'table': STR, 'fields': {'type': 'object'}}, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'table'))),

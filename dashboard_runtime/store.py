@@ -124,8 +124,16 @@ class Store:
 
     def list(self):
         with self.connect() as db:
-            rows = db.execute('SELECT id,revision,document FROM boards ORDER BY id').fetchall()
-        return [{'id': r['id'], 'revision': r['revision'], 'title': json.loads(r['document'])['manifest']['title']} for r in rows]
+            rows = db.execute("SELECT id,revision,json_extract(document, '$.manifest.title') AS title FROM boards ORDER BY id").fetchall()
+        return [dict(row) for row in rows]
+
+    def revision(self, board_id):
+        identifier(board_id)
+        with self.connect() as db:
+            row = db.execute('SELECT revision FROM boards WHERE id=?', (board_id,)).fetchone()
+        if row is None:
+            raise DashboardError('NOT_FOUND', 'Dashboard not found', 404)
+        return row['revision']
 
     def history(self, board_id):
         self.get(board_id, hydrate=False)

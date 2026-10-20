@@ -76,7 +76,7 @@ def test_table_cells_and_csv_keep_zero_values():
 const app = Object.create(DashboardApp.prototype);
 app.state = new StateStore(config); app.config = app.state.config;
 const elements = {};
-app.getById = id => elements[id] ??= {innerHTML: '', textContent: '', disabled: false, classList: {add() {}, remove() {}, toggle() {}}};
+app.getById = id => elements[id] ??= {innerHTML: '', textContent: '', disabled: false, closest() { return null; }, classList: {add() {}, remove() {}, toggle() {}}};
 app.renderTableEngine();
 let csv = '';
 globalThis.Blob = function(parts) { csv = parts.join(''); };

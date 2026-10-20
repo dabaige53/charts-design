@@ -117,9 +117,10 @@ def test_original_toolbar_kpi_table_and_offline_fidelity(tmp_path):
             table.get_by_role('button', name='指标定义与语义', exact=True).click()
             reference = page.get_by_role('dialog')
             assert reference.locator('nav, details').count() == 0
-            page.get_by_text("当前数据：35 条", exact=True).wait_for()
-            assert reference.locator('tbody tr').count() == len(doc['manifest']['components']['original-table']['config']['rows'])
-            assert reference.get_by_role('button', name='下一页', exact=True).count() == 0
+            expect(reference.get_by_text("共 35 条 · 第 1 页 · 每页最多 20 行", exact=True)).to_be_visible()
+            expect(reference.locator('tbody tr')).to_have_count(20)
+            reference.get_by_role('button', name='数据下一页', exact=True).click()
+            expect(reference.locator('tbody tr')).to_have_count(15)
             assert '示例 · 未连接业务数据 / 未执行' not in reference.inner_text()
             assert '合成示例，仅展示版式' not in reference.inner_text()
             page.get_by_role('button', name='关闭', exact=True).click()

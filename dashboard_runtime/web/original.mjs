@@ -37,9 +37,17 @@ function setOriginalHtml(node,markup){
 const node=(tag,cls='',text='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;};
 function download(name,body,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 let api=null;
+const sharedStyles=new Map();
+export function appendOriginalStyle(shadow,text){
+  if('adoptedStyleSheets' in shadow&&typeof CSSStyleSheet!=='undefined'&&CSSStyleSheet.prototype.replaceSync){
+    let sheet=sharedStyles.get(text);
+    if(!sheet){sheet=new CSSStyleSheet();sheet.replaceSync(text);sharedStyles.set(text,sheet);}
+    shadow.adoptedStyleSheets=[...shadow.adoptedStyleSheets,sheet];
+  }else{const style=node('style');style.textContent=text;shadow.append(style);}
+}
 export function initializeOriginal(echarts){api=createOriginalComponents(echarts,setOriginalHtml);const fallback=api.ChartDataToTableConverter.convert;api.ChartDataToTableConverter.convert=(inst,c)=>c?.resolvedTable?c.resolvedTable():fallback(inst,c);return api;}
-export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentation,onBinding,onAnnotate,onText,onLocalQuery,onLocalExport,editing=false,readOnly=false}){
-  const c=doc.manifest.components[id],shadow=host.attachShadow({mode:'open'}),style=node('style');style.textContent=originalStyle;shadow.append(style);host.dataset.theme='light';
+function originalConfig(doc,id){
+  const c=doc.manifest.components[id];
   const cfg={meta:{title:c.title},filters:[],kpis:[],charts:[],table:{columns:[],rows:[]},explanations:{...api.explanations}};
   let family=c.kind==='legacy'?(c.family||'chart'):c.kind;
   const key='original-'+id;let raw=doc.computed?.components?.[id]??(c.kind==='legacy'?resolveOriginal(doc,id,c.config.defaultGranularity||'month'):c.config),rows=[];
@@ -51,7 +59,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
       chart.data=structuredClone(raw.data);chart.presentation=structuredClone(raw.presentation);
     }else{
       chart={id:key,instanceId:key,code:c.chartType,title:c.title,subtitle:c.subtitle||'',hasGranularity:false,
-        data:{},optionBuilder:()=>optionFor(doc,id),tableDataExtractor:()=>{const values=chartTable(doc,id),headers=Object.keys(values[0]||{});return {headers,rows:values.map(row=>headers.map(h=>row[h]))};}};
+        data:{resolved:optionFor(doc,id)},optionBuilder:data=>data.resolved,tableDataExtractor:()=>{const values=chartTable(doc,id),headers=Object.keys(values[0]||{});return {headers,rows:values.map(row=>headers.map(h=>row[h]))};}};
     }
     const builder=chart.optionBuilder,extractor=chart.tableDataExtractor;let selectedGranularity='month';if(extractor)chart.resolvedTable=()=>extractor(chart.data,c.binding?'month':selectedGranularity,chart);
     chart.optionBuilder=(...args)=>{
@@ -61,7 +69,6 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
     };
     cfg.charts=[chart];
     if(raw?.explanation)cfg.explanations[chart.explainKey||raw.code]=raw.explanation;
-    const container=node('div');container.id='app-charts-grid';shadow.append(container);
   }else if(family==='kpi'){
     if(c.kind!=='legacy'&&!doc.computed?.components?.[id]){
       const m=doc.manifest.metrics[c.measures[0]],value=aggregate(visibleRows(doc,id),m);
@@ -72,14 +79,18 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
     }
     cfg.kpis=[{...structuredClone(raw),sparkData:raw.sparkData??raw.sparkline,id:key,explainKey:raw.explainKey||key}];
     if(c.kind==='legacy')cfg.explanations[key]=raw.explanation||api.explanations[raw.type]||{title:c.title,overview:'原始指标卡片快照'};
-    const container=node('div');container.id='app-kpis';shadow.append(container);
   }else if(family==='table'){
     rows=doc.computed?.components?.[id]?.rows??(c.kind==='legacy'?raw.rows:visibleRows(doc,id));
     cfg.table={...(raw||c.presentation||{}),id:key,title:c.title,rows,columns:raw?.columns||c.presentation?.columns||Object.entries(doc.manifest.datasets[c.datasetId].fields).map(([key,meta])=>({key,title:meta.label||key,align:meta.type==='number'?'right':'left'}))};
     cfg.table.columns=cfg.table.columns.map(col=>({...col,title:col.title??col.label??col.key}));
     if(doc.computed?.tables?.[id])cfg.table.remotePage=doc.computed.tables[id];
-    const container=node('section','section-card');container.id='app-table-section';shadow.append(container);
   }
+  return {cfg,c,family,raw};
+}
+export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentation,onBinding,onAnnotate,onText,onLocalQuery,onLocalExport,editing=false,readOnly=false,deferChart=false,onReady}){
+  const shadow=host.shadowRoot||host.attachShadow({mode:'open'});shadow.replaceChildren();shadow.adoptedStyleSheets=[];appendOriginalStyle(shadow,originalStyle);host.dataset.theme='light';
+  let {cfg,c,family,raw}=originalConfig(doc,id);const key='original-'+id;
+  const container=node(family==='table'?'section':'div',family==='table'?'section-card':'');container.id={chart:'app-charts-grid',kpi:'app-kpis',table:'app-table-section'}[family];shadow.append(container);
   const overlay=node('dialog','explanation-dialog');overlay.id='app-explain-dialog';shadow.append(overlay);
   const feedback=node('div');feedback.id='app-toast-container';shadow.append(feedback);
   const app=new api.DashboardApp(cfg,shadow);const controller=new AbortController();
@@ -88,9 +99,14 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
     try{const call=JSON.parse(target.getAttribute('data-original-'+event));if(!methods.has(call.method))return;const args=call.args.map(a=>'literal'in a?a.literal:({'event':e,'this.value':target.value,'this.checked':target.checked,'true':true,'false':false}[a.ref]));app[call.method](...args);}catch(error){app.showToast(error.message);}
   },{signal:controller.signal,capture:event==='focus'||event==='mouseenter'||event==='mouseleave'});
   app.setTableCrossFilter=()=>{};
+  let deferred=deferChart&&family==='chart';const initCharts=app.initCharts.bind(app);
+  app.initCharts=()=>{if(!deferred)initCharts();};
+  const ensure=()=>{if(!deferred)return;deferred=false;initCharts();onReady?.();};
+  shadow.addEventListener('click',ensure,{capture:true,signal:controller.signal});
   app.init();
   if(family==='kpi'&&['mc01','mc02','mc03','mc04','mc05'].includes(raw.type)){for(const span of shadow.querySelectorAll('#app-kpis span'))if(span.textContent.trim()==='—'&&!span.classList.contains('text-2xl'))span.hidden=true;}
 
+  let updateTable=null,renderTableRows=null;
   if(family==='table'){
     const remote=doc.computed?.tables?.[id];
     const saved={...(c.kind==='legacy'?c.config:c.presentation)?.tableState,...(remote||{})};
@@ -99,7 +115,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
       if(saved.pageSize)app.state.table.pageSize=saved.pageSize;if(saved.page)app.state.table.page=saved.page;
       if(saved.sortCol){app.state.table.sortCol=saved.sortCol;app.state.table.sortDir=saved.sortDir;}
       app.renderColCheckboxes();app.renderTableEngine();}
-    let persistTimer;const originalRender=app.renderTableEngine.bind(app);
+    let persistTimer;const originalRender=app.renderTableEngine.bind(app);renderTableRows=originalRender;
     app.renderTableEngine=(...args)=>{const result=originalRender(...args);clearTimeout(persistTimer);
       if(onPresentation&&!readOnly)persistTimer=setTimeout(()=>onPresentation(id,{tableState:{columns:app.state.table.orderedColumns.map(x=>x.key),visible:[...app.state.table.visibleCols],page:app.state.table.page,pageSize:app.state.table.pageSize,sortCol:app.state.table.sortCol,sortDir:app.state.table.sortDir}}),350);
       return result;};controller.signal.addEventListener('abort',()=>clearTimeout(persistTimer));
@@ -110,6 +126,14 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
     const search=node('input','catalog-search');search.placeholder='搜索明细';search.setAttribute('aria-label','搜索明细');search.oninput=()=>{app.state.keyword=search.value;app.state.table.page=1;app.renderTableEngine();};shadow.querySelector('#app-table-section>div:first-child').prepend(search);
     if(cfg.table.remotePage&&onLocalQuery){
       const remote=cfg.table.remotePage;
+      updateTable=(data,state)=>{
+        if(!state||!Array.isArray(data?.rows))return false;
+        cfg.table.rows=data.rows;Object.assign(remote,state);
+        Object.assign(app.state.table,{page:state.page,pageSize:state.pageSize,sortCol:state.sortCol,sortDir:state.sortDir});
+        app.state.keyword=state.keyword||'';
+        const size=shadow.querySelector('select[data-original-change]');if(size)size.value=state.pageSize===9999?'all':String(state.pageSize);
+        renderTableRows();return true;
+      };
       const request=changes=>onLocalQuery(id,{tableState:{...remote,...changes}}).catch(error=>app.showToast(error.message));
       app.prevTablePage=()=>remote.page>1&&request({page:remote.page-1});
       app.nextTablePage=()=>remote.page*remote.pageSize<remote.totalRows&&request({page:remote.page+1});
@@ -130,7 +154,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   }
   const actions=shadow.querySelector('.card-header-wrap>div:last-child')||shadow.querySelector('.section-card>div:first-child>div:last-child')||shadow.querySelector('.section-card>div:first-child');
   if(actions){
-    if(editing&&family==='chart'&&c.kind==='legacy'){
+    if(family==='chart'&&c.kind==='legacy'){
       const choice=node('select');choice.setAttribute('aria-label','Chart type');choice.disabled=readOnly;
       const compatible=['c01','c02'].includes(raw.code)?['c01','c02']:[raw.code];
       for(const code of compatible){const option=node('option','',catalog.find(entry=>entry.id===code)?.nameZh||'当前图表');option.value=code;choice.append(option);}
@@ -150,6 +174,33 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   const fullscreen=node('dialog');fullscreen.className='original-fullscreen';shadow.append(fullscreen);let placeholder=null;
   fullscreen.addEventListener('close',()=>{const card=fullscreen.querySelector('.section-card');if(card&&placeholder){card.classList.remove('card-fullscreen');placeholder.replaceWith(card);placeholder=null;const b=card.querySelector('.fullscreen-btn');if(b)setOriginalHtml(b,api.LUCIDE_ICONS.maximize);Object.values(app.state.chartInstances).forEach(i=>i.resize());}});
   shadow.addEventListener('click',e=>{const b=e.target.closest('.fullscreen-btn');if(!b)return;e.stopImmediatePropagation();if(fullscreen.open)fullscreen.close();else{const card=b.closest('.section-card');placeholder=document.createComment('original-card-position');card.replaceWith(placeholder);fullscreen.append(card);card.classList.add('card-fullscreen');setOriginalHtml(b,api.LUCIDE_ICONS.minimize);fullscreen.showModal();requestAnimationFrame(()=>Object.values(app.state.chartInstances).forEach(i=>i.resize()));}},{capture:true,signal:controller.signal});
-  const disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding,onAnnotate,onText});
-  return {app,shadow,destroy(){disposeChrome();controller.abort();if(fullscreen.open)fullscreen.close();app.destroy();}};
+  let disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding,onAnnotate,onText});
+  const signature=value=>JSON.stringify(value,(key,item)=>['durationMs','totalDurationMs','cacheHits','responseBytes'].includes(key)?undefined:item);
+  const inputs=value=>signature([value.manifest.components[id],value.computed?.components?.[id],value.computed?.tables?.[id],value.computed?.grouped?.[id],value.manifest.metrics,value.manifest.datasets,value.manifest.filters.filter(f=>f.componentIds.includes(id)),value.computed?null:value.snapshot.datasets,value.computed?null:value.snapshot.componentData]);
+  let inputSignature=inputs(doc);
+  let configSignature=signature(cfg),chromeSignature=signature([c.title,c.subtitle,c.config?.description,editing,raw?.statusBadge]);
+  function update(nextDoc,nextEditing=false,nextReadOnly=false){
+    const nextInput=inputs(nextDoc);if(nextInput===inputSignature&&nextEditing===editing&&nextReadOnly===readOnly){doc=nextDoc;return true;}
+    inputSignature=nextInput;const next=originalConfig(nextDoc,id);
+    if(next.family!==family||(family==='chart'&&next.cfg.charts[0].code!==cfg.charts[0].code)||(family==='kpi'&&next.raw.type!==raw.type))return false;
+    doc=nextDoc;c=next.c;raw=next.raw;editing=nextEditing;readOnly=nextReadOnly;
+    const nextSignature=signature(next.cfg);
+    if(nextSignature!==configSignature){
+      if(family==='chart'&&next.raw?.defaultGranularity){const granularity=next.raw.defaultGranularity;app.state.chartGranularities[key]=granularity;shadow.querySelectorAll('.granularity-tab-btn').forEach(button=>{const active=button.dataset.granularity===granularity;for(const cls of ['bg-white','font-semibold','shadow-xs','text-primary-strong'])button.classList.toggle(cls,active);button.classList.toggle('text-ink-muted',!active);});}
+
+      if(family==='table'&&cfg.table.remotePage&&next.cfg.table.remotePage){
+        const previousColumns=signature(cfg.table.columns);cfg.table.columns=next.cfg.table.columns;
+        if(previousColumns!==signature(cfg.table.columns)){app.state.table.orderedColumns=cfg.table.columns;app.state.table.visibleCols=new Set(cfg.table.columns.map(col=>col.key));app.renderColCheckboxes();}
+        updateTable?.(next.cfg.table,next.cfg.table.remotePage);
+      }else {app.updateConfig(next.cfg);cfg=app.config;}
+      configSignature=nextSignature;
+    }
+    const nextChrome=signature([c.title,c.subtitle,c.config?.description,editing,raw?.statusBadge]);
+    if(nextChrome!==chromeSignature){
+      const choice=shadow.querySelector('select[aria-label="Chart type"]');if(choice)choice.disabled=readOnly;
+      disposeChrome();disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding,onAnnotate,onText});chromeSignature=nextChrome;
+    }
+    return true;
+  }
+  return {id,app,shadow,ensure,update,updateTable,destroy(){disposeChrome();controller.abort();if(fullscreen.open)fullscreen.close();app.destroy();}};
 }

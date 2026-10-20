@@ -16,3 +16,8 @@ test('missing structured artifact and tool errors are explicit',()=>{
  assert.throws(()=>decodeToolResult({content:[{type:'text',text:'{"artifactLocation":"structuredContent.document"}'}]}),/缺少 structuredContent/);
  assert.throws(()=>decodeToolResult({isError:true,content:[{type:'text',text:'Revision conflict'}]}),/Revision conflict/);
 });
+
+ test('structured revision errors retain their code for a fresh definition retry',()=>{
+   assert.throws(()=>decodeToolResult({isError:true,structuredContent:{error:{code:'REVISION_CONFLICT',message:'Reload'}}}),error=>error.code==='REVISION_CONFLICT'&&error.message==='Reload');
+   assert.throws(()=>decodeToolResult({content:[{type:'text',text:'{"artifactLocation":"structuredContent"}'}]}),/缺少 structuredContent/);
+ });

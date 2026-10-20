@@ -43,7 +43,10 @@ def test_every_original_visual_and_icon_header(tmp_path):
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1600, "height": 1100})
             errors = []
-            page.on("pageerror", lambda e: errors.append(str(e)))
+            def record_error(error):
+                errors.append(error.stack)
+                print(error.stack)
+            page.on("pageerror", record_error)
             page.goto(
                 f"http://127.0.0.1:{server.server_address[1]}/?board=all-components#icons-test"
             )
@@ -54,6 +57,9 @@ def test_every_original_visual_and_icon_header(tmp_path):
                 "components"
             ].items():
                 card = page.locator(f'.grid-stack-item[data-component-id="{key}"]')
+                card.scroll_into_view_if_needed()
+                if c["family"] == "chart":
+                    card.locator("canvas").first.wait_for()
                 assert card.locator(".component-title").inner_text() == c["title"]
                 assert card.locator(".component-header").count() == 1
                 metrics = card.evaluate(

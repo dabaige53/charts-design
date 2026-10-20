@@ -31,9 +31,10 @@ test('table rendering uses column precision while preserving source values',()=>
   const row={share:8.333333333333334,revenue:0.5409};
   const nodes=new Map();
   const context={
-    getById:id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);},
+    getById:id=>{if(!nodes.has(id))nodes.set(id,{closest(){return null;}});return nodes.get(id);},
     state:{table:{orderedColumns:[{key:'share',title:'Share',align:'right',...percent},{key:'revenue',title:'Revenue',align:'right',format:'number',decimals:2}],visibleCols:new Set(['share','revenue']),page:1,pageSize:10}},
-    config:{table:{}},getFilteredTableRows:()=>[row],formatTableCell:cell
+    config:{table:{}},getFilteredTableRows:()=>[row],formatTableCell:cell,
+    renderTableRows:api.DashboardApp.prototype.renderTableRows
   };
   api.DashboardApp.prototype.renderTableEngine.call(context);
   assert.match(nodes.get('main14ColTbody').innerHTML,/>8\.3%<\/td>/);

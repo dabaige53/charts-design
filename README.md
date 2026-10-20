@@ -6,9 +6,9 @@ Enterprise-grade, McKinsey/Bloomberg/FT-caliber business charts, KPI decision ca
 
 ---
 
-## 当前版本：1.1.0（runtime 0.5.0）
+## 当前版本：1.2.0（runtime 0.6.0）
 
-密集柱状图和折线图默认提供缩放窗口；筛选弹窗支持全选与取消全选；MCP 阅读界面支持手动刷新和版本检查。见 [运行时与刷新说明](docs/dashboard-runtime.md)。更新源码后执行 `npm --prefix runtime-ui ci && npm --prefix runtime-ui run build`，重新连接 MCP 后打开最新预览。用户数据目录可以继续使用。
+翻页、筛选、编辑和刷新复用图表实例，MCP 支持局部数据响应。图表数据表超过 100 行时按滚动位置渲染；说明图标弹窗的数据区每页最多 20 行，完整 CSV 导出不变。密集图表缩放、筛选全选与取消全选、版本检查继续保留。见 [运行时与刷新说明](docs/dashboard-runtime.md)。更新源码后执行 `npm --prefix runtime-ui ci && npm --prefix runtime-ui run build`，重新连接 MCP 后打开最新预览。用户数据目录可以继续使用。
 
 ## 两条 Skills 与 MCP 生成路径
 

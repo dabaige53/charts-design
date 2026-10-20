@@ -1,6 +1,6 @@
 {
   "name": "charts-design",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "McKinsey-grade executive charts, KPI metric cards, interactive pivot tables, and dashboard generator. 麦肯锡风格图表设计与高管决策看板套件。",
   "bin": {
     "charts-design": "./bin/cli.js",
@@ -38,7 +38,8 @@
     "dashboard_runtime/web/*.css",
     "dashboard_runtime/web/.npmignore",
     "dashboard_runtime/examples/*.md",
-    "docs/seaborn-backend.md"
+    "docs/seaborn-backend.md",
+    "docs/performance-results.json"
   ],
   "keywords": [
     "mckinsey",

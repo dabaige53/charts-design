@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import csv
+import copy
+import threading
+from collections import OrderedDict
+from concurrent.futures import Future
 from contextlib import contextmanager, closing
 import hashlib
 import json
@@ -45,6 +49,55 @@ def _sort_number(value):
     return number if math.isfinite(number) else None
 
 
+class QueryCache:
+    """Bounded values with per-key singleflight; unrelated SQL runs concurrently."""
+    def __init__(self, max_bytes=32 * 1024 * 1024, max_entries=256):
+        self.values, self.pending = OrderedDict(), {}
+        self.lock = threading.RLock()
+        self.bytes, self.max_bytes, self.max_entries = 0, max_bytes, max_entries
+
+    def get(self, key, compute):
+        with self.lock:
+            if key in self.values:
+                self.values.move_to_end(key)
+                return copy.deepcopy(self.values[key][0]), True
+            future = self.pending.get(key)
+            owner = future is None
+            if owner:
+                future = self.pending[key] = Future()
+        if not owner:
+            return copy.deepcopy(future.result()), True
+        try:
+            value = compute()
+            size = len(_json(value).encode()) + len(key.encode())
+            with self.lock:
+                if size <= self.max_bytes // 4:
+                    self.values[key] = (copy.deepcopy(value), size)
+                    self.bytes += size
+                    while self.bytes > self.max_bytes or len(self.values) > self.max_entries:
+                        _, (_, removed) = self.values.popitem(last=False)
+                        self.bytes -= removed
+            future.set_result(value)
+            return value, False
+        except BaseException as exc:
+            future.set_exception(exc)
+            raise
+        finally:
+            with self.lock:
+                self.pending.pop(key, None)
+
+
+def semantic_filters(filters):
+    result = []
+    for item in filters or []:
+        if item.get('values'):
+            values = item['values']
+            if item['op'] == 'in':
+                values = sorted({_json(v): v for v in values}.values(), key=_json)
+            result.append({'field': item['field'], 'op': item['op'], 'values': values})
+    return sorted(result, key=_json)
+
+
 class LocalData:
     """Versions are immutable; result bounds raise errors instead of dropping rows."""
 
@@ -52,12 +105,17 @@ class LocalData:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / 'data.sqlite3'
+        self.cache = QueryCache()
+        self.index_lock = threading.RLock()
+        self.indexed = set()
+        self.page_cursors = OrderedDict()
+        self.cursor_lock = threading.RLock()
         with self._connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS versions (version TEXT PRIMARY KEY, metadata TEXT NOT NULL)')
 
     @contextmanager
     def _connect(self):
-        db = sqlite3.connect(self.path)
+        db = sqlite3.connect(self.path, timeout=30)
         db.create_function('contains_text', 3, _contains, deterministic=True)
         db.create_function('grain', 2, self._grain, deterministic=True)
         db.create_function('search_text', 3, _search_text, deterministic=True)
@@ -230,7 +288,16 @@ class LocalData:
                 keys.add(raw)
         for key in keys:
             column = self._column(fields, key)
-            db.execute(f'CREATE INDEX IF NOT EXISTS i_{table}_{column} ON {table} ({column})')
+            identity = (table, column)
+            with self.index_lock:
+                if identity not in self.indexed:
+                    db.execute(f'CREATE INDEX IF NOT EXISTS i_{table}_{column} ON {table} ({column})')
+                    self.indexed.add(identity)
+
+    def prepare_indexes(self, ref, fields_to_index):
+        with self._connect() as db:
+            table, metadata = self._version(db, ref)
+            self._indexes(db, table, metadata['fields'], [{'field': k} for k in fields_to_index])
 
     def _selection(self, fields, columns, sort):
         keys = list(fields) if columns is None else list(columns)
@@ -267,9 +334,52 @@ class LocalData:
             self._indexes(db, table, fields, filters, sort)
             where, params = self._where(fields, filters, search)
             keys, selected, order = self._selection(fields, columns, sort)
-            total = db.execute(f'SELECT COUNT(*) FROM {table}' + where, params).fetchone()[0]
-            records = db.execute(f'SELECT {selected}, _missing FROM {table}' + where + order + ' LIMIT ? OFFSET ?', params + [limit, offset])
-            result = [self._decode(keys, r[:-1], fields, r[-1]) for r in records]
+            semantics = [ref['version'], semantic_filters(filters), search.lower()]
+            count_key = _json(['count', semantics])
+            total = metadata['rowCount'] if not where else self.cache.get(count_key, lambda: db.execute(f'SELECT COUNT(*) FROM {table}' + where, params).fetchone()[0])[0]
+            seek_column, seek_direction = None, 'asc'
+            if sort and len(sort) == 1:
+                sort_field = sort[0]['field']
+                raw_field = 'raw' + sort_field[:1].upper() + sort_field[1:]
+                if fields[sort_field]['type'] == 'string' and fields.get(raw_field, {}).get('type') == 'number':
+                    sort_field = raw_field
+                if fields[sort_field]['type'] in ('number', 'date', 'boolean'):
+                    seek_column = self._column(fields, sort_field)
+                    seek_direction = sort[0].get('direction', 'asc').lower()
+            can_seek = not sort or seek_column is not None
+            cursor_key = _json([semantics, sort or [], keys, offset])
+            with self.cursor_lock:
+                previous = self.page_cursors.get(cursor_key) if offset and can_seek else None
+            page_where, page_params, page_offset = where, list(params), offset
+            if previous is not None:
+                rowid, boundary = previous
+                if seek_column is None:
+                    clause, seek_params = 'rowid > ?', [rowid]
+                elif boundary is None:
+                    clause = f'({seek_column} IS NULL AND rowid > ?)'
+                    if seek_direction == 'asc':
+                        clause = f'({seek_column} IS NOT NULL OR {clause})'
+                    seek_params = [rowid]
+                else:
+                    comparison = '>' if seek_direction == 'asc' else '<'
+                    clause = f'({seek_column} {comparison} ? OR ({seek_column} = ? AND rowid > ?)'
+                    if seek_direction == 'desc':
+                        clause += f' OR {seek_column} IS NULL'
+                    clause += ')'
+                    seek_params = [boundary, boundary, rowid]
+                page_where += (' AND ' if page_where else ' WHERE ') + clause
+                page_params.extend(seek_params)
+                page_offset = 0
+            boundary_select = seek_column or 'NULL'
+            records = list(db.execute(f'SELECT {selected}, _missing, rowid, {boundary_select} FROM {table}' + page_where + order + ' LIMIT ? OFFSET ?', page_params + [limit, page_offset]))
+            result = [self._decode(keys, r[:-3], fields, r[-3]) for r in records]
+            if records and can_seek:
+                with self.cursor_lock:
+                    next_key = _json([semantics, sort or [], keys, offset + len(records)])
+                    self.page_cursors[next_key] = (records[-1][-2], records[-1][-1])
+                    self.page_cursors.move_to_end(next_key)
+                    while len(self.page_cursors) > 256:
+                        self.page_cursors.popitem(last=False)
         return {'rows': result, 'totalRows': total, 'durationMs': (time.perf_counter()-started)*1000}
 
     def aggregate(self, ref, metrics, filters=None, group_by=None, time_grain=None):
@@ -356,6 +466,10 @@ class LocalData:
             return [bool(r[0]) if r[0] is not None and metadata['fields'][field].get('type') == 'boolean' else r[0] for r in records]
 
     def option_page(self, refs, field, search='', offset=0, limit=100):
+        key = _json(['options', sorted({r['version'] for r in refs}), field, search.lower(), offset, limit])
+        return self.cache.get(key, lambda: self._option_page(refs, field, search, offset, limit))[0]
+
+    def _option_page(self, refs, field, search='', offset=0, limit=100):
         """Page the complete option universe, including across consumer datasets."""
         if not isinstance(search, str) or len(search) > 1000 or type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError('Invalid option search or pagination')

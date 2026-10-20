@@ -794,7 +794,7 @@ __FILTER_BINDINGS_JS__
                 const container = this.getById('app-kpis');
                 if (!container) return;
 
-                container.innerHTML = kpis.map(kpi => {
+                const markup = kpis.map(kpi => {
                     const cardType = kpi.type || 'mc01';
 
                     // 1. mc01: Standard Value Card
@@ -1038,11 +1038,48 @@ __FILTER_BINDINGS_JS__
                         </div>
                     `;
                 }).join('');
-                Array.from(container.children).forEach((card, index) => {
+                if (!document.createElement) { container.innerHTML = markup; return; }
+                const draft = document.createElement('div');
+                draft.innerHTML = markup;
+                Array.from(draft.children).forEach((card, index) => {
                     const componentId = kpis[index]?.id || `kpi-${index + 1}`;
                     card.id = componentId;
                     card.dataset.componentId = componentId;
+                    card.dataset.kpiType = kpis[index]?.type || 'mc01';
+                    card.dataset.kpiSignature = JSON.stringify(kpis[index]);
+                    const old = Array.from(container.children).find(node => node.dataset.componentId === componentId);
+                    if (old && old.dataset.kpiSignature === card.dataset.kpiSignature) { container.appendChild(old); return; }
+                    if (old && old.dataset.kpiType === card.dataset.kpiType) {
+                        old.dataset.kpiSignature = card.dataset.kpiSignature;
+                        // Keep widget hosts (and their ECharts canvas) while refreshing card text.
+                        card.querySelectorAll('[id^="kpi-spark-"], [id^="kpi-gauge-"]').forEach(host => {
+                            const existing = old.querySelector(`#${CSS.escape(host.id)}`);
+                            if (existing) host.replaceWith(existing);
+                        });
+                        const chrome = old.querySelector('.component-header');
+                        if (chrome) {
+                            chrome.remove();
+                            // The embedding adapter owns the header and its aligned body slots.
+                            card.firstElementChild?.remove();
+                            if (old.classList.contains('kpi-aligned')) {
+                                const sections = Array.from(card.children);
+                                const value = sections.shift();
+                                const footer = sections.pop();
+                                const aux = document.createElement('div');
+                                aux.className = 'kpi-aux';
+                                aux.append(...sections);
+                                value?.classList.add('kpi-headline');
+                                footer?.classList.add('kpi-footer');
+                                card.replaceChildren(...(value ? [value] : []), aux, ...(footer ? [footer] : []));
+                            }
+                        }
+                        old.replaceChildren(...card.childNodes);
+                        if (chrome) old.prepend(chrome);
+                        container.appendChild(old);
+                    } else { old?.remove(); container.appendChild(card); }
                 });
+                const ids = new Set(kpis.map((kpi, index) => kpi.id || `kpi-${index + 1}`));
+                Array.from(container.children).forEach(card => { if (!ids.has(card.dataset.componentId)) card.remove(); });
             }
 
             renderChartsGrid() {
@@ -1050,7 +1087,7 @@ __FILTER_BINDINGS_JS__
                 const container = this.getById('app-charts-grid');
                 if (!container) return;
 
-                container.innerHTML = charts.map(chart => {
+                const markup = charts.map(chart => {
                     const colClass = chart.colSpan === 2 ? 'lg:col-span-2' : '';
                     const granTabs = chart.hasGranularity ? `
                         <div class="inline-flex bg-slate-100/90 p-0.5 rounded-md text-[11px]">
@@ -1060,7 +1097,7 @@ __FILTER_BINDINGS_JS__
                     ` : '';
 
                     return `
-                        <div class="section-card p-5 flex flex-col justify-between ${colClass}" data-component-id="${chart.instanceId}">
+                        <div class="section-card p-5 flex flex-col justify-between ${colClass}" data-component-id="${chart.instanceId}" data-chart-code="${chart.code || ''}">
                             <!-- Card Header -->
                             <div class="card-header-wrap flex flex-wrap items-start justify-between gap-3 mb-3" id="header-${chart.instanceId}">
                                 <div class="min-w-0 max-w-[65%]">
@@ -1102,6 +1139,30 @@ __FILTER_BINDINGS_JS__
                         </div>
                     `;
                 }).join('');
+                if (!document.createElement) { container.innerHTML = markup; return; }
+                const draft = document.createElement('div');
+                draft.innerHTML = markup;
+                const retained = new Set();
+                Array.from(draft.children).forEach(card => {
+                    const old = Array.from(container.children).find(node => node.dataset.componentId === card.dataset.componentId && node.dataset.chartCode === card.dataset.chartCode);
+                    const target = old || card;
+                    if (old && !old.querySelector('.component-header')) {
+                        old.querySelector('.card-header-wrap')?.replaceWith(card.querySelector('.card-header-wrap'));
+                        old.className = card.className;
+                        const granularity = this.state.chartGranularities[card.dataset.componentId] || 'month';
+                        old.querySelectorAll('.granularity-tab-btn').forEach(button => {
+                            const active = button.dataset.granularity === granularity;
+                            button.classList.toggle('bg-white', active);
+                            button.classList.toggle('text-primary-strong', active);
+                            button.classList.toggle('font-semibold', active);
+                            button.classList.toggle('shadow-xs', active);
+                            button.classList.toggle('text-ink-muted', !active);
+                        });
+                    }
+                    retained.add(target);
+                    container.appendChild(target);
+                });
+                Array.from(container.children).forEach(card => { if (!retained.has(card)) card.remove(); });
             }
 
             renderTableSection() {
@@ -1114,7 +1175,7 @@ __FILTER_BINDINGS_JS__
                     <div class="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
                         <div class="flex items-center gap-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0"></span>
-                            <h3 class="text-sm font-bold text-primary-strong tracking-tight">${tableCfg.title || '全要素业务运营效能多维透视表'}</h3>
+                            <h3 data-dashboard-table-title class="text-sm font-bold text-primary-strong tracking-tight">${tableCfg.title || '全要素业务运营效能多维透视表'}</h3>
                             
                         </div>
                         <div class="flex items-center gap-2">
@@ -1253,6 +1314,8 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 this._mounted = false;
                 this._eventController = null;
                 this._resizeObserver = null;
+                this._timers = new Set();
+                this._chartTableCleanups = new Map();
             }
 
             getById(id) {
@@ -1294,6 +1357,93 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 return this;
             }
 
+            setChartOption(instance, option) {
+                // Replace data-bearing components to remove deleted series, retaining user selections.
+                const previous = instance.getOption?.() || {};
+                if (option.legend && previous.legend) {
+                    const legends = Array.isArray(option.legend) ? option.legend : [option.legend];
+                    legends.forEach((legend, index) => { legend.selected = {...previous.legend[index]?.selected, ...legend.selected}; });
+                }
+                if (option.dataZoom && previous.dataZoom) {
+                    const zooms = Array.isArray(option.dataZoom) ? option.dataZoom : [option.dataZoom];
+                    zooms.forEach((zoom, index) => {
+                        const old = zoom.id ? previous.dataZoom.find(item => item.id === zoom.id) : previous.dataZoom[index];
+                        if (old) Object.assign(zoom, {start: old.start, end: old.end});
+                    });
+                }
+                instance.setOption(option, {replaceMerge: ['series', 'dataset', 'xAxis', 'yAxis', 'legend', 'dataZoom']});
+            }
+
+            updateConfig(config) {
+                const next = new StateStore(config);
+                const kpisChanged = JSON.stringify(this.config.kpis) !== JSON.stringify(next.config.kpis);
+                const tableChanged = this.config.table !== next.config.table;
+                const filtersChanged = JSON.stringify(this.config.filters) !== JSON.stringify(next.config.filters);
+                const metaChanged = JSON.stringify(this.config.meta) !== JSON.stringify(next.config.meta);
+                const oldCharts = new Map((this.config.charts || []).map(chart => [chart.instanceId, chart]));
+                const changedCharts = new Set(next.config.charts.filter(chart => JSON.stringify(oldCharts.get(chart.instanceId)) !== JSON.stringify(chart) || String(oldCharts.get(chart.instanceId)?.optionBuilder) !== String(chart.optionBuilder) || (chart.binding && (tableChanged || filtersChanged))).map(chart => chart.instanceId));
+                const compatible = new Set(next.config.charts.filter(chart => oldCharts.get(chart.instanceId)?.code === chart.code).map(chart => chart.instanceId));
+                const oldKPIs = new Map((this.config.kpis || []).map(kpi => [kpi.id, kpi.type || 'mc01']));
+                next.config.kpis.forEach(kpi => {
+                    if (oldKPIs.get(kpi.id) === (kpi.type || 'mc01')) {
+                        if (kpi.type === 'mc03') compatible.add(`kpi-spark-${kpi.id}`);
+                        if (kpi.type === 'mc05') compatible.add(`kpi-gauge-${kpi.id}`);
+                    }
+                });
+                Object.entries(this.state.chartInstances).forEach(([id, instance]) => {
+                    if (!compatible.has(id)) { this._chartTableCleanups.get(id)?.(); instance.dispose(); delete this.state.chartInstances[id]; }
+                });
+                const table = this.state.table;
+                const columns = next.table.orderedColumns;
+                const columnMap = new Map(columns.map(column => [column.key, column]));
+                const ordered = table.orderedColumns.filter(column => columnMap.has(column.key)).map(column => columnMap.get(column.key));
+                const known = new Set(ordered.map(column => column.key));
+                ordered.push(...columns.filter(column => !known.has(column.key)));
+                table.orderedColumns = ordered;
+                table.visibleCols = new Set(columns.filter(column => table.visibleCols.has(column.key) || !known.has(column.key)).map(column => column.key));
+                if (!columnMap.has(table.sortCol)) table.sortCol = null;
+                const suppliedTableState = config.tableState ?? config.table?.tableState;
+                if (suppliedTableState) {
+                    if (Array.isArray(suppliedTableState.columns)) {
+                        const keys = [...new Set(suppliedTableState.columns)].filter(key => columnMap.has(key));
+                        table.orderedColumns = [...keys.map(key => columnMap.get(key)), ...ordered.filter(column => !keys.includes(column.key))];
+                    }
+                    if (Array.isArray(suppliedTableState.visible)) table.visibleCols = new Set(suppliedTableState.visible.filter(key => columnMap.has(key)));
+                    if (Number.isInteger(suppliedTableState.page) && suppliedTableState.page > 0) table.page = suppliedTableState.page;
+                    if (Number.isInteger(suppliedTableState.pageSize) && suppliedTableState.pageSize > 0) table.pageSize = suppliedTableState.pageSize;
+                    if (Object.hasOwn(suppliedTableState, 'sortCol')) table.sortCol = columnMap.has(suppliedTableState.sortCol) ? suppliedTableState.sortCol : null;
+                    if (['asc', 'desc'].includes(suppliedTableState.sortDir)) table.sortDir = suppliedTableState.sortDir;
+                }
+                this.config = this.state.config = next.config;
+                if (filtersChanged) {
+                    this.state.filterValues = next.filterValues;
+                    this.state.filterLabels = next.filterLabels;
+                    this.state.defaultFilterValues = next.defaultFilterValues;
+                    this.state.defaultFilterLabels = next.defaultFilterLabels;
+                    this.state.filters = next.filters;
+                }
+                this.state.filterDefs = next.filterDefs;
+                this.renderer.config = this.config;
+                if (metaChanged) this.renderer.renderHeader();
+                if (filtersChanged) this.renderer.renderFilters();
+                const tableSection = this.getById('app-table-section');
+                if (tableSection && this.config.table) {
+                    tableSection.dataset.componentId = this.config.table.id || 'table';
+                    const title = tableSection.querySelector('[data-dashboard-table-title]');
+                    if (title) title.textContent = this.config.table.title || '全要素业务运营效能多维透视表';
+                    const size = tableSection.querySelector('select[onchange], select[data-original-change]');
+                    if (size) size.value = table.pageSize === 9999 ? 'all' : String(table.pageSize);
+                }
+                if (kpisChanged) this.renderer.renderKPIs();
+                this.renderer.renderChartsGrid();
+                this.initCharts();
+                if (kpisChanged) this.initKPIWidgets();
+                this.renderColCheckboxes();
+                this.renderTableEngine();
+                this.updateKPIsAndChartsFromFilters(changedCharts);
+                return this;
+            }
+
             initKPIWidgets() {
                 const kpis = this.config.kpis || [];
                 kpis.forEach(kpi => {
@@ -1303,8 +1453,11 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                         if (dom) {
                             const months = kpi.sparkMonths;
                             const seriesData = kpi.sparkData;
-                            if (!Array.isArray(months) || !Array.isArray(seriesData) || !seriesData.length || months.length !== seriesData.length) return;
-                            const inst = echarts.init(dom);
+                            if (!Array.isArray(months) || !Array.isArray(seriesData) || !seriesData.length || months.length !== seriesData.length) {
+                                this.state.chartInstances[`kpi-spark-${kpi.id}`]?.clear();
+                                return;
+                            }
+                            const inst = echarts.getInstanceByDom?.(dom) || echarts.init(dom);
                             this.state.chartInstances[`kpi-spark-${kpi.id}`] = inst;
                             const minVal = Math.floor(Math.min(...seriesData) * 0.95);
                             const maxVal = Math.ceil(Math.max(...seriesData) * 1.05);
@@ -1351,7 +1504,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                         if (dom) {
                             const val = parseKPIValue(kpi.value);
                             if (val === null) return;
-                            const inst = echarts.init(dom);
+                            const inst = echarts.getInstanceByDom?.(dom) || echarts.init(dom);
                             this.state.chartInstances[`kpi-gauge-${kpi.id}`] = inst;
                             inst.setOption({
                                 animation: true,
@@ -1378,12 +1531,29 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 });
             }
 
+            scheduleChartResize(instance) {
+                if (!instance) return;
+                this._pendingChartResize ||= new Set();
+                this._pendingChartResize.add(instance);
+                if (this._chartResizeFrame) return;
+                this._chartResizeFrame = requestAnimationFrame(() => {
+                    this._chartResizeFrame = null;
+                    for (const chart of this._pendingChartResize) {
+                        if (chart.isDisposed()) continue;
+                        const dom = chart.getDom();
+                        if (dom.isConnected && dom.clientWidth > 0 && dom.clientHeight > 0) chart.resize();
+                    }
+                    this._pendingChartResize.clear();
+                });
+            }
+
             initCharts() {
                 const charts = this.config.charts || [];
                 charts.forEach(chartCfg => {
                     const dom = this.getById(chartCfg.id);
                     if (!dom) return;
-                    const inst = echarts.init(dom);
+                    if (this.state.chartInstances[chartCfg.instanceId]) return;
+                    const inst = echarts.getInstanceByDom?.(dom) || echarts.init(dom);
                     this.state.chartInstances[chartCfg.instanceId] = inst;
                     this.state.chartGranularities[chartCfg.instanceId] = chartCfg.defaultGranularity || 'month';
 
@@ -1406,17 +1576,21 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                         for (const entry of entries) {
                             const inst = echarts.getInstanceByDom(entry.target);
                             if (inst && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-                                inst.resize();
+                                this.scheduleChartResize(inst);
                             }
                         }
                     });
+                    this._resizeObserver?.disconnect();
                     this._resizeObserver = observer;
                     this.queryAll('.card-chart-pane, .section-card div[id^="kpi-spark-"], .section-card div[id^="kpi-gauge-"]').forEach(el => observer.observe(el));
                 }
 
+                if (!this._resizeBound) {
+                this._resizeBound = true;
                 window.addEventListener('resize', () => {
-                    Object.values(this.state.chartInstances).forEach(inst => inst?.resize());
+                    Object.values(this.state.chartInstances).forEach(inst => this.scheduleChartResize(inst));
                 }, { signal: this._eventController.signal });
+                }
             }
 
             bindEvents() {
@@ -1474,7 +1648,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                         if (chartCfg && inst) {
                             this.state.chartGranularities[code] = gran;
                             const newOpt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg);
-                            inst.setOption(newOpt, true);
+                            this.setChartOption(inst, newOpt);
                             
                             // If table pane is active, refresh table dynamically
                             const card = tabBtn.closest('.section-card');
@@ -1508,6 +1682,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                                 this.renderDynamicChartTable(code, tablePane);
                                 this.showToast('已呈现图表结构化数据');
                             } else {
+                                this._chartTableCleanups.get(code)?.();
                                 tablePane.classList.add('hidden');
                                 chartPane.classList.remove('hidden');
                                 btn.classList.remove('active-state');
@@ -1609,10 +1784,16 @@ __EXPLANATION_DIALOG_RENDERER_JS__
             }
 
             renderDynamicChartTable(code, tablePane) {
+                const scrollTop = tablePane.firstElementChild?.scrollTop || 0;
+                this._chartTableCleanups.get(code)?.();
                 const inst = this.state.chartInstances[code];
                 const chartCfg = (this.config.charts || []).find(c => c.instanceId === code);
                 const tdata = ChartDataToTableConverter.convert(inst, chartCfg);
                 if (tdata && tdata.headers && tdata.rows) {
+                    const rowMarkup = (r, index) => `
+                        <tr aria-rowindex="${index + 2}" class="hover:bg-slate-50 transition-colors ${index % 2 ? 'bg-slate-50/50' : ''}">
+                            ${r.map((v, i) => `<td class="px-3 py-2 font-mono text-[11px] text-[#17212B] border-b border-slate-100 ${i > 0 ? 'font-semibold' : ''}">${v}</td>`).join('')}
+                        </tr>`;
                     tablePane.innerHTML = `
                         <div class="w-full h-full overflow-auto bg-white rounded border border-slate-200 custom-scrollbar">
                             <table class="w-full text-xs text-left border-separate border-spacing-0">
@@ -1626,20 +1807,98 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                                     </tr>
                                 </thead>
                                 <tbody class="text-ink">
-                                    ${tdata.rows.map(r => `
-                                        <tr class="hover:bg-slate-50 transition-colors even:bg-slate-50/50">
-                                            ${r.map((v, i) => `
-                                                <td class="px-3 py-2 font-mono text-[11px] text-[#17212B] border-b border-slate-100 ${i > 0 ? 'font-semibold' : ''}">
-                                                    ${v}
-                                                </td>
-                                            `).join('')}
-                                        </tr>
-                                    `).join('')}
                                 </tbody>
                             </table>
                         </div>
                     `;
+                    const table = tablePane.querySelector('table');
+                    table.setAttribute('aria-rowcount', String(tdata.rows.length + 1));
+                    table.setAttribute('aria-colcount', String(tdata.headers.length));
+                    const body = table.querySelector('tbody');
+                    if (tdata.rows.length <= 100) body.innerHTML = tdata.rows.map(rowMarkup).join('');
+                    else this.renderChartTableWindow(code, table, tdata.rows, rowMarkup, scrollTop);
                 }
+            }
+
+            renderChartTableWindow(code, table, rows, rowMarkup, scrollTop) {
+                const scroller = table.parentElement, body = table.querySelector('tbody');
+                // Let the browser size columns using representative full-data values, then
+                // freeze those widths so recycling rows cannot move the header or columns.
+                const widest = rows[0].slice();
+                rows.forEach(row => row.forEach((value, column) => {
+                    if (String(value ?? '').length > String(widest[column] ?? '').length) widest[column] = value;
+                }));
+                body.innerHTML = rowMarkup(widest, 0) + rows.slice(0, 12).map(rowMarkup).join('');
+                const headers = Array.from(table.querySelectorAll('thead th'));
+                const widths = headers.map(header => header.getBoundingClientRect().width);
+                headers.forEach((header, index) => { header.style.width = `${widths[index]}px`; });
+                table.style.tableLayout = 'fixed';
+                table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+                table.style.minWidth = '100%';
+                const estimate = body.children[1]?.getBoundingClientRect().height || 32;
+                // Prefix sums of measured height differences keep wrapped rows accurate
+                // without scanning every row while scrolling.
+                const heights = new Map(), tree = new Float64Array(rows.length + 1);
+                const prefix = count => {
+                    let value = count * estimate;
+                    for (let i = count; i > 0; i -= i & -i) value += tree[i];
+                    return value;
+                };
+                const indexAt = offset => {
+                    let low = 0, high = rows.length;
+                    while (low < high) {
+                        const mid = Math.floor((low + high) / 2);
+                        if (prefix(mid + 1) <= offset) low = mid + 1; else high = mid;
+                    }
+                    return Math.min(rows.length - 1, low);
+                };
+                const measure = (index, height) => {
+                    if (!height) return;
+                    const delta = height - (heights.get(index) ?? estimate);
+                    heights.set(index, height);
+                    for (let i = index + 1; i < tree.length; i += i & -i) tree[i] += delta;
+                };
+                const spacer = height => `<tr aria-hidden="true"><td colspan="${headers.length}" style="height:${Math.max(0, height)}px;padding:0;border:0;line-height:0"></td></tr>`;
+                let frame = null, disposed = false, start = -1, end = -1, lastWidth = scroller.clientWidth;
+                scroller.style.overflowAnchor = 'none';
+                const draw = () => {
+                    frame = null;
+                    if (disposed || !scroller.clientHeight || !scroller.clientWidth) return;
+                    const headerHeight = table.tHead.getBoundingClientRect().height;
+                    const viewport = Math.max(1, scroller.clientHeight - headerHeight);
+                    const atBottom = scroller.scrollTop > 0 && scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+                    if (lastWidth !== scroller.clientWidth) {
+                        lastWidth = scroller.clientWidth;
+                        heights.clear(); tree.fill(0); start = end = -1;
+                    }
+                    const anchor = indexAt(scroller.scrollTop), within = scroller.scrollTop - prefix(anchor);
+                    const nextStart = Math.max(0, anchor - 6);
+                    const nextEnd = Math.min(rows.length, indexAt(scroller.scrollTop + viewport) + 7);
+                    if (nextStart !== start || nextEnd !== end) {
+                        start = nextStart; end = nextEnd;
+                        body.innerHTML = spacer(prefix(start)) + rows.slice(start, end).map((row, i) => rowMarkup(row, start + i)).join('') + spacer(prefix(rows.length) - prefix(end));
+                    }
+                    Array.from(body.children).slice(1, -1).forEach((row, i) => measure(start + i, row.getBoundingClientRect().height));
+                    body.firstElementChild.firstElementChild.style.height = `${prefix(start)}px`;
+                    body.lastElementChild.firstElementChild.style.height = `${Math.max(0, prefix(rows.length) - prefix(end))}px`;
+                    scroller.scrollTop = atBottom ? scroller.scrollHeight - scroller.clientHeight : prefix(anchor) + within;
+                    if (end < rows.length && prefix(end) < scroller.scrollTop + viewport) schedule();
+                };
+                const schedule = () => { if (!disposed && frame === null) frame = requestAnimationFrame(draw); };
+                const observer = new ResizeObserver(schedule);
+                observer.observe(scroller);
+                observer.observe(table);
+                scroller.addEventListener('scroll', schedule, {passive: true});
+                this._chartTableCleanups.set(code, () => {
+                    disposed = true;
+                    scroller.removeEventListener('scroll', schedule);
+                    observer.disconnect();
+                    if (frame !== null) cancelAnimationFrame(frame);
+                    this._chartTableCleanups.delete(code);
+                });
+                body.innerHTML = spacer(0) + rows.slice(0, 12).map(rowMarkup).join('') + spacer((rows.length - 12) * estimate);
+                scroller.scrollTop = scrollTop;
+                draw();
             }
 
             // Filter Handlers (100% Dynamic)
@@ -1848,7 +2107,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 this.updateKPIsAndChartsFromFilters();
             }
 
-            updateKPIsAndChartsFromFilters() {
+            updateKPIsAndChartsFromFilters(changedCharts = null) {
                 const rows = this.getFilteredTableRows();
                 const allRows = this.config.table?.rows || [];
                 const isFiltered = rows.length < allRows.length;
@@ -1857,13 +2116,6 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     kpi.value = ComponentBindings.kpiValue(this.getFilteredTableRows(kpi.id), kpi);
                 });
                 if (boundKPIs.length) {
-                    // Rebuild the cards so text, progress bars, and widgets agree.
-                    Object.keys(this.state.chartInstances).forEach(id => {
-                        if (id.startsWith('kpi-spark-') || id.startsWith('kpi-gauge-')) {
-                            this.state.chartInstances[id]?.dispose();
-                            delete this.state.chartInstances[id];
-                        }
-                    });
                     this.renderer.renderKPIs();
                     this.initKPIWidgets();
                 }
@@ -1872,6 +2124,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 const charts = this.config.charts || [];
                 charts.forEach(chartCfg => {
                     const instanceId = chartCfg.instanceId;
+                    if (changedCharts && !changedCharts.has(instanceId)) return;
                     const inst = this.state.chartInstances[instanceId];
                     if (!inst) return;
                     const gran = this.state.chartGranularities[instanceId] || 'month';
@@ -1879,12 +2132,12 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     try {
                         if (chartCfg.binding) {
                             chartCfg.data = ComponentBindings.chartData(this.getFilteredTableRows(instanceId), chartCfg);
-                            inst.setOption(chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg), true);
+                            this.setChartOption(inst, chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg));
                         } else if (typeof chartCfg.onFilterChange === 'function') {
                             chartCfg.onFilterChange(rows, isFiltered, inst, TOKENS);
                         } else if (typeof chartCfg.optionBuilder === 'function') {
                             const opt = chartCfg.optionBuilder(chartCfg.data, gran, TOKENS, chartCfg);
-                            inst.setOption(opt, true);
+                            this.setChartOption(inst, opt);
                         }
 
                         // If table pane is currently open for this card, refresh table dynamically
@@ -2260,12 +2513,17 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     </tr>
                 `;
 
+                this._tableScrollCleanup?.();
+                this._tableScrollCleanup = null;
+                const tableElement = tbody.closest('table');
+                tableElement?.setAttribute('aria-rowcount', String(total + 1));
+                tableElement?.setAttribute('aria-colcount', String(visibleCols.length));
                 // Render Tbody (Strict single line with tabular nums)
                 if (currentRows.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="py-8 text-center text-ink-subtle">暂无符合筛选条件的数据记录</td></tr>`;
                 } else {
-                    tbody.innerHTML = currentRows.map(row => `
-                        <tr onmouseenter="window.App.onTableRowHover('${row.name}')" onmouseleave="window.App.onTableRowLeave()" class="hover:bg-slate-50/80 transition-colors">
+                    const rowMarkup = (row, index) => `
+                        <tr aria-rowindex="${startIdx + index + 2}" onmouseenter="window.App.onTableRowHover('${row.name}')" onmouseleave="window.App.onTableRowLeave()" class="hover:bg-slate-50/80 transition-colors">
                             ${visibleCols.map(col => {
                                 const raw = row[col.key];
                                 const hasValue = raw !== undefined && raw !== null && raw !== '';
@@ -2280,7 +2538,8 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                                 return `<td onclick="window.App.copyCell('${hasValue ? raw : ''}')" class="px-3.5 py-2 text-${col.align} font-mono text-[11px] cursor-pointer hover:underline whitespace-nowrap ${cellStyle}" title="点击复制">${val}</td>`;
                             }).join('')}
                         </tr>
-                    `).join('');
+                    `;
+                    this.renderTableRows(tbody, currentRows, visibleCols, rowMarkup);
                 }
 
                 // Update Pagination Info
@@ -2293,6 +2552,64 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 if (pageIndicator) pageIndicator.textContent = `${this.state.table.page} / ${totalPages}`;
                 if (prevBtn) prevBtn.disabled = this.state.table.page <= 1;
                 if (nextBtn) nextBtn.disabled = this.state.table.page >= totalPages;
+            }
+
+            renderTableRows(tbody, rows, columns, rowMarkup) {
+                if (rows.length <= 100) {
+                    tbody.innerHTML = rows.map(rowMarkup).join('');
+                    return;
+                }
+                const scroller = tbody.closest('table').parentElement;
+                // The existing nowrap cells produce uniform rows; measure their actual styled height.
+                tbody.innerHTML = rows.slice(0, 2).map(rowMarkup).join('');
+                const measured = Array.from(tbody.children).map(row => row.getBoundingClientRect().height);
+                const height = measured[0];
+                if (!height || measured.some(value => Math.abs(value - height) > 1)) {
+                    tbody.innerHTML = rows.map(rowMarkup).join('');
+                    return;
+                }
+                const oldMaxHeight = scroller.style.maxHeight;
+                const oldOverflow = scroller.style.overflowY;
+                scroller.style.maxHeight = '420px';
+                scroller.style.overflowY = 'auto';
+                const table = tbody.closest('table');
+                const headers = Array.from(table.querySelectorAll('thead th'));
+                const measure = document.createElement('canvas').getContext('2d');
+                const cells = Array.from(tbody.querySelector('tr').children);
+                const widths = columns.map((column, index) => {
+                    const style = getComputedStyle(cells[index]);
+                    measure.font = style.font || `${style.fontSize} ${style.fontFamily}`;
+                    const max = rows.reduce((width, row) => Math.max(width, measure.measureText(this.formatTableCell(row[column.key], column)).width), 0);
+                    const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2;
+                    return Math.ceil(Math.max(headers[index]?.getBoundingClientRect().width || 0, max + padding));
+                });
+                const oldLayout = table.style.tableLayout;
+                const oldWidth = table.style.width;
+                table.style.tableLayout = 'fixed';
+                table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+                headers.forEach((header, index) => { header.style.width = `${widths[index]}px`; });
+                let frame = null;
+                let lastStart = -1;
+                const draw = () => {
+                    frame = null;
+                    const start = Math.max(0, Math.floor(scroller.scrollTop / height) - 6);
+                    if (start === lastStart) return;
+                    lastStart = start;
+                    const end = Math.min(rows.length, start + Math.ceil((scroller.clientHeight || 420) / height) + 12);
+                    const spacer = size => `<tr aria-hidden="true"><td colspan="${columns.length}" style="height:${size}px;padding:0;border:0"></td></tr>`;
+                    tbody.innerHTML = spacer(start * height) + rows.slice(start, end).map((row, index) => rowMarkup(row, start + index)).join('') + spacer((rows.length - end) * height);
+                };
+                const onScroll = () => { if (frame === null) frame = requestAnimationFrame(draw); };
+                scroller.addEventListener('scroll', onScroll, {passive: true});
+                draw();
+                this._tableScrollCleanup = () => {
+                    scroller.removeEventListener('scroll', onScroll);
+                    if (frame !== null) cancelAnimationFrame(frame);
+                    scroller.style.maxHeight = oldMaxHeight;
+                    scroller.style.overflowY = oldOverflow;
+                    table.style.tableLayout = oldLayout;
+                    table.style.width = oldWidth;
+                };
             }
 
             onTableRowHover(routeName) {
@@ -2336,14 +2653,32 @@ __EXPLANATION_DIALOG_RENDERER_JS__
             destroy() {
                 if (!this._mounted) return;
                 this._mounted = false;
+                this._tableScrollCleanup?.();
+                this._tableScrollCleanup = null;
+                this._chartTableCleanups.forEach(cleanup => cleanup());
+                this._resizeBound = false;
+                this._timers.forEach(timer => clearTimeout(timer));
+                this._timers.clear();
                 this._eventController?.abort();
                 this._eventController = null;
                 this._resizeObserver?.disconnect();
                 this._resizeObserver = null;
+                if (this._chartResizeFrame) cancelAnimationFrame(this._chartResizeFrame);
+                this._chartResizeFrame = null;
+                this._pendingChartResize?.clear();
                 Object.values(this.state.chartInstances).forEach(inst => inst?.dispose());
                 this.state.chartInstances = {};
                 if (this.root.__dashboardApp === this) delete this.root.__dashboardApp;
                 if (window.App === this) window.App = null;
+            }
+
+            scheduleTimeout(callback, delay) {
+                const timer = setTimeout(() => {
+                    this._timers.delete(timer);
+                    if (this._mounted) callback();
+                }, delay);
+                this._timers.add(timer);
+                return timer;
             }
 
             showToast(msg) {
@@ -2353,10 +2688,10 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 toast.className = 'px-4 py-2.5 bg-primary-strong text-white text-xs font-semibold rounded-lg shadow-xl toast-active flex items-center gap-2 border border-slate-700 pointer-events-auto';
                 toast.innerHTML = `<span class="flex-shrink-0">${LUCIDE_ICONS.checkCircle}</span><span>${msg}</span>`;
                 container.appendChild(toast);
-                setTimeout(() => {
+                this.scheduleTimeout(() => {
                     toast.style.opacity = '0';
                     toast.style.transition = 'opacity 0.3s ease';
-                    setTimeout(() => toast.remove(), 300);
+                    this.scheduleTimeout(() => toast.remove(), 300);
                 }, 2800);
             }
         }

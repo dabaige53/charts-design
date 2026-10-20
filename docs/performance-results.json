@@ -1,0 +1,452 @@
+{
+  "date": "2026-10-20",
+  "project": "charts-design",
+  "environment": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "browser": "local Playwright Chromium",
+    "data": "独立合成数据，未修改业务看板"
+  },
+  "display": {
+    "inspectorPageSize": 20,
+    "mainTableDefaultPageSize": 10,
+    "explicitTablePageSizesPreserved": true,
+    "exportsTruncated": false,
+    "twentyRowScope": "仅图表右上角说明图标打开的指标定义与语义弹窗数据区",
+    "chartDataView": "完整滚动浏览；超过 100 行时仅创建可见行及上下缓冲行，不截断数据"
+  },
+  "frontendComparison": {
+    "baseline": "本轮实施开始时的工作区，已含前轮表格局部更新和资源缓存；同设备、相同合成数据和窗口。",
+    "fixture": "7 个看板组件，报告包含 10 个图表引用",
+    "samples": 5,
+    "loadMedianMs": {
+      "baseline": 335.39999999990687,
+      "final": 235.29999999981374
+    },
+    "reportTextEditMedianMs": {
+      "baseline": 186.20000000018626,
+      "final": 187.40000000037253
+    },
+    "reportTextEditNote": "包含已有的 180 ms 输入合并延迟；此项没有测得速度提升，两版均保留 10 个引用。",
+    "desktopScreenshotIdentical": true,
+    "desktopLayoutRectsIdentical": true,
+    "responsiveRegressionWidths": [
+      1440,
+      900,
+      390
+    ]
+  },
+  "backendComparison": {
+    "baseline": "git HEAD 的 local_data/local_view/service，与最终版使用同一设备及相同百万行合成数据；与工作区起点的前端基线不是同一个版本范围。",
+    "samplesPerOperation": 1,
+    "statistics": "单次后端计时，不作为中位数或 P95；repeatSearch 为缓存命中，search 为首次搜索。",
+    "measurements": {
+      "baseline": {
+        "rows": 1000000,
+        "boundCharts": 40,
+        "timingsMs": {
+          "open": 997.1779170000445,
+          "filter": 655.2012080001077,
+          "deepPage": 265.5904160001228,
+          "nextDeepPage": 130.62354099974982,
+          "search": 1599.6064579999256,
+          "repeatSearch": 1577.6189579996753
+        },
+        "responseBytes": {
+          "open": 56133,
+          "filter": 52780,
+          "deepPage": 58343,
+          "nextDeepPage": 58344,
+          "search": 58277,
+          "repeatSearch": 58276
+        },
+        "importMs": 5211.971042000187,
+        "searchRows": 10310,
+        "status": "passed"
+      },
+      "final": {
+        "rows": 1000000,
+        "boundCharts": 40,
+        "timingsMs": {
+          "open": 320.7612080000217,
+          "filter": 185.15508300015426,
+          "deepPage": 44.17162499976257,
+          "nextDeepPage": 90.58295799968619,
+          "search": 1570.606916000088,
+          "repeatSearch": 8.600916999967012
+        },
+        "responseBytes": {
+          "open": 56132,
+          "filter": 52782,
+          "deepPage": 58342,
+          "nextDeepPage": 4517,
+          "search": 4451,
+          "repeatSearch": 4449
+        },
+        "importMs": 5224.501333999797,
+        "searchRows": 10310,
+        "status": "passed"
+      }
+    }
+  },
+  "millionRowBrowser": {
+    "rows": 1000000,
+    "charts": 40,
+    "viewport": [
+      1440,
+      1100
+    ],
+    "browser": "Chromium",
+    "samples": 100,
+    "coldFirstChartMs": 996.5,
+    "warmFirstChartMedianMs": 1004.4499999997206,
+    "initialComponentShells": 43,
+    "initialEChartsInstances": 2,
+    "heapBeforeBytes": 17426020,
+    "heapAfterBytes": 17861188,
+    "domBefore": {
+      "documents": 2,
+      "nodes": 5429,
+      "jsEventListeners": 2741
+    },
+    "domAfter": {
+      "documents": 3,
+      "nodes": 5523,
+      "jsEventListeners": 2741
+    },
+    "retainedChartInstances": 40,
+    "totalMs": {
+      "median": 33.299999999813735,
+      "p95": 34.299999999813735,
+      "max": 66.70000000018626
+    },
+    "afterResponseMs": {
+      "median": 24.799999999813735,
+      "p95": 25.700000000186265,
+      "max": 32.799999999813735
+    },
+    "targetsMet": true,
+    "pageErrors": [],
+    "status": "passed"
+  },
+  "validation": {
+    "build": {
+      "command": "npm --prefix runtime-ui run build",
+      "status": "passed",
+      "charts": 40,
+      "kpiTypes": 9
+    },
+    "python": {
+      "nonRuntimePassed": 91,
+      "runtimeSuitePassed": 300,
+      "additionalRefreshRegressionPassed": 1,
+      "finalAffectedBackendTestsPassed": 54,
+      "finalAffectedBrowserTestsPassed": 3,
+      "status": "passed",
+      "notes": "完整 Python 套件后补充删除组件的刷新回归，并复查受影响的后端与浏览器测试。"
+    },
+    "node": {
+      "command": "node --test tests/runtime/*.test.mjs",
+      "passed": 49,
+      "status": "passed"
+    },
+    "syntax": {
+      "command": "npm run check",
+      "status": "passed"
+    },
+    "whitespace": {
+      "command": "git diff --check",
+      "status": "passed"
+    },
+    "lsp": {
+      "engines": [
+        "Pyright",
+        "typescript-language-server"
+      ],
+      "passedFiles": 30,
+      "status": "passed",
+      "files": [
+        {
+          "path": "dashboard_runtime/__init__.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "d15031b23e2124592a82142c69ea5968fafeea753388a6436f4dabf123587155"
+        },
+        {
+          "path": "dashboard_runtime/assets.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "633feb068dd3f7da613d2b7de5abf2a3426189a554a5b37cd5dd3d90c8167d6e"
+        },
+        {
+          "path": "dashboard_runtime/local_data.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "fe68d54b9121ad2e19716cfb15b19d1f69ed8f17a0db00ccf2b4057787dc2fed"
+        },
+        {
+          "path": "dashboard_runtime/local_view.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "bff41f9b2b5a42464677c0cb29523c0c94094271013b0bad029ffd67c4c1c505"
+        },
+        {
+          "path": "dashboard_runtime/mcp_server.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "8660d9a5570cc4f6fd5e020034572d08b9f28a716d97cdf94108399dc56f534c"
+        },
+        {
+          "path": "dashboard_runtime/pdf_export.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "15ceb254704ab5e3d59011591fcaaa8e7ddf732273a5f7d96f7b0f418139aaf5"
+        },
+        {
+          "path": "dashboard_runtime/service.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "3cd8635b0756eb4d7e736e12c88a31c231f4034d4b13c77e298d6bdf472323fb"
+        },
+        {
+          "path": "dashboard_runtime/store.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "451d2e8f3856961574460b8c124fc9c28ff65954f019486187926f7150cffbe7"
+        },
+        {
+          "path": "dashboard_runtime/web/app.mjs",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "edbd9291022c83e3d343df3a026d0dd0e9055a205573c307aa2a31e506937d71"
+        },
+        {
+          "path": "dashboard_runtime/web/chrome.mjs",
+          "diagnostics": [
+            {
+              "line": 5,
+              "column": 72,
+              "severity": "warning",
+              "message": "'onEdit' is declared but its value is never read.",
+              "source": "typescript"
+            },
+            {
+              "line": 5,
+              "column": 79,
+              "severity": "warning",
+              "message": "'onBinding' is declared but its value is never read.",
+              "source": "typescript"
+            }
+          ],
+          "status": "passed",
+          "sha256": "0f2693b66ed008b92fc7c9198b9ff5b1ec7d8b6518c8785714573202a75fc6f1"
+        },
+        {
+          "path": "dashboard_runtime/web/original.mjs",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "16119c9ae5f5ab45076e5ae5ebc95fba859c30cdded4027caa63f85f115735ea"
+        },
+        {
+          "path": "dashboard_runtime/web/report.mjs",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "cdd9b6cf0d0eaf8abba80eb753942a798a0d725b310426a5e419586aaefbc250"
+        },
+        {
+          "path": "dashboard_runtime/web/tool-result.mjs",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "970ded9614fb68d9e349140f0c29979f82af7e1b08b6113e01c73ff268e57747"
+        },
+        {
+          "path": "runtime-ui/entry.mjs",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "d90ead3703366f95997e58c1fd2c3507a88eb65d4449fb080eae02f27482eca4"
+        },
+        {
+          "path": "skills/executive-charts/scripts/core/dashboard_template.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "cc249c12d909f57494f94ddc4f3d67a4b26adb9b2d26397a335d2ba27e7a6499"
+        },
+        {
+          "path": "skills/executive-charts/scripts/core/runtime_bundle.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "e52ec62701bc8f13aa7abffcd19e35094d33ec27b6402f0023e72e937b20c3ef"
+        },
+        {
+          "path": "tests/runtime/benchmark_incremental.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "b593277bd5847f824d103dbe4fd20f5f6007917a9f4a71549915d282edfe7796"
+        },
+        {
+          "path": "tests/runtime/table-format.test.mjs",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "6863e904230cfdb74642ec3b49834a3ab7eb20fa97c225d37ecbf30dee10a151"
+        },
+        {
+          "path": "tests/runtime/test_asset_cache.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "44d62b543a6c17c1c0c425d167eff5324996ac5bd46b129d325df73b252d8c00"
+        },
+        {
+          "path": "tests/runtime/test_fidelity.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "1cb07386e8d3c9347a569de520c45283d41be58daffe596f9394591116780096"
+        },
+        {
+          "path": "tests/runtime/test_icon_contract.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "d1c19f4f4ee4e53231186e3ad86ca9e56d8b8dc4564909b6a9e5730dfbcf804d"
+        },
+        {
+          "path": "tests/runtime/test_incremental_browser.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "7af3c1a695d2477b08790d07aae970742e0082696a7609df0df4bb02c2685cef"
+        },
+        {
+          "path": "tests/runtime/test_incremental_queries.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "c77389fc54a7eead784ccc3590bc200850551d9993fee2d3884c7ae2cc6bf928"
+        },
+        {
+          "path": "tests/runtime/test_inspector_data.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "04768533f894d4a4e0d05044a2a339f83b9fbf521d746ed7e9732c3fa00a39fb"
+        },
+        {
+          "path": "tests/runtime/test_performance_browser.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "f093ced9dab833da4d3b2df1ab771424262a96238d348c0f3b651c6f2d8f3c3d"
+        },
+        {
+          "path": "tests/runtime/test_renderer_reuse_browser.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "e4c0ceb8fd15674b0141155acdf07cfa5e6f04ad2337029371733c9cfe39d2df"
+        },
+        {
+          "path": "tests/runtime/test_table_updates_browser.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "154b318dd104c84d8976f08e870e810314eb11b1cc02244657505466ef012b0f"
+        },
+        {
+          "path": "tests/runtime/tool-result.test.mjs",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "2b8f72599d080462acf1edca2b57de947be6e16b16fc43ee8f2172c4cd59d754"
+        },
+        {
+          "path": "tests/test_preset_dashboards.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "ab2df65ccd3f8d3acd957e1d56b73140d843a8060fd6cc146b4ea6daf734b689"
+        },
+        {
+          "path": "tests/test_runtime_lifecycle.py",
+          "diagnostics": [],
+          "status": "passed",
+          "sha256": "b4d1701a844d5eefc3857b6a2c331b4dc86c22acabd72756900b6909d6441724"
+        }
+      ]
+    },
+    "infoIconScopeRegression": {
+      "status": "passed",
+      "command": "node bin/python-runtime.js -m pytest tests/runtime/test_renderer_reuse_browser.py tests/runtime/test_incremental_browser.py tests/runtime/test_inspector_data.py -q",
+      "result": ".........                                                                [100%]\n9 passed in 19.99s"
+    },
+    "priorMilestoneUniqueTestsPassed": 441
+  },
+  "reproduce": {
+    "browser": "node bin/python-runtime.js tests/runtime/benchmark_incremental.py --output /tmp/charts-performance.json",
+    "regression": "npm test",
+    "build": "npm --prefix runtime-ui run build"
+  },
+  "limitations": [
+    "首次全字段子串搜索仍扫描百万行，本次为 1570.6 ms；没有通过抽样或改变匹配规则提速。",
+    "自然字符串排序、多列排序和任意跳深页仍使用 OFFSET；可连续定位的排序路径使用排序值和行 ID。",
+    "100 次操作中 40 个图表实例全部保留，监听器数量不变；GC 后堆内存增加约 0.42 MiB，单轮结果不能证明无限时长内存稳定。",
+    "端到端 P95 为本机 HTTP 的缓存命中翻页；MCP 协议与过期响应处理通过回归，未测不同 MCP 宿主的端到端延迟。",
+    "桌面截图像素和组件几何一致；平板、窄屏通过响应式交互检查，未做所有图表在所有尺寸的逐像素对比。",
+    "统计绘图套件仍有两条 Matplotlib 弃用警告；LSP 有两条已有未使用回调警告，全部文件状态均为 passed。"
+  ],
+  "chartDataVirtualization": {
+    "date": "2026-10-20",
+    "thresholdRows": 100,
+    "bufferRowsPerSide": 6,
+    "implementation": "按实际行高累计定位，适配换行；滚动帧合并；表头和列宽稳定；隐藏、更新和卸载时释放监听器与观察器。",
+    "validation": {
+      "status": "passed",
+      "targetedTestsPassed": 154,
+      "canonicalBrowserInspectorAndFidelityTests": 11,
+      "bundledOfflineAndCatalogTests": 3,
+      "nonRuntimeTests": 91,
+      "nodeTests": 49,
+      "build": "passed",
+      "syntax": "passed",
+      "lsp": [
+        {
+          "path": "skills/executive-charts/scripts/core/dashboard_template.py",
+          "status": "passed",
+          "sha256": "cc249c12d909f57494f94ddc4f3d67a4b26adb9b2d26397a335d2ba27e7a6499"
+        },
+        {
+          "path": "tests/runtime/test_renderer_reuse_browser.py",
+          "status": "passed",
+          "sha256": "e4c0ceb8fd15674b0141155acdf07cfa5e6f04ad2337029371733c9cfe39d2df"
+        },
+        {
+          "path": "runtime-ui/generated/original-engine.mjs",
+          "status": "passed",
+          "sha256": "4ee204e6e9df5aa9dd7fac52cd5e79ae16060bbe5e866d5d9d97fc3910159b08"
+        }
+      ]
+    },
+    "largeFixture": {
+      "rows": 10000,
+      "renderedDataRowsAtNormalViewport": "少于 60 行",
+      "lastRowReachable": true,
+      "csvRowsExcludingHeader": 10000,
+      "columnWidthsStable": true
+    },
+    "covered": [
+      "长文本换行",
+      "视口增高",
+      "全屏与窄屏",
+      "滚动到末行和返回顶部",
+      "大数据变成小数据",
+      "重复切换后的清理",
+      "组件移除和卸载",
+      "本地打包页面",
+      "离线 HTML",
+      "说明弹窗仍每页最多 20 行"
+    ],
+    "measurementScope": "本轮验证 DOM 行数有界和功能一致，未重新测量此前的查询耗时与 P95。"
+  },
+  "releaseValidation": {
+    "version": "1.2.0",
+    "runtimeVersion": "0.6.0",
+    "command": "npm test",
+    "nonRuntimeTestsPassed": 91,
+    "runtimeTestsPassed": 304,
+    "nodeTestsPassed": 49,
+    "totalPassed": 444,
+    "status": "passed",
+    "productionDependencyVulnerabilities": 0,
+    "diagnosticFilesPassed": 30,
+    "notes": "局部更新不再执行旧的页面滚动位置恢复；完整回归通过。"
+  }
+}

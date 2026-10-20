@@ -27,6 +27,8 @@ RUNTIME_MODULES = (
                     return this.app.init();
                 },
                 update(config, root = this.root) {
+                    this.config = config;
+                    if (this.app?._mounted && root === this.root) return this.app.updateConfig(config);
                     this.destroy();
                     return this.mount(root, config);
                 },

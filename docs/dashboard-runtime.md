@@ -326,3 +326,20 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 本地数据模式按不可变版本保存 SQLite 引用，筛选与汇总由本机计算；HTML/JSON 导出不嵌入全量明细。CSV 和 PDF 按实际导出范围处理。安装包与 GitHub 发布不包含用户的数据库或业务明细。
 
 完整 PDF 导出依赖 Playwright Chromium 和 Poppler（`pdfunite`）；Linux 安装 `poppler-utils`，macOS 使用本机已有的 Poppler。CI 显式安装这些依赖，不跳过 PDF 验收。
+
+
+### 局部更新与性能验证
+
+`dashboard_view` 默认返回完整 `document`。交互调用可传 `responseMode: "patch"`、`componentIds` 和 `expectedRevision`，返回 `{id, revision, componentIds, computed, statisticalArtifacts}`。`computed.components`、`tables`、`grouped` 只包含选中的组件；省略字段表示保留已有值，空数组表示清空。省略 `componentIds` 表示全部，空列表表示不计算组件。仅在需要重新加载筛选选项时传 `includeFilterOptions: true`。版本不符返回 `REVISION_CONFLICT`；先刷新最新定义再重试。MCP 的完整局部响应仅存放于 `structuredContent`，文本块为摘要。
+
+`component_data` 接受 `sort: [{field, direction}]` 与 `search`，沿用表格的排序和子串搜索规则。点击图表右上角说明图标打开的“指标定义与语义”弹窗，其数据区默认每页最多 20 行。图表的“切换为数据表”视图保留完整滚动浏览：超过 100 行时只创建可见行及上下缓冲行，按实际行高处理换行，滚动时保持列宽；切回图表、移除组件和更新数据时清理对应监听器。主表默认 10 行，已有明确设置保留。CSV、PDF 导出不受展示行数限制。
+
+前端按组件 ID 更新，屏幕外只延迟 ECharts 初始化，标题和操作控件立即出现；报告以组件 ID 和出现序号复用引用。兼容数据变化保留图表、表格焦点和布局实例。`window.__chartsReady()` 会初始化待显示的图表并等待字体、图片和图表动画完成，供导出和截图验证使用。独立 HTML 的 `DashboardRuntime.update(config)` 在同一 root 中保留 app。
+
+百万行、40 个共享数据图表的独立合成压力测试：
+
+```sh
+node bin/python-runtime.js tests/runtime/benchmark_incremental.py --output /tmp/charts-performance.json
+```
+
+该命令创建独立临时数据，记录首次可见图表耗时、100 次翻页的中位数/P95、响应后绘制时间、实例保留数及 GC 后内存和监听器数量。不会读取或修改现有业务看板。首次全字段子串搜索仍需扫描完整数据；自然字符串排序、多列排序及随机深页保留 OFFSET 路径。缓存绑定不可变数据版本，不使用过期数据换取速度。

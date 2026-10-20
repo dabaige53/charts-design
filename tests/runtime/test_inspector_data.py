@@ -1,4 +1,4 @@
-"""The expanded inspector reads every filtered row without changing the board."""
+"""The inspector reads bounded pages without changing the board."""
 import pytest
 from dashboard_runtime.demo import document
 from dashboard_runtime.model import DashboardError
@@ -59,9 +59,10 @@ def test_single_page_inspector_online_and_offline(tmp_path):
                 chart = page.locator('[data-component-id=trend]')
                 chart.get_by_role('button', name='指标定义与语义', exact=True).click()
                 panel = page.get_by_role('dialog')
-                expect(panel.locator('tbody tr')).to_have_count(1005)
+                expect(panel.locator('tbody tr')).to_have_count(20)
                 assert panel.locator('nav, details').count() == 0
-                assert panel.get_by_role('button', name='下一页', exact=True).count() == 0
+                panel.get_by_role('button', name='数据下一页' if url.startswith('http') else '下一页', exact=True).click()
+                expect(panel.locator('tbody tr')).to_have_count(20)
                 assert panel.locator('.inspector-sql').inner_text() == sql
                 assert panel.get_by_text(doc['manifest']['metrics']['revenue']['definition'], exact=True).is_visible()
                 assert panel.get_by_text('营业收入合计', exact=True).is_visible()

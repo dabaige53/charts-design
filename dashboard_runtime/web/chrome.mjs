@@ -18,7 +18,7 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
     const tabs=[...old.querySelectorAll('.granularity-tab-btn')];
     if(tabs.length){const controls=text('div','component-granularity');for(const b of tabs){b.setAttribute('aria-label',b.dataset.granularity==='quarter'?'季度':'月度');controls.append(b);}actions.append(controls);}
     const select=old.querySelector('select[aria-label="Chart type"]');
-    if(select){storage.append(select);menu('chart','切换图表类型',()=>[...select.options].map(o=>({icon:'chart',label:o.textContent,disabled:select.disabled||o.disabled,checked:o.value===select.value,run:()=>{if(o.value===select.value)return;select.value=o.value;select.dispatchEvent(new Event('change'));}})));}
+    if(select){storage.append(select);if(editing)menu('chart','切换图表类型',()=>[...select.options].map(o=>({icon:'chart',label:o.textContent,disabled:select.disabled||o.disabled,checked:o.value===select.value,run:()=>{if(o.value===select.value)return;select.value=o.value;select.dispatchEvent(new Event('change'));}})));}
     use(old.querySelector('.view-toggle-btn'),'table');
   }
   if(family==='table'){
@@ -26,7 +26,7 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
     const search=shadow.querySelector('.catalog-search');if(search){search.title='仅搜索本表明细；全页搜索请使用页面筛选栏';heading.append(search);}
     const col=old.querySelector('#colDrawerBtn'),drawer=old.querySelector('#colDrawerMenu');
     if(col&&drawer){col.removeAttribute('data-original-click');col.textContent='自定义列配置';col.setAttribute('aria-label','列配置');col.className='component-text-button';actions.append(col);drawer.className='column-content';storage.append(drawer);
-      col.addEventListener('click',e=>{e.stopPropagation();drawer.classList.remove('hidden');const popup=openMenu(col,[],{label:'列设置',content:drawer});popup.id='colDrawerWrap';});
+      col.onclick=e=>{e.stopPropagation();drawer.classList.remove('hidden');const popup=openMenu(col,[],{label:'列设置',content:drawer});popup.id='colDrawerWrap';};
       const reset=drawer.querySelector('button');if(reset)decorateButton(reset,'refresh','恢复默认');}
     const exportButton=old.querySelector('[data-original-click*="exportTableToCSV"]');if(exportButton){exportButton.textContent='导出 Excel (CSV)';exportButton.setAttribute('aria-label','导出表格 CSV');exportButton.className='component-text-button';actions.append(exportButton);}
     const pageSize=shadow.querySelector('select[data-original-change]');if(pageSize){pageSize.setAttribute('aria-label','每页条数');pageSize.value=app.state.table.pageSize===9999?'all':String(app.state.table.pageSize);}
@@ -40,7 +40,7 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
   header.id=old.id;header.append(heading,actions);old.replaceWith(header);
   card.classList.add('component-'+family);card.dataset.chrome='icons-v1';
   if(family==='table'){const table=card.querySelector('#main14ColTable'),body=[...card.children].find(child=>child!==header&&child.contains(table));body?.classList.add('component-table-body');}
-  if(family==='kpi'&&['mc01','mc02','mc03','mc04'].includes(app.config.kpis?.[0]?.type)){
+  if(!card.classList.contains('kpi-aligned')&&family==='kpi'&&['mc01','mc02','mc03','mc04'].includes(app.config.kpis?.[0]?.type)){
     const sections=[...card.children].filter(n=>n!==header),value=sections.shift(),footer=sections.pop(),aux=text('div','kpi-aux');aux.append(...sections);if(value)value.classList.add('kpi-headline');if(footer)footer.classList.add('kpi-footer');card.replaceChildren(header,...(value?[value]:[]),aux,...(footer?[footer]:[]));card.classList.add('kpi-aligned');
   }
 

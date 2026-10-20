@@ -4,11 +4,14 @@ from __future__ import annotations
 import copy
 import json
 import time
-import threading
-from collections import OrderedDict
 from decimal import Decimal, ROUND_HALF_UP
 
 from .model import apply_operations, json_bytes, require
+from .local_data import QueryCache, semantic_filters
+
+
+def _key(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
 
 
 def formatted(value, metric, signed=False):
@@ -28,30 +31,27 @@ def formatted(value, metric, signed=False):
 class LocalView:
     def __init__(self, data):
         self.data = data
-        self.cache = OrderedDict()
-        self.cache_bytes = 0
-        self.cache_lock = threading.RLock()
+        self.query_cache = QueryCache()
 
     def aggregate(self, ref, metrics, filters, groups=None, grain=None):
-        with self.cache_lock:
-            return self._aggregate(ref, metrics, filters, groups, grain)
+        # Metric identity and labels are presentation; cache the calculation only.
+        names = list(metrics)
+        semantic_keys = ('aggregation', 'field', 'numerator', 'denominator', 'entityField')
+        definitions = [{k: v for k, v in metrics[name].items() if k in semantic_keys} for name in names]
+        canonical = sorted({_key(d): d for d in definitions}.values(), key=_key)
+        prefix = '__metric_'
+        while any(f'{prefix}{i}' in (groups or []) for i in range(len(canonical))):
+            prefix = '_' + prefix
+        alias_names = [f'{prefix}{i}' for i in range(len(canonical))]
+        aliases = dict(zip(alias_names, canonical))
+        key = _key([ref['version'], canonical, semantic_filters(filters), groups or [], grain])
+        result, hit = self.query_cache.get(key, lambda: self.data.aggregate(ref, aliases, filters, group_by=groups, time_grain=grain))
+        translated = []
+        for row in result:
+            translated.append({**{k: row[k] for k in groups or []}, **{name: row[alias_names[canonical.index(definition)]] for name, definition in zip(names, definitions)}})
+        return translated, hit
 
-    def _aggregate(self, ref, metrics, filters, groups=None, grain=None):
-        key = json.dumps([ref['version'], metrics, filters, groups, grain], sort_keys=True, ensure_ascii=False)
-        if key in self.cache:
-            self.cache.move_to_end(key)
-            return copy.deepcopy(self.cache[key][0]), True
-        value = self.data.aggregate(ref, metrics, filters, group_by=groups, time_grain=grain)
-        size = len(json_bytes(value))
-        if size <= 8 * 1024 * 1024:
-            self.cache[key] = (copy.deepcopy(value), size)
-            self.cache_bytes += size
-            while self.cache_bytes > 32 * 1024 * 1024 or len(self.cache) > 128:
-                _, (_, removed) = self.cache.popitem(last=False)
-                self.cache_bytes -= removed
-        return value, False
-
-    def prepare(self, document, filters=None, table_states=None, granularities=None):
+    def prepare(self, document, filters=None, table_states=None, granularities=None, component_ids=None, include_filter_options=True):
         started = time.perf_counter()
         doc = copy.deepcopy(document)
         if filters is not None:
@@ -63,7 +63,18 @@ class LocalView:
         table_states, granularities = table_states or {}, granularities or {}
         require(set(table_states) <= set(m['components']), 'Unknown table view component')
         require(set(granularities) <= set(m['components']) and all(v in ('month', 'quarter') for v in granularities.values()), 'Invalid chart granularity')
+        selected = set(m['components']) if component_ids is None else set(component_ids)
+        require(selected <= set(m['components']), 'Unknown view component')
+        if component_ids is None:
+            for ds, ref in refs.items():
+                declared = {f['field'] for f in m['filters'] if any(m['components'][cid].get('datasetId') == ds for cid in f['componentIds'])}
+                for c in m['components'].values():
+                    if c.get('datasetId') == ds and (c.get('family') == 'table' or c.get('kind') == 'table'):
+                        declared.update(k for k, v in ref['fields'].items() if v['type'] == 'number')
+                self.data.prepare_indexes(ref, declared)
         for key, c in m['components'].items():
+            if key not in selected:
+                continue
             family = c.get('family', 'chart') if c['kind'] == 'legacy' else c['kind']
             if family in ('text', 'statistical'):
                 continue
@@ -159,7 +170,7 @@ class LocalView:
                 grouped, hit = self.aggregate(ref, definitions, active, groups)
                 computed['cacheHits'] += int(hit)
                 computed['grouped'][key] = [{'x': r[c['x']], 'group': r.get(c.get('series')), 'values': {mid: r[mid] for mid in definitions}} for r in grouped]
-        for f in m['filters']:
+        for f in m['filters'] if include_filter_options else []:
             if f['op'] != 'in':
                 continue
             options = self.filter_options(doc, f['id'])

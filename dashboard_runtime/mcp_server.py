@@ -25,6 +25,10 @@ def result_text(result):
     """Keep the canonical artifact once, in structuredContent, rather than twice."""
     if 'export' in result and 'content' in result['export']:
         return json.dumps({'export': {k: v for k, v in result['export'].items() if k != 'content'}}, ensure_ascii=False)
+    if isinstance(result.get('computed'), dict) and isinstance(result.get('componentIds'), list):
+        return json.dumps({'dashboardId': result['id'], 'revision': result['revision'],
+                           'componentIds': result['componentIds'], 'artifactLocation': 'structuredContent'},
+                          ensure_ascii=False, allow_nan=False)
     document = result.get('document')
     if not isinstance(document, dict):
         return json.dumps(result, ensure_ascii=False, allow_nan=False)

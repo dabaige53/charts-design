@@ -44,8 +44,8 @@ def render_pdf(path: Path, document: dict, html: str, data):
             page = browser.new_page(viewport={'width': 1440, 'height': 1000}, device_scale_factor=2)
             page.set_content(html.replace('window.__DASHBOARD_BOOT__=', 'window.__CHARTS_PDF_EXPORT__=true;window.__DASHBOARD_BOOT__=', 1), wait_until='load')
             page.wait_for_selector('.grid-stack-item, .report-paper, .markdown-preview', timeout=30000)
-            page.evaluate('document.fonts.ready')
-            page.wait_for_timeout(1100)
+            page.wait_for_function('typeof window.__chartsReady === "function"')
+            page.evaluate('window.__chartsReady()')
             # Screenshots preserve each renderer's visuals, including shadow-root styles.
             # The print document owns pagination; no fixed grid or overflow containers remain.
             page.evaluate('''() => {

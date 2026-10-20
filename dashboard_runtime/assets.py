@@ -2,18 +2,38 @@
 from __future__ import annotations
 import json
 import hashlib
+from functools import lru_cache
 from pathlib import Path
 from .model import DashboardError, validate
 
 DIST = Path(__file__).parent / 'web' / 'dist'
 
-def ui_build_id():
-    digest = hashlib.sha256()
+def _asset_signature():
+    signature = []
     for name in ('app.js', 'app.css'):
         path = DIST / name
-        if path.exists():
-            digest.update(path.read_bytes())
-    return digest.hexdigest()[:12]
+        try:
+            stat = path.stat()
+            signature.append((stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino))
+        except FileNotFoundError:
+            signature.append(None)
+    return str(DIST.resolve()), tuple(signature)
+
+
+@lru_cache(maxsize=2)
+def _read_assets(directory, signature):
+    """Reuse immutable build contents; stat changes invalidate running MCP previews."""
+    digest = hashlib.sha256()
+    contents = []
+    for name, stamp in zip(('app.js', 'app.css'), signature):
+        raw = (Path(directory) / name).read_bytes() if stamp is not None else b''
+        digest.update(raw)
+        contents.append(raw.decode('utf-8'))
+    return digest.hexdigest()[:12], contents[0].replace('</script', '<\\/script'), contents[1].replace('</style', '<\\/style')
+
+
+def ui_build_id():
+    return _read_assets(*_asset_signature())[0]
 
 def render_html(mode='web', document=None, legacy=None, idle_timeout: float=60):
     js, css = DIST / 'app.js', DIST / 'app.css'
@@ -22,10 +42,9 @@ def render_html(mode='web', document=None, legacy=None, idle_timeout: float=60):
     if document is not None:
         validate(document)
     from .statistical import statistical_artifacts
-    boot = {'uiBuildId': ui_build_id(), 'statisticalArtifacts': statistical_artifacts(document) if document else {}, 'mode': mode, 'document': document, 'legacy': legacy or {}, 'idleTimeout': idle_timeout}
+    build_id, javascript, styles = _read_assets(*_asset_signature())
+    boot = {'uiBuildId': build_id, 'statisticalArtifacts': statistical_artifacts(document) if document else {}, 'mode': mode, 'document': document, 'legacy': legacy or {}, 'idleTimeout': idle_timeout}
     payload = json.dumps(boot, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
-    javascript = js.read_text().replace('</script', '<\\/script')
-    styles = css.read_text().replace('</style', '<\\/style')
     return ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>Charts Design</title><style>' + styles + '</style></head><body>'

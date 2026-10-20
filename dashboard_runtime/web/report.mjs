@@ -4,7 +4,7 @@ export {reportMarkdown};
 // Isolated purifier: original chart adapter has stricter link-removal hooks.
 const reportPurifier=DOMPurify(window);
 const node=(tag,cls='',text='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;};
-export function renderReport({host,doc,editing,mount,draft,onSave,onChange,onDiscard,onDownload,onDisposeCharts}){
+export function renderReport({host,doc,editing,mount,draft,onSave,onChange,onDiscard,onDownload,unmount,mountedCharts=new Map()}){
   const shell=node('div','markdown-workspace'+(editing?' is-writing':'')),bar=node('div','markdown-toolbar'),label=node('div','markdown-label',editing?'MARKDOWN / 写作与预览':'分析报告 / 阅读'),state=node('span','markdown-save-state'),preview=node('article','markdown-preview');
   bar.append(label,state);shell.append(bar);host.append(shell);
   let timer=null,disposed=false,saving=false,warnings=[];
@@ -23,16 +23,19 @@ export function renderReport({host,doc,editing,mount,draft,onSave,onChange,onDis
   }else shell.append(preview);
   function changed(){onChange(area.value);status();clearTimeout(timer);timer=setTimeout(draw,180);}
   function status(){state.textContent=(saving?'保存中…':draft.dirty?'未保存修改':`已保存 · v${draft.revision}`)+(warnings.length?` · ${warnings.length} 个注释引用未定义`:'');state.title=warnings.join('\n');state.classList.remove('error');state.classList.toggle('warning',warnings.length>0);if(save)save.disabled=saving||!draft.dirty;if(cancel)cancel.disabled=!draft.dirty;}
-  function draw(){if(disposed)return;onDisposeCharts();const result=parseReportMarkdown(draft.text,doc.manifest.components);warnings=result.warnings;preview.innerHTML=reportPurifier.sanitize(result.html,{FORBID_TAGS:['img','iframe','object','embed','form','style'],FORBID_ATTR:['style'],ALLOW_DATA_ATTR:true});
+  function draw(){if(disposed)return;const result=parseReportMarkdown(draft.text,doc.manifest.components);
+    const occurrences=new Map(),charts=result.charts.filter(chart=>!chart.error).map(chart=>{const count=occurrences.get(chart.componentId)||0;occurrences.set(chart.componentId,count+1);return {...chart,key:chart.componentId+':'+count};});
+    const wanted=new Set(charts.map(chart=>chart.key));for(const [key,entry] of mountedCharts)if(!wanted.has(key)){unmount(entry.host);mountedCharts.delete(key);}
+    warnings=result.warnings;preview.innerHTML=reportPurifier.sanitize(result.html,{FORBID_TAGS:['img','iframe','object','embed','form','style'],FORBID_ATTR:['style'],ALLOW_DATA_ATTR:true});
     for(const a of preview.querySelectorAll('a')){if(!a.getAttribute('href')?.startsWith('#')){a.rel='noopener noreferrer';a.target='_blank';}}
     let sectionNumber=0;for(const h of preview.querySelectorAll(':scope > h2')){if(!/^(摘要|关键词|Abstract|Keywords)$/i.test(h.textContent.trim())){sectionNumber++;if(!/^\d+[.、．\s]/.test(h.textContent))h.prepend(node('span','paper-section-number',sectionNumber+'　'));}}
     for(const p of preview.querySelectorAll(':scope > p')){if(/^摘要[：:]/.test(p.textContent.trim()))p.classList.add('paper-abstract');if(/^关键词[：:]/.test(p.textContent.trim()))p.classList.add('paper-keywords');}
     const subtitle=preview.querySelector(':scope > h1 + p');if(subtitle?.children.length===1&&subtitle.firstElementChild.tagName==='EM')subtitle.classList.add('paper-subtitle');
     const figureNumbers=new Map();for(const [index,ch] of result.charts.entries())if(!ch.error&&!figureNumbers.has(ch.componentId))figureNumbers.set(ch.componentId,index+1);
     for(const a of preview.querySelectorAll('a[href^="#fig-"]')){const target=a.getAttribute('href').slice(5),number=figureNumbers.get(target);if(number){if(a.textContent.trim()==='图')a.textContent='图 '+number;a.classList.add('paper-figure-ref');}else{a.classList.add('markdown-error');a.textContent='未找到图引用：'+target;result.errors.push('未找到图引用：'+target);}}
-    for(const chart of result.charts){if(chart.error)continue;const slot=preview.querySelector(`[data-chart-slot="${chart.slot}"]`),c=doc.manifest.components[chart.componentId];if(!preview.querySelector('#fig-'+chart.componentId))slot.id='fig-'+chart.componentId;slot.classList.add('paper-figure');const host=node('div','original-host markdown-chart');host.style.height=c.kind==='statistical'?'auto':(c.kind==='kpi'||c.family==='kpi'?180:c.kind==='table'||c.family==='table'?340:250)+'px';slot.append(host);try{mount(host,chart.componentId);}catch(e){slot.append(node('p','markdown-error',e.message));}slot.append(node('figcaption','paper-caption',`图 ${chart.slot+1}　${chart.caption??c.title}`));if(chart.source)slot.append(node('div','paper-source',chart.source));}
+    for(const chart of charts){const slot=preview.querySelector(`[data-chart-slot="${chart.slot}"]`),c=doc.manifest.components[chart.componentId];if(!preview.querySelector('#fig-'+chart.componentId))slot.id='fig-'+chart.componentId;slot.classList.add('paper-figure');let entry=mountedCharts.get(chart.key);const host=entry?.host||node('div','original-host markdown-chart');host.style.height=c.kind==='statistical'?'auto':(c.kind==='kpi'||c.family==='kpi'?180:c.kind==='table'||c.family==='table'?340:250)+'px';slot.append(host);try{mount(host,chart.componentId);}catch(e){slot.append(node('p','markdown-error',e.message));}mountedCharts.set(chart.key,{id:chart.componentId,host});slot.append(node('figcaption','paper-caption',`图 ${chart.slot+1}　${chart.caption??c.title}`));if(chart.source)slot.append(node('div','paper-source',chart.source));}
     if(!draft.text.trim())preview.append(node('p','markdown-placeholder','从一个标题开始写，然后在文字之间插入图表。'));
     if(result.errors.length){state.textContent=`${result.errors.length} 个图表代码块需要修正 · 原文已保留`;if(save)save.disabled=true;}else status();
   }
-  status();draw();return ()=>{disposed=true;clearTimeout(timer);};
+  status();draw();const dispose=()=>{disposed=true;clearTimeout(timer);};dispose.update=next=>{doc=next;if(area&&area.value!==draft.text)area.value=draft.text;draw();};return dispose;
 }
