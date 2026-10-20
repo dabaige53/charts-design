@@ -36,6 +36,10 @@ export async function start({echarts,GridStack,App}){
   let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,pendingLayout=null,dragging=false,renderQueued=false,linkage=null,app=null;
   let lastBreakpoint=null,transport,originalInstances=[],disposeToolbar=null,disposeReport=null;
   let viewTables={},viewGranularities={},viewRequest=0,refreshing=false,lastRefresh=null;
+  let pages=[],switchRequest=0,switching=false;
+  const titleRow=el('div','dashboard-title-row'),pageSwitch=button('切换页面',showPages,'page-switch');
+  title.before(titleRow);titleRow.append(title,pageSwitch);pageSwitch.hidden=true;
+  pageSwitch.setAttribute('aria-label','切换页面');pageSwitch.setAttribute('aria-haspopup','menu');pageSwitch.setAttribute('aria-expanded','false');
   const updateNotice=el('div','runtime-update-notice');updateNotice.hidden=true;updateNotice.setAttribute('role','status');top.after(updateNotice);
   let statisticalArtifacts=updateStatisticalArtifacts(Object.create(null),boot),renderedStatisticalArtifacts=null;
   const reportDrafts=new Map();
@@ -50,7 +54,7 @@ export async function start({echarts,GridStack,App}){
       const incoming=decodeToolResult(result);
       if(incoming.document&&doc&&incoming.document.id===doc.id&&incoming.document.revision<doc.revision)return;
       const previous=statisticalArtifacts,value=accept(incoming);
-      if(value.document){if(doc&&(doc.id!==value.document.id||doc.revision!==value.document.revision)){undo=[];redo=[];}doc=value.document;}
+      if(value.document){if(doc?.id!==value.document.id){switchRequest++;resetPageState();}if(doc&&(doc.id!==value.document.id||doc.revision!==value.document.revision)){undo=[];redo=[];}doc=value.document;}
       if(value.document&&!doc.computed){await refreshLocal();return;}
       if(value.document||previous!==statisticalArtifacts)render();
     }catch(e){showError(e);}};
@@ -68,6 +72,34 @@ export async function start({echarts,GridStack,App}){
     const id=new URLSearchParams(location.search).get('board');
     if(id)doc=(await transport('dashboard_get',{dashboardId:id,dataMode:'local'})).document;
     else{const boards=(await transport('dashboard_list',{})).dashboards;if(boards.length)doc=(await transport('dashboard_get',{dashboardId:boards[0].id,dataMode:'local'})).document;}
+  }
+  function resetPageState(){viewRequest++;viewTables={};viewGranularities={};linkage=null;undo=[];redo=[];lastRefresh=null;editing=false;}
+  function renderPageSwitch(){
+    const available=pages.filter(page=>page.id!==doc?.id);
+    pageSwitch.hidden=boot.mode==='offline'||!doc||!available.length;
+    pageSwitch.disabled=switching;pageSwitch.replaceChildren();
+    if(!editing&&doc)pageSwitch.append(el('span','page-switch-title',doc.manifest.title));
+    pageSwitch.append(icon('chevronDown'));title.hidden=!pageSwitch.hidden&&!editing;
+  }
+  async function refreshPages(){
+    pages=(await transport('dashboard_list',{})).dashboards;renderPageSwitch();
+  }
+  async function showPages(){
+    await refreshPages();
+    if(pageSwitch.hidden)return;
+    const current={id:doc.id,title:doc.manifest.title};
+    openMenu(pageSwitch,[current,...pages.filter(page=>page.id!==current.id)].map(page=>({label:page.title,icon:'chart',checked:page.id===doc.id,run:()=>switchPage(page.id)})),{label:'切换页面',align:'start'});
+  }
+  async function switchPage(id){
+    if(id===doc?.id)return;
+    const request=++switchRequest;switching=true;renderPageSwitch();
+    try{
+      saveLayout();await queue;
+      const result=await transport('dashboard_get',{dashboardId:id,dataMode:'local'});
+      if(request!==switchRequest)return;
+      resetPageState();doc=result.document;render();
+      if(boot.mode!=='mcp'){const url=new URL(location.href);url.searchParams.set('board',id);history.replaceState(null,'',url);}
+    }finally{switching=false;renderPageSwitch();}
   }
   async function mutate(name,args,pushUndo=true,rerender=true){
     if(!doc)throw Error('Create a dashboard first');
@@ -128,9 +160,10 @@ export async function start({echarts,GridStack,App}){
   async function restore(direction){const from=direction==='undo'?undo:redo,to=direction==='undo'?redo:undo;if(!from.length)return;const target=from.pop(),current=doc.revision;try{await mutate('dashboard_restore',{revision:target},false);to.push(current);render();}catch(e){from.push(target);throw e;}}
   async function reload(){if(!doc)return;if(reportDrafts.get(doc.id)?.dirty&&!confirm('重新读取会放弃未保存的 Markdown，继续？'))return;const next=(await transport('dashboard_get',{dashboardId:doc.id,dataMode:'local'})).document;reportDrafts.delete(doc.id);if(next.revision!==doc.revision){undo=[];redo=[];}doc=next;render();}
   async function refreshReport(force=false){
-    if(!doc||refreshing||editing||busy||pendingLayout||boot.mode==='offline')return;
+    if(!doc||refreshing||switching||editing||busy||pendingLayout||boot.mode==='offline')return;
     refreshing=true;
     try{
+      await refreshPages();
       const id=doc.id,info=await transport('runtime_info',{dashboardId:id});
       const changed=Boolean(boot.uiBuildId&&info.uiBuildId&&boot.uiBuildId!==info.uiBuildId);
       updateNotice.hidden=!changed;updateNotice.textContent=changed?'界面已有新版，请重新打开最新预览。报表数据仍可刷新。':'';
@@ -155,6 +188,7 @@ export async function start({echarts,GridStack,App}){
     const keepY=window.scrollY;canvas.style.minHeight=canvas.offsetHeight+'px';requestAnimationFrame(()=>requestAnimationFrame(()=>{canvas.style.minHeight='';if(Math.abs(window.scrollY-keepY)>1)window.scrollTo(0,keepY);}));
     renderedStatisticalArtifacts=statisticalArtifacts;
     root.classList.toggle('paper-reading',doc.manifest.viewMode==='report'&&!editing);root.classList.toggle('report-page',doc.manifest.viewMode==='report');document.documentElement.dataset.theme='light';document.title=doc.manifest.title;title.value=doc.manifest.title;title.disabled=!editing;
+    renderPageSwitch();
     const meta=doc.manifest.meta??doc.manifest.originalWorkspace?.meta??{};
     description.textContent=meta.subtitle||'';description.hidden=!description.textContent&&!editing;notice.hidden=!editing;
     clearInlineEdit(description);if(editing)inlineEdit(description,{label:'页面描述',value:meta.subtitle||'',save:value=>patch([{op:'set_meta',value:{...meta,subtitle:value}}])});
@@ -412,6 +446,7 @@ export async function start({echarts,GridStack,App}){
   window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!pendingLayout&&!dragging&&!busy)render();});
   if(boot.mode!=='offline')whileVisible(async()=>{if(!doc||editing||busy||pendingLayout||dragging||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{await refreshReport();}catch(e){showError(e);}},5000);
   if(boot.mode!=='offline')whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3));
-  window.addEventListener('beforeunload',event=>{if(doc&&reportDrafts.get(doc.id)?.dirty){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{if([...reportDrafts.values()].some(draft=>draft.dirty)){event.preventDefault();event.returnValue='';}});
   window.addEventListener('charts-error',event=>showError(event.detail));render();
+  if(boot.mode!=='offline')refreshPages().catch(showError);
 }

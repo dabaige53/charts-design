@@ -288,6 +288,8 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 页面说明使用 `manifest.meta`：可选字段 `subtitle`、`org`、`system`、`statusText`，均为最多 1000 字符的文本。`set_meta` 整体替换这些字段；传入 `{}` 清空页面说明。未设置 `meta` 的旧导入项目继续读取 `originalWorkspace.meta`。标题仍使用 `manifest.title` / `set_title`。通过 MCP 的 `set_meta` 修改这些字段。
 
+同一 Runtime 中保存多个页面时，MCP 内嵌预览和本机看板在左上角标题旁显示下拉箭头。点击标题可选择其他已保存页面，列表由 `dashboard_list` 读取，切换通过 `dashboard_get` 加载。新建页面会在阅读模式下自动出现在入口中；看板和分析报告均可切换。切换后退出编辑，并清空临时表格状态、图表联动和撤销记录；未保存的报告 Markdown 按页面保留在当前会话中。仅有一个页面或打开离线 HTML 时不显示入口。
+
 组件的 `subtitle` 为最多 1000 字符的说明，图表、指标卡和表格均显示。原版组件未设置顶层说明时使用 `config.subtitle`。原生指标卡默认 `presentation.type=mc01`，也支持 `mc02`–`mc09`；同比、环比、目标等字段需要明确提供，系统不会自动推算。`mc03` 需要有效数据字段 `timeField` 或显式 `sparkData` / `sparkline`；`mc06` 需要 `leftVal` 和 `rightVal`。
 
 仪表盘筛选栏常驻显示条件摘要与“一键重置”。多组件筛选的候选项取关联数据集的并集。新增 `op=contains`：`values` 为空或一个最多 1000 字符的文本，对明确声明的字符串 `field` 做不区分大小写的包含匹配；仅影响 `componentIds`。全页搜索使用本地数据版本，不重新执行来源 SQL。表格自己的搜索框只搜索本表。
