@@ -322,3 +322,5 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 - MCP UI 资源地址随最新 bundle 内容变化，并发出资源与工具目录更新通知。已加载的旧 iframe 无法由服务端强制替换；新版界面检测到构建差异会提示重新打开最新预览。主机若仍缓存旧工具目录，需要重新连接 MCP 后打开新预览。
 
 本地数据模式按不可变版本保存 SQLite 引用，筛选与汇总由本机计算；HTML/JSON 导出不嵌入全量明细。CSV 和 PDF 按实际导出范围处理。安装包与 GitHub 发布不包含用户的数据库或业务明细。
+
+完整 PDF 导出依赖 Playwright Chromium 和 Poppler（`pdfunite`）；Linux 安装 `poppler-utils`，macOS 使用本机已有的 Poppler。CI 显式安装这些依赖，不跳过 PDF 验收。
