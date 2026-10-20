@@ -1,6 +1,7 @@
 """Read-only adapter for the existing executive-charts catalog and workspace v1."""
 from __future__ import annotations
 import html
+import importlib
 import importlib.util
 import json
 import sys
@@ -9,6 +10,17 @@ from .model import DashboardError, apply_operations, identifier, new_document, r
 
 REPO = Path(__file__).resolve().parent.parent
 SKILL = REPO / 'skills' / 'executive-charts'
+
+def component_schemas():
+    """Load the installed standalone skill through its explicit script root."""
+    scripts = str(SKILL / 'scripts')
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    return importlib.import_module('core.component_schemas')
+
+def validate_comparisons(config, path):
+    errors = component_schemas().validate_kpi_comparisons(config, path)
+    require(not errors, 'KPI comparison contract: ' + json.dumps(errors, ensure_ascii=False), 'KPI_COMPARISON_INVALID')
 
 def catalog():
     path = SKILL / 'references' / 'chart_catalog.json'
@@ -22,6 +34,8 @@ def render(config):
     require(path.exists(), 'Legacy renderer requires the original charts-design repository', 'LEGACY_UNAVAILABLE')
     sys.path.insert(0, str(path.parent)) if str(path.parent) not in sys.path else None
     spec = importlib.util.spec_from_file_location('_charts_legacy', path)
+    if spec is None or spec.loader is None:
+        raise DashboardError('LEGACY_UNAVAILABLE', 'Cannot load the original chart renderer')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     code = config.get('code')
@@ -90,11 +104,15 @@ def import_workspace(path, board_id):
         for key in ordered:
             c = result['manifest']['components'][key]
             width = (cols // 4 if bp == 'desktop' else cols // 2) if c['family'] == 'kpi' else (cols if c['family'] == 'table' or c['config'].get('colSpan') == 2 else cols // 2)
-            if bp == 'mobile': width = cols
+            if bp == 'mobile':
+                width = cols
             height = 4 if c['family'] == 'kpi' else 12 if c['family'] == 'table' else 8
-            if x + width > cols: y += row_height; x = row_height = 0
+            if x + width > cols:
+                y += row_height
+                x = row_height = 0
             positions.append({'id': key, 'x': x, 'y': y, 'w': width, 'h': height})
-            x += width; row_height = max(row_height, height)
+            x += width
+            row_height = max(row_height, height)
         result['manifest']['layout'][bp] = positions
     from .model import validate
     return validate(result), notes
@@ -105,16 +123,14 @@ def validate_original(component):
     require(isinstance(config, dict), 'Original component requires a config object')
     family = component.get('family', 'chart')
     require(family in ('chart', 'kpi', 'table'), 'Unknown original component family')
-    scripts = SKILL / 'scripts'
-    if str(scripts) not in sys.path:
-        sys.path.insert(0, str(scripts))
-    from core.component_schemas import validate_chart_data, KPI_TYPES
+    schemas = component_schemas()
     if family == 'chart':
         require(isinstance(config.get('data'), dict) and isinstance(config.get('presentation'), dict), 'Original charts need explicit data and presentation')
-        errors = validate_chart_data(config['data'], 'config.data', code=config.get('code'), strict=True, presentation=config['presentation'])
+        errors = schemas.validate_chart_data(config['data'], 'config.data', code=config.get('code'), strict=True, presentation=config['presentation'])
         require(not errors, 'Original chart contract: ' + json.dumps(errors, ensure_ascii=False))
     elif family == 'kpi':
-        require(config.get('type', 'mc01') in KPI_TYPES, 'Unknown original KPI type')
+        validate_comparisons(config, 'config')
+        require(config.get('type', 'mc01') in schemas.KPI_TYPES, 'Unknown original KPI type')
         require(isinstance(config.get('label'), str), 'Original KPI requires a label')
         require('value' in config or (config.get('type') == 'mc06' and 'leftVal' in config and 'rightVal' in config), 'Original KPI requires explicit values')
         if config.get('type') == 'mc03':

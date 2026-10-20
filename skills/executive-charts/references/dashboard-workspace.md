@@ -64,7 +64,7 @@ Use `--replace` for an intentional replacement of an existing KPI or chart with 
 }
 ```
 
-Keep the display value and unit consistent. Optional comparisons render as a dash when omitted. Comparison fields such as `yoy` and `mom` take their color from their sign (红涨绿跌): start increases with `+` and decreases with `-`; unsigned or zero values stay neutral. Strict mode also checks the primary visual data of specialized cards:
+Keep the display value and unit consistent. Optional comparisons render as a dash when omitted. Comparison fields `yoy`, `mom`, `leftYoy` and `rightYoy` accept finite numbers or signed display text. Numbers carry their direction and the renderer adds `+` to positive values; use a metric binding to retain units and precision during filtering. Legacy text must preserve its sign (`+12.4%`, `-1%`). Strict validation rejects nonzero unsigned comparison text instead of silently delivering grey badges. Zero, missing values and status text stay neutral. Do not infer a business direction from an ambiguous unsigned string. Strict mode also checks the primary visual data of specialized cards:
 
 - `mc03`: non-empty `sparkMonths` and finite `sparkData` arrays of equal length;
 - `mc04` / `mc05`: a numeric display value, including zero;

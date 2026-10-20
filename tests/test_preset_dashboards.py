@@ -9,16 +9,19 @@ import pytest
 SCRIPTS = Path(__file__).parents[1] / "skills" / "executive-charts" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from generate_dashboard import PRESET_CONFIGS, generate_dashboard, legacy_filters_to_array
-from test_palette import run_renderer
+from generate_dashboard import PRESET_CONFIGS, generate_dashboard, legacy_filters_to_array  # type: ignore[reportMissingImports]  # noqa: E402
+from test_palette import run_renderer  # noqa: E402
 
 
 def built_config(tmp_path, **kwargs):
     target = tmp_path / "board.html"
     generate_dashboard(output_path=str(target), **kwargs)
     html = target.read_text(encoding="utf-8")
-    filters = json.loads(re.search(r"filters: (\[.*?\]),\n\s+kpis:", html, re.S).group(1))
-    table = json.loads(re.search(r"table: (\{.*?\}),\n\s+explanations:", html, re.S).group(1))
+    filter_match = re.search(r"filters: (\[.*?\]),\n\s+kpis:", html, re.S)
+    table_match = re.search(r"table: (\{.*?\}),\n\s+explanations:", html, re.S)
+    assert filter_match is not None and table_match is not None
+    filters = json.loads(filter_match.group(1))
+    table = json.loads(table_match.group(1))
     return filters, table
 
 
@@ -84,5 +87,5 @@ app.exportTableToCSV();
 console.log(JSON.stringify({body: elements.main14ColTbody.innerHTML, csv}));
 """)
     cells = re.findall(r"<td[^>]*>(.*?)</td>", result["body"], re.S)
-    assert cells == ["华东一店", "0", "-"]
+    assert cells == ["华东一店", "0", "—"]
     assert result["csv"].splitlines()[-1] == '"华东一店","0",""'

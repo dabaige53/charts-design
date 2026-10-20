@@ -1,7 +1,4 @@
 # Base template with 100% solid, non-overlapping sticky table headers
-import os
-import re
-
 from .runtime_bundle import render_runtime_bundle
 from .filter_bindings import FILTER_BINDINGS_JS
 from .palette import categorical_js, echarts_palette_js, tailwind_colors_js
@@ -611,6 +608,11 @@ __FILTER_BINDINGS_JS__
             return direction > 0 ? 'text-positive' : direction < 0 ? 'text-negative' : neutralClass;
         }
 
+        function comparisonText(value) {
+            if (typeof value === 'number') return Number.isFinite(value) ? (value > 0 ? '+' : '') + value : '—';
+            return value ?? '—';
+        }
+
         function trendBadgeClass(value) {
             const direction = trendDirection(value);
             if (direction > 0) return 'bg-positive/10 text-positive border-positive/20';
@@ -810,7 +812,7 @@ __FILTER_BINDINGS_JS__
                                 </div>
                                 <div class="flex items-baseline gap-2 my-1">
                                     <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
-                                    <span class="text-xs font-semibold ${trendTextClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
+                                    <span class="text-xs font-semibold ${trendTextClass(kpi.yoy)} font-mono">${comparisonText(kpi.yoy)}</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '统计口径'}</span>
@@ -832,8 +834,8 @@ __FILTER_BINDINGS_JS__
                                     <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
                                 </div>
                                 <div class="flex items-center gap-1.5 my-1">
-                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${trendBadgeClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
-                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${trendBadgeClass(kpi.mom)} font-mono">${kpi.mom ?? '—'}</span>
+                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${trendBadgeClass(kpi.yoy)} font-mono">同比 ${comparisonText(kpi.yoy)}</span>
+                                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${trendBadgeClass(kpi.mom)} font-mono">环比 ${comparisonText(kpi.mom)}</span>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                     <span>${kpi.subLabel || '同比增量'}</span>
@@ -854,7 +856,7 @@ __FILTER_BINDINGS_JS__
                                 <div class="flex items-baseline justify-between gap-2">
                                     <div class="flex items-baseline gap-1.5">
                                         <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
-                                        <span class="text-xs font-bold ${trendTextClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
+                                        <span class="text-xs font-bold ${trendTextClass(kpi.yoy)} font-mono">${comparisonText(kpi.yoy)}</span>
                                     </div>
                                     <span class="text-[10px] font-semibold border ${trendBadgeClass(kpi.trendLabel)} px-1.5 py-0.5 rounded font-mono">${kpi.trendLabel ?? '—'}</span>
                                 </div>
@@ -879,7 +881,7 @@ __FILTER_BINDINGS_JS__
                                 </div>
                                 <div class="flex items-baseline justify-between my-0.5">
                                     <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
-                                    <span class="text-[11px] font-bold ${trendTextClass(kpi.yoy, 'text-primary')} font-mono">${kpi.yoy ?? '—'}</span>
+                                    <span class="text-[11px] font-bold ${trendTextClass(kpi.yoy, 'text-primary')} font-mono">${comparisonText(kpi.yoy)}</span>
                                 </div>
                                 <div class="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden my-1.5">
                                     <div class="bg-primary h-full rounded-full transition-all" style="width: ${barWidth}%;"></div>
@@ -927,12 +929,12 @@ __FILTER_BINDINGS_JS__
                                     <div>
                                         <span class="text-[10px] text-ink-subtle block">${kpi.leftTitle || '规模指标'}</span>
                                         <div class="text-lg font-extrabold text-primary-strong font-mono tabular-nums">${kpi.leftVal ?? '—'}</div>
-                                        <span class="text-[10px] ${trendTextClass(kpi.leftYoy)} font-bold font-mono">${kpi.leftYoy ?? '—'}</span>
+                                        <span class="text-[10px] ${trendTextClass(kpi.leftYoy)} font-bold font-mono">${comparisonText(kpi.leftYoy)}</span>
                                     </div>
                                     <div class="pl-2">
                                         <span class="text-[10px] text-ink-subtle block">${kpi.rightTitle || '效能指标'}</span>
                                         <div class="text-lg font-extrabold text-primary font-mono tabular-nums">${kpi.rightVal ?? '—'}</div>
-                                        <span class="text-[10px] ${trendTextClass(kpi.rightYoy)} font-bold font-mono">${kpi.rightYoy ?? '—'}</span>
+                                        <span class="text-[10px] ${trendTextClass(kpi.rightYoy)} font-bold font-mono">${comparisonText(kpi.rightYoy)}</span>
                                     </div>
                                 </div>
                                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
@@ -1004,7 +1006,7 @@ __FILTER_BINDINGS_JS__
                                 </div>
                                 <div class="flex items-baseline justify-between my-0.5">
                                     <span class="text-xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
-                                    <span class="text-[10px] ${trendTextClass(kpi.yoy, 'text-ink-subtle')} font-mono">${kpi.yoy ?? '—'}</span>
+                                    <span class="text-[10px] ${trendTextClass(kpi.yoy, 'text-ink-subtle')} font-mono">${comparisonText(kpi.yoy)}</span>
                                 </div>
                                 <div class="w-full h-2.5 rounded-full overflow-hidden flex my-1.5 shadow-inner bg-slate-100">
                                     <div class="bg-primary h-full transition-all" style="width: ${parseKPIValue(kpi.segLeftWidth) ?? 0}%;"></div>
@@ -1027,7 +1029,7 @@ __FILTER_BINDINGS_JS__
                             </div>
                             <div class="flex items-baseline gap-2 my-1">
                                 <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
-                                <span class="text-xs font-semibold ${trendTextClass(kpi.yoy)} font-mono">${kpi.yoy ?? '—'}</span>
+                                <span class="text-xs font-semibold ${trendTextClass(kpi.yoy)} font-mono">${comparisonText(kpi.yoy)}</span>
                             </div>
                             <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
                                 <span>${kpi.subLabel ?? '—'}</span>
@@ -2132,7 +2134,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
             }
 
             nextTablePage() {
-                const totalPages = Math.ceil(this.getFilteredTableRows().length / this.state.table.pageSize);
+                const totalPages = Math.ceil((this.config.table?.remotePage?.totalRows ?? this.getFilteredTableRows().length) / this.state.table.pageSize);
                 if (this.state.table.page < totalPages) {
                     this.state.table.page++;
                     this.renderTableEngine();
@@ -2151,6 +2153,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
 
             getFilteredTableRows(componentId = null) {
                 let rows = [...(this.config.table?.rows || [])];
+                if (this.config.table?.remotePage) return rows;
 
                 // 1. Dynamic Attribute Filtering
                 this.state.filterDefs.forEach(f => {
@@ -2213,6 +2216,18 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                 return rows;
             }
 
+            formatTableCell(raw, col) {
+                if (raw === undefined || raw === null || raw === '') return '—';
+                if (!col.format || typeof raw !== 'number' || !Number.isFinite(raw)) return String(raw);
+                const digits = col.decimals ?? (col.format === 'percent' ? 1 : 0);
+                const scaled = col.format === 'percent' && col.scale === 'fraction' ? raw * 100 : raw;
+                const formatter = new Intl.NumberFormat('zh-CN', {minimumFractionDigits: digits, maximumFractionDigits: digits});
+                let text = formatter.format(scaled);
+                const value = Number(text.replace(/,/g, ''));
+                if (value === 0) text = formatter.format(0);
+                return (col.signed && value > 0 ? '+' : '') + text + (col.format === 'percent' ? '%' : '');
+            }
+
             renderTableEngine() {
                 const thead = this.getById('main14ColThead');
                 const tbody = this.getById('main14ColTbody');
@@ -2220,13 +2235,14 @@ __EXPLANATION_DIALOG_RENDERER_JS__
 
                 const visibleCols = this.state.table.orderedColumns.filter(c => this.state.table.visibleCols.has(c.key));
                 const allFiltered = this.getFilteredTableRows();
-                const total = allFiltered.length;
+                const remote = this.config.table?.remotePage;
+                const total = remote?.totalRows ?? allFiltered.length;
                 const pageSize = this.state.table.pageSize;
                 const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
                 if (this.state.table.page > totalPages) this.state.table.page = totalPages;
                 const startIdx = (this.state.table.page - 1) * pageSize;
-                const currentRows = allFiltered.slice(startIdx, startIdx + pageSize);
+                const currentRows = remote ? allFiltered : allFiltered.slice(startIdx, startIdx + pageSize);
 
                 // Render Thead (Strict single line with whitespace-nowrap)
                 thead.innerHTML = `
@@ -2253,8 +2269,8 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                             ${visibleCols.map(col => {
                                 const raw = row[col.key];
                                 const hasValue = raw !== undefined && raw !== null && raw !== '';
-                                let val = hasValue ? String(raw) : '-';
-                                const trendClass = hasValue && ['yoy', 'mom'].includes(col.key) ? trendTextClass(raw, '') : '';
+                                let val = this.formatTableCell(raw, col);
+                                const trendClass = hasValue && ['yoy', 'mom'].includes(col.key) ? trendTextClass(val, '') : '';
                                 let cellStyle = trendClass ? `${trendClass} font-bold` : '';
                                 if (col.key === 'rating') {
                                     if (val.includes('S')) val = `<span class="px-2 py-0.5 rounded bg-[#123B5D]/10 text-primary border border-[#123B5D]/20 font-bold text-[10px] whitespace-nowrap">${val}</span>`;

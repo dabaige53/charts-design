@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolveOriginal} from '../../dashboard_runtime/web/bindings.mjs';
+import {formatComparison} from '../../dashboard_runtime/web/engine.mjs';
 const source={
  manifest:{components:{bar:{kind:'legacy',family:'chart',datasetId:'ds',config:{code:'c01',data:{categories:['old'],values:[999]},presentation:{}},binding:{datasetId:'ds',categoryField:'region',categoryTarget:'categories',measures:{values:'revenue'}}}},metrics:{revenue:{aggregation:'sum',field:'revenue'},ratio:{aggregation:'ratio',numerator:'p',denominator:'s',format:'percent'}},filters:[]},
  snapshot:{datasets:{ds:[{region:'East',date:'2026-01-01',revenue:100,p:90,s:100},{region:'East',date:'2026-02-01',revenue:20,p:1,s:10},{region:'West',date:'2026-02-01',revenue:35,p:7,s:10}]}}};
@@ -20,4 +21,23 @@ test('quarterly dual-axis ratio is not an average of monthly percentages',()=>{
 test('metric decimals set the shown precision after scaling',()=>{
  const d=structuredClone(source);d.manifest.metrics.ratio={...d.manifest.metrics.ratio,decimals:0};d.manifest.components.dual={kind:'legacy',family:'chart',datasetId:'ds',config:{code:'t06',data:{}},binding:{datasetId:'ds',categoryField:'date',categoryTarget:'categories',timeGrain:true,measures:{revenue:'revenue',yieldGrowth:'ratio'},scale:{yieldGrowth:100}}};
  assert.equal(resolveOriginal(d,'dual','quarter').data.month.yieldGrowth[0],82);
+});
+test('filtered KPI comparisons retain signs, units and neutral zero',()=>{
+ const d=structuredClone(source);
+ d.manifest.components.kpi={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc02',value:'old'},binding:{datasetId:'ds',measures:{value:'revenue',yoy:'ratio',mom:'change'}}};
+ d.manifest.metrics.change={aggregation:'sum',field:'change',format:'percent',decimals:1};
+ d.snapshot.datasets.ds=[{region:'East',revenue:100,p:12.4,s:100,change:-0.01},{region:'West',revenue:50,p:0,s:100,change:0}];
+ d.manifest.filters=[{componentIds:['kpi'],field:'region',op:'in',values:['East']}];
+ assert.equal(resolveOriginal(d,'kpi').yoy,'+12.4%');
+ assert.equal(resolveOriginal(d,'kpi').mom,'-1%');
+ d.manifest.filters[0].values=['West'];
+ assert.equal(resolveOriginal(d,'kpi').yoy,'0%');
+ assert.equal(resolveOriginal(d,'kpi').mom,'0%');
+ d.manifest.filters[0].values=['Missing'];
+ assert.equal(resolveOriginal(d,'kpi').yoy,'—');
+});
+test('rounded zero never receives a positive or negative sign',()=>{
+ assert.equal(formatComparison(0.00001,{format:'percent',decimals:1}),'0%');
+ assert.equal(formatComparison(-0.00001,{format:'percent',decimals:1}),'0%');
+ assert.equal(formatComparison(0,{unit:'m2'}),'0 m2');
 });

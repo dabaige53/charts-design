@@ -30,6 +30,16 @@ def test_contract_and_ratio_definition():
     assert len(doc["snapshot"]["datasets"]["sales"]) == 6
 
 
+@pytest.mark.parametrize('legacy', [True, False])
+def test_ambiguous_kpi_comparison_cannot_be_saved(legacy):
+    component = ({'kind': 'legacy', 'family': 'kpi', 'title': 'Sales',
+                  'config': {'type': 'mc02', 'label': 'Sales', 'value': 100, 'yoy': '12.4%'}}
+                 if legacy else {'kind': 'kpi', 'title': 'Sales', 'datasetId': 'sales',
+                                 'measures': ['revenue'], 'presentation': {'type': 'mc02', 'yoy': '12.4%'}})
+    with pytest.raises(DashboardError, match='Nonzero comparison text'):
+        apply_operations(document(), [{'op': 'put_component', 'id': 'ambiguous', 'value': component}])
+
+
 @pytest.mark.parametrize("bad", ["scatter", "heatmap", "waterfall", "unknown"])
 def test_incompatible_charts_rejected(bad):
     with pytest.raises(DashboardError):

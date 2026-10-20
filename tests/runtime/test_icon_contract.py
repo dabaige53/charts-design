@@ -86,7 +86,7 @@ def test_every_original_visual_and_icon_header(tmp_path):
                         "button", name="指标定义与语义", exact=True
                     ).click()
                     assert page.get_by_role(
-                        "button", name="SQL 与来源", exact=True
+                        "heading", name="SQL 与来源", exact=True
                     ).is_visible(), key
                     page.get_by_role("button", name="关闭", exact=True).click()
                     with page.expect_download() as downloaded:

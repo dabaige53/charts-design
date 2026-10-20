@@ -15,8 +15,8 @@ def document(board_id='demo'):
     ops = [
         {'op': 'put_source', 'id': 'fixture', 'value': {'kind': 'fixture', 'name': 'Synthetic acceptance-test data; not a real query'}},
         {'op': 'put_dataset', 'id': 'sales', 'meta': {'sourceId': 'fixture', 'fields': {k: {'type': 'string' if k in ('month', 'region') else 'number'} for k in rows[0]}}, 'rows': rows},
-        {'op': 'put_metric', 'id': 'revenue', 'value': {'datasetId': 'sales', 'field': 'revenue', 'aggregation': 'sum', 'label': 'Revenue', 'unit': '10k CNY', 'definition': 'Sum of synthetic revenue for the selected months and regions.', 'status': 'unverified'}},
-        {'op': 'put_metric', 'id': 'load-factor', 'value': {'datasetId': 'sales', 'aggregation': 'ratio', 'numerator': 'passengers', 'denominator': 'seats', 'label': 'Load factor', 'unit': '', 'format': 'percent', 'scale': 'fraction', 'definition': 'Sum(passengers) / sum(seats), recomputed after filters. Synthetic example only.', 'status': 'unverified'}},
+        {'op': 'put_metric', 'id': 'revenue', 'value': {'datasetId': 'sales', 'field': 'revenue', 'aggregation': 'sum', 'label': 'Revenue', 'unit': '10k CNY', 'definition': '所选月份和区域内，收入记录的金额合计，用于比较各期与各区域的收入规模。', 'status': 'unverified'}},
+        {'op': 'put_metric', 'id': 'load-factor', 'value': {'datasetId': 'sales', 'aggregation': 'ratio', 'numerator': 'passengers', 'denominator': 'seats', 'label': 'Load factor', 'unit': '', 'format': 'percent', 'scale': 'fraction', 'definition': '所选月份和区域内，旅客量占可用座位数的比例，反映座位使用情况。先分别汇总旅客量与座位数，再计算比例。', 'status': 'unverified'}},
         {'op': 'put_component', 'id': 'total', 'value': {'kind': 'kpi', 'title': 'Revenue', 'datasetId': 'sales', 'measures': ['revenue']}},
         {'op': 'put_component', 'id': 'load', 'value': {'kind': 'kpi', 'title': 'Load factor', 'datasetId': 'sales', 'measures': ['load-factor']}},
         {'op': 'put_component', 'id': 'trend', 'value': {'kind': 'chart', 'title': 'Revenue by month', 'datasetId': 'sales', 'x': 'month', 'measures': ['revenue'], 'chartType': 'line'}},
@@ -70,13 +70,14 @@ def executive_document(board_id='executive-demo'):
     ops = [{'op': 'put_metric', 'id': 'revenue', 'value': {**doc['manifest']['metrics']['revenue'], 'label': '营业收入', 'unit': '万元'}}, {'op': 'set_title', 'value': '民航航空集团月度运营与收益复盘全景看板'},
            {'op': 'set_meta', 'value': {'iconKey': 'plane', 'subtitle': '收入规模、运力利用与目标推进', 'org': '航空运营管理中心', 'system': '经营决策与运行控制系统 (AOC / RMS)', 'statusText': '月度经营复盘'}},
            {'op': 'put_dataset', 'id': 'sales', 'meta': {'sourceId': 'fixture', 'fields': fields}, 'rows': rows}]
+    ratio_definitions = {'attainment': '所选月份和区域内，营业收入占同期预算收入的比例，反映当前收入相对于预算目标的完成程度。', 'yield-growth': '所选月份和区域内，收入相对基期金额的增减幅度。正值表示收入增加，负值表示收入减少。'}
     for key, numerator, denominator, label in [('attainment', 'revenue', 'budget', '预算达成率'), ('yield-growth', 'yieldDelta', 'yieldBase', '收益变动率')]:
-        ops.append({'op': 'put_metric', 'id': key, 'value': {'datasetId': 'sales', 'aggregation': 'ratio', 'numerator': numerator, 'denominator': denominator, 'label': label, 'unit': '', 'format': 'percent', 'scale': 'fraction', 'definition': f'合成数据 sum({numerator}) / sum({denominator})；筛选后重算。'}})
+        ops.append({'op': 'put_metric', 'id': key, 'value': {'datasetId': 'sales', 'aggregation': 'ratio', 'numerator': numerator, 'denominator': denominator, 'label': label, 'unit': '', 'format': 'percent', 'scale': 'fraction', 'definition': ratio_definitions[key]}})
     ids = ['total', 'load', 'passengers', 'goal']
     cards = [('total', 'mc01', 'revenue', '主营收入', '万元'), ('load', 'mc02', 'load-factor', '客座率', ''), ('passengers', 'mc03', 'passengers', '旅客运输量', '万人次'), ('goal', 'mc04', 'attainment', '预算目标推进', '')]
-    ops.append({'op': 'put_metric', 'id': 'passengers', 'value': {'datasetId': 'sales', 'field': 'passengers', 'aggregation': 'sum', 'label': '旅客运输量', 'unit': '万人次', 'definition': '合成旅客量求和，筛选后重算。'}})
+    ops.append({'op': 'put_metric', 'id': 'passengers', 'value': {'datasetId': 'sales', 'field': 'passengers', 'aggregation': 'sum', 'label': '旅客运输量', 'unit': '万人次', 'definition': '所选月份和区域内，数据表记录的旅客运输量合计，用于比较运输业务规模。'}})
     for key, field_name, label, unit in [('budget', 'budget', '预算收入', '万元'), ('seats', 'seats', '可用座位数', '万座'), ('baseline-revenue', 'yieldBase', '基期收入', '万元')]:
-        ops.append({'op': 'put_metric', 'id': key, 'value': {'datasetId': 'sales', 'field': field_name, 'aggregation': 'sum', 'label': label, 'unit': unit, 'definition': f'按所选范围汇总 {field_name}。'}})
+        ops.append({'op': 'put_metric', 'id': key, 'value': {'datasetId': 'sales', 'field': field_name, 'aggregation': 'sum', 'label': label, 'unit': unit, 'definition': {'budget': '所选月份和区域对应的预算收入合计，作为同一范围营业收入的目标比较值。', 'seats': '所选月份和区域内记录的可用座位数合计，作为座位使用比例的计算基础。', 'baseline-revenue': '与所选月份和区域对应的基期收入合计，作为收入增减幅度的比较基础。'}[key]}})
     totals = {field: sum(row[field] for row in rows) for field in ('revenue', 'passengers', 'seats', 'budget')}
     headline = {'revenue': str(totals['revenue']), 'passengers': str(totals['passengers']), 'load-factor': f"{totals['passengers'] / totals['seats']:.2%}", 'attainment': f"{totals['revenue'] / totals['budget']:.2%}"}
     for key, card_type, metric, label, unit in cards:

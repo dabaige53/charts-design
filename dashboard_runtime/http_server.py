@@ -93,7 +93,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == '/health':
                 self.send({'ok': True})
             elif path.startswith('/api/export/'):
-                doc = self.runtime.service.store.get(unquote(path.removeprefix('/api/export/')))
+                store = self.runtime.service.store
+                doc = store.hydrate(store.get(unquote(path.removeprefix('/api/export/')), hydrate=False))
                 self.send(export_document(doc), content_type='text/html')
             else:
                 raise DashboardError('NOT_FOUND', 'Unknown endpoint', 404)

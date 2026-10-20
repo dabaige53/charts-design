@@ -35,9 +35,13 @@ def validate_binding(doc, component):
     if family == 'chart':
         target = SERIES_TARGETS.get(config.get('code'))
         require(target is not None, 'This original shape needs a dedicated reviewed data transform', 'BINDING_TRANSFORM_REQUIRED')
+        assert target is not None
         require(b.get('categoryTarget') == target[0], 'Wrong category target for the original chart')
         require(set(measures) == set(target[1]), 'Bind every required series; stale snapshot series are not allowed')
         field(m['datasets'][ds], b.get('categoryField'))
+        if b.get('orderBy'):
+            require(b['orderBy'].get('target') in measures, 'Binding sort target must be a bound measure')
+            require(b['orderBy'].get('direction') in ('asc', 'desc'), 'Binding sort direction must be asc or desc')
         if b.get('timeGrain'):
             require(m['datasets'][ds]['fields'][b['categoryField']]['type'] == 'date', 'Monthly/quarterly binding requires a date field')
     elif family == 'kpi':

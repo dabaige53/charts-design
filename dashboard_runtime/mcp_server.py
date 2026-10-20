@@ -11,16 +11,38 @@ from .model import DashboardError, MAX_BYTES
 from .service import READ_ONLY, TOOLS
 
 LEGACY_URI = f'ui://charts-design/dashboard-v{__version__}.html'
-# A rebuilt frontend must not reuse the host's cached resource identity.
-_bundle = hashlib.sha256()
-for _asset in ('app.js', 'app.css'):
-    _path = DIST / _asset
-    if _path.exists():
-        _bundle.update(_path.read_bytes())
-URI = f'ui://charts-design/dashboard-v{__version__}-{_bundle.hexdigest()[:12]}.html'
+def current_ui_uri():
+    """Frontend rebuilds also change resource identity in a running worker."""
+    bundle = hashlib.sha256()
+    for asset in ('app.js', 'app.css'):
+        path = DIST / asset
+        if path.exists():
+            bundle.update(path.read_bytes())
+    return f'ui://charts-design/dashboard-v{__version__}-{bundle.hexdigest()[:12]}.html'
+
+URI = current_ui_uri()
 MIME = 'text/html;profile=mcp-app'
 UI_TOOLS = {'dashboard_create', 'dashboard_preview', 'dashboard_patch',
-            'dashboard_restore', 'dataset_import', 'query_execute'}
+            'dashboard_restore', 'dataset_import', 'query_execute', 'dataset_attach',
+            'dashboard_view', 'dashboard_migrate', 'dashboard_migration_rollback'}
+UI_TOOLS.add('dashboard_refresh')
+
+def result_text(result):
+    """Keep the canonical artifact once, in structuredContent, rather than twice."""
+    if 'export' in result and 'content' in result['export']:
+        return json.dumps({'export': {k: v for k, v in result['export'].items() if k != 'content'}}, ensure_ascii=False)
+    document = result.get('document')
+    if not isinstance(document, dict):
+        return json.dumps(result, ensure_ascii=False, allow_nan=False)
+    summary = {key: value for key, value in result.items() if key not in ('document', 'statisticalArtifacts')}
+    summary.update({
+        'dashboardId': document['id'], 'revision': document['revision'],
+        'title': document['manifest']['title'], 'artifactLocation': 'structuredContent.document',
+        'documentBytes': len(json.dumps(document, ensure_ascii=False, allow_nan=False).encode('utf-8')),
+        'datasetRows': {**{key: len(rows) for key, rows in document['snapshot']['datasets'].items()},
+                        **{key: ref['rowCount'] for key, ref in document['snapshot'].get('datasetRefs', {}).items()}},
+    })
+    return json.dumps(summary, ensure_ascii=False, allow_nan=False)
 
 def create_server(service, lifetime=None):
     lifetime = lifetime or IdleLifetime()
@@ -32,13 +54,18 @@ def create_server(service, lifetime=None):
     except ImportError as exc:
         raise DashboardError('MCP_NOT_INSTALLED', 'Install the MCP adapter: python3 -m pip install "mcp>=1.28,<2"') from exc
     server = Server('charts-design', version=__version__)
+    advertised_uri = None
+    known_uris = {URI, LEGACY_URI}
 
     @server.list_tools()
     @lifetime.track
     async def list_tools():
+        nonlocal advertised_uri
+        advertised_uri = current_ui_uri()
+        known_uris.add(advertised_uri)
         result = []
         for name, (description, schema) in TOOLS.items():
-            metadata = {'ui': {'resourceUri': URI}, 'ui/resourceUri': URI} if name in UI_TOOLS else {}
+            metadata = {'ui': {'resourceUri': advertised_uri}, 'ui/resourceUri': advertised_uri} if name in UI_TOOLS else {}
             if name == 'runtime_keepalive':
                 metadata = {'ui': {'visibility': ['app']}}
             tool = types.Tool(name=name, description=description, inputSchema=schema,
@@ -51,9 +78,19 @@ def create_server(service, lifetime=None):
     @server.call_tool()
     @lifetime.track
     async def call_tool(name, arguments):
+        nonlocal advertised_uri
         try:
-            result = await asyncio.to_thread(service.call, name, arguments or {})
-            return types.CallToolResult(content=[types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False, allow_nan=False))], structuredContent=result)
+            request = dict(arguments or {})
+            if name in TOOLS and 'dataMode' in TOOLS[name][1].get('properties', {}):
+                request.setdefault('dataMode', 'local')
+            result = await asyncio.to_thread(service.call, name, request)
+            uri = current_ui_uri()
+            if advertised_uri != uri:
+                advertised_uri = uri
+                known_uris.add(uri)
+                await server.request_context.session.send_tool_list_changed()
+                await server.request_context.session.send_resource_list_changed()
+            return types.CallToolResult(content=[types.TextContent(type='text', text=result_text(result))], structuredContent=result)
         except DashboardError as exc:
             return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=json.dumps(exc.as_dict()))], structuredContent=exc.as_dict())
         except (KeyError, TypeError, ValueError) as exc:
@@ -62,7 +99,9 @@ def create_server(service, lifetime=None):
     @server.list_resources()
     @lifetime.track
     async def list_resources():
-        return [types.Resource(uri=AnyUrl(URI), name='Dashboard editor', mimeType=MIME),
+        uri = current_ui_uri()
+        known_uris.add(uri)
+        return [types.Resource(uri=AnyUrl(uri), name='Dashboard editor', mimeType=MIME),
                 types.Resource(uri=AnyUrl('charts://catalog'), name='Chart catalog', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://contract'), name='Runtime tools and typed operations', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://declarations'), name='Chart declaration requirements', mimeType='application/json'),
@@ -73,7 +112,7 @@ def create_server(service, lifetime=None):
     @server.read_resource()
     @lifetime.track
     async def read_resource(uri):
-        if str(uri) in (URI, LEGACY_URI):
+        if str(uri) in known_uris or str(uri) == current_ui_uri():
             return [ReadResourceContents(content=render_html('mcp', idle_timeout=lifetime.timeout),
                                          mime_type=MIME, meta={'ui': {'prefersBorder': True}})]
         if str(uri) == 'charts://catalog':

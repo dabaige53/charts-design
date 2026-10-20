@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip('mcp',reason='Install the optional official MCP SDK for protocol integration tests')
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mcp.types import TextResourceContents
+from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
 def test_real_stdio_protocol(tmp_path):
@@ -35,6 +35,13 @@ def test_real_stdio_protocol(tmp_path):
                 assert not result.isError
                 assert result.structuredContent is not None
                 assert result.structuredContent['document']['revision']==2
+                import json
+                assert isinstance(result.content[0], TextContent)
+                summary = json.loads(result.content[0].text)
+                assert summary['dashboardId'] == 'mcp-test'
+                assert summary['artifactLocation'] == 'structuredContent.document'
+                assert 'document' not in summary
+                assert summary['datasetRows'] == {}
                 bad=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':1,'operations':[{'op':'set_title','value':'Stale'}]})
                 assert bad.isError
                 report=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':2,'operations':[
@@ -68,6 +75,23 @@ def test_real_stdio_protocol(tmp_path):
                 assert not large.isError
                 assert large.structuredContent is not None
                 assert large.structuredContent['document']['manifest']['report']['markdown'] == large_source
+                assert isinstance(large.content[0], TextContent)
+                assert len(large.content[0].text) < 1000
+                # A representative 960-row transport fixture exceeds the reported response size.
+                rows = [{'detail': str(i) + 'x' * 1000} for i in range(960)]
+                payload = await session.call_tool('dashboard_patch', {'dashboardId': 'mcp-test',
+                    'dataMode': 'snapshot',
+                    'expectedRevision': 5, 'operations': [
+                        {'op': 'put_source', 'id': 'transport-fixture', 'value': {'kind': 'fixture'}},
+                        {'op': 'put_dataset', 'id': 'details', 'meta': {
+                            'sourceId': 'transport-fixture', 'fields': {'detail': {'type': 'string'}}}, 'rows': rows},
+                    ]})
+                assert not payload.isError
+                assert payload.structuredContent is not None
+                assert payload.structuredContent['document']['snapshot']['datasets']['details'] == rows
+                assert isinstance(payload.content[0], TextContent)
+                assert json.loads(payload.content[0].text)['documentBytes'] > 900000
+                assert len(payload.content[0].text) < 1000
                 resources=await session.list_resources()
                 assert any(str(r.uri).startswith('ui://') for r in resources.resources)
                 contract=await session.read_resource(AnyUrl('charts://contract'))

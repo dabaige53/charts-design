@@ -1,14 +1,20 @@
 name: Dashboard runtime
 on:
   push:
-    branches: [feat/dashboard-runtime-mcp-cli]
+    branches: [main]
   pull_request:
     paths:
       - 'dashboard_runtime/**'
       - 'runtime-ui/**'
       - 'tests/runtime/**'
+      - 'skills/executive-charts/scripts/**'
+      - 'bin/**'
+      - 'package.json'
       - 'pyproject.toml'
       - '.github/workflows/dashboard-runtime.yml'
+concurrency:
+  group: dashboard-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -25,38 +31,18 @@ jobs:
           node-version: '22'
       - name: Install explicit runtime test dependencies
         run: |
-          python -m pip install 'pytest>=8,<9' 'mcp>=1.28,<2' playwright '.[statistics]'
-          npm --prefix runtime-ui install
+          python -m pip install '.[statistics,mcp,test]'
+          npm --prefix runtime-ui ci
           python -m playwright install --with-deps chromium
+          sudo apt-get install -y poppler-utils
       - name: Audit production browser dependencies
-        run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate --json > runtime-audit.json
+        run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate
       - name: Build the shared browser and MCP App bundle
         run: npm --prefix runtime-ui run build
-      - name: Core, MCP protocol, original component fidelity and real browser acceptance
+      - name: Check shared source syntax
+        run: npm run check
+      - name: Runtime, MCP protocol and browser tests
         run: |
           set -o pipefail
-          python -m pytest tests/runtime -q | tee runtime-tests.txt
+          python -m pytest tests/runtime -q
           node --test tests/runtime/*.test.mjs
-      - name: Package source and built UI for review
-        if: always()
-        run: |
-          tar --exclude=.git --exclude=node_modules --exclude=__pycache__ --exclude=.pytest_cache -czf /tmp/runtime-source.tar.gz .
-          mv /tmp/runtime-source.tar.gz runtime-source.tar.gz
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dashboard-runtime-review
-          path: |
-            runtime-source.tar.gz
-            runtime-tests.txt
-            runtime-audit.json
-            report-preview.png
-            runtime-screenshot.png
-            runtime-original-restored.png
-            runtime-icons-gallery.png
-            runtime-bound-filter.png
-            component-review/
-            runtime-ui/generated/provenance.json
-            runtime-ui/package-lock.json
-            dashboard_runtime/web/dist/
-          retention-days: 7

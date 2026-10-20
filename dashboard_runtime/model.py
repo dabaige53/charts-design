@@ -17,7 +17,7 @@ MAX_REPORT_SOURCE = 1000
 ID = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]{0,79}$')
 TYPES = ('bar', 'line', 'area', 'pie', 'scatter', 'heatmap', 'funnel', 'waterfall')
 COLS = {'desktop': 12, 'tablet': 8, 'mobile': 4}
-AGGREGATES = ('sum', 'avg', 'min', 'max', 'count', 'ratio')
+AGGREGATES = ('sum', 'avg', 'min', 'max', 'count', 'ratio', 'entity_ratio')
 VIEW_MODES = ('dashboard', 'report')
 
 class DashboardError(ValueError):
@@ -266,7 +266,21 @@ def validate(doc):
     require(isinstance(s.get('datasets'), dict), 'snapshot.datasets must be an object')
     require(s.get('status') in ('ready', 'partial', 'blocked', 'fixture'), 'Unknown snapshot status')
     require(isinstance(s.get('updatedAt'), str), 'Snapshot timestamp is required')
-    require(set(m['datasets']) == set(s['datasets']), 'Dataset metadata and snapshot ids must match')
+    refs = s.get('datasetRefs', {})
+    table_refs = s.get('componentDataRefs', {})
+    require(isinstance(refs, dict), 'snapshot.datasetRefs must be an object')
+    require(isinstance(table_refs, dict), 'snapshot.componentDataRefs must be an object')
+    require(not (set(refs) & set(s['datasets'])), 'Dataset must have either rows or a local version, not both')
+    require(set(m['datasets']) == set(s['datasets']) | set(refs), 'Dataset metadata and snapshot ids must match')
+    for key in table_refs:
+        component = m['components'].get(key, {})
+        require(component.get('kind') == 'legacy' and component.get('family') == 'table' and not component.get('binding'),
+                'Component data references belong to unbound original tables')
+    for ref in [*refs.values(), *table_refs.values()]:
+        require(isinstance(ref, dict) and isinstance(ref.get('version'), str)
+                and re.fullmatch(r'[0-9a-f]{64}', ref['version']) is not None,
+                'Local data version must be a content hash')
+        require(type(ref.get('rowCount')) is int and ref['rowCount'] >= 0, 'Local data row count is required')
     require(len(m['components']) <= MAX_COMPONENTS, 'Too many components')
     total_rows = 0
     for key, source in m['sources'].items():
@@ -283,6 +297,9 @@ def validate(doc):
         for name, info in meta['fields'].items():
             require(isinstance(name, str) and 0 < len(name) < 200, 'Invalid field name')
             require(isinstance(info, dict) and info.get('type') in ('string', 'number', 'boolean', 'date'), f'{name}: invalid field type')
+        if key in refs:
+            require(refs[key].get('fields') == meta['fields'], f'{key}: local version fields must match dataset metadata')
+            continue
         rows = s['datasets'][key]
         require(isinstance(rows, list), f'{key}: rows must be an array')
         total_rows += len(rows)
@@ -309,9 +326,11 @@ def validate(doc):
             require(metric.get('scale') == 'fraction', 'Percent metrics must declare fractional scale')
         require(metric.get('status', 'unverified') in ('unverified', 'reviewed'), 'Unsupported metric status')
         require(type(metric.get('decimals', 2)) is int and 0 <= metric.get('decimals', 2) <= 6, f'{key}: decimals must be an integer 0-6')
-        if metric['aggregation'] == 'ratio':
+        if metric['aggregation'] in ('ratio', 'entity_ratio'):
             field(m['datasets'][ds], metric.get('numerator'), True)
             field(m['datasets'][ds], metric.get('denominator'), True)
+            if metric['aggregation'] == 'entity_ratio':
+                field(m['datasets'][ds], metric.get('entityField'))
         elif metric['aggregation'] != 'count':
             field(m['datasets'][ds], metric.get('field'), True)
     require(sum(isinstance(c, dict) and c.get('kind') == 'statistical' for c in m['components'].values()) <= 10, 'At most 10 statistical components per document')
@@ -361,6 +380,8 @@ def validate(doc):
             for mid in c['measures']:
                 require(mid in m['metrics'] and m['metrics'][mid]['datasetId'] == ds, f'{key}: metric/dataset mismatch')
             if c['kind'] == 'kpi':
+                from .legacy import validate_comparisons
+                validate_comparisons(presentation, f'components.{key}.presentation')
                 require(len(c['measures']) == 1, 'KPI must have one headline measure')
                 card_type = presentation.get('type', 'mc01')
                 require(isinstance(card_type, str) and card_type in {f'mc{i:02}' for i in range(1, 10)}, 'Unknown KPI presentation type')
@@ -396,6 +417,9 @@ def validate(doc):
         seen.add(f['id'])
         require(f.get('op') in ('in', 'range', 'contains'), 'Unknown filter operation')
         require(isinstance(f.get('values'), list), 'Filter values must be an array')
+        require(f.get('selectionMode', 'multiple') in ('single', 'multiple'), 'Unknown filter selection mode')
+        if f.get('selectionMode') == 'single':
+            require(f['op'] == 'in' and len(f['values']) <= 1, 'Single-select filter allows at most one value')
         require(all(type(v) in (str, int, float, bool) or v is None for v in f['values']), 'Filter values must be scalar')
         require(f['op'] != 'range' or len(f['values']) in (0, 2), 'Range filter needs two bounds')
         if f['op'] == 'contains':
@@ -462,6 +486,13 @@ def apply_operations(doc, operations):
             key = identifier(op.get('id'))
             m['datasets'][key] = copy.deepcopy(op.get('meta'))
             s['datasets'][key] = copy.deepcopy(op.get('rows'))
+            s.get('datasetRefs', {}).pop(key, None)
+            s['updatedAt'] = utcnow()
+        elif kind == 'put_dataset_ref':
+            key = identifier(op.get('id'))
+            m['datasets'][key] = copy.deepcopy(op.get('meta'))
+            s['datasets'].pop(key, None)
+            s.setdefault('datasetRefs', {})[key] = copy.deepcopy(op.get('ref'))
             s['updatedAt'] = utcnow()
         elif kind == 'remove_component':
             key = op.get('id')
@@ -519,6 +550,9 @@ def apply_operations(doc, operations):
             m['report'] = report
         elif kind == 'set_status':
             s['status'] = op.get('value')
+        elif kind == 'set_data_mode':
+            require(op.get('value') in ('local', 'snapshot'), 'Data mode must be local or snapshot')
+            s['localMode'] = op['value'] == 'local'
         else:
             raise DashboardError('UNKNOWN_OPERATION', f'Unsupported operation: {kind}')
     if initialize_report and 'markdown' not in m.get('report', {}):

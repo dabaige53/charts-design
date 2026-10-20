@@ -1,3 +1,4 @@
+# ruff: noqa: E402 -- imports follow the shared generator search path.
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -192,7 +193,7 @@ def _render_specialized_contract(code: str) -> dict:
         "}",
         "console.log(JSON.stringify({ option, table, tooltipText }));",
     ])
-    completed = subprocess.run(["node", "-e", program], check=True, capture_output=True, text=True)
+    completed = subprocess.run(["node", "-"], input=program, check=True, capture_output=True, text=True)
     return json.loads(completed.stdout)
 
 

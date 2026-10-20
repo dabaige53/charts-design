@@ -46,10 +46,10 @@ def _common():
         'datasetId': _identifier(), 'field': field_name,
         'aggregation': {'enum': list(AGGREGATES)},
         'label': {'type': 'string', 'minLength': 1},
-        'unit': string, 'definition': {'type': 'string', 'minLength': 1},
+        'unit': string, 'definition': {'type': 'string', 'minLength': 1, 'description': 'Business object, scope and meaning in plain language; record confirmed boundaries and specific unresolved rules. Do not substitute SQL or the metric title.'},
         'format': {'enum': ['number', 'percent', 'currency'], 'default': 'number'},
         'scale': string, 'semantic': string,
-        'numerator': field_name, 'denominator': field_name,
+        'numerator': field_name, 'denominator': field_name, 'entityField': field_name,
         'status': {'enum': ['unverified', 'reviewed'], 'default': 'unverified'},
         'decimals': {'type': 'integer', 'minimum': 0, 'maximum': 6, 'default': 2,
                      'description': 'Digits shown after binding scale is applied; labels, tooltips, tables and KPIs all use it.'},
@@ -57,6 +57,8 @@ def _common():
     metric['allOf'] = [
         {'if': {'properties': {'aggregation': {'const': 'ratio'}}},
          'then': {'required': ['numerator', 'denominator']}},
+        {'if': {'properties': {'aggregation': {'const': 'entity_ratio'}}},
+         'then': {'required': ['entityField', 'numerator', 'denominator']}},
         {'if': {'properties': {'aggregation': {'enum': ['sum', 'avg', 'min', 'max']}}},
          'then': {'required': ['field']}},
         {'if': {'required': ['format'], 'properties': {'format': {'const': 'percent'}}},
@@ -76,7 +78,7 @@ def _common():
     return {
         'identifierSchema': _identifier(), 'sourceSchema': source,
         'metaSchema': _object({**{key: {'type': 'string', 'maxLength': 1000} for key in ('subtitle', 'org', 'system', 'statusText')}, 'iconKey': {'enum': ['chart', 'plane']}}),
-        'filterSchema': _object({'id': _identifier(), 'label': string, 'field': field_name, 'op': {'enum': ['in', 'range', 'contains']}, 'values': {'type': 'array'}, 'componentIds': {'type': 'array', 'items': _identifier()}}, ['id', 'field', 'op', 'values', 'componentIds']),
+        'filterSchema': _object({'id': _identifier(), 'label': string, 'field': field_name, 'op': {'enum': ['in', 'range', 'contains']}, 'selectionMode': {'enum': ['single', 'multiple'], 'default': 'multiple'}, 'values': {'type': 'array'}, 'componentIds': {'type': 'array', 'items': _identifier()}}, ['id', 'field', 'op', 'values', 'componentIds']),
         'datasetMetaSchema': _object({
             'sourceId': _identifier(),
             'fields': {'type': 'object', 'minProperties': 1,
