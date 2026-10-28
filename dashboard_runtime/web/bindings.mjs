@@ -31,6 +31,13 @@ export function resolveOriginal(doc,id,granularity='month'){
   if(b.orderBy){const metric=metrics[b.measures[b.orderBy.target]],sign=b.orderBy.direction==='desc'?-1:1;
     keys.sort((a,c)=>{const av=aggregate(groups.get(a),metric),cv=aggregate(groups.get(c),metric);
       return av==null?(cv==null?String(a).localeCompare(String(c)):1):cv==null?-1:sign*(av-cv)||String(a).localeCompare(String(c));});}
+  if(raw.code==='r02'){
+    raw.data.clusters=keys.flatMap(k=>{
+      const values=['x','y','size'].map(target=>{const mid=b.measures[target],value=aggregate(groups.get(k),metrics[mid]);return value==null?null:rounded(value*(b.scale?.[target]??1),metrics[mid]);});
+      return k!==''&&values.every(v=>v!=null)&&values[2]>=0?[[...values,k]]:[];
+    });
+    return raw;
+  }
   if(raw.code==='t06')raw.data={};
   raw.data[b.categoryTarget]=keys;
   for(const [target,mid]of Object.entries(b.measures))raw.data[target]=keys.map(k=>{const value=aggregate(groups.get(k),metrics[mid]);return value==null?null:rounded(value*(b.scale?.[target]??1),metrics[mid]);});

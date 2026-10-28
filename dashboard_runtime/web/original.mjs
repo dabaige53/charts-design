@@ -1,4 +1,5 @@
 import {resolveOriginal} from './bindings.mjs';
+import {applyEChartsOptions} from './echarts-options.mjs';
 import {installChrome} from './chrome.mjs';
 /* Original components are extracted at build time, never reauthored as lookalikes. */
 import DOMPurify from 'dompurify';
@@ -62,10 +63,17 @@ function originalConfig(doc,id){
         data:{resolved:optionFor(doc,id)},optionBuilder:data=>data.resolved,tableDataExtractor:()=>{const values=chartTable(doc,id),headers=Object.keys(values[0]||{});return {headers,rows:values.map(row=>headers.map(h=>row[h]))};}};
     }
     const builder=chart.optionBuilder,extractor=chart.tableDataExtractor;let selectedGranularity='month';if(extractor)chart.resolvedTable=()=>extractor(chart.data,c.binding?'month':selectedGranularity,chart);
+    if(c.binding&&raw.code==='r02')chart.resolvedTable=()=>({headers:[doc.manifest.datasets[c.binding.datasetId].fields[c.binding.categoryField].label||c.binding.categoryField,...['x','y','size'].map(target=>doc.manifest.metrics[c.binding.measures[target]].label)],rows:chart.data.clusters.map(point=>[point[3],...point.slice(0,3)])});
     chart.optionBuilder=(...args)=>{
       selectedGranularity=args[1]||'month';if(c.binding){chart.data=resolveOriginal(doc,id,selectedGranularity).data;args[0]=chart.data;args[1]='month';}const option=builder(...args);
+      if(c.binding&&raw.code==='r02'){
+        const names=['x','y','size'].map(target=>doc.manifest.metrics[c.binding.measures[target]].label),units=raw.presentation.units||[];
+        option.tooltip.formatter=params=>{const v=params.value;return `<div class="font-bold">${v[3]}</div>${names.map((name,i)=>`<div>${name}: ${v[i]}${units[i]||''}</div>`).join('')}`;};
+        option.series[0].label.formatter=params=>params.value[3];
+        [option.xAxis,option.yAxis].forEach((axis,i)=>{axis.axisLabel={...axis.axisLabel,formatter:value=>`${value}${units[i]||''}`};});
+      }
       function protect(value){if(!value||typeof value!=='object')return;for(const [k,v]of Object.entries(value)){if(k==='tooltip'&&v&&typeof v==='object'&&typeof v.formatter==='function'){const formatter=v.formatter;v.formatter=(...a)=>DOMPurify.sanitize(String(formatter(...a)),{FORBID_TAGS:['img','iframe','script'],FORBID_ATTR:['src','href']});}else if(v&&typeof v==='object')protect(v);}}
-      protect(option);return option;
+      const resolvedOption=applyEChartsOptions(option,chart.echarts);protect(resolvedOption);return resolvedOption;
     };
     cfg.charts=[chart];
     if(raw?.explanation)cfg.explanations[chart.explainKey||raw.code]=raw.explanation;
@@ -165,7 +173,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   if(family==='chart'){
     shadow.addEventListener('click',e=>{
       const csvButton=e.target.closest('.export-chart-btn'),copyButton=e.target.closest('.copy-chart-btn');
-      if(csvButton){e.stopImmediatePropagation();const chart=app.config.charts[0],gran=app.state.chartGranularities[key],data=chart.tableDataExtractor(chart.data,c.binding?'month':gran,chart);download(c.title+'.csv',csv(data.rows.map(r=>Object.fromEntries(data.headers.map((h,i)=>[h,r[i]])))),'text/csv;charset=utf-8');}
+      if(csvButton){e.stopImmediatePropagation();const chart=app.config.charts[0],gran=app.state.chartGranularities[key],data=chart.resolvedTable?chart.resolvedTable():chart.tableDataExtractor(chart.data,c.binding?'month':gran,chart);download(c.title+'.csv',csv(data.rows.map(r=>Object.fromEntries(data.headers.map((h,i)=>[h,r[i]])))),'text/csv;charset=utf-8');}
       if(copyButton){e.stopImmediatePropagation();const url=app.state.chartInstances[key].getDataURL({pixelRatio:2,backgroundColor:'#fff'});fetch(url).then(r=>r.blob()).then(async blob=>{try{if(!navigator.clipboard?.write)throw Error();await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);app.showToast('已复制 2x PNG');}catch{const a=document.createElement('a');a.href=url;a.download=c.title+'.png';a.click();app.showToast('剪贴板不可用，已导出 PNG');}}).catch(error=>app.showToast(error.message));}
       const gran=e.target.closest('.granularity-tab-btn');if(gran&&doc.computed&&c.binding?.timeGrain&&onLocalQuery){e.stopImmediatePropagation();onLocalQuery(id,{granularity:gran.dataset.granularity}).catch(error=>app.showToast(error.message));return;}if(gran&&onPresentation&&!readOnly)setTimeout(()=>onPresentation(id,{defaultGranularity:gran.dataset.granularity}),0);
     },{capture:true,signal:controller.signal});

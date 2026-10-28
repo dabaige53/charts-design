@@ -25,6 +25,7 @@
     "runtime-ui/*.mjs",
     "runtime-ui/package.json",
     "docs/dashboard-runtime.md",
+    "docs/echarts-options.md",
     "pyproject.toml",
     "mcp.json",
     "README.md",

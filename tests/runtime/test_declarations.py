@@ -168,3 +168,20 @@ def test_public_metadata_and_table_heading_contract(reference):
     assert 'contains' in reference['common']['filterSchema']['properties']['op']['enum']
     columns = reference['legacy']['families']['table']['componentSchema']['properties']['config']['properties']['columns']
     assert {'title', 'label', 'key'} <= set(columns['items']['properties'])
+
+
+def test_native_echarts_options_are_discoverable_and_preserved():
+    selected = declaration_contract(legacy_code='c01')
+    chart = selected['legacy']['families']['chart']
+    schema = chart['componentSchema']['properties']['config']['properties']['echarts']
+    assert schema['type'] == 'object' and schema['additionalProperties'] is True
+    operations = chart['example']['operations']
+    component = next(op['value'] for op in operations if op['op'] == 'put_component')
+    override = {'series': [{'label': {'show': False}}], 'brush': {'toolbox': ['rect']},
+                'futureEChartsField': {'values': [1, 2, 3]}}
+    component['config']['echarts'] = override
+    document = apply_operations(new_document('options', 'Native options'), operations)
+    assert document['manifest']['components'][chart['example']['componentId']]['config']['echarts'] == override
+    component['config']['echarts'] = 'function () {}'
+    with pytest.raises(DashboardError, match='config.echarts must be an ECharts option object'):
+        apply_operations(new_document('options', 'Native options'), operations)

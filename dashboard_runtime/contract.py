@@ -55,6 +55,7 @@ CONTRACT = {
         'charts://declarations provides required-field schemas and original family/code requirements with authoritative validator sources and coverage limits.',
         'The original discovery catalog contains 45 entries including KPI and table entries, while its installed validator registry has 40 chart codes and 9 KPI types. Do not use every catalog entry as a chart code.',
         'Legacy chart configs require explicit data and presentation from the registered schema. Per-code discovery metadata is partial guidance, not a complete JSON Schema.',
+        'Optional config.echarts supplies native ECharts JSON option overrides after preset generation. Unknown fields pass through; objects merge and component arrays merge by id/index. No extra feature tools or JavaScript-string execution. Binding, data tables and cross-chart filtering retain their existing scope. See docs/echarts-options.md.',
         'Source verification supplied is not proof of execution or certification.'
     ]
 }

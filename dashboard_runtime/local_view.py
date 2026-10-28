@@ -158,10 +158,20 @@ class LocalView:
                     grouped.sort(key=lambda row: (row[mid] is None, direction*(row[mid] or 0), str(row[category])))
                 raw.setdefault('data', {})
                 data = {} if raw['code'] == 't06' else raw['data']
-                data[binding['categoryTarget']] = [r[category] for r in grouped if r[category] is not None]
-                for target, mid in mids.items():
+                def displayed(row, target, mid):
                     metric = m['metrics'][mid]
-                    data[target] = [None if r[mid] is None else float(Decimal(str(r[mid] * binding.get('scale', {}).get(target, 1))).quantize(Decimal(1).scaleb(-metric.get('decimals', 2)), rounding=ROUND_HALF_UP)) for r in grouped if r[category] is not None]
+                    return None if row[mid] is None else float(Decimal(str(row[mid] * binding.get('scale', {}).get(target, 1))).quantize(Decimal(1).scaleb(-metric.get('decimals', 2)), rounding=ROUND_HALF_UP))
+                if raw['code'] == 'r02':
+                    points = []
+                    for row in grouped:
+                        values = [displayed(row, target, mids[target]) for target in ('x', 'y', 'size')]
+                        if row[category] not in (None, '') and all(v is not None for v in values) and values[2] is not None and values[2] >= 0:
+                            points.append([*values, row[category]])
+                    data['clusters'] = points
+                else:
+                    data[binding['categoryTarget']] = [r[category] for r in grouped if r[category] is not None]
+                    for target, mid in mids.items():
+                        data[target] = [displayed(r, target, mid) for r in grouped if r[category] is not None]
                 raw['data'] = {'month': data, 'quarter': copy.deepcopy(data)} if raw['code'] == 't06' else data
                 raw['hasGranularity'] = bool(binding.get('timeGrain'))
                 computed['components'][key] = raw

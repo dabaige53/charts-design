@@ -29,7 +29,9 @@
 
 sales 必须是已有 Dataset；revenue 必须是与它绑定的指标 ID。`put_component` 自动归一化 datasetId 和 measures；校验器要求所有系列绑定完整。绑定不能改变原 config 快照，渲染时才计算视图。各筛选器仍需要明确列出 componentIds。
 
-当前安全的系列映射见 `dashboard_runtime/bindings.py`：14 类可按一维分类聚合的原图形、mc01–mc06 指标卡、明细表。mc03 还需 timeField。时间序列设置 timeGrain 后，日期字段必须声明为 date，并使用 ISO 日期。季度比例使用 SUM(分子)/SUM(分母)，不平均月度百分比。展示单位换算必须显式声明 scale。
+当前支持的系列映射见 `dashboard_runtime/bindings.py`：按一维分类聚合的原图形、mc01–mc06 指标卡、明细表。mc03 还需 timeField。时间序列设置 timeGrain 后，日期字段必须声明为 date，并使用 ISO 日期。季度比例使用 SUM(分子)/SUM(分母)，不平均月度百分比。展示单位换算必须显式声明 scale。
+
+气泡图 `r02` 的绑定使用 `categoryTarget: "clusters"`，并将 `measures` 的 `x`、`y`、`size` 分别绑定到三个已有指标。`categoryField` 是字符串类型的业务对象标识，例如代理 ID；每个标识汇总为一个气泡，标识也作为图上文字。筛选后按各指标定义重新汇总；缺少任一指标或气泡大小为负的对象不显示。点击气泡可临时筛选同一数据集中参与联动的其他组件，再次点击或清除筛选可取消。绑定气泡图的提示和数据表仅展示这三个指标，不自动计算比值。原有未绑定的气泡图保持原样。
 
 复杂网络、层级、矩阵、统计分布及 mc07–mc09 的动态绑定仍需专门变换契约；当前拒绝不完整映射，而不是补造数据或把图形简化成柱状图。这些图形的原版静态配置仍完整可用。
 

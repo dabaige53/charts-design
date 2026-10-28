@@ -210,7 +210,8 @@ def _legacy(common):
         schema['required'] = ['kind', 'title', 'family', 'config']
         if family == 'chart':
             config_schema = _object({'code': {'enum': codes} if codes else {'type': 'string'}, 'data': {'type': 'object', 'minProperties': 1},
-                                     'presentation': {'type': 'object'}}, ['code', 'data', 'presentation'])
+                                     'presentation': {'type': 'object'},
+                                     'echarts': {'type': 'object', 'additionalProperties': True, 'description': 'Optional native ECharts JSON option overrides, applied after the preset. Objects merge recursively; component arrays merge by matching id or index; other arrays replace. Unknown fields pass through. JavaScript strings are not executed.'}}, ['code', 'data', 'presentation'])
             example_config = chart_config
         elif family == 'kpi':
             config_schema = _object({'type': {'enum': kpis, 'default': 'mc01'} if kpis else {'type': 'string', 'default': 'mc01'},
@@ -252,6 +253,7 @@ def _legacy(common):
             'Use only registered chartCodes for family=chart, kpiTypes for family=kpi, and explicit columns/rows for family=table. Do not interpret all catalog IDs as config.code.',
             'Legacy family defaults to chart in the validator; declarations should always supply family explicitly.',
             'Legacy configs preserve original data paths and presentation. No catalog preview data is substituted for supplied business data.',
+            'config.echarts passes native JSON options to the standard ECharts runtime without a per-feature whitelist. Presets and data binding remain unchanged. Display overrides do not add filter computation or cross-chart linkage. Preserve series data/identity when relying on existing bindings and data tables; explicit data overrides affect the chart, not the bound dataset. Existing preset callbacks are preserved; JSON strings are not evaluated as JavaScript. Third-party extensions still need separate registration.',
             'Without the installed original repository, legacy schema discovery is unavailable; original chart authoring is unavailable.',
         ],
         'bindings': {
@@ -260,6 +262,8 @@ def _legacy(common):
             'description': 'Original components use explicit config snapshots. Cross-component filters require a reviewed binding to a dataset and metrics; not every legacy shape has a supported binding transform.',
             'exampleForC01': {'datasetId': 'example-data', 'categoryField': 'category',
                               'categoryTarget': 'categories', 'measures': {'values': 'example-value'}},
+            'exampleForR02': {'datasetId': 'example-data', 'categoryField': 'agent',
+                              'categoryTarget': 'clusters', 'measures': {'x': 'example-x', 'y': 'example-y', 'size': 'example-size'}},
         },
     }
 

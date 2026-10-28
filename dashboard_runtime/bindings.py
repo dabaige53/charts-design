@@ -13,6 +13,7 @@ SERIES_TARGETS = {
     'fn02': ('quarters', ('revenue', 'cost')),
     'fn03': ('variables', ('negative', 'positive')),
     't06': ('categories', ('revenue', 'yieldGrowth')),
+    'r02': ('clusters', ('x', 'y', 'size')),
 }
 KPI_TARGETS = {'value', 'leftVal', 'rightVal', 'subVal', 'yoy', 'mom', 'percent'}
 
@@ -39,6 +40,9 @@ def validate_binding(doc, component):
         require(b.get('categoryTarget') == target[0], 'Wrong category target for the original chart')
         require(set(measures) == set(target[1]), 'Bind every required series; stale snapshot series are not allowed')
         field(m['datasets'][ds], b.get('categoryField'))
+        if config.get('code') == 'r02':
+            require(m['datasets'][ds]['fields'][b['categoryField']]['type'] == 'string', 'Bubble grouping field must be a string identifier')
+            require(not b.get('timeGrain'), 'Bubble grouping does not support time granularity')
         if b.get('orderBy'):
             require(b['orderBy'].get('target') in measures, 'Binding sort target must be a bound measure')
             require(b['orderBy'].get('direction') in ('asc', 'desc'), 'Binding sort direction must be asc or desc')

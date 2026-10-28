@@ -125,6 +125,7 @@ def validate_original(component):
     require(family in ('chart', 'kpi', 'table'), 'Unknown original component family')
     schemas = component_schemas()
     if family == 'chart':
+        require('echarts' not in config or isinstance(config['echarts'], dict), 'config.echarts must be an ECharts option object')
         require(isinstance(config.get('data'), dict) and isinstance(config.get('presentation'), dict), 'Original charts need explicit data and presentation')
         errors = schemas.validate_chart_data(config['data'], 'config.data', code=config.get('code'), strict=True, presentation=config['presentation'])
         require(not errors, 'Original chart contract: ' + json.dumps(errors, ensure_ascii=False))

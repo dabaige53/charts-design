@@ -7,6 +7,7 @@ import {visibleRows,csv,chartTypes} from './engine.mjs';
 import {mountStatisticalImage,updateStatisticalArtifacts} from './statistical.mjs';
 import {decodeToolResult} from './tool-result.mjs';
 import {pagedFilter,singleFilter,clearFilterValues} from './local-filter.mjs';
+import {linkageValue,linkagePoint} from './linkage.mjs';
 const T={edit:'编辑',view:'退出编辑',add:'添加组件',import:'导入数据',undo:'撤销',redo:'重做',reload:'重新读取',export:'导出',close:'关闭',save:'保存',data:'数据',semantic:'指标语义',settings:'图表设置',source:'查询来源',remove:'删除',copy:'复制',empty:'导入数据，或通过 CLI / MCP 添加组件。'};
 const el=(tag,cls='',text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 const button=(label,fn,cls='')=>{const b=el('button',cls,label);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
@@ -197,11 +198,12 @@ export async function start({echarts,GridStack,App}){
     if(!instance)return;const old=linkageListeners.get(instance);if(old)instance.off('click',old);
     const series=linkageSeries.get(instance);if(series){instance.setOption({series});linkageSeries.delete(instance);}
     if(editing||c.kind!=='legacy'||c.family!=='chart'||!c.binding?.categoryField)return;
-    const handler=params=>{if(params.name!=null&&params.name!=='')toggleLinkage(id,String(params.name));};linkageListeners.set(instance,handler);instance.on('click',handler);
+    const bubble=c.config.code==='r02';
+    const handler=params=>{const selected=linkageValue(params,bubble);if(selected!=null&&selected!=='')toggleLinkage(id,String(selected));};linkageListeners.set(instance,handler);instance.on('click',handler);
     if(linkage?.sourceId!==id)return;
     const option=instance.getOption(),axis=[...(option.xAxis||[]),...(option.yAxis||[])].find(a=>a.type==='category'),categories=(axis?.data||[]).map(v=>typeof v==='object'&&v?v.value:v).map(String);
     linkageSeries.set(instance,(option.series||[]).map(series=>({data:series.data})));
-    instance.setOption({series:(option.series||[]).map(series=>({data:(series.data||[]).map((point,i)=>({value:point&&typeof point==='object'&&'value'in point?point.value:point,itemStyle:{opacity:categories[i]===linkage.category?1:.22}}))}))});
+    instance.setOption({series:(option.series||[]).map(series=>({data:(series.data||[]).map((point,i)=>linkagePoint(point,i,categories,linkage.category,bubble))}))});
   }
   // The whole card is the drag surface; presses on controls (also inside original shadow roots) stay with the control.
   const CONTROLS='button,a,input,select,textarea,label,summary,[contenteditable],[role=button],[role=tab],[role=menuitem]';
@@ -490,7 +492,7 @@ export async function start({echarts,GridStack,App}){
   }
   function bindingEditor(id){
     const c=doc.manifest.components[id],{d,body}=dialog('数据绑定 / '+c.title);
-    const targets={c01:['categories','values'],c02:['categories','values'],c03:['clusters','budget','actual'],c04:['fleets','deviations'],c06:['hubs','offSeason','peakSeason'],c07:['clusters','base2024','curr2025'],c08:['categories','domestic','intl'],t01:['months','rpk'],t02:['quarters','actual','forecast'],t04:['quarters','premium','economy','cargo','ancillary'],t06:['categories','revenue','yieldGrowth'],d01:['brackets','counts'],fn02:['quarters','revenue','cost'],fn03:['variables','negative','positive']};
+    const targets={c01:['categories','values'],c02:['categories','values'],c03:['clusters','budget','actual'],c04:['fleets','deviations'],c06:['hubs','offSeason','peakSeason'],c07:['clusters','base2024','curr2025'],c08:['categories','domestic','intl'],t01:['months','rpk'],t02:['quarters','actual','forecast'],t04:['quarters','premium','economy','cargo','ancillary'],t06:['categories','revenue','yieldGrowth'],d01:['brackets','counts'],fn02:['quarters','revenue','cost'],fn03:['variables','negative','positive'],r02:['clusters','x','y','size']};
     const shape=targets[c.config.code],template={datasetId:'',measures:{}};
     if(c.family==='chart'&&shape){template.categoryField='';template.categoryTarget=shape[0];template.measures=Object.fromEntries(shape.slice(1).map(k=>[k,'']));}
     if(c.family==='kpi'){template.measures=c.config.type==='mc06'?{leftVal:'',rightVal:''}:{value:''};if(c.config.type==='mc03')template.timeField='';}
