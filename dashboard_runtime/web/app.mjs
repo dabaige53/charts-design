@@ -130,12 +130,12 @@ export async function start({echarts,GridStack,App}){
       },
       apply:(id,result)=>{
         if(progressiveKey!==key||result.revision!==doc.revision)return;
-        const computed={...doc.computed};for(const map of ['components','tables','grouped','filterOptions','filterPages'])computed[map]={...computed[map],...result.computed?.[map]};
+        const computed={...doc.computed};for(const map of ['components','tables','grouped','filterOptions','filterPages']){computed[map]={...computed[map]};if(['components','tables','grouped'].includes(map))delete computed[map][id];Object.assign(computed[map],result.computed?.[map]);}
         doc={...doc,computed};fetched.add(id);statisticalArtifacts=updateStatisticalArtifacts(statisticalArtifacts,{statisticalArtifacts:{...statisticalArtifacts,...result.statisticalArtifacts}});
-        const card=cards.get(id)?.card||reportHosts.get(id);if(card){card.querySelector('.component-load-error')?.remove();mountComponent(card,id,false,true);}
+        const card=cards.get(id)?.card||reportHosts.get(id);if(card){delete card.dataset.loadFailed;(card.shadowRoot||card).querySelector('.component-load-error')?.remove();mountComponent(card,id,false,true);}
         transport('runtime_report_error',{dashboardId:doc.id,revision:doc.revision,requestId:result.requestId||'',code:'CLIENT_DATA_APPLIED'}).catch(()=>{});
       },
-      failed:(id,error)=>{const card=cards.get(id)?.card||reportHosts.get(id);if(card){card.querySelector('.component-load-error')?.remove();const message=el('div','component-load-error',error.message);message.append(button('重试',()=>progressiveLoader.need(id)));card.append(message);}if(error.code==='REVISION_CONFLICT')reload().catch(showError);}
+      failed:(id,error)=>{const card=cards.get(id)?.card||reportHosts.get(id);if(card){card.dataset.loadFailed='true';(card.shadowRoot||card).querySelector('.component-load-error')?.remove();const message=el('div','component-load-error',error.message);message.append(button('重试',()=>progressiveLoader.need(id)));(card.shadowRoot||card).append(message);}if(error.code==='REVISION_CONFLICT')reload().catch(showError);}
     });
   }
   function refreshLocal(filters=requestedFilters||doc.manifest.filters,componentIds=null){

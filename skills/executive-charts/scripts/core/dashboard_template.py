@@ -1371,7 +1371,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                         if (old) Object.assign(zoom, {start: old.start, end: old.end});
                     });
                 }
-                instance.setOption(option, {replaceMerge: ['series', 'dataset', 'xAxis', 'yAxis', 'legend', 'dataZoom']});
+                instance.setOption(option, {replaceMerge: ['series', 'dataset', 'xAxis', 'yAxis', 'legend', 'dataZoom', 'graphic', 'title', 'tooltip']});
             }
 
             updateConfig(config) {

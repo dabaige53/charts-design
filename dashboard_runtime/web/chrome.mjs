@@ -9,6 +9,12 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
   const title=text('h3','component-title',c.title);titleRow.append(title);heading.append(titleRow);if(editing&&onText)inlineEdit(title,{label:'图表标题',value:c.title,maxLength:240,save:value=>onText(id,{title:value})});
   const description=c.subtitle||c.config?.subtitle||c.config?.description||'';
   if(description||editing){const subtitle=text('p','component-description component-subtitle',description);heading.append(subtitle);if(editing&&onText)inlineEdit(subtitle,{label:'图表描述',value:description,save:value=>onText(id,{subtitle:value})});}
+  if(family==='chart'&&c.config?.encoding?.adjustableBarWidth){
+    const controls=text('label','bar-width-control'),caption=text('span','','条形宽度'),range=document.createElement('input'),value=text('output','','');
+    range.type='range';range.min='6';range.max='36';range.step='1';range.value=String(app._barWidth??c.config.encoding.barWidth??14);range.setAttribute('aria-label','条形宽度');value.textContent=range.value+' px';
+    range.oninput=()=>{app._barWidth=Number(range.value);value.textContent=range.value+' px';const plot=app.state.chartInstances['original-'+id];if(plot)plot.setOption({series:(plot.getOption().series||[]).map(()=>({barWidth:app._barWidth}))});};
+    controls.append(caption,range,value);heading.append(controls);
+  }
   const statusBadge=family==='kpi'&&app.config.kpis?.[0]?.statusBadge;if(statusBadge&&app.config.kpis?.[0]?.type==='mc01')titleRow.append(text('span','component-status',statusBadge));
   const actions=text('div','component-actions');actions.setAttribute('role','toolbar');actions.setAttribute('aria-label','组件操作');
   const storage=text('div','component-storage');storage.hidden=true;heading.append(storage);

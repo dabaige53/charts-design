@@ -308,7 +308,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
         'codes': ['r02', 'c03'],
         'enable': 'config.encoding; requires explicit binding; config.data={} and presentation={} are allowed',
         'scatter': {'binding': {'categoryField': 'od', 'measures': {'x': 'market-metric', 'y': 'ho-metric', 'share': 'ratio-metric'}, 'attributes': {'grade': {'field': 'grade', 'aggregation': 'unique', 'label': '评级'}}}, 'encoding': {'symbolSize': 18, 'colorBy': 'grade', 'tooltip': ['x', 'y', 'share', 'grade'], 'colors': {}}},
-        'bars': {'binding': {'categoryField': 'category', 'seriesField': 'series', 'measures': {'value': 'metric'}, 'orderBy': {'target': 'value', 'direction': 'desc'}}, 'encoding': {'orientation': 'horizontal', 'stacked': True, 'colors': {}}},
+        'bars': {'binding': {'categoryField': 'category', 'seriesField': 'series', 'measures': {'value': 'metric'}, 'orderBy': {'target': 'value', 'direction': 'desc'}}, 'encoding': {'orientation': 'horizontal', 'stacked': True, 'colors': {}, 'topSeries': 4, 'pinnedSeries': [], 'visibleCount': 10, 'barWidth': 14, 'adjustableBarWidth': True, 'emptyText': '当前筛选范围暂无数据'}},
         'rules': ['ratio aggregates numerator and denominator after filtering', 'unique returns null for conflicting or missing attributes; min/max ignore nulls', 'fixed symbolSize is default; sizeBy explicitly enables bubbles', 'Missing category/series displays 缺失; missing numeric pairs are omitted; empty results display 当前筛选无数据', 'linkGroup explicitly opts components into cross-dataset linkage by the same field name', 'Dynamic series are absolute values, never normalized to 100 percent']
     }
     from .statistical import statistical_declarations

@@ -51,3 +51,9 @@
 - `npm pack --pack-destination /private/tmp`：按项目正式入口生成安装包。安装包中的 `runtime_info.uiBuildId` 用于区分开发构建；本次不发布新版本。
 
 ![零售通用场景验收](images/dynamic-encoding-retail.png)
+
+## 排名展示与无结果状态
+
+`c03` 支持 `topSeries`（按当前筛选净值合计降序取前 N 个系列）、`pinnedSeries`（在 N 个名额内优先保留的系列）、`visibleCount`（默认显示 10 行，超出时启用分类轴滑条）、`barWidth` 和 `adjustableBarWidth`（阅读时调节条形宽度）。这些选项仅影响图形，原数据和完整数据表不裁剪；未展示系列不合并为其他，组件描述应说明展示范围。
+
+`emptyText` 设置无结果提示。保留卡片和操作区，以居中灰色文本提示，无旧点、旧柱或旧明细；恢复有结果时移除提示。动态提示框显示在指针附近，边界不足时换边。

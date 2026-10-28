@@ -48,3 +48,8 @@
 /* Compact KPI rhythm: a 4-row grid cell still leaves ~46px for sparklines and progress bars. */
 .component-kpi.kpi-aligned{grid-template-rows:auto auto minmax(0,1fr) auto;gap:2px}:host(.is-editing) .kpi-aligned{grid-template-rows:auto auto minmax(0,1fr) auto}.kpi-aligned .kpi-aux>div{margin-top:0!important;margin-bottom:0!important}.kpi-aligned .kpi-footer{padding-top:6px!important}
 :host(.is-editing) .section-card{cursor:inherit}:host(.is-editing) .component-actions,:host(.is-editing) .inline-edit{cursor:auto}
+
+.bar-width-control{display:flex;align-items:center;gap:8px;font-size:11px;color:#7B8794;margin-top:8px}.bar-width-control input{width:110px;accent-color:#123B5D}.bar-width-control output{min-width:34px;font-variant-numeric:tabular-nums}
+:host([data-load-failed="true"]) .card-body-wrap,:host([data-load-failed="true"]) .kpi-headline,:host([data-load-failed="true"]) .component-table-body{visibility:hidden}
+
+.component-load-error{position:absolute;inset:80px 12px auto;padding:16px;color:#a63d36;background:#fff7f5;font-size:13px;z-index:5}.component-load-error button{margin-left:12px}

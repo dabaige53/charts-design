@@ -103,7 +103,9 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   const container=node(family==='table'?'section':'div',family==='table'?'section-card':'');container.id={chart:'app-charts-grid',kpi:'app-kpis',table:'app-table-section'}[family];shadow.append(container);
   const overlay=node('dialog','explanation-dialog');overlay.id='app-explain-dialog';shadow.append(overlay);
   const feedback=node('div');feedback.id='app-toast-container';shadow.append(feedback);
-  const app=new api.DashboardApp(cfg,shadow);const controller=new AbortController();
+  const app=new api.DashboardApp(cfg,shadow);
+  const setChartOption=app.setChartOption.bind(app);app.setChartOption=(instance,option)=>{if(app._barWidth&&c.config?.encoding?.adjustableBarWidth)for(const series of option.series||[])if(series.type==='bar')series.barWidth=app._barWidth;return setChartOption(instance,option);};
+  const controller=new AbortController();
   for(const event of ['click','change','input','keydown','focus','mouseenter','mouseleave'])shadow.addEventListener(event,e=>{
     const target=e.target.closest?.('[data-original-'+event+']');if(!target)return;
     try{const call=JSON.parse(target.getAttribute('data-original-'+event));if(!methods.has(call.method))return;const args=call.args.map(a=>'literal'in a?a.literal:({'event':e,'this.value':target.value,'this.checked':target.checked,'true':true,'false':false}[a.ref]));app[call.method](...args);}catch(error){app.showToast(error.message);}

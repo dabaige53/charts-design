@@ -7,7 +7,7 @@ export function createProgressiveLoader({query,apply,failed,visible,loading,dela
       if(active.size>=concurrency)break;
       if(active.has(id)||!visible(id))continue;
       dirty.delete(id);const epoch=generation;active.set(id,epoch);loading(id,true);
-      Promise.resolve().then(()=>query(id,epoch)).then(value=>{if(epoch===generation)apply(id,value);else dirty.add(id);}).catch(error=>{if(epoch===generation)failed(id,error);else dirty.add(id);}).finally(()=>{active.delete(id);loading(id,false);drain();});
+      Promise.resolve().then(()=>query(id,epoch)).then(value=>{if(stopped)return;if(epoch===generation)apply(id,value);else dirty.add(id);}).catch(error=>{if(stopped)return;if(epoch===generation)failed(id,error);else dirty.add(id);}).finally(()=>{active.delete(id);if(stopped)return;if(!dirty.has(id))loading(id,false);drain();});
     }
   }
   return {

@@ -5,13 +5,18 @@ from .model import require, field
 def validate_encoding(component):
     e = component['config']['encoding']
     require(isinstance(e, dict), 'encoding must be an object')
-    require(set(e) <= {'orientation', 'stacked', 'symbolSize', 'colors', 'tooltip', 'colorBy', 'sizeBy', 'showLabels'}, 'Unknown encoding option; consult chart_declarations')
+    require(set(e) <= {'orientation', 'stacked', 'symbolSize', 'colors', 'tooltip', 'colorBy', 'sizeBy', 'showLabels', 'topSeries', 'pinnedSeries', 'visibleCount', 'barWidth', 'adjustableBarWidth', 'emptyText'}, 'Unknown encoding option; consult chart_declarations')
     require(component['config'].get('code') in ('r02', 'c03'), 'encoding supports r02 and c03')
     require(component.get('binding'), 'encoding requires a dataset binding')
     require(e.get('orientation', 'vertical') in ('horizontal', 'vertical'), 'Invalid orientation')
     require(type(e.get('stacked', False)) is bool, 'stacked must be boolean')
     require(type(e.get('symbolSize', 18)) in (int, float) and 1 <= e.get('symbolSize', 18) <= 100, 'symbolSize must be 1–100')
     require(isinstance(e.get('tooltip', []), list) and all(isinstance(k, str) for k in e.get('tooltip', [])), 'tooltip must be an array of bound keys')
+    for key, default, maximum in [('topSeries', 100, 100), ('visibleCount', 10, 200), ('barWidth', 14, 60)]:
+        require(type(e.get(key, default)) is int and 1 <= e.get(key, default) <= maximum, f'{key} must be 1–{maximum}')
+    require(isinstance(e.get('pinnedSeries', []), list) and all(isinstance(v, str) for v in e.get('pinnedSeries', [])), 'pinnedSeries must be strings')
+    require(type(e.get('adjustableBarWidth', False)) is bool, 'adjustableBarWidth must be boolean')
+    require(isinstance(e.get('emptyText', ''), str), 'emptyText must be text')
     require(type(e.get('showLabels', False)) is bool, 'showLabels must be boolean')
     require(isinstance(e.get('colors', {}), dict) and all(isinstance(v, str) for v in e.get('colors', {}).values()), 'colors maps categories to CSS colors')
 
