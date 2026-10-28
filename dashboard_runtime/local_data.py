@@ -427,6 +427,9 @@ class LocalData:
                 op = metric['aggregation']
                 if op == 'count':
                     measures.append('COUNT(*)')
+                elif op == 'unique':
+                    col = self._column(fields, metric['field'])
+                    measures.append(f'CASE WHEN COUNT(DISTINCT {col}) = 1 AND COUNT({col}) = COUNT(*) THEN MIN({col}) ELSE NULL END')
                 elif op == 'ratio':
                     if any(fields.get(metric[k], {}).get('type') != 'number' for k in ('numerator', 'denominator')):
                         raise ValueError('Ratio requires numeric fields')

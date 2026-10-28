@@ -175,6 +175,26 @@ class Service:
                 for source in doc.get('manifest', {}).get('sources', {}).values():
                     source['verification'] = 'supplied'
             return {'document': self.store.create(args['dashboardId'], args.get('title', 'Dashboard'), doc)}
+        if tool == 'dashboard_annotations':
+            doc = self.store.get(board, hydrate=False)
+            manifest = doc['manifest']
+            notes = copy.deepcopy(manifest.get('annotations', []))
+            targets = {}
+            for note in notes:
+                component_id = note.get('componentId')
+                anchor = note.get('anchor', {})
+                target = {'scope': anchor.get('scope', 'component' if component_id else 'page')}
+                if component_id:
+                    component = manifest['components'].get(component_id)
+                    target.update({'componentExists': component is not None,
+                                   'sourcePath': 'manifest.components.' + component_id})
+                    if component is not None:
+                        target.update({'title': component.get('title', ''), 'kind': component['kind']})
+                else:
+                    target['sourcePath'] = 'manifest.report.markdown' if manifest.get('viewMode') == 'report' else 'manifest'
+                targets[note['id']] = target
+            return {'dashboardId': doc['id'], 'title': manifest['title'], 'revision': doc['revision'],
+                    'annotations': notes, 'targets': targets, 'count': len(notes)}
         if tool in ('dashboard_get', 'dashboard_preview'):
             return {'document': self.store.get(board, hydrate=not (tool == 'dashboard_preview' or args.get('dataMode') == 'local'))}
         if tool == 'dashboard_validate':
@@ -275,7 +295,8 @@ TOOLS = {
     'runtime_keepalive': ('Keep the local runtime alive only while its preview is visible; do not poll from background agents', schema()),
     'dashboard_list': ('List saved dashboards', schema()),
     'dashboard_create': ('Create a dashboard with an optional reviewed artifact', schema({**BOARD, 'title': STR, 'document': {'type': 'object'}}, ('dashboardId',))),
-    'dashboard_get': ('Read current canonical state before editing', schema(BOARD, ('dashboardId',))),
+    'dashboard_annotations': ('Read saved comments and selection anchors without loading chart data. Returns revision, annotations and target component identities. When asked to act on comments, read dashboard_get for canonical content, then use dashboard_patch with its latest expectedRevision. Preserve comments unless asked to edit or remove them. Anchors are relative geometry/text references, not screenshots; verify ambiguous visual targets in the rendered page.', schema({'dashboardId': STR}, ('dashboardId',))),
+    'dashboard_get': ('Read current canonical state including manifest.annotations before editing', schema(BOARD, ('dashboardId',))),
     'dashboard_preview': ('Open an interactive MCP App; non-UI hosts receive the canonical artifact', schema(BOARD, ('dashboardId',))),
     'dashboard_validate': ('Validate a stored dashboard or supplied artifact', schema({**BOARD, 'document': {'type': 'object'}})),
     'dashboard_patch': ('Apply atomic typed operations with optimistic concurrency', schema({**BOARD, 'expectedRevision': INT, 'operations': {'type': 'array', 'minItems': 1, 'maxItems': 200, 'items': {'type': 'object'}}}, ('dashboardId', 'expectedRevision', 'operations'))),
@@ -287,7 +308,7 @@ TOOLS = {
     'semantic_inspect': ('Inspect stored metric definitions, units and aggregation', schema(TARGET, ('dashboardId', 'componentId'))),
     'query_execute': ('Execute a bounded read-only SQLite query on a configured alias and atomically save its snapshot', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'connection': STR, 'sql': STR, 'parameters': {'type': ['object', 'array']}}, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql')))
 }
-READ_ONLY = {'component_data', 'dashboard_list', 'dashboard_get', 'dashboard_preview', 'dashboard_validate', 'dashboard_history', 'chart_catalog', 'query_inspect', 'semantic_inspect'}
+READ_ONLY = {'dashboard_annotations', 'component_data', 'dashboard_list', 'dashboard_get', 'dashboard_preview', 'dashboard_validate', 'dashboard_history', 'chart_catalog', 'query_inspect', 'semantic_inspect'}
 READ_ONLY.add('runtime_keepalive')
 TOOLS.update({
     'dataset_import': ('Import explicit JSON rows or CSV; inferred measures remain unverified', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'rows': {'type':'array', 'items':{'type':'object'}}, 'csvText':STR, 'name':STR}, ('dashboardId','expectedRevision','datasetId'))),

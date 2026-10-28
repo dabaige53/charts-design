@@ -107,6 +107,11 @@ class LocalView:
                 computed['tables'][key] = {'page': page, 'pageSize': size, 'totalRows': total, 'sortCol': state.get('sortCol'), 'sortDir': state.get('sortDir', 'asc'), 'keyword': search, 'durationMs': request['durationMs']}
                 computed['components'][key] = raw
                 continue
+            if binding and 'encoding' in raw:
+                from .encoding import resolve_encoding
+                raw['data'] = {'records': resolve_encoding(self, ref, m, c, active)}
+                computed['components'][key] = raw
+                continue
             mids = binding.get('measures', {}) if binding else {mid: mid for mid in c.get('measures', [])}
             definitions = {mid: m['metrics'][mid] for mid in dict.fromkeys(mids.values())}
             if family == 'kpi':

@@ -16,7 +16,7 @@ CONTRACT = {
         'set_original_chart': {'id': 'original component id', 'code': 'c01|c02; reviewed compatible original codes, retains data and swaps axis labels'},
         'set_layout': {'breakpoint': 'desktop|tablet|mobile', 'value': [{'id': 'component id', 'x': 0, 'y': 0, 'w': 6, 'h': 6}]},
         'set_filters': {'value': [{'id': 'region', 'field': 'region', 'op': 'in|range|contains', 'values': [], 'componentIds': ['component id']}]},
-        'set_annotations': {'value': [{'id': 'unique annotation id', 'componentId': 'existing component id or null for page', 'text': '1-4000 characters', 'createdAt': 'ISO timestamp'}], 'policy': 'Replaces annotation list; at most 100; persisted with document revision'},
+        'set_annotations': {'value': [{'id': 'unique annotation id', 'componentId': 'existing component id or null for page', 'text': '1-4000 characters', 'createdAt': 'ISO timestamp', 'anchor': 'optional: scope component/text/page, kind element/area, quote (max 1000), rect {x,y,width,height} in 0..1; text scope also requires occurrence'}], 'policy': 'Replaces annotation list; at most 100; persisted with document revision'},
         'set_meta': {'value': {'iconKey': 'chart|plane', 'subtitle': 'Page description', 'org': 'Organization', 'system': 'Business system', 'statusText': 'Business status; each field optional, 0-1000 characters; replaces page metadata'}},
         'set_title': {'value': 'Dashboard title'}, 'set_theme': {'value': 'light|dark'},
         'set_view_mode': {'value': 'dashboard|report'},
@@ -28,6 +28,8 @@ CONTRACT = {
     'rules': [
         'contains filters accept zero or one text value, match a declared string field without case sensitivity, and update only explicit componentIds. Local filtering queries the immutable data version; it never reruns the upstream source query.',
         'Read dashboard_get before mutation and supply its expectedRevision.',
+        'Use dashboard_annotations to read saved review comments, quoted text, relative selection rectangles and target identities without chart datasets. It returns the current revision and raw annotations separately from derived targets. Missing components have componentExists=false; text/area anchors need rendered-page verification when ambiguous.',
+        'When the user requests changes based on annotations, read canonical content with dashboard_get and modify the corresponding component, metadata or report Markdown through dashboard_patch. Preserve annotations unless the user asks to edit/delete them. Saving an annotation does not start an agent or authorize unrelated actions.',
         'Every operation object must include its op name.',
         'Operations are atomic. References are checked after the entire batch.',
         'Dataset metadata lives in manifest.datasets. Stored rows live in immutable local data versions referenced by snapshot.datasetRefs; bounded legacy snapshots may use snapshot.datasets instead. Never store both for the same dataset.',

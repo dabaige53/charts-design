@@ -1,3 +1,4 @@
+import {createAnnotations} from './annotations.mjs';
 import {inlineEdit,clearInlineEdit} from './inline-edit.mjs';
 import {reportMarkdown,renderReport} from './report.mjs';
 import {whileVisible} from './lifecycle.mjs';
@@ -36,7 +37,7 @@ export async function start({echarts,GridStack,App}){
   notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');const description=el('div','dashboard-description'),context=el('div','dashboard-context'),badge=el('span','dashboard-status'),heading=el('div','dashboard-heading'),mark=el('div','document-mark');mark.append(icon('chart'));heading.append(mark,title,description,context,notice);top.append(heading,badge,toolbar);filters.setAttribute('role','region');filters.setAttribute('aria-label','筛选条件');canvas.append(gridEl);root.append(top,filters,canvas);toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Dashboard actions');
   let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,pendingLayout=null,dragging=false,renderQueued=false,linkage=null,app=null;
   let lastBreakpoint=null,transport,originalInstances=[],disposeToolbar=null,disposeReport=null;
-  let renderedPage=null,renderedMode=null,reportEditing=null,reconciling=false;
+  let renderedPage=null,renderedMode=null,reportEditing=null,reconciling=false,annotations=null;
   const cards=new Map(),controllers=new Map(),reportHosts=new Map(),pendingMounts=new Map();
   const observer=typeof IntersectionObserver==='undefined'?null:new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const run=pendingMounts.get(entry.target);if(run){pendingMounts.delete(entry.target);observer.unobserve(entry.target);run();}}},{rootMargin:'300px'});
   let viewTables={},viewGranularities={},viewRequest=0,refreshing=false,lastRefresh=null;
@@ -78,7 +79,7 @@ export async function start({echarts,GridStack,App}){
     if(id)doc=accept(await transport('dashboard_get',{dashboardId:id,dataMode:'local'})).document;
     else{const boards=(await transport('dashboard_list',{})).dashboards;if(boards.length)doc=accept(await transport('dashboard_get',{dashboardId:boards[0].id,dataMode:'local'})).document;}
   }
-  function resetPageState(){viewAbort?.abort();viewRequest++;requestedFilters=null;dirtyViewIds=new Set();viewTables={};viewGranularities={};linkage=null;undo=[];redo=[];lastRefresh=null;editing=false;}
+  function resetPageState(){annotations?.reset();viewAbort?.abort();viewRequest++;requestedFilters=null;dirtyViewIds=new Set();viewTables={};viewGranularities={};linkage=null;undo=[];redo=[];lastRefresh=null;editing=false;}
   function renderPageSwitch(){
     const available=pages.filter(page=>page.id!==doc?.id);
     pageSwitch.hidden=boot.mode==='offline'||!doc||!available.length;
@@ -175,7 +176,7 @@ export async function start({echarts,GridStack,App}){
     if(c.kind==='statistical')return {ok:false,reason:'统计图基于原始观测，不支持筛选'};
     const ds=c.kind==='legacy'?c.binding?.datasetId:c.datasetId;
     if(!ds)return {ok:false,reason:'未绑定数据'};
-    if(ds!==linkage.datasetId||!doc.manifest.datasets[ds]?.fields?.[linkage.field])return {ok:false,reason:`数据中没有「${linkage.label}」字段`};
+    if((ds!==linkage.datasetId&&!(c.linkGroup&&c.linkGroup===doc.manifest.components[linkage.sourceId]?.linkGroup))||!doc.manifest.datasets[ds]?.fields?.[linkage.field])return {ok:false,reason:`数据中没有「${linkage.label}」字段`};
     return {ok:true};
   }
   function viewDoc(){
@@ -230,6 +231,7 @@ export async function start({echarts,GridStack,App}){
   title.onchange=()=>patch([{op:'set_title',value:title.value}]).catch(showError);
   function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?'离线快照 · ':''}版本 v${doc.revision}`);}
   function render(){
+    annotations?.refresh();
     // Never rebuild GridStack mid-drag; flush an unsaved drop before replacing the grid.
     if(dragging){renderQueued=true;return;}renderQueued=false;
     if(pendingLayout&&saveLayout(true))return;
@@ -250,7 +252,8 @@ export async function start({echarts,GridStack,App}){
     clearInlineEdit(description);if(editing)inlineEdit(description,{label:'页面描述',value:meta.subtitle||'',save:value=>patch([{op:'set_meta',value:{...meta,subtitle:value}}])});
     clearInlineEdit(badge);context.replaceChildren();if(editing){const setMeta=key=>value=>patch([{op:'set_meta',value:{...meta,[key]:value}}]);const org=el('span'),system=el('span');inlineEdit(org,{label:'组织',value:meta.org||'',save:setMeta('org')});inlineEdit(system,{label:'系统',value:meta.system||'',save:setMeta('system')});context.append(org,el('span','context-separator',' · '),system);context.hidden=false;inlineEdit(badge,{label:'状态标签',value:meta.statusText||'',save:setMeta('statusText')});badge.hidden=false;}else{context.textContent=[meta.org,meta.system].filter(Boolean).join(' · ');context.hidden=!context.textContent;badge.textContent=meta.statusText||'';badge.hidden=!badge.textContent;}mark.replaceChildren(icon(meta.iconKey==='plane'?'plane':'chart'));
     disposeToolbar?.();toolbar.replaceChildren();
-    const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑？'))return;editing=!editing;render();});edit.disabled=boot.mode==='offline';edit.classList.remove('icon-button');edit.classList.add('mode-toggle');edit.append(el('span','',editing?T.view:T.edit));toolbar.append(edit);
+    const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑？'))return;annotations?.reset();editing=!editing;render();});edit.disabled=boot.mode==='offline';edit.classList.remove('icon-button');edit.classList.add('mode-toggle');edit.append(el('span','',editing?T.view:T.edit));toolbar.append(edit);
+    const annotate=iconButton('comment',annotations?.active?'退出批注':'批注',()=>{if(editing){if(currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑并开始批注？'))return;editing=false;render();}annotations.toggle();});annotate.classList.add('annotation-toggle');annotate.setAttribute('aria-pressed',String(Boolean(annotations?.active)));toolbar.append(annotate);
     if(editing)toolbar.append(iconButton('comment','页面批注',()=>annotationDialog(null)));
     if(editing){const u=iconButton('undo',T.undo,()=>restore('undo')),r=iconButton('redo',T.redo,()=>restore('redo'));u.disabled=!undo.length;r.disabled=!redo.length;toolbar.append(u,r);}
     if(boot.mode!=='offline'){
@@ -345,7 +348,7 @@ export async function start({echarts,GridStack,App}){
     if(previous){
       const plot=previous.app?.state.chartInstances['original-'+id],series=plot&&linkageSeries.get(plot);if(series){plot.setOption({series});linkageSeries.delete(plot);}
       const oldConfig=previous.app?.config;
-      if(previous.update(quiet?doc:viewDoc(),quiet?false:editing,quiet||!editing||boot.mode==='offline')){if(quiet&&oldConfig!==previous.app?.config)quietPlot(previous,doc.manifest.components[id]);if(!quiet)wireLinkage(id,previous.app?.state.chartInstances['original-'+id]);return previous;}
+      try{if(previous.update(quiet?doc:viewDoc(),quiet?false:editing,quiet||!editing||boot.mode==='offline')){if(quiet&&oldConfig!==previous.app?.config)quietPlot(previous,doc.manifest.components[id]);if(!quiet)wireLinkage(id,previous.app?.state.chartInstances['original-'+id]);return previous;}}catch(error){unmountComponent(card);const target=card.shadowRoot||card;target.replaceChildren(el('p','error',`${id}: ${error.message}`));return;}
       unmountComponent(card);if(card.shadowRoot){card.shadowRoot.replaceChildren();card.shadowRoot.adoptedStyleSheets=[];}
     }
     pendingMounts.delete(card);observer?.unobserve(card);
@@ -551,7 +554,7 @@ export async function start({echarts,GridStack,App}){
   }
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkage&&!document.querySelector('dialog[open]'))clearLinkage();});
   window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!pendingLayout&&!dragging&&!busy)render();});
-  if(boot.mode!=='offline')whileVisible(async()=>{if(!doc||editing||busy||pendingLayout||dragging||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{await refreshReport();}catch(e){showError(e);}},5000);
+  if(boot.mode!=='offline')whileVisible(async()=>{if(!doc||editing||annotations?.active||busy||pendingLayout||dragging||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{await refreshReport();}catch(e){showError(e);}},5000);
   if(boot.mode!=='offline')whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3));
   window.addEventListener('beforeunload',event=>{if([...reportDrafts.values()].some(draft=>draft.dirty)){event.preventDefault();event.returnValue='';}});
   window.__chartsReady=async()=>{
@@ -564,6 +567,7 @@ export async function start({echarts,GridStack,App}){
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   };
   window.addEventListener('beforeprint',()=>{for(const run of [...pendingMounts.values()])run();});
+  annotations=createAnnotations({root,iconButton,getDocument:()=>doc,readOnly:boot.mode==='offline',save:transform=>patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]),onError:showError,onMode:active=>{const b=toolbar.querySelector('.annotation-toggle');if(b){b.setAttribute('aria-pressed',String(active));b.setAttribute('aria-label',active?'退出批注':'批注');b.title=active?'退出批注':'批注';b.dataset.tooltip=b.title;}}});
   window.addEventListener('charts-error',event=>showError(event.detail));render();
 
 }

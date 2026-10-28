@@ -33,6 +33,10 @@ def validate_binding(doc, component):
     scale = b.get('scale', {})
     require(isinstance(scale, dict) and set(scale) <= set(measures), 'Binding scale targets must be measures')
     require(all(type(v) in (int, float) and v > 0 for v in scale.values()), 'Binding scales must be positive finite numbers')
+    if family == 'chart' and 'encoding' in config:
+        from .encoding import validate_encoding_binding
+        validate_encoding_binding(doc, component)
+        return b
     if family == 'chart':
         target = SERIES_TARGETS.get(config.get('code'))
         require(target is not None, 'This original shape needs a dedicated reviewed data transform', 'BINDING_TRANSFORM_REQUIRED')

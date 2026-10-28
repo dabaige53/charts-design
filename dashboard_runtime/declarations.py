@@ -290,6 +290,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
         },
         'workflow': [
             {'tool': 'dashboard_create', 'purpose': 'Create an empty dashboard, or use an existing dashboard ID.'},
+            {'tool': 'dashboard_annotations', 'purpose': 'Read saved comments, selected quotes/regions and target identities when the user asks to review or apply annotations. Preserve comments after modifying their targets.'},
             {'tool': 'dashboard_get', 'purpose': 'Read canonical state and current revision before mutation.'},
             {'tool': 'dashboard_patch', 'purpose': 'Supply dashboardId, the latest expectedRevision and an operations array. Put source, dataset, metric and component in one atomic batch.'},
             {'tool': 'dashboard_validate', 'purpose': 'Validate the saved dashboard or a complete proposed document.'},
@@ -302,6 +303,13 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             'rules': ['Chart fences reference existing non-text component IDs; they do not create charts.',
                       'Creating a component does not append it to report Markdown. Set view mode to report separately when desired.'],
         },
+    }
+    result['dynamicEncoding'] = {
+        'codes': ['r02', 'c03'],
+        'enable': 'config.encoding; requires explicit binding; config.data={} and presentation={} are allowed',
+        'scatter': {'binding': {'categoryField': 'od', 'measures': {'x': 'market-metric', 'y': 'ho-metric', 'share': 'ratio-metric'}, 'attributes': {'grade': {'field': 'grade', 'aggregation': 'unique', 'label': '评级'}}}, 'encoding': {'symbolSize': 18, 'colorBy': 'grade', 'tooltip': ['x', 'y', 'share', 'grade'], 'colors': {}}},
+        'bars': {'binding': {'categoryField': 'category', 'seriesField': 'series', 'measures': {'value': 'metric'}, 'orderBy': {'target': 'value', 'direction': 'desc'}}, 'encoding': {'orientation': 'horizontal', 'stacked': True, 'colors': {}}},
+        'rules': ['ratio aggregates numerator and denominator after filtering', 'unique returns null for conflicting or missing attributes; min/max ignore nulls', 'fixed symbolSize is default; sizeBy explicitly enables bubbles', 'Missing category/series displays 缺失; missing numeric pairs are omitted; empty results display 当前筛选无数据', 'linkGroup explicitly opts components into cross-dataset linkage by the same field name', 'Dynamic series are absolute values, never normalized to 100 percent']
     }
     from .statistical import statistical_declarations
     result['statistical'] = statistical_declarations()

@@ -408,3 +408,19 @@ def test_mcp_rejects_extra_chart_system(tmp_path):
     assert 'chartType' not in service.call('chart_declarations', {})
     assert len(service.call('chart_catalog', {})['charts']) == 40
     assert all('code' in item and 'type' not in item for item in service.call('chart_catalog', {})['charts'])
+
+
+def test_position_annotations_survive_target_removal(service):
+    note = {'id': 'position-1', 'componentId': 'trend', 'text': '核对峰值', 'createdAt': '2026-10-28T10:00:00Z',
+            'anchor': {'scope': 'component', 'kind': 'area', 'quote': '',
+                       'rect': {'x': .2, 'y': .3, 'width': .1, 'height': .2}}}
+    service.call('dashboard_patch', {'dashboardId': 'demo', 'expectedRevision': 1,
+                 'operations': [{'op': 'set_annotations', 'value': [note]}]})
+    assert service.store.get('demo')['manifest']['annotations'] == [note]
+    service.call('dashboard_patch', {'dashboardId': 'demo', 'expectedRevision': 2,
+                 'operations': [{'op': 'remove_component', 'id': 'trend'}]})
+    assert service.store.get('demo')['manifest']['annotations'] == [note]
+    bad = {**note, 'anchor': {**note['anchor'], 'rect': {'x': .9, 'y': .3, 'width': .2, 'height': .2}}}
+    with pytest.raises(DashboardError):
+        service.call('dashboard_patch', {'dashboardId': 'demo', 'expectedRevision': 3,
+                     'operations': [{'op': 'set_annotations', 'value': [bad]}]})

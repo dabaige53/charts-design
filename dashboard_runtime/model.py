@@ -403,7 +403,25 @@ def validate(doc):
         identifier(note.get('id'), 'annotation id')
         require(note['id'] not in annotation_ids, 'Duplicate annotation id')
         annotation_ids.add(note['id'])
-        require(note.get('componentId') is None or note['componentId'] in m['components'], 'Unknown annotation component')
+        require(note.get('componentId') is None or note['componentId'] in m['components'] or isinstance(note.get('anchor'), dict), 'Unknown annotation component')
+        if note.get('componentId') is not None:
+            identifier(note['componentId'], 'annotation component')
+        if 'anchor' in note:
+            anchor = note['anchor']
+            require(isinstance(anchor, dict), 'Annotation anchor must be an object')
+            require(anchor.get('scope') in ('component', 'text', 'page'), 'Invalid annotation scope')
+            require((anchor['scope'] == 'component') == (note.get('componentId') is not None), 'Annotation scope must match component')
+            require(anchor.get('kind') in ('element', 'area'), 'Invalid annotation selection')
+            require(isinstance(anchor.get('quote'), str) and len(anchor['quote']) <= 1000, 'Invalid annotation quote')
+            if anchor['scope'] == 'text':
+                require(bool(anchor['quote'].strip()), 'Annotation text anchor requires quote')
+                require(type(anchor.get('occurrence')) is int and 0 <= anchor['occurrence'] <= 10000, 'Invalid annotation occurrence')
+            rect = anchor.get('rect')
+            require(isinstance(rect, dict), 'Annotation rectangle required')
+            for axis in ('x', 'y', 'width', 'height'):
+                value = rect.get(axis)
+                require(type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1, 'Invalid annotation rectangle')
+            require(rect['x'] + rect['width'] <= 1.000001 and rect['y'] + rect['height'] <= 1.000001, 'Annotation rectangle exceeds target')
         require(isinstance(note.get('text'), str) and bool(note['text'].strip()) and len(note['text']) <= 4000, 'Annotation text must contain 1-4000 characters')
         require(isinstance(note.get('createdAt'), str) and 0 < len(note['createdAt']) <= 100, 'Annotation timestamp required')
     if 'report' in m:
@@ -503,7 +521,7 @@ def apply_operations(doc, operations):
                         'REPORT_COMPONENT_REFERENCED')
             del m['components'][key]
             if 'annotations' in m:
-                m['annotations'] = [note for note in m['annotations'] if note['componentId'] != key]
+                m['annotations'] = [note for note in m['annotations'] if note['componentId'] != key or note.get('anchor')]
             for bp in COLS:
                 m['layout'][bp] = [p for p in m['layout'][bp] if p['id'] != key]
             for f in m['filters']:

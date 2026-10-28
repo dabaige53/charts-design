@@ -35,6 +35,7 @@ def result_text(result):
     summary = {key: value for key, value in result.items() if key not in ('document', 'statisticalArtifacts')}
     summary.update({
         'dashboardId': document['id'], 'revision': document['revision'],
+        'annotationCount': len(document['manifest'].get('annotations', [])),
         'title': document['manifest']['title'], 'artifactLocation': 'structuredContent.document',
         'documentBytes': len(json.dumps(document, ensure_ascii=False, allow_nan=False).encode('utf-8')),
         'datasetRows': {**{key: len(rows) for key, rows in document['snapshot']['datasets'].items()},

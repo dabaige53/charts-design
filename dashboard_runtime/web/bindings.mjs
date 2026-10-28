@@ -1,3 +1,4 @@
+import {encodingRecords} from './encoding.mjs';
 import {aggregate,visibleRows,format,formatComparison} from './engine.mjs';
 // Metric precision is part of the metric definition: round once here so labels, tooltips and tables agree.
 function rounded(value,metric){return value==null?null:Number(value.toFixed(metric?.decimals??2));}
@@ -9,6 +10,7 @@ export function resolveOriginal(doc,id,granularity='month'){
   if(doc.computed?.components?.[id])return structuredClone(doc.computed.components[id]);
   const c=doc.manifest.components[id],b=c.binding,raw=structuredClone(c.config);
   if(!b)return raw;
+  if(raw.encoding){raw.data={records:encodingRecords(doc,id)};return raw;}
   const rows=visibleRows(doc,id),metrics=doc.manifest.metrics;
   if(c.family==='table'){raw.rows=rows;return raw;}
   if(c.family==='kpi'){

@@ -99,3 +99,54 @@ def test_real_stdio_protocol(tmp_path):
                 assert 'set_layout' in contract.contents[0].text
                 assert 'set_report_markdown' in contract.contents[0].text and 'set_report' in contract.contents[0].text and 'set_view_mode' in contract.contents[0].text
     asyncio.run(check())
+
+
+def test_read_annotations_and_edit_target_over_stdio(tmp_path):
+    async def check():
+        params = StdioServerParameters(command=sys.executable,
+            args=['-m', 'dashboard_runtime', '--root', str(tmp_path / 'annotations'), 'mcp'],
+            env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[2]) + os.pathsep + os.environ.get('PYTHONPATH', '')})
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = {t.name: t for t in (await session.list_tools()).tools}
+                assert tools['dashboard_annotations'].annotations.readOnlyHint is True
+                assert tools['dashboard_annotations'].meta is None
+
+                async def call(name, **args):
+                    result = await session.call_tool(name, args)
+                    assert not result.isError, result
+                    return result.structuredContent
+
+                await call('dashboard_create', dashboardId='review', title='Review')
+                empty = await call('dashboard_annotations', dashboardId='review')
+                assert empty['count'] == 0 and empty['revision'] == 1
+                note = {'id': 'review-note', 'componentId': 'finding', 'text': '将观察内容改为已核对收入',
+                        'createdAt': '2026-10-28T12:00:00Z',
+                        'anchor': {'scope': 'component', 'kind': 'element', 'quote': '待核对',
+                                   'rect': {'x': 0, 'y': .2, 'width': 1, 'height': .3}}}
+                old_note = {'id': 'page-note', 'componentId': None, 'text': '保留页面结构', 'createdAt': note['createdAt']}
+                await call('dashboard_patch', dashboardId='review', expectedRevision=1, operations=[
+                    {'op': 'put_component', 'id': 'finding', 'value': {'kind': 'text', 'title': '观察', 'text': '待核对'}},
+                    {'op': 'set_annotations', 'value': [note, old_note]}])
+                review = await call('dashboard_annotations', dashboardId='review')
+                assert review['annotations'] == [note, old_note]
+                assert review['count'] == 2 and review['revision'] == 2
+                assert review['targets']['review-note'] == {'scope': 'component', 'componentExists': True,
+                    'sourcePath': 'manifest.components.finding', 'title': '观察', 'kind': 'text'}
+                assert review['targets']['page-note']['scope'] == 'page'
+                assert 'document' not in review and 'snapshot' not in review
+                current = (await call('dashboard_get', dashboardId='review'))['document']
+                component = current['manifest']['components'][note['componentId']]
+                modified = await call('dashboard_patch', dashboardId='review', expectedRevision=current['revision'], operations=[
+                    {'op': 'put_component', 'id': note['componentId'], 'value': {**component, 'text': '已核对收入'}}])
+                assert modified['document']['manifest']['components']['finding']['text'] == '已核对收入'
+                after = await call('dashboard_annotations', dashboardId='review')
+                assert after['annotations'] == review['annotations']
+                assert after['revision'] == 3
+                await call('dashboard_patch', dashboardId='review', expectedRevision=3,
+                    operations=[{'op': 'remove_component', 'id': 'finding'}])
+                missing = await call('dashboard_annotations', dashboardId='review')
+                assert missing['targets']['review-note']['componentExists'] is False
+                assert missing['annotations'] == [note, old_note]
+    asyncio.run(check())

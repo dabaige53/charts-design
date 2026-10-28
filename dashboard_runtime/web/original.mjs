@@ -1,3 +1,4 @@
+import {encodingOption,encodingTable} from './encoding.mjs';
 import {resolveOriginal} from './bindings.mjs';
 import {applyEChartsOptions} from './echarts-options.mjs';
 import {installChrome} from './chrome.mjs';
@@ -62,11 +63,12 @@ function originalConfig(doc,id){
       chart={id:key,instanceId:key,code:c.chartType,title:c.title,subtitle:c.subtitle||'',hasGranularity:false,
         data:{resolved:optionFor(doc,id)},optionBuilder:data=>data.resolved,tableDataExtractor:()=>{const values=chartTable(doc,id),headers=Object.keys(values[0]||{});return {headers,rows:values.map(row=>headers.map(h=>row[h]))};}};
     }
+    if(raw.encoding){chart.optionBuilder=data=>encodingOption(doc,id,data.records);chart.tableDataExtractor=data=>encodingTable(doc,id,data.records);}
     const builder=chart.optionBuilder,extractor=chart.tableDataExtractor;let selectedGranularity='month';if(extractor)chart.resolvedTable=()=>extractor(chart.data,c.binding?'month':selectedGranularity,chart);
-    if(c.binding&&raw.code==='r02')chart.resolvedTable=()=>({headers:[doc.manifest.datasets[c.binding.datasetId].fields[c.binding.categoryField].label||c.binding.categoryField,...['x','y','size'].map(target=>doc.manifest.metrics[c.binding.measures[target]].label)],rows:chart.data.clusters.map(point=>[point[3],...point.slice(0,3)])});
+    if(c.binding&&raw.code==='r02'&&!raw.encoding)chart.resolvedTable=()=>({headers:[doc.manifest.datasets[c.binding.datasetId].fields[c.binding.categoryField].label||c.binding.categoryField,...['x','y','size'].map(target=>doc.manifest.metrics[c.binding.measures[target]].label)],rows:chart.data.clusters.map(point=>[point[3],...point.slice(0,3)])});
     chart.optionBuilder=(...args)=>{
       selectedGranularity=args[1]||'month';if(c.binding){chart.data=resolveOriginal(doc,id,selectedGranularity).data;args[0]=chart.data;args[1]='month';}const option=builder(...args);
-      if(c.binding&&raw.code==='r02'){
+      if(c.binding&&raw.code==='r02'&&!raw.encoding){
         const names=['x','y','size'].map(target=>doc.manifest.metrics[c.binding.measures[target]].label),units=raw.presentation.units||[];
         option.tooltip.formatter=params=>{const v=params.value;return `<div class="font-bold">${v[3]}</div>${names.map((name,i)=>`<div>${name}: ${v[i]}${units[i]||''}</div>`).join('')}`;};
         option.series[0].label.formatter=params=>params.value[3];
