@@ -6,7 +6,7 @@ on:
     paths:
       - 'dashboard_runtime/**'
       - 'runtime-ui/**'
-      - 'tests/runtime/**'
+      - 'tests/**'
       - 'skills/executive-charts/scripts/**'
       - 'bin/**'
       - 'package.json'
@@ -46,3 +46,5 @@ jobs:
           set -o pipefail
           python -m pytest tests/runtime -q
           node --test tests/runtime/*.test.mjs
+      - name: Standalone chart and dashboard tests
+        run: node bin/python-runtime.js -m pytest tests --ignore=tests/runtime -q

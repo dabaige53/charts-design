@@ -1,7 +1,6 @@
 """Exercise real pointer grabs instead of moving GridStack nodes through its API."""
 
 import threading
-import time
 
 import pytest
 from playwright.sync_api import sync_playwright
@@ -93,13 +92,17 @@ def test_second_drag_survives_inflight_layout_save(tmp_path):
     service = Service(tmp_path / "state")
     service.store.create("drag", "Drag", executive_document())
     call = service.call
+    first_save_started = threading.Event()
+    release_first_save = threading.Event()
 
-    def slow_call(tool, args):
-        if tool == "dashboard_patch":
-            time.sleep(0.8)
+    def delayed_call(tool, args):
+        if tool == "dashboard_patch" and not first_save_started.is_set():
+            first_save_started.set()
+            if not release_first_save.wait(timeout=10):
+                raise TimeoutError("First layout save was not released")
         return call(tool, args)
 
-    service.call = slow_call
+    service.call = delayed_call
     server = RuntimeHTTPServer(service, 0, "drag-test")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -114,20 +117,25 @@ def test_second_drag_survives_inflight_layout_save(tmp_path):
 
             def grab(source):
                 box = page.locator(f"[data-component-id={source}] .grid-stack-item-content").bounding_box()
+                assert box is not None, f"Cannot find the bounds for {source}"
                 page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
                 page.mouse.down()
 
             def drop_on(target):
                 box = page.locator(f"[data-component-id={target}] .grid-stack-item-content").bounding_box()
+                assert box is not None, f"Cannot find the bounds for {target}"
                 page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=15)
                 page.mouse.up()
 
             grab("total")
             drop_on("load")
-            page.wait_for_timeout(400)  # first save is now in flight
+            assert first_save_started.wait(timeout=10), "First layout save did not start"
             grab("trend")
             page.mouse.move(700, 600, steps=10)
-            page.wait_for_timeout(900)  # first save returns mid-drag
+            page.locator(".grid-stack-dragging").wait_for()
+            release_first_save.set()
+            page.wait_for_function("document.querySelector('#notice').textContent.includes('v2')")
+            assert page.locator(".grid-stack-dragging").count() == 1
             drop_on("goal")
             page.wait_for_function("document.querySelector('#notice').textContent.includes('v3')")
             shown = page.eval_on_selector_all(
@@ -140,6 +148,7 @@ def test_second_drag_survives_inflight_layout_save(tmp_path):
             assert not errors, errors
             browser.close()
     finally:
+        release_first_save.set()
         server.shutdown()
         server.server_close()
         thread.join()
