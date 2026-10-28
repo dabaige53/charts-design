@@ -168,13 +168,13 @@ def test_singleflight_failure_can_retry():
     assert cache.get('key', lambda: 3) == (3, False)
 
 
-def test_patch_mcp_text_contains_only_structured_content_pointer(service):
+def test_patch_mcp_text_preserves_small_response_for_text_only_hosts(service):
     import json
     from dashboard_runtime.mcp_server import result_text
     result = view(service, responseMode='patch', componentIds=['details'])
     summary = json.loads(result_text(result))
-    assert summary == {'dashboardId': 'acceptance', 'revision': 3, 'componentIds': ['details'], 'artifactLocation': 'structuredContent'}
-    assert len(result_text(result)) < 200
+    assert summary == result
+    assert len(result_text(result)) < 48000
     assert result['computed']['components']['details']['rows']
 
 

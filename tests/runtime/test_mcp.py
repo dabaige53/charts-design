@@ -11,6 +11,8 @@ from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
 def test_real_stdio_protocol(tmp_path):
+    from dashboard_runtime.store import Store
+    Store(tmp_path/'mcp').create('mcp-test', 'MCP')
     async def check():
         params=StdioServerParameters(command=sys.executable,args=['-m','dashboard_runtime','--root',str(tmp_path/'mcp'),'mcp'],env={**os.environ,'PYTHONPATH':str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')})
         async with stdio_client(params) as (read,write):
@@ -30,7 +32,8 @@ def test_real_stdio_protocol(tmp_path):
                 assert ui.contents[0].meta == {'ui': {'prefersBorder': True}}
                 assert '"mode": "mcp"' in ui.contents[0].text
                 result=await session.call_tool('dashboard_create',{'dashboardId':'mcp-test','title':'MCP'})
-                assert not result.isError
+                assert result.isError
+                assert result.structuredContent['error']['code'] == 'PROJECT_REQUIRED'
                 result=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':1,'operations':[{'op':'set_title','value':'Edited over MCP'}]})
                 assert not result.isError
                 assert result.structuredContent is not None
@@ -38,10 +41,10 @@ def test_real_stdio_protocol(tmp_path):
                 import json
                 assert isinstance(result.content[0], TextContent)
                 summary = json.loads(result.content[0].text)
-                assert summary['dashboardId'] == 'mcp-test'
-                assert summary['artifactLocation'] == 'structuredContent.document'
-                assert 'document' not in summary
-                assert summary['datasetRows'] == {}
+                assert summary['document']['id'] == 'mcp-test'
+                assert summary == result.structuredContent
+                assert 'document' in summary
+                assert summary['document']['snapshot']['datasets'] == {}
                 bad=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':1,'operations':[{'op':'set_title','value':'Stale'}]})
                 assert bad.isError
                 report=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':2,'operations':[
@@ -74,7 +77,21 @@ def test_real_stdio_protocol(tmp_path):
                     'expectedRevision':4,'operations':[{'op':'set_report_markdown','value':large_source}]})
                 assert not large.isError
                 assert large.structuredContent is not None
-                assert large.structuredContent['document']['manifest']['report']['markdown'] == large_source
+                async def resolve(result):
+                    import base64
+                    envelope = result.structuredContent
+                    if 'transport' not in envelope:
+                        return envelope
+                    info = envelope['transport']
+                    parts = []
+                    for index in range(info['chunks']):
+                        chunk = await session.call_tool('runtime_result_chunk', {'requestId': info['requestId'], 'index': index})
+                        assert len(chunk.content[0].text) < 25000
+                        parts.append(chunk.structuredContent['data'])
+                    raw = base64.b64decode(''.join(parts))
+                    assert len(raw) == info['bytes']
+                    return json.loads(raw)
+                assert (await resolve(large))['document']['manifest']['report']['markdown'] == large_source
                 assert isinstance(large.content[0], TextContent)
                 assert len(large.content[0].text) < 1000
                 # A representative 960-row transport fixture exceeds the reported response size.
@@ -88,9 +105,9 @@ def test_real_stdio_protocol(tmp_path):
                     ]})
                 assert not payload.isError
                 assert payload.structuredContent is not None
-                assert payload.structuredContent['document']['snapshot']['datasets']['details'] == rows
+                assert (await resolve(payload))['document']['snapshot']['datasets']['details'] == rows
                 assert isinstance(payload.content[0], TextContent)
-                assert json.loads(payload.content[0].text)['documentBytes'] > 900000
+                assert json.loads(payload.content[0].text)['transport']['bytes'] > 900000
                 assert len(payload.content[0].text) < 1000
                 resources=await session.list_resources()
                 assert any(str(r.uri).startswith('ui://') for r in resources.resources)
@@ -102,6 +119,8 @@ def test_real_stdio_protocol(tmp_path):
 
 
 def test_read_annotations_and_edit_target_over_stdio(tmp_path):
+    from dashboard_runtime.store import Store
+    Store(tmp_path/'annotations').create('review', 'Review')
     async def check():
         params = StdioServerParameters(command=sys.executable,
             args=['-m', 'dashboard_runtime', '--root', str(tmp_path / 'annotations'), 'mcp'],
@@ -118,7 +137,6 @@ def test_read_annotations_and_edit_target_over_stdio(tmp_path):
                     assert not result.isError, result
                     return result.structuredContent
 
-                await call('dashboard_create', dashboardId='review', title='Review')
                 empty = await call('dashboard_annotations', dashboardId='review')
                 assert empty['count'] == 0 and empty['revision'] == 1
                 note = {'id': 'review-note', 'componentId': 'finding', 'text': '将观察内容改为已核对收入',

@@ -1,13 +1,21 @@
 /* High-cardinality filters page options; the selection still addresses all rows. */
 export function clearFilterValues(filters){return filters.map(filter=>({...filter,values:[]}));}
 
-export function singleFilter({filter,values,onApply,onError,openMenu,icon,disabled=false}){
+export function singleFilter({filter,values,load,onApply,onError,openMenu,closeMenu,icon,disabled=false}){
   const trigger=document.createElement('button'),caption=filter.label||filter.field;
   trigger.type='button';trigger.className='filter-trigger';trigger.disabled=disabled;
   trigger.textContent=caption+'：'+(filter.values.length?String(filter.values[0]):'全部');
   trigger.setAttribute('aria-label',trigger.textContent);trigger.setAttribute('aria-haspopup','menu');
   trigger.append(icon('down'));
-  trigger.onclick=()=>{
+  trigger.onclick=async()=>{
+    if(load){
+      const panel=document.createElement('div'),search=document.createElement('input'),list=document.createElement('div'),more=document.createElement('button');
+      search.placeholder='搜索全部选项';search.setAttribute('aria-label',caption+'搜索选项');more.textContent='加载更多';let page,seq=0,timer;
+      const choose=value=>{closeMenu();Promise.resolve(onApply(value===undefined?[]:[value])).catch(onError);};
+      const item=(label,value)=>{const b=document.createElement('button');b.type='button';b.className='ui-menu-item';b.setAttribute('role','menuitemradio');b.setAttribute('aria-checked',String(value===undefined?!filter.values.length:JSON.stringify(value)===JSON.stringify(filter.values[0])));b.textContent=label;b.onclick=()=>choose(value);return b;};
+      async function fetchPage(offset){const request=++seq;more.disabled=true;try{const result=await load(search.value,offset);if(request!==seq)return;page=result;if(!offset)list.replaceChildren(item('全部',undefined));for(const value of result.values)list.append(item(String(value??'—'),value));more.hidden=!result.hasMore;}catch(error){onError(error);}finally{if(request===seq)more.disabled=false;}}
+      search.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>fetchPage(0),150);};more.onclick=()=>fetchPage(page.offset+page.values.length);panel.append(search,list,more);openMenu(trigger,[],{label:caption,content:panel,align:'start'});await fetchPage(0);return;
+    }
     const entries=[{label:'全部',value:undefined},...values.map(value=>({label:String(value??'—'),value}))].map(({label,value})=>({
       label,checked:value===undefined?!filter.values.length:JSON.stringify(filter.values[0])===JSON.stringify(value),
       run:()=>Promise.resolve(onApply(value===undefined?[]:[value])).catch(onError),
@@ -51,5 +59,6 @@ export function pagedFilter({filter,firstPage,load,onApply,onError,disabled=fals
   };
   reset.onclick=()=>{all=true;selected.clear();excluded.clear();sync();};
   clear.onclick=()=>{all=false;selected.clear();excluded.clear();sync();};
+  panel.loadFirst=()=>fetchPage(0);
   draw(firstPage);return panel;
 }

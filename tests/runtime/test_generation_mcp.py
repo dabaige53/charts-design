@@ -18,7 +18,7 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
     async def check():
         params = StdioServerParameters(
             command=sys.executable,
-            args=['-m', 'dashboard_runtime', '--root', str(tmp_path / 'state'), 'mcp'],
+            args=['-m', 'dashboard_runtime', '--project-root', str(tmp_path/'project'), '--runtime-root', str(tmp_path/'state'), 'mcp'],
             env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')},
         )
         async with stdio_client(params) as (read, write):
@@ -124,7 +124,9 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 for tool in ('dashboard_get', 'dashboard_preview'):
                     loaded = (await call(tool, {'dashboardId': 'fresh-report'}))['document']
                     assert {k: v for k, v in loaded.items() if k != 'computed'} == {k: v for k, v in doc.items() if k != 'computed'}
-                    assert loaded['computed']['components']['trend']['data']['values'] == [10, 15]
+                    assert loaded['computed']['components'] == {}
+                view = await call('dashboard_view', {'dashboardId':'fresh-report','responseMode':'patch','componentIds':['trend']})
+                assert view['computed']['components']['trend']['data']['values'] == [10,15]
                 semantics = await call('semantic_inspect', {'dashboardId': 'fresh-report', 'componentId': 'trend'})
                 assert semantics['metrics']['revenue']['definition'] == 'Sum of synthetic revenue'
                 invalid = await session.call_tool('dashboard_patch', {'dashboardId': 'fresh-report',

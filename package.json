@@ -26,6 +26,8 @@
     "runtime-ui/package.json",
     "docs/dashboard-runtime.md",
     "docs/echarts-options.md",
+    "docs/dynamic-encoding.md",
+    "docs/images/dynamic-encoding-retail.png",
     "pyproject.toml",
     "mcp.json",
     "README.md",
@@ -40,7 +42,9 @@
     "dashboard_runtime/web/.npmignore",
     "dashboard_runtime/examples/*.md",
     "docs/seaborn-backend.md",
-    "docs/performance-results.json"
+    "docs/performance-results.json",
+    "docs/project-runtime.md",
+    "docs/mcp-transport-diagnostics.md"
   ],
   "keywords": [
     "mckinsey",

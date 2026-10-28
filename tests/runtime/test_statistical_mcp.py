@@ -13,7 +13,7 @@ from mcp.client.stdio import stdio_client
 
 def test_statistical_stdio_authoring(tmp_path):
     async def check():
-        params=StdioServerParameters(command=sys.executable,args=['-m','dashboard_runtime','--root',str(tmp_path),'mcp'],env={**os.environ,'PYTHONPATH':str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')})
+        params=StdioServerParameters(command=sys.executable,args=['-m','dashboard_runtime','--project-root',str(tmp_path/'project'),'--runtime-root',str(tmp_path/'runtime'),'mcp'],env={**os.environ,'PYTHONPATH':str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')})
         async with stdio_client(params) as (read,write):
             async with ClientSession(read,write) as session:
                 await session.initialize()
@@ -30,8 +30,9 @@ def test_statistical_stdio_authoring(tmp_path):
                     {'op':'set_view_mode','value':'report'},
                     {'op':'set_report_markdown','value':'# Synthetic report\n\n```chart\n{"componentId":"regression"}\n```'},
                 ]})
-                assert result['statisticalArtifacts']['regression']['provenance']['rowsUsed']==5
+                assert result['document']['computed']['components']=={}
                 assert (await call('dashboard_validate',{'dashboardId':'statistics'}))['valid']
-                assert 'regression' in (await call('dashboard_preview',{'dashboardId':'statistics'}))['statisticalArtifacts']
+                assert 'statisticalArtifacts' not in (await call('dashboard_preview',{'dashboardId':'statistics'}))
+                assert (await call('dashboard_view',{'dashboardId':'statistics','responseMode':'patch','componentIds':['regression']}))['statisticalArtifacts']['regression']['provenance']['rowsUsed']==5
                 assert (await call('statistical_render',{'dashboardId':'statistics','componentId':'regression','format':'png'}))['mimeType']=='image/png'
     asyncio.run(check())

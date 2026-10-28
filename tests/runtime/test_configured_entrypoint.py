@@ -15,7 +15,8 @@ def test_project_mcp_command_and_reconnect(tmp_path):
     root = Path(__file__).resolve().parents[2]
     config = json.loads(root.joinpath('mcp.json').read_text())['mcpServers']['charts-design']
     args = [value.replace('${PLUGIN_ROOT}', str(root)) for value in config['args']]
-    args[args.index('--root') + 1] = str(tmp_path)
+    args[args.index('--root') + 1] = str(tmp_path/'runtime')
+    args[1:1] = ['--project-root', str(tmp_path/'project')]
 
     async def check():
         params = StdioServerParameters(command=config['command'], args=args, env=dict(os.environ))
@@ -44,7 +45,7 @@ def test_same_host_session_survives_worker_idle_shutdown(tmp_path):
 
     async def check():
         params = StdioServerParameters(command='node', args=[str(root / 'bin/dashboard-runtime.js'),
-            '--root', str(tmp_path), 'mcp', '--idle-timeout', '0.2'], env=dict(os.environ))
+            '--project-root', str(tmp_path/'project'), '--runtime-root', str(tmp_path/'runtime'), 'mcp', '--idle-timeout', '0.2'], env=dict(os.environ))
         async with stdio_client(params, errlog=errlog) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()

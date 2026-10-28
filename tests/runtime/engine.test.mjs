@@ -14,22 +14,33 @@ test('filters feed KPIs and charts from the same reviewed rows',()=>{
   assert.equal(grouped(d,'trend').reduce((s,r)=>s+r.values.revenue,0),278);
 });
 test('native chart type switching preserves source snapshot',()=>{
-  for(const type of ['bar','line','area','pie','funnel']){
+  for(const [type,seriesType] of Object.entries({bar:'bar',line:'line',area:'line',pie:'pie',funnel:'funnel'})){
     const d=structuredClone(doc);d.manifest.components.trend.chartType=type;
-    assert.ok(optionFor(d,'trend').series.length);
+    const series=optionFor(d,'trend').series;
+    assert.deepEqual([...new Set(series.map(item=>item.type))],[seriesType]);
+    if(type==='area')assert.ok(series.every(item=>item.areaStyle));
     assert.deepEqual(d.snapshot,doc.snapshot);
   }
 });
 test('shape compatibility blocks missing roles',()=>{
-  assert.ok(compatible(doc,doc.manifest.components.trend,'scatter'));
-  assert.ok(compatible(doc,doc.manifest.components.trend,'heatmap'));
-  assert.ok(compatible(doc,doc.manifest.components.trend,'waterfall'));
+  const trend=doc.manifest.components.trend;
+  assert.match(compatible(doc,trend,'scatter'),/numeric X field/);
+  assert.match(compatible(doc,trend,'heatmap'),/second categorical field/);
+  assert.match(compatible(doc,trend,'waterfall'),/additive delta metric/);
+  assert.equal(compatible(doc,{...trend,x:'revenue'},'scatter'),null);
+  assert.equal(compatible(doc,{...trend,series:'region'},'heatmap'),null);
+  const delta=structuredClone(doc);delta.manifest.metrics.revenue.semantic='delta';
+  assert.equal(compatible(delta,delta.manifest.components.trend,'waterfall'),null);
 });
 test('null measurements are missing, never coerced to zero',()=>{
   assert.equal(aggregate([{v:null}],{aggregation:'sum',field:'v'}),null);
 });
 test('CSV quotes values and neutralizes formula injection',()=>{
-  assert.ok(csv([{label:'=HYPERLINK("x")',value:-3}]).includes("'=HYPERLINK"));
+  const result=csv([{label:'=HYPERLINK("x")',value:-3}]);
+  const parsed=JSON.parse(execFileSync('python3',['-c',
+    'import csv,io,json,sys; print(json.dumps(list(csv.reader(io.StringIO(sys.stdin.read().lstrip(chr(0xfeff)), newline="")))))'
+  ],{input:result,encoding:'utf8'}));
+  assert.deepEqual(parsed,[['label','value'],['\'=HYPERLINK("x")','-3']]);
 });
 test('declared search recomputes only its explicit consumers',()=>{
   const d=structuredClone(doc);d.manifest.filters=[{id:'search',op:'contains',field:'region',values:['EA'],componentIds:['total','trend']}];

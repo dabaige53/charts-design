@@ -24,7 +24,7 @@ def test_mcp_page_switch(tmp_path):
 
     async def check():
         params = StdioServerParameters(command='node', args=[str(root / 'bin/dashboard-runtime.js'),
-            '--root', str(tmp_path / 'state'), 'mcp'], env=dict(os.environ))
+            '--project-root', str(tmp_path/'project'), '--runtime-root', str(tmp_path/'state'), 'mcp'], env=dict(os.environ))
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()

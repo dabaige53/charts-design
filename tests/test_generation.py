@@ -8,28 +8,42 @@ import sys
 import subprocess
 import json
 import tempfile
+from pathlib import Path
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "skills", "executive-charts", "scripts")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "tests", "test_output")
 
-def test_chart_generation():
+
+def dashboard_config(output_file):
+    html = Path(output_file).read_text(encoding="utf-8")
+    start_tag = '<script id="dashboard-data">'
+    start = html.index(start_tag) + len(start_tag)
+    config_script = html[start:html.index("</script>", start)]
+    program = "const window = {};\n" + config_script + "\nconsole.log(JSON.stringify(window.DASHBOARD_CONFIG));"
+    result = subprocess.run(["node", "-"], input=program, capture_output=True, text=True, check=True)
+    return json.loads(result.stdout)
+
+
+def test_chart_generation(tmp_path):
     print("Testing standalone chart generation (t06)...")
-    out_file = os.path.join(OUTPUT_DIR, "test_chart_t06.html")
+    out_file = tmp_path / "chart.html"
     cmd = [
         sys.executable,
         os.path.join(SCRIPTS_DIR, "generate_chart.py"),
         "--code", "t06",
+        "--title", "测试趋势图",
         "--output", out_file
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
     assert res.returncode == 0, f"generate_chart.py failed: {res.stderr}"
-    assert os.path.exists(out_file), "Output file was not created"
+    html = out_file.read_text(encoding="utf-8")
+    assert "测试趋势图" in html
+    assert 'data-explain-chart="T06"' in html
     print("✓ Standalone chart test passed!")
 
-def test_dashboard_generation():
+def test_dashboard_generation(tmp_path):
     print("Testing custom dashboard composition...")
-    out_file = os.path.join(OUTPUT_DIR, "test_dashboard_custom.html")
+    out_file = tmp_path / "dashboard.html"
     cmd = [
         sys.executable,
         os.path.join(SCRIPTS_DIR, "generate_dashboard.py"),
@@ -39,12 +53,14 @@ def test_dashboard_generation():
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
     assert res.returncode == 0, f"generate_dashboard.py failed: {res.stderr}"
-    assert os.path.exists(out_file), "Output file was not created"
+    config = dashboard_config(out_file)
+    assert config["meta"]["title"] == "测试研判看板"
+    assert [chart["code"] for chart in config["charts"]] == ["c01", "t06", "r01", "fn01"]
     print("✓ Dashboard composition test passed!")
 
-def test_preset_generation():
+def test_preset_generation(tmp_path):
     print("Testing retail_ecommerce preset...")
-    out_file = os.path.join(OUTPUT_DIR, "test_retail_preset.html")
+    out_file = tmp_path / "retail.html"
     cmd = [
         sys.executable,
         os.path.join(SCRIPTS_DIR, "generate_dashboard.py"),
@@ -53,14 +69,15 @@ def test_preset_generation():
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
     assert res.returncode == 0, f"generate_dashboard.py preset failed: {res.stderr}"
-    assert os.path.exists(out_file), "Output file was not created"
+    config = dashboard_config(out_file)
+    assert config["meta"]["title"] == "零售连锁集团核心运营效能与商品战略研判看板"
+    assert "kpi-gmv" in [kpi["id"] for kpi in config["kpis"]]
     print("✓ Retail preset test passed!")
 
-def test_config_generation():
-    import json
+def test_config_generation(tmp_path):
     print("Testing custom JSON config generation...")
-    cfg_file = os.path.join(OUTPUT_DIR, "sample_cfg.json")
-    out_file = os.path.join(OUTPUT_DIR, "test_config_dashboard.html")
+    cfg_file = tmp_path / "config.json"
+    out_file = tmp_path / "configured.html"
     with open(cfg_file, "w", encoding="utf-8") as f:
         json.dump({
             "meta": {"title": "自定义测试看板", "org": "测试部"},
@@ -88,13 +105,17 @@ def test_config_generation():
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
     assert res.returncode == 0, f"generate_dashboard.py --config failed: {res.stderr}"
-    assert os.path.exists(out_file), "Output file was not created"
+    config = dashboard_config(out_file)
+    assert config["meta"]["title"] == "自定义测试看板"
+    assert [item["key"] for item in config["filters"]] == ["month", "region"]
+    assert [option["value"] for option in config["filters"][1]["options"]] == ["华东", "华南"]
+    assert [chart["code"] for chart in config["charts"]] == ["c01", "t06", "k01"]
     print("✓ Custom JSON config test passed!")
 
-def test_from_csv_generation():
+def test_from_csv_generation(tmp_path):
     print("Testing --from-csv automated generation...")
-    sample_csv = os.path.join(OUTPUT_DIR, "sample_sales.csv")
-    out_file = os.path.join(OUTPUT_DIR, "test_csv_dashboard.html")
+    sample_csv = tmp_path / "sales.csv"
+    out_file = tmp_path / "csv-dashboard.html"
     with open(sample_csv, "w", encoding="utf-8") as f:
         f.write('"门店","大区","销售额","同比","毛利率"\n')
         f.write('"上海旗舰店","华东","¥4,500 万","+16.2%","35.4%"\n')
@@ -227,12 +248,13 @@ def test_workspace_filter_scope_contract():
     print("✓ Explicit workspace filter scope test passed!")
 
 if __name__ == "__main__":
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    test_chart_generation()
-    test_dashboard_generation()
-    test_preset_generation()
-    test_config_generation()
-    test_from_csv_generation()
+    with tempfile.TemporaryDirectory(prefix="charts-design-generation-") as tmp:
+        tmp_path = Path(tmp)
+        test_chart_generation(tmp_path)
+        test_dashboard_generation(tmp_path)
+        test_preset_generation(tmp_path)
+        test_config_generation(tmp_path)
+        test_from_csv_generation(tmp_path)
     test_generated_html_inspector_contract()
     test_workspace_generation()
     test_workspace_filter_scope_contract()

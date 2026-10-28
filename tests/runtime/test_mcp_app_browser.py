@@ -27,7 +27,7 @@ def test_embedded_app_edits_persists_and_reopens(tmp_path):
 
     async def check():
         params = StdioServerParameters(command='node', args=[str(root / 'bin/dashboard-runtime.js'),
-            '--root', str(tmp_path / 'state'), 'mcp'], env=dict(os.environ))
+            '--project-root', str(tmp_path/'project'), '--runtime-root', str(tmp_path/'state'), 'mcp'], env=dict(os.environ))
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -176,7 +176,7 @@ def test_embedded_app_edits_persists_and_reopens(tmp_path):
                             'Auto refreshed MCP App')
                         # A computed offline component is a page snapshot, never a full export.
                         from dashboard_runtime.assets import export_document
-                        saved_document = saved.structuredContent['document']
+                        saved_document = (await session.call_tool('dashboard_view', {'dashboardId':'embedded','responseMode':'full'})).structuredContent['document']
                         offline_html = export_document(saved_document)
                         offline = await browser.new_page()
                         await offline.route('http://127.0.0.1:54322/**', lambda route: route.fulfill(

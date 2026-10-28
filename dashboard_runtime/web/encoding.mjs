@@ -25,12 +25,12 @@ export function encodingOption(doc,id,records){
   const metric=k=>doc.manifest.metrics[b.measures[k]]||b.attributes?.[k]||{};
   const show=(k,v)=>typeof v==='number'?format(v,metric(k)):label(v);
   const tooltip=r=>[label(r.category),...(e.tooltip||Object.keys(b.measures)).map(k=>`${metric(k).label||k}: ${show(k,r.values[k])}`)].join('\n');
-  const base={animation:false,legend:{type:'scroll',top:0},tooltip:{trigger:'item',renderMode:'richText',confine:true},grid:{left:16,right:24,top:42,bottom:24,containLabel:true}};
+  const base={animation:false,legend:{type:'scroll',top:0},tooltip:{trigger:'item',renderMode:'richText',confine:true},grid:{left:16,right:24,top:42,bottom:42,containLabel:true}};
   if(!records.length)return {...base,title:{text:'当前筛选无数据',left:'center',top:'middle'},xAxis:{show:false},yAxis:{show:false},series:[]};
   if(c.config.code==='r02'){
     const groups=[...new Set(records.map(r=>e.colorBy?r.values[e.colorBy]:null))];
-    return {...base,legend:{...base.legend,show:!!e.colorBy},xAxis:{type:'value',name:metric('x').label,axisLabel:{formatter:v=>show('x',v)}},yAxis:{type:'value',name:metric('y').label,axisLabel:{formatter:v=>show('y',v)}},
-      tooltip:{...base.tooltip,formatter:p=>tooltip(p.data.record)},series:groups.map((g,i)=>({name:e.colorBy?label(g):metric('y').label,type:'scatter',itemStyle:{color:color(g,i)},symbolSize:e.sizeBy?(v=>Math.max(4,Math.min(80,Math.sqrt(Math.max(0,v[2]))))):(e.symbolSize??18),data:records.filter(r=>(e.colorBy?r.values[e.colorBy]:null)===g&&r.values.x!=null&&r.values.y!=null).map(r=>({value:[r.values.x,r.values.y,e.sizeBy?r.values[e.sizeBy]:1,r.category],record:r}))}))};
+    return {...base,legend:{...base.legend,show:!!e.colorBy},xAxis:{type:'value',name:metric('x').label,nameLocation:'middle',nameGap:30,axisLabel:{formatter:v=>show('x',v)}},yAxis:{type:'value',name:metric('y').label,axisLabel:{formatter:v=>show('y',v)}},
+      tooltip:{...base.tooltip,formatter:p=>tooltip(p.data.record)},series:groups.map((g,i)=>({name:e.colorBy?label(g):metric('y').label,type:'scatter',label:{show:e.showLabels??false,position:'top',fontSize:10,formatter:p=>label(p.value[3])},itemStyle:{color:color(g,i)},symbolSize:e.sizeBy?(v=>Math.max(4,Math.min(80,Math.sqrt(Math.max(0,v[2]))))):(e.symbolSize??18),data:records.filter(r=>(e.colorBy?r.values[e.colorBy]:null)===g&&r.values.x!=null&&r.values.y!=null).map(r=>({value:[r.values.x,r.values.y,e.sizeBy?r.values[e.sizeBy]:1,r.category],record:r}))}))};
   }
   const categories=[...new Set(records.map(r=>r.category))],groups=[...new Set(records.map(r=>r.series))];
   const lookup=new Map(records.map(r=>[JSON.stringify([r.category,r.series]),r]));

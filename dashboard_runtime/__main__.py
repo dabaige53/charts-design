@@ -18,6 +18,8 @@ def parser():
         default=".charts-runtime",
         help="Persistent dashboard store (shared by all transports)",
     )
+    p.add_argument("--project-root", help="Project containing data and dashboard assets")
+    p.add_argument("--runtime-root", help="Disposable runtime cache and diagnostics directory")
     p.add_argument("--sources", help="Operator-owned read-only source aliases JSON")
     sub = p.add_subparsers(dest="command", required=True)
     init = sub.add_parser("init")
@@ -30,6 +32,10 @@ def parser():
         default="dashboard",
         help="Initial view; report provides a Markdown document with inline chart fences",
     )
+    migration = sub.add_parser('migrate-project')
+    migration.add_argument('--source-root', required=True)
+    migration.add_argument('--board', action='append', required=True)
+    migration.add_argument('--apply', action='store_true')
     sub.add_parser("list")
     for name in ("get", "validate", "history"):
         sub.add_parser(name).add_argument("id")
@@ -83,9 +89,18 @@ def read_json(path):
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
-        service = Service(args.root, args.sources)
+        service = Service(args.runtime_root or args.root, args.sources, project_root=args.project_root)
+        if not args.project_root:
+            print("Legacy --root mode: migrate to --project-root; new CLI dashboards require a project.", file=sys.stderr)
+            if args.command in ("init", "import", "import-workspace"):
+                raise DashboardError("PROJECT_REQUIRED", "Specify --project-root for new dashboards")
         command = args.command
-        if command == "init":
+        if command == 'migrate-project':
+            from .project_migration import migrate_project
+            if not args.project_root:
+                raise DashboardError('PROJECT_REQUIRED', 'Migration requires --project-root')
+            result = migrate_project(args.source_root, args.project_root, args.runtime_root or args.root, args.board, args.apply)
+        elif command == "init":
             from .demo import executive_document, report_document
             from .model import apply_operations, new_document
 

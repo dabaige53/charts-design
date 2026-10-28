@@ -319,6 +319,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             'schemaVersion': result['schemaVersion'],
             'documentSchemaVersion': result['documentSchemaVersion'],
             'statistical': {'backend':'seaborn','types':result['statistical']['types'],'component':result['statistical']['component'],'resource':'charts://declarations','renderTool':'statistical_render'},
+            'dynamicEncoding': result['dynamicEncoding'],
             'summary': True, 'resource': 'charts://declarations',
             'usage': 'Choose code for one of the 40 original charts or 9 KPI types. The full resource also documents the table family.',
             'legacy': {

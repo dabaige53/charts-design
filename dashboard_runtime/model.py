@@ -25,7 +25,10 @@ class DashboardError(ValueError):
         super().__init__(message)
         self.code, self.status = code, status
     def as_dict(self):
-        return {'ok': False, 'error': {'code': self.code, 'message': str(self)}}
+        detail = {'code': self.code, 'message': str(self)}
+        if getattr(self, 'request_id', None):
+            detail['requestId'] = self.request_id
+        return {'ok': False, 'error': detail}
 
 def require(test, message, code='INVALID_DOCUMENT'):
     if not test:
@@ -403,7 +406,7 @@ def validate(doc):
         identifier(note.get('id'), 'annotation id')
         require(note['id'] not in annotation_ids, 'Duplicate annotation id')
         annotation_ids.add(note['id'])
-        require(note.get('componentId') is None or note['componentId'] in m['components'] or isinstance(note.get('anchor'), dict), 'Unknown annotation component')
+        require(note.get('componentId') is None or note['componentId'] in m['components'] or isinstance(note.get('anchor'), dict) or isinstance(note.get('context'), dict), 'Unknown annotation component')
         if note.get('componentId') is not None:
             identifier(note['componentId'], 'annotation component')
         if 'anchor' in note:

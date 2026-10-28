@@ -372,7 +372,7 @@ def test_demo_is_markdown_document_with_two_shared_charts_and_synthetic_label():
 
 def test_cli_report_init_demo_json_export_and_import(tmp_path):
     def run(*args):
-        return subprocess.run([sys.executable, '-m', 'dashboard_runtime', '--root', str(tmp_path / 'cli'), *args], text=True, capture_output=True)
+        return subprocess.run([sys.executable, '-m', 'dashboard_runtime', '--project-root', str(tmp_path / 'cli'), '--runtime-root', str(tmp_path / 'cache'), *args], text=True, capture_output=True)
 
     empty = run('init', 'empty', '--mode', 'report', '--title', 'My analysis')
     assert empty.returncode == 0, empty.stderr

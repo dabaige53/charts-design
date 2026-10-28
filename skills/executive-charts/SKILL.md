@@ -9,6 +9,14 @@ Turn business evidence into a restrained executive dashboard. Run the scripts bu
 
 The goal is a reusable business-component generation system whose deliverable is working HTML or an explicit framework Adapter. Use the Gallery and `examples/` for discovery and visual comparison. Generate final markup from explicit business data through the registered component pipeline.
 
+## Project MCP editing and display
+
+Use a project-configured runtime (`--project-root` for durable assets and `--runtime-root` for disposable runtime files). Do not create business dashboards inside a plugin installation or shared cache directory.
+
+For a multi-step edit, call `dashboard_edit_begin`, apply draft patches with the latest concurrency revision, then call `dashboard_edit_finish`. If its Doctor report fails, fix the listed components and finish again. After success call `dashboard_preview` once; do not open previews after intermediate patches, data attachment or queries. Existing connected pages refresh in place. Report source checks, installed version and actual host rendering separately.
+
+Use `dashboard_view` with explicit component IDs for on-demand results; use full mode only for explicit complete exports or analysis. Never embed full dataset rows into a page to work around loading. Query `runtime_diagnostics` using a request ID when loading fails. Keep annotations independent of design restoration and preserve their context.
+
 ## Runtime MCP reference case
 
 For local datasets that must remain outside the preview, read [local-data.md](references/local-data.md). Use `dataset_attach` to stream an operator-configured SQLite table into a versioned local dataset; bind components to that dataset. MCP returns local aggregate results and table pages by default. Use `dashboard_view` for unsaved reader filters, pagination, sorting and time-grain changes; `dataset_export` streams every matching row to a managed local CSV. Do not expand rows per chart, send full observations in component configs, or launch an HTTP service. Inspect data versions, row counts and sizes with `dashboard_data_inspect`.

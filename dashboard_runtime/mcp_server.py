@@ -16,32 +16,11 @@ def current_ui_uri():
 
 URI = current_ui_uri()
 MIME = 'text/html;profile=mcp-app'
-UI_TOOLS = {'dashboard_create', 'dashboard_preview', 'dashboard_patch',
-            'dashboard_restore', 'dataset_import', 'query_execute', 'dataset_attach',
-            'dashboard_view', 'dashboard_migrate', 'dashboard_migration_rollback'}
-UI_TOOLS.add('dashboard_refresh')
+UI_TOOLS = {'dashboard_preview'}
 
 def result_text(result):
-    """Keep the canonical artifact once, in structuredContent, rather than twice."""
-    if 'export' in result and 'content' in result['export']:
-        return json.dumps({'export': {k: v for k, v in result['export'].items() if k != 'content'}}, ensure_ascii=False)
-    if isinstance(result.get('computed'), dict) and isinstance(result.get('componentIds'), list):
-        return json.dumps({'dashboardId': result['id'], 'revision': result['revision'],
-                           'componentIds': result['componentIds'], 'artifactLocation': 'structuredContent'},
-                          ensure_ascii=False, allow_nan=False)
-    document = result.get('document')
-    if not isinstance(document, dict):
-        return json.dumps(result, ensure_ascii=False, allow_nan=False)
-    summary = {key: value for key, value in result.items() if key not in ('document', 'statisticalArtifacts')}
-    summary.update({
-        'dashboardId': document['id'], 'revision': document['revision'],
-        'annotationCount': len(document['manifest'].get('annotations', [])),
-        'title': document['manifest']['title'], 'artifactLocation': 'structuredContent.document',
-        'documentBytes': len(json.dumps(document, ensure_ascii=False, allow_nan=False).encode('utf-8')),
-        'datasetRows': {**{key: len(rows) for key, rows in document['snapshot']['datasets'].items()},
-                        **{key: ref['rowCount'] for key, ref in document['snapshot'].get('datasetRefs', {}).items()}},
-    })
-    return json.dumps(summary, ensure_ascii=False, allow_nan=False)
+    """Transport.pack already bounds the payload; text-only hosts need all fields."""
+    return json.dumps(result, ensure_ascii=False, allow_nan=False)
 
 def create_server(service, lifetime=None):
     lifetime = lifetime or IdleLifetime()
@@ -80,9 +59,13 @@ def create_server(service, lifetime=None):
         nonlocal advertised_uri
         try:
             request = dict(arguments or {})
+            if name == 'dashboard_create' and not service.project_root:
+                raise DashboardError('PROJECT_REQUIRED', 'Specify --project-root for new dashboards; legacy --root supports existing dashboards only')
             if name in TOOLS and 'dataMode' in TOOLS[name][1].get('properties', {}):
                 request.setdefault('dataMode', 'local')
             result = await asyncio.to_thread(service.call, name, request)
+            if name not in ('runtime_result_chunk', 'runtime_diagnostics', 'runtime_report_error', 'runtime_keepalive'):
+                result = service.transport.pack(result, name)
             uri = current_ui_uri()
             if advertised_uri != uri:
                 advertised_uri = uri
@@ -91,8 +74,10 @@ def create_server(service, lifetime=None):
                 await server.request_context.session.send_resource_list_changed()
             return types.CallToolResult(content=[types.TextContent(type='text', text=result_text(result))], structuredContent=result)
         except DashboardError as exc:
+            service.transport.log('', name, 'server', exc.code)
             return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=json.dumps(exc.as_dict()))], structuredContent=exc.as_dict())
         except (KeyError, TypeError, ValueError) as exc:
+            service.transport.log('', name, 'server', type(exc).__name__)
             return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=str(exc))])
 
     @server.list_resources()

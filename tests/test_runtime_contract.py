@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import sys
 
 
@@ -9,6 +10,8 @@ sys.path.insert(0, str(SCRIPTS))
 from generate_dashboard import CHARTS_MAP, generate_dashboard  # noqa: E402
 from core.component_schemas import CHART_SCHEMA_REGISTRY, KPI_TYPES  # noqa: E402
 from core.html_inspector import inspect_html  # noqa: E402
+from test_generation import dashboard_config  # noqa: E402
+from test_palette import run_renderer  # noqa: E402
 
 
 def _generate(tmp_path, charts):
@@ -50,7 +53,7 @@ def test_cross_filter_uses_canonical_state_field(tmp_path):
 
 
 def test_explicit_workspace_component_id_is_preserved(tmp_path):
-    html = _generate(tmp_path, [{
+    _generate(tmp_path, [{
         "id": "regional-sales",
         "code": "c01",
         "title": "Regional sales",
@@ -58,7 +61,12 @@ def test_explicit_workspace_component_id_is_preserved(tmp_path):
         "data": {"categories": ["华东"], "values": [10]},
     }])
 
-    assert "const requestedId = chart.instanceId || chart.id ||" in html
+    config = json.dumps(dashboard_config(tmp_path / "dashboard.html"), ensure_ascii=False)
+    chart = run_renderer(f"const config = {config};" + """
+const chart = new StateStore(config).config.charts[0];
+console.log(JSON.stringify({id: chart.id, instanceId: chart.instanceId, code: chart.code}));
+""")
+    assert chart == {"id": "regional-sales", "instanceId": "regional-sales", "code": "c01"}
 
 
 def test_every_registered_component_is_covered_by_schema_and_generated_html_gate(tmp_path):
