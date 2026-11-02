@@ -18,7 +18,7 @@ def parser():
         default=".charts-runtime",
         help="Persistent dashboard store (shared by all transports)",
     )
-    p.add_argument("--project-root", help="Project containing data and dashboard assets")
+    p.add_argument("--project-root", help="Default project containing data and dashboard assets; MCP requests can select another projectRoot")
     p.add_argument("--runtime-root", help="Disposable runtime cache and diagnostics directory")
     p.add_argument("--sources", help="Operator-owned read-only source aliases JSON")
     sub = p.add_subparsers(dest="command", required=True)
@@ -90,7 +90,7 @@ def main(argv=None):
     args = parser().parse_args(argv)
     try:
         service = Service(args.runtime_root or args.root, args.sources, project_root=args.project_root)
-        if not args.project_root:
+        if not args.project_root and args.command != 'mcp':
             print("Legacy --root mode: migrate to --project-root; new CLI dashboards require a project.", file=sys.stderr)
             if args.command in ("init", "import", "import-workspace"):
                 raise DashboardError("PROJECT_REQUIRED", "Specify --project-root for new dashboards")

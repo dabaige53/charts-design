@@ -57,3 +57,21 @@ Thumbs.db
 # Local acceptance reports may contain user data and machine paths.
 dist/local-data-acceptance/
 core-tests.txt
+
+# >>> magpie: library skills placed here (magpie adds and removes these lines) >>>
+/.agents/skills/design-md
+/.agents/skills/enhance-prompt
+/.agents/skills/react-vite-dashboard
+/.agents/skills/remotion
+/.agents/skills/shadcn-ui
+/.agents/skills/stitch-code-to-design
+/.agents/skills/stitch-extract-design-md
+/.agents/skills/stitch-extract-static-html
+/.agents/skills/stitch-generate-design
+/.agents/skills/stitch-loop
+/.agents/skills/stitch-manage-design-system
+/.agents/skills/stitch-react-components
+/.agents/skills/stitch-react-native
+/.agents/skills/stitch-upload-to-stitch
+/.agents/skills/taste-design
+# <<< magpie <<<

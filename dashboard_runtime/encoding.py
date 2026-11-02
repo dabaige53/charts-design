@@ -5,7 +5,7 @@ from .model import require, field
 def validate_encoding(component):
     e = component['config']['encoding']
     require(isinstance(e, dict), 'encoding must be an object')
-    require(set(e) <= {'orientation', 'stacked', 'symbolSize', 'colors', 'tooltip', 'colorBy', 'sizeBy', 'showLabels', 'topSeries', 'pinnedSeries', 'visibleCount', 'barWidth', 'adjustableBarWidth', 'emptyText'}, 'Unknown encoding option; consult chart_declarations')
+    require(set(e) <= {'orientation', 'stacked', 'symbolSize', 'colors', 'tooltip', 'colorBy', 'sizeBy', 'showLabels', 'topSeries', 'pinnedSeries', 'visibleCount', 'barWidth', 'adjustableBarWidth', 'emptyText', 'otherSeriesLabel', 'seriesRanking'}, 'Unknown encoding option; consult chart_declarations')
     require(component['config'].get('code') in ('r02', 'c03'), 'encoding supports r02 and c03')
     require(component.get('binding'), 'encoding requires a dataset binding')
     require(e.get('orientation', 'vertical') in ('horizontal', 'vertical'), 'Invalid orientation')
@@ -17,6 +17,8 @@ def validate_encoding(component):
     require(isinstance(e.get('pinnedSeries', []), list) and all(isinstance(v, str) for v in e.get('pinnedSeries', [])), 'pinnedSeries must be strings')
     require(type(e.get('adjustableBarWidth', False)) is bool, 'adjustableBarWidth must be boolean')
     require(isinstance(e.get('emptyText', ''), str), 'emptyText must be text')
+    require(isinstance(e.get('otherSeriesLabel', ''), str), 'otherSeriesLabel must be text')
+    require(e.get('seriesRanking', 'global') in ('global', 'category'), 'seriesRanking must be global or category')
     require(type(e.get('showLabels', False)) is bool, 'showLabels must be boolean')
     require(isinstance(e.get('colors', {}), dict) and all(isinstance(v, str) for v in e.get('colors', {}).values()), 'colors maps categories to CSS colors')
 

@@ -11,3 +11,12 @@ export function whileVisible(callback, interval, doc=document, win=window){
   resume();
   return ()=>{stop();doc.removeEventListener('visibilitychange',resume);win.removeEventListener('pagehide',hide);win.removeEventListener('pageshow',show);};
 }
+
+// Host teardown can precede pagehide; release view-owned work immediately.
+export function viewLifetime(){
+  const cleanups=[];let closed=false;
+  return {
+    add(cleanup){if(closed)cleanup();else cleanups.push(cleanup);},
+    dispose(){if(closed)return;closed=true;for(const cleanup of cleanups.splice(0))cleanup();}
+  };
+}

@@ -2,7 +2,7 @@
 import {inlineEdit} from './inline-edit.mjs';
 import {icon,iconButton,decorateButton,menuButton,openMenu,closeMenu} from './icons.mjs';
 const text=(tag,cls,value)=>{const n=document.createElement(tag);n.className=cls;n.textContent=value||'';return n;};
-export function installChrome({shadow,app,component:c,family,onInspect,onEdit,onBinding,onAnnotate,onText,id,editing=false}){
+export function installChrome({shadow,app,component:c,family,onInspect,onText,id,editing=false}){
   const card=shadow.querySelector('.section-card');if(!card)return ()=>{};
   const old=card.querySelector('.card-header-wrap')||card.firstElementChild;
   const header=text('div','component-header card-header-wrap'),heading=text('div','component-heading'),titleRow=text('div','component-title-row');
@@ -42,7 +42,6 @@ export function installChrome({shadow,app,component:c,family,onInspect,onEdit,on
     for(const [selector,label,name] of [['.export-chart-btn','导出数据','export'],['.copy-chart-btn','复制图片','copy'],['.fullscreen-btn','全屏查看','maximize']])use(old.querySelector(selector),name,label);
   }
   const details=iconButton('info','指标定义与语义',()=>onInspect?.(id));details.classList.add('chart-explain-btn');actions.append(details);
-  if(editing&&onAnnotate)use(iconButton('comment','图表批注',()=>onAnnotate(id)),'comment','图表批注');
   header.id=old.id;header.append(heading,actions);old.replaceWith(header);
   card.classList.add('component-'+family);card.dataset.chrome='icons-v1';
   if(family==='table'){const table=card.querySelector('#main14ColTable'),body=[...card.children].find(child=>child!==header&&child.contains(table));body?.classList.add('component-table-body');}

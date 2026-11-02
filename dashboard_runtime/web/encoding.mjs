@@ -25,7 +25,6 @@ export function encodingOption(doc,id,records){
   const metric=k=>doc.manifest.metrics[b.measures[k]]||b.attributes?.[k]||{};
   const show=(k,v)=>typeof v==='number'?format(v,metric(k)):label(v);
   const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const tooltip=r=>[label(r.category),...(e.tooltip||Object.keys(b.measures)).map(k=>`${metric(k).label||k}: ${show(k,r.values[k])}`)].join('\n');
   const position=(point,params,dom,rect,size)=>{const [w,h]=size.contentSize,[vw,vh]=size.viewSize;let x=point[0]+16,y=point[1]-h-12;if(x+w>vw)x=point[0]-w-16;if(y<8)y=point[1]+16;return [Math.max(8,Math.min(x,vw-w-8)),Math.max(8,Math.min(y,vh-h-8))];};
   const base={animation:false,legend:{show:true,type:'scroll',top:0},tooltip:{show:true,trigger:'item',renderMode:'html',confine:true,position,backgroundColor:'#fff',borderColor:'#D6E1EB',padding:14,textStyle:{color:'#17212B',fontSize:13},extraCssText:'box-shadow:0 6px 20px #123b5d15;border-radius:10px;pointer-events:none;z-index:100;'},grid:{left:16,right:24,top:42,bottom:42,containLabel:true},graphic:[],title:[]};
   if(!records.length)return {...base,legend:{show:false},tooltip:{show:false},graphic:[{id:'empty-state',type:'text',left:'center',top:'middle',style:{text:e.emptyText||'当前筛选范围暂无数据',fill:'#7B8794',font:'13px sans-serif'}}],xAxis:{show:false},yAxis:{show:false},dataZoom:[],series:[]};
@@ -36,12 +35,44 @@ export function encodingOption(doc,id,records){
   }
   const categories=[...new Set(records.map(r=>r.category))];
   let groups=[...new Set(records.map(r=>r.series))];
-  if(e.topSeries){const totals=new Map(groups.map(g=>[g,0]));for(const r of records)totals.set(r.series,totals.get(r.series)+(r.values.value??0));groups.sort((a,b)=>totals.get(b)-totals.get(a));const pinned=(e.pinnedSeries||[]).filter(g=>groups.includes(g));groups=[...pinned,...groups.filter(g=>!pinned.includes(g))].slice(0,e.topSeries);}
+  let keptByCategory=null;
+  if(e.topSeries){
+    const totals=new Map(groups.map(g=>[g,0]));for(const r of records)totals.set(r.series,totals.get(r.series)+(r.values.value??0));groups.sort((a,b)=>totals.get(b)-totals.get(a));
+    const select=list=>{const pinned=(e.pinnedSeries||[]).filter(g=>list.includes(g));return [...pinned,...list.filter(g=>!pinned.includes(g))].slice(0,e.topSeries);};
+    if(e.seriesRanking==='category'){
+      keptByCategory=new Map();const values=new Map();
+      for(const r of records){if(!values.has(r.category))values.set(r.category,new Map());const v=values.get(r.category);v.set(r.series,(v.get(r.series)||0)+(r.values.value??0));}
+      for(const [category,v]of values)keptByCategory.set(category,new Set(select([...v.keys()].sort((a,b)=>v.get(b)-v.get(a)||String(a).localeCompare(String(b))))));
+      groups=groups.filter(g=>[...keptByCategory.values()].some(set=>set.has(g)));
+    }else groups=select(groups);
+  }
+  if(e.otherSeriesLabel&&e.topSeries){
+    const kept=new Set(groups),other=new Map(),isKept=r=>(keptByCategory?.get(r.category)||kept).has(r.series);
+    for(const r of records){if(isKept(r))continue;const item=other.get(r.category)||{category:r.category,series:e.otherSeriesLabel,values:{value:0}};item.values.value+=r.values.value??0;other.set(r.category,item);}
+    if(other.size){records=[...records.filter(isKept),...other.values()];groups=[...groups,e.otherSeriesLabel];}
+  }
   const lookup=new Map(records.map(r=>[JSON.stringify([r.category,r.series]),r]));
-  if(b.orderBy){const sign=b.orderBy.direction==='desc'?-1:1;const total=k=>records.filter(r=>r.category===k).reduce((s,r)=>s+(r.values[b.orderBy.target]??0),0);categories.sort((a,z)=>sign*(total(a)-total(z)));}
+  if(b.orderBy){const sign=b.orderBy.direction==='desc'?-1:1,totals=new Map();for(const r of records)totals.set(r.category,(totals.get(r.category)||0)+(r.values[b.orderBy.target]??0));categories.sort((a,z)=>sign*((totals.get(a)||0)-(totals.get(z)||0)));}
+  const totalsByCategory=new Map();
+  for(const r of records)totalsByCategory.set(r.category,(totalsByCategory.get(r.category)||0)+(r.values.value??0));
+  const grandTotal=[...totalsByCategory.values()].reduce((a,v)=>a+v,0);
+  const percent=(value,total)=>total?`${(value/total*100).toFixed(1)}%`:'—';
+  const stackTooltip=params=>{
+    const items=Array.isArray(params)?params:[params],record=items.find(p=>p.data?.record)?.data.record;
+    if(!record)return '暂无数据';
+    const total=totalsByCategory.get(record.category)||0;
+    const heading=`<div style="font-size:14px;font-weight:700;color:#123B5D;white-space:normal;overflow-wrap:anywhere;margin-bottom:6px">${escape(label(record.category))}</div>`;
+    const summary=`<div style="color:#7B8794;margin-bottom:8px;white-space:normal">${escape(c.config.presentation?.tooltipTotalLabel||'合计')}: <strong style="color:#123B5D;font-family:monospace">${escape(show('value',total))}</strong>（占当前范围 ${percent(total,grandTotal)}）</div>`;
+    const rows=groups.map((g,i)=>{const r=lookup.get(JSON.stringify([record.category,g]));if(!r||r.values.value==null)return '';const value=r.values.value,emphasis=(e.pinnedSeries||[]).includes(g),ink=emphasis?color(g,i):'#17212B';return `<div style="display:flex;align-items:center;justify-content:space-between;gap:28px;line-height:1.9"><span style="display:flex;align-items:center;gap:9px;color:#7B8794"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escape(color(g,i))}"></span>${escape(label(g))}</span><strong style="color:${escape(ink)};font-family:monospace;font-variant-numeric:tabular-nums;white-space:nowrap">${escape(show('value',value))}（${percent(value,total)}）</strong></div>`;}).join('');
+    const gradeText=b.attributes?.grade?groups.filter(g=>g==='HO').map(g=>{const r=lookup.get(JSON.stringify([record.category,g]));return r?escape(label(g))+': '+escape(r.values.grade||'多种评级'):'';}).filter(Boolean).join('；'):'';
+    const hoRecord=lookup.get(JSON.stringify([record.category,'HO']));
+    let connectionText='';
+    if(b.attributes?.connectionKey&&hoRecord){const key=hoRecord.values.connectionKey;if(key==null)connectionText='HO：所选行程未形成可服务衔接';else{const wait=Math.floor(key/1000000),period=String(key%1000000),grade=wait<=240?'优质':wait<=360?'良好':wait<=480?'一般':'较差';connectionText=`${escape(b.attributes.connectionKey.label||'HO计划衔接')}：${wait} 分钟 · ${grade} · ${period.slice(0,4)}-${period.slice(4)} · 中转 ${escape(hoRecord.values.selectedHub||'多个中转点（请先选择B→C）')}`;}}
+    return `<div style="min-width:260px;max-width:520px">${heading}${summary}${rows}${connectionText?'<div style="margin-top:8px;white-space:normal">'+connectionText+'</div>':''}${gradeText?'<div style="margin-top:8px;white-space:normal">HO 衔接评级：'+gradeText+'</div>':''}</div>`;
+  };
   const categoryAxis={show:true,type:'category',data:categories.map(label),axisLabel:{width:180,overflow:'truncate',interval:0},inverse:e.orientation==='horizontal'};
   const valueAxis={show:true,type:'value',axisLabel:{formatter:v=>show('value',v)}};
   const count=e.visibleCount||10,horizontal=e.orientation==='horizontal',zoom=categories.length>count;
-  return {...base,grid:{...base.grid,right:horizontal&&zoom?48:24,bottom:!horizontal&&zoom?68:42},dataZoom:zoom?[{id:'category-window',type:'slider',...(horizontal?{yAxisIndex:0,right:8,width:12}:{xAxisIndex:0,bottom:8,height:12}),start:0,end:Math.min(100,count/categories.length*100),showDetail:false,filterMode:'filter'},{id:'category-inside',type:'inside',...(horizontal?{yAxisIndex:0}:{xAxisIndex:0}),start:0,end:Math.min(100,count/categories.length*100)}]:[],xAxis:e.orientation==='horizontal'?valueAxis:categoryAxis,yAxis:e.orientation==='horizontal'?categoryAxis:valueAxis,
-    tooltip:{...base.tooltip,formatter:p=>p.data.record?`${escape(label(p.data.record.series))}<br>${escape(tooltip(p.data.record)).replaceAll('\n','<br>')}`:'缺失'},series:groups.map((g,i)=>({name:label(g),type:'bar',stack:e.stacked?'total':undefined,itemStyle:{color:color(g,i)},barWidth:e.barWidth||14,data:categories.map(k=>{const r=lookup.get(JSON.stringify([k,g]));return {value:r?.values.value??null,record:r};})}))};
+  return {...base,grid:{...base.grid,right:horizontal&&zoom?48:24,bottom:!horizontal&&zoom?68:42},dataZoom:zoom?[{id:'category-window',type:'slider',...(horizontal?{yAxisIndex:0,right:8,width:12}:{xAxisIndex:0,bottom:8,height:12}),startValue:0,endValue:count-1,rangeMode:['value','value'],minSpan:0,showDetail:false,filterMode:'filter'},{id:'category-inside',type:'inside',...(horizontal?{yAxisIndex:0}:{xAxisIndex:0}),startValue:0,endValue:count-1,rangeMode:['value','value'],minSpan:0}]:[],xAxis:e.orientation==='horizontal'?valueAxis:categoryAxis,yAxis:e.orientation==='horizontal'?categoryAxis:valueAxis,
+    tooltip:{...base.tooltip,trigger:'axis',axisPointer:{type:'shadow'},formatter:stackTooltip},series:groups.map((g,i)=>({name:label(g),type:'bar',stack:e.stacked?'total':undefined,itemStyle:{color:color(g,i)},barWidth:e.barWidth||14,data:categories.map(k=>{const r=lookup.get(JSON.stringify([k,g]));return {value:r?.values.value??null,record:r};})}))};
 }

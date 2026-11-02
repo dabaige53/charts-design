@@ -1,5 +1,7 @@
 # 麦肯锡高管商业图表套件：核心问题与缺陷清单 (Problem & Defect Catalog)
 
+> 历史记录。本文保存早期缺陷现象，不是当前待办清单。各项不表示当前版本仍有同一缺陷，也不表示已经修复；处理前需核对代码与验证证据。文中的 52 款图表、代码标签和色彩描述属于当时背景。当前组件交互与绑定见 [标题区与绑定](icon-header-and-bindings.md)，配色见 [现行设计规范](../skills/executive-charts/references/design_standards.md)。
+
 ---
 
 ### 1. 案例数据严重污染与脏数据渗透 (Mock Data Pollution & Leakage)

@@ -1,5 +1,9 @@
 /* High-cardinality filters page options; the selection still addresses all rows. */
-export function clearFilterValues(filters){return filters.map(filter=>({...filter,values:[]}));}
+export function staticFilterPage(values,search='',offset=0,size=100){
+  const query=search.toLocaleLowerCase(),matches=query?values.filter(value=>String(value??'').toLocaleLowerCase().includes(query)):values;
+  return {values:matches.slice(offset,offset+size),offset,totalValues:matches.length,hasMore:offset+size<matches.length};
+}
+export function clearFilterValues(filters){return filters.map(filter=>({...filter,values:filter.required?[...filter.values]:[]}));}
 
 export function singleFilter({filter,values,load,onApply,onError,openMenu,closeMenu,icon,disabled=false}){
   const trigger=document.createElement('button'),caption=filter.label||filter.field;
@@ -13,10 +17,10 @@ export function singleFilter({filter,values,load,onApply,onError,openMenu,closeM
       search.placeholder='搜索全部选项';search.setAttribute('aria-label',caption+'搜索选项');more.textContent='加载更多';let page,seq=0,timer;
       const choose=value=>{closeMenu();Promise.resolve(onApply(value===undefined?[]:[value])).catch(onError);};
       const item=(label,value)=>{const b=document.createElement('button');b.type='button';b.className='ui-menu-item';b.setAttribute('role','menuitemradio');b.setAttribute('aria-checked',String(value===undefined?!filter.values.length:JSON.stringify(value)===JSON.stringify(filter.values[0])));b.textContent=label;b.onclick=()=>choose(value);return b;};
-      async function fetchPage(offset){const request=++seq;more.disabled=true;try{const result=await load(search.value,offset);if(request!==seq)return;page=result;if(!offset)list.replaceChildren(item('全部',undefined));for(const value of result.values)list.append(item(String(value??'—'),value));more.hidden=!result.hasMore;}catch(error){onError(error);}finally{if(request===seq)more.disabled=false;}}
+      async function fetchPage(offset){const request=++seq;more.disabled=true;list.setAttribute('aria-busy','true');if(!offset)list.textContent='正在加载选项…';try{const result=await load(search.value,offset);if(request!==seq)return;page=result;if(!offset)list.replaceChildren(...(filter.required?[]:[item('全部',undefined)]));for(const value of result.values)list.append(item(String(value??'—'),value));more.hidden=!result.hasMore;}catch(error){onError(error);}finally{if(request===seq){more.disabled=false;list.setAttribute('aria-busy','false');}}}
       search.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>fetchPage(0),150);};more.onclick=()=>fetchPage(page.offset+page.values.length);panel.append(search,list,more);openMenu(trigger,[],{label:caption,content:panel,align:'start'});await fetchPage(0);return;
     }
-    const entries=[{label:'全部',value:undefined},...values.map(value=>({label:String(value??'—'),value}))].map(({label,value})=>({
+    const entries=[...(filter.required?[]:[{label:'全部',value:undefined}]),...values.map(value=>({label:String(value??'—'),value}))].map(({label,value})=>({
       label,checked:value===undefined?!filter.values.length:JSON.stringify(filter.values[0])===JSON.stringify(value),
       run:()=>Promise.resolve(onApply(value===undefined?[]:[value])).catch(onError),
     }));
@@ -36,9 +40,9 @@ export function pagedFilter({filter,firstPage,load,onApply,onError,disabled=fals
   let all=filter.values.length===0,page=firstPage,values=[],timer,request=0,loading=false;
   const status=()=>{count.textContent=all?`已选全部${excluded.size?'，排除 '+excluded.size+' 项':''}`:`已选 ${selected.size} 项`;apply.disabled=disabled||loading||(!all&&!selected.size)||(all&&firstPage.totalValues>0&&excluded.size>=firstPage.totalValues);reset.disabled=clear.disabled=disabled||loading;more.hidden=!page.hasMore;more.disabled=disabled||loading;};
   const sync=()=>{for(const [key,check]of checks)check.checked=all?!excluded.has(key):selected.has(key);status();};
-  function draw(incoming,append=false){page=incoming;if(!append){list.replaceChildren();values=[];checks.clear();}
+  function draw(incoming,append=false){page=incoming;search.hidden=incoming.totalValues<=12&&!search.value;if(!append){list.replaceChildren();values=[];checks.clear();}
     for(const value of incoming.values){const key=JSON.stringify(value);if(values.includes(key))continue;values.push(key);const label=node('label','filter-choice'),check=node('input');check.type='checkbox';check.checked=all?!excluded.has(key):selected.has(key);check.disabled=disabled;checks.set(key,check);label.append(check,node('span','',String(value??'—')));check.onchange=()=>{if(all){if(check.checked)excluded.delete(key);else excluded.add(key);}else if(check.checked)selected.set(key,value);else selected.delete(key);status();};list.append(label);}status();}
-  async function fetchPage(offset){const seq=++request;loading=true;status();try{const result=await load(search.value,offset);if(seq===request)draw(result,offset>0);}catch(error){onError(error);}finally{if(seq===request){loading=false;status();}}}
+  async function fetchPage(offset){const seq=++request;loading=true;status();list.setAttribute('aria-busy','true');if(!offset&&!values.length)list.textContent='正在加载选项…';try{const result=await load(search.value,offset);if(seq===request)draw(result,offset>0);}catch(error){onError(error);}finally{if(seq===request){loading=false;list.setAttribute('aria-busy','false');status();}}}
   more.type=apply.type=reset.type=clear.type='button';search.disabled=disabled;
   more.onclick=()=>fetchPage(page.offset+page.values.length);
   search.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>fetchPage(0),200);};
@@ -59,6 +63,6 @@ export function pagedFilter({filter,firstPage,load,onApply,onError,disabled=fals
   };
   reset.onclick=()=>{all=true;selected.clear();excluded.clear();sync();};
   clear.onclick=()=>{all=false;selected.clear();excluded.clear();sync();};
-  panel.loadFirst=()=>fetchPage(0);
+  let initialized=firstPage.values.length>0;panel.loadFirst=()=>{if(initialized)return;return fetchPage(0).then(()=>{initialized=page.values.length>0||page.totalValues===0;});};
   draw(firstPage);return panel;
 }

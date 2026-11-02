@@ -1,26 +1,58 @@
-# 更新 analyst-workspace 的本地 MCP
+# 本地 MCP 安装更新
 
-在 charts-design 本项目的 Codex 本地环境中执行 **更新 charts-design MCP**。analyst-workspace 是更新目标，不放置该操作按钮。
-该操作从本仓源码构建并打包到本机 Documents 的现有工具目录，验证 MCP 启动和预览资源后，仅替换 analyst-workspace 的 `mcp_servers.charts-design.args[0]`。
+源码、安装包、连接中的工作进程和已打开页面分别检查。修改仓库源码不会自动更新其他安装目录；工具响应成功也不代表宿主已显示新版。
 
-- 继续使用原来的 Node 命令、启动参数、启用状态和看板数据目录。
-- 不提交或推送 Git，不修改看板数据，不创建配置备份。
-- 构建或启动检查失败时不切换配置；配置在构建期间发生变化时停止。
-- 配置采用临时文件原子替换，完成后不保留临时配置。
-- 已运行的 Codex 会话需重新连接 MCP 并重新打开预览。脚本不强行重启 Codex。
+## 完整打包并更新 analyst-workspace
 
-命令入口：
+在 charts-design 本项目的 Codex 本地环境中执行“更新 charts-design MCP”。analyst-workspace 是更新目标，不放置该操作按钮。
 
-```bash
+该操作从本仓源码构建并打包到本机 Documents 的现有工具目录，验证 MCP 启动和预览资源后，仅替换 analyst-workspace 的 `mcp_servers.charts-design.args[0]`。此入口用于已有项目配置的兼容更新；统一注册与多项目路由由 Magpie 管理，不为各业务项目新增注册。
+
+```sh
 node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace
 ```
 
-## 测试取舍
+- 保留原 Node 命令、其余启动参数、启用状态和看板数据目录。
+- 不提交或推送 Git，不修改看板数据，不创建配置备份。
+- 构建或启动检查失败时不切换配置；配置在构建期间变化时停止。
+- 配置采用临时文件原子替换，完成后不保留临时配置。
+- 已运行的宿主会话需重新连接 MCP 并重新打开预览；脚本不强行重启宿主。
 
-按 Test Value Cleaner 清理，仅检查配置更新这一稳定合同：
+## 按文件清单更新已有安装包
 
-- MERGE：单行与多行 TOML 参数归为同一项参数化检查，验证仅替换入口，其他服务器和数据目录不变。
-- KEEP：拒绝未知入口，防止错误目标配置被修改。
-- 复用已完成的真实 MCP 启动检查；不重复打包，不运行全仓测试，不新增界面截图或临时测试报告。
+已确定目标安装目录与改动文件时，先构建，再传入明确的包内相对路径：
 
-验证命令：`node bin/python-runtime.js -m pytest tests/test_local_mcp_update.py -q`。
+```sh
+npm --prefix runtime-ui run build
+node bin/update-runtime.js /absolute/install/package dashboard_runtime/web/dist/app.js dashboard_runtime/web/dist/app.css
+```
+
+脚本检查目标包身份和全部源文件，然后复制清单内文件，最后原子写入 `.runtime-generation`。后端源文件更新也必须逐项列入清单。只复制前端产物不会更新后端。依赖变化需另行完成依赖安装或选择完整打包更新；此脚本只复制指定文件。
+
+支持该标记的常驻 Node 入口在收到后续请求时，停止向旧 Python 进程派发新请求；等待已派发请求返回后，关闭旧进程输入、启动新进程、恢复初始化并执行排队请求。已经执行的写操作不重试。首次部署此 Node 入口时，宿主仍需重新建立 MCP 连接；入口自身和工具定义的变化不由此机制热更新。
+
+## 确认更新生效
+
+1. 对所用项目调用 `runtime_info`，显式传入 `projectRoot`。检查 `moduleRoot`、`backendBuildId`、`uiBuildId`、进程编号和资产路径，确认连接使用目标安装。
+2. 更新入口或工具定义后重新连接 MCP。重新读取工具列表，调用当前构建的预览工具并打开新预览。
+3. 在页面“运行诊断”中对照页面与服务的 UI 构建标识，再检查实际改动。页面每 30 秒独立检查界面版本，编辑中也只提示，不刷新文档或清除输入。
+
+刷新报表只更新数据，不替换界面代码。已打开页面仍由宿主重新打开；本项目没有可调用的宿主 MCP 重载或标签替换接口。工具与资源正确、连接已切换、页面已更新分别记录。宿主尚未实际检查时，验收状态保留待确认。
+
+## 定向检查
+
+完整打包配置更新：
+
+```sh
+node bin/python-runtime.js -m pytest tests/test_local_mcp_update.py -q
+```
+
+该检查覆盖单行与多行 TOML 参数、仅替换入口并保留其他配置，以及拒绝未知入口。安装包实际启动与预览资源仍按完整更新脚本检查。
+
+文件标记更新、SDK 能力保留及页面生命周期：
+
+```sh
+node --test tests/runtime/mcp-reload.test.mjs tests/runtime/host-app.test.mjs tests/runtime/lifecycle.test.mjs
+```
+
+源码或自动检查通过后，仍需按上述步骤确认连接与实际宿主页面。维护时机：构建、安装更新入口、进程切换或重连方式变化时更新本文。

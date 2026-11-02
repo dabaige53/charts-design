@@ -51,7 +51,6 @@ Account for all of the following where present:
 - [ ] KPI aggregation and chart recomputation needed after filtering; use the declarative `binding` contract where supported, or record the framework adapter needed for a structured component.
 - [ ] Table columns, units, alignment, sorting, pagination, keyword search, filter behavior, column visibility, drag order, copying, export, and overflow behavior.
 - [ ] Dialogs, drawers, menus, keyboard actions, focus order, labels, and ARIA references.
-- [ ] Render metric/chart explanations as read-only reference overlays with a title-bar close control, backdrop dismissal, `Escape`, and a content-focused body.
 
 Completion criterion: every existing region appears exactly once in the inventory, every behavior has an owner, and every unsupported behavior has an explicit adapter, scoped follow-up, or accepted exclusion.
 

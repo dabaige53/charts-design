@@ -1,44 +1,46 @@
 /* Pure field mapping and aggregation; shared by every browser delivery surface. */
 export const chartTypes = ['bar','line','area','pie','scatter','heatmap','funnel','waterfall'];
-export function visibleRows(doc, id) {
-  const c = doc.manifest.components[id];
-  const rows = doc.snapshot.datasets[c.datasetId] || [];
-  const filters = doc.manifest.filters.filter(f => f.componentIds.includes(id) && f.values.length);
-  return rows.filter(row => filters.every(f => f.op === 'in' ? f.values.some(v => v === row[f.field]) : f.op === 'contains' ? String(row[f.field]??'').toLocaleLowerCase().includes(f.values[0].toLocaleLowerCase()) : row[f.field] != null && row[f.field] >= f.values[0] && row[f.field] <= f.values[1]));
+// Row arrays are immutable snapshots. Share only the latest filter scope per dataset.
+const filteredCache=new WeakMap(),aggregateCache=new WeakMap();
+export function visibleRows(doc,id){
+  const c=doc.manifest.components[id],rows=doc.snapshot.datasets[c.datasetId]||[];
+  const filters=doc.manifest.filters.filter(f=>f.componentIds.includes(id)&&f.values.length);
+  if(!filters.length)return rows;
+  const key=JSON.stringify([doc.dataVersion,filters.map(f=>[f.field,f.op,f.values])]);
+  const cached=filteredCache.get(rows);if(cached?.key===key)return cached.rows;
+  const tests=filters.map(f=>{
+    if(f.op==='in'){const values=new Set(f.values);return row=>values.has(row[f.field]);}
+    if(f.op==='contains'){const needle=f.values[0].toLocaleLowerCase();return row=>String(row[f.field]??'').toLocaleLowerCase().includes(needle);}
+    return row=>row[f.field]!=null&&row[f.field]>=f.values[0]&&row[f.field]<=f.values[1];
+  });
+  const result=rows.filter(row=>tests.every(test=>test(row)));
+  filteredCache.set(rows,{key,rows:result});return result;
 }
-export function aggregate(rows, metric) {
-  const numbers = key => rows.map(r => r[key]).filter(v => typeof v === 'number' && Number.isFinite(v));
-  const total = values => values.reduce((a,b) => a+b, 0);
-  if (metric.aggregation === 'count') return rows.length;
-  if (metric.aggregation === 'entity_ratio') {
+export function aggregate(rows,metric){
+  let cache=aggregateCache.get(rows);if(!cache){cache=new Map();aggregateCache.set(rows,cache);}
+  const key=JSON.stringify(metric);if(cache.has(key))return cache.get(key);
+  const result=calculateAggregate(rows,metric);cache.set(key,result);return result;
+}
+function calculateAggregate(rows,metric){
+  if(metric.aggregation==='count')return rows.length;
+  if(metric.aggregation==='entity_ratio'){
     const entities=new Map();
     for(const row of rows){const key=row[metric.entityField];if(key==null)continue;
-      if(!entities.has(key))entities.set(key,{n:[],d:[]});const entry=entities.get(key);
-      for(const [part,field] of [['n',metric.numerator],['d',metric.denominator]]){
-        const value=row[field];if(typeof value==='number'&&Number.isFinite(value))entry[part].push(value);
-      }
+      if(!entities.has(key))entities.set(key,{n:0,d:0});const entry=entities.get(key);
+      for(const [part,field]of [['n',metric.numerator],['d',metric.denominator]]){const v=row[field];if(typeof v==='number'&&Number.isFinite(v))entry[part]+=v;}
     }
-    let n=0,d=0;for(const entry of entities.values()){
-      if(entry.n.length&&total(entry.n)>0)n++;
-      if(entry.d.length&&total(entry.d)>0)d++;
-    }
-    return d?n/d:null;
+    let n=0,d=0;for(const e of entities.values()){if(e.n>0)n++;if(e.d>0)d++;}return d?n/d:null;
   }
-  if (metric.aggregation === 'ratio') {
-    const numerator = numbers(metric.numerator), denominator = numbers(metric.denominator);
-    if (!numerator.length || !denominator.length) return null;
-    const d = total(denominator);
-    return d === 0 ? null : total(numerator) / d;
-  }
-  const values = numbers(metric.field);
-  if (!values.length) return null;
-  switch (metric.aggregation) {
-    case 'sum': return total(values);
-    case 'avg': return total(values) / values.length;
-    case 'min': return Math.min(...values);
-    case 'max': return Math.max(...values);
-    default: throw Error('Unsupported metric aggregation');
-  }
+  const stats=field=>{
+    const key='field:'+field;if(cacheForRows.has(key))return cacheForRows.get(key);
+    let sum=0,count=0,min=Infinity,max=-Infinity;
+    for(const row of rows){const v=row[field];if(typeof v!=='number'||!Number.isFinite(v))continue;sum+=v;count++;if(v<min)min=v;if(v>max)max=v;}
+    const result={sum,count,min,max};cacheForRows.set(key,result);return result;
+  };
+  const cacheForRows=aggregateCache.get(rows);
+  if(metric.aggregation==='ratio'){const n=stats(metric.numerator),d=stats(metric.denominator);return n.count&&d.count&&d.sum!==0?n.sum/d.sum:null;}
+  const values=stats(metric.field);if(!values.count)return null;
+  switch(metric.aggregation){case 'sum':return values.sum;case 'avg':return values.sum/values.count;case 'min':return values.min;case 'max':return values.max;default:throw Error('Unsupported metric aggregation');}
 }
 export function grouped(doc, id) {
   if(doc.computed?.grouped?.[id])return doc.computed.grouped[id];

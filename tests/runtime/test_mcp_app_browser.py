@@ -143,6 +143,8 @@ def test_embedded_app_edits_persists_and_reopens(tmp_path):
                         refreshed = await session.call_tool('dashboard_patch', {'dashboardId': 'embedded',
                             'expectedRevision': 2, 'operations': [{'op': 'set_title', 'value': 'Refreshed MCP App'}]})
                         assert not refreshed.isError
+                        checkpoint = await session.call_tool('dashboard_checkpoint', {'dashboardId': 'embedded', 'expectedRevision': 3})
+                        assert not checkpoint.isError
                         await app.get_by_role('button', name='刷新报表', exact=True).click()
                         await expect(title).to_have_value('Refreshed MCP App')
                         await expect(app.get_by_role('button', name='刷新报表', exact=True)).to_be_enabled()
@@ -151,6 +153,8 @@ def test_embedded_app_edits_persists_and_reopens(tmp_path):
                         automatic = await session.call_tool('dashboard_patch', {'dashboardId': 'embedded',
                             'expectedRevision': 3, 'operations': [{'op': 'set_title', 'value': 'Auto refreshed MCP App'}]})
                         assert not automatic.isError
+                        checkpoint = await session.call_tool('dashboard_checkpoint', {'dashboardId': 'embedded', 'expectedRevision': 4})
+                        assert not checkpoint.isError
                         await expect(title).to_have_value('Auto refreshed MCP App', timeout=10000)
                         saved = await session.call_tool('dashboard_get', {'dashboardId': 'embedded'})
                         assert saved.structuredContent is not None
@@ -176,7 +180,9 @@ def test_embedded_app_edits_persists_and_reopens(tmp_path):
                             'Auto refreshed MCP App')
                         # A computed offline component is a page snapshot, never a full export.
                         from dashboard_runtime.assets import export_document
-                        saved_document = (await session.call_tool('dashboard_view', {'dashboardId':'embedded','responseMode':'full'})).structuredContent['document']
+                        viewed = await session.call_tool('dashboard_view', {'dashboardId':'embedded','responseMode':'full'})
+                        assert viewed.structuredContent is not None
+                        saved_document = viewed.structuredContent['document']
                         offline_html = export_document(saved_document)
                         offline = await browser.new_page()
                         await offline.route('http://127.0.0.1:54322/**', lambda route: route.fulfill(

@@ -11,7 +11,7 @@ Use the approved academic reading master, not a dashboard grid or an always-open
 
 1. Read `charts://examples` or call `generation_examples` with no arguments. The two tracks remain separate: `executive-dashboard` and `academic-report`.
 2. Call `generation_examples` with `{"caseId":"academic-report"}` (equivalently read `charts://examples/academic-report`). This returns the actual master Markdown, synthetic data and a complete atomic declaration batch. The packaged source is `dashboard_runtime/examples/academic-report.md`.
-3. Call `chart_declarations` for the compact index, then select `{"chartType":"line"}` or `{"code":"c01"}` for requirements and a working declaration batch. The complete reference is `charts://declarations`; consult `chart_catalog` for visual discovery. Prefer native dataset-bound charts when they answer the question. Original chart families can be embedded too, but require explicit data and presentation contracts; do not guess their shape.
+3. Call `chart_declarations` for the compact index, then select a registered code such as `{"code":"c01"}` for its requirements and available example. The complete reference is `charts://declarations`; consult `chart_catalog` for visual discovery. New interactive charts use original registered codes with explicit data, presentation and supported dataset/metric bindings. `chartType` authoring is rejected; historical generic charts retain compatibility reading. Do not guess a component’s configuration or filtering support.
 4. Read `charts://contract` for current mutation rules. All examples are synthetic. Never silently reuse their facts or label them as real user data.
 
 ## Compose the report
@@ -32,12 +32,13 @@ Use standard Markdown named notes for metric definitions, provenance or key qual
 
 ## MCP generation loop
 
-- Create an empty artifact with `dashboard_create`, or read the existing one with `dashboard_get`.
-- Adapt the case's `operations`: replace sources, data, metrics, chart IDs, captions and every numeric statement. Do not overwrite an existing document wholesale just to change a paragraph.
-- Submit one `dashboard_patch` with the latest `expectedRevision`. Include declarations, `set_report_markdown` and `set_view_mode`=`report` in the same atomic batch. References are validated after the whole batch.
-- Run `dashboard_validate`, then `dashboard_preview`. A supported MCP Apps host renders the shared UI; a non-UI host receives the canonical document and can use local CLI export/serve.
-- Inspect actual rendering: prose–figure–prose order, units/legends, caption numbering, source notes, figure links, and no edit controls in reading mode. Check save/reload when authoring.
-- Re-read after a revision conflict rather than blindly retrying. Changing filters/data does not rewrite narrative: recompute and review claims explicitly.
+Read [the shared MCP delivery workflow](../executive-charts/references/mcp-delivery.md) before creating, editing, replacing data or diagnosing loading. Use its project storage, edit-batch and one-preview workflow for reports too.
+
+- Pass the absolute asset directory as `projectRoot` on every project call. Create an empty artifact with `dashboard_create`, or inspect the existing document and referenced component IDs. Begin an edit batch with the latest revision. Preserve accepted Markdown, captions, notes and sources outside the requested change.
+- Adapt the case's declarations: replace sources, data, metrics, chart IDs, captions and every numeric statement. Apply declarations, `set_report_markdown` and `set_view_mode`=`report` together so references resolve after the batch.
+- Finish the edit batch and resolve its Doctor errors before one preview. Re-read after a revision conflict.
+- Inspect actual rendering: prose–figure–prose order, units/legends, caption numbering, source notes, figure links, and reading-mode controls. Check save/reload when authoring. Report host acceptance as pending if only tool output was observed.
+- Data or filter changes update charts, not authored claims. Recompute each affected numeric statement against the same data version and filter scope, or explicitly keep the narrative tied to its original snapshot. Record unresolved statements rather than reusing stale values.
 
 Dashboard layouts and report source coexist. Route dashboard-first requests to `../executive-charts/SKILL.md`; retain their examples and interactive controls.
 

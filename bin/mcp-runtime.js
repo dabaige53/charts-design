@@ -1,4 +1,6 @@
 // Keep the host transport open while the Python worker sleeps between calls.
+const path = require('node:path');
+const fs = require('node:fs');
 const {spawn} = require('node:child_process');
 const {createInterface} = require('node:readline');
 const {pythonRuntime} = require('./python-runtime.js');
@@ -6,7 +8,12 @@ const {pythonRuntime} = require('./python-runtime.js');
 function runMcp(args) {
   const {python, env, isolated} = pythonRuntime();
   let child = null, initialization = null, initialized = null, booting = false;
-  let closing = false;
+  let closing = false, draining = false, generation;
+  const marker = path.resolve(__dirname, '../.runtime-generation');
+  const currentGeneration = () => { try { return fs.readFileSync(marker, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return ''; throw e; } };
+  function drain() {
+    if (draining && !pending.size && !booting) child?.stdin.end();
+  }
   const queued = [], pending = new Set();
   function write(line, track = true) {
     const message = JSON.parse(line);
@@ -15,7 +22,9 @@ function runMcp(args) {
   }
   function flush() { while (queued.length) write(queued.shift()); }
   function start() {
-    child = spawn(python, [...(isolated ? ['-S'] : []), '-m', 'dashboard_runtime', ...args],
+    generation = currentGeneration();
+    draining = false;
+    child = spawn(python, [...(isolated ? ['-S'] : []), '-c', 'import sys,runpy; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module("dashboard_runtime",run_name="__main__")', path.resolve(__dirname, '..'), ...args],
       {env, stdio: ['pipe', 'pipe', 'inherit']});
     const worker = child;
     booting = Boolean(initialization);
@@ -32,6 +41,7 @@ function runMcp(args) {
       }
       if ('id' in message && !message.method) pending.delete(message.id);
       process.stdout.write(line + '\n');
+      drain();
     });
     worker.on('error', error => { console.error(error.message); process.exitCode = 1; input.close(); });
     worker.stdin.on('error', error => { if (error.code !== 'EPIPE') console.error(error.message); });
@@ -58,7 +68,9 @@ function runMcp(args) {
       if (first) { const saved = initialization; initialization = null; start(); initialization = saved; }
       else start();
     }
-    if (!booting) flush();
+    if (child && generation !== currentGeneration()) draining = true;
+    if (draining) drain();
+    else if (!booting) flush();
   });
   function close() { closing = true; input.close(); child?.stdin.end(); }
   input.on('close', () => { closing = true; child?.stdin.end(); });

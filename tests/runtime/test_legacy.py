@@ -1,5 +1,3 @@
-import json
-from pathlib import Path
 import pytest
 from dashboard_runtime.legacy import REPO,render
 

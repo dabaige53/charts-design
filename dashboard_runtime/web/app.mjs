@@ -1,24 +1,27 @@
+import {staticData} from './static-data.mjs';
+import {createStaticClient} from './static-client.mjs';
+import {createRequestQueue} from './request-queue.mjs';
+import {createProjectContext} from './project-context.mjs';
 import {createProgressiveLoader} from './progressive.mjs';
 import {createAnnotations} from './annotations.mjs';
+import {supportsAnnotationContext,createAnnotationContext} from './annotation-context.mjs';
 import {inlineEdit,clearInlineEdit} from './inline-edit.mjs';
 import {reportMarkdown,renderReport} from './report.mjs';
-import {whileVisible} from './lifecycle.mjs';
+import {whileVisible,viewLifetime} from './lifecycle.mjs';
 import {icon,iconButton,openMenu,closeMenu,adaptiveActions} from './icons.mjs';
-import {initializeOriginal,mountOriginal,appendOriginalStyle,catalog} from './original.mjs';
-import {visibleRows,csv,chartTypes} from './engine.mjs';
+import {initializeOriginal,mountOriginal,appendOriginalStyle} from './original.mjs';
+import {visibleRows,csv} from './engine.mjs';
 import {mountStatisticalImage,updateStatisticalArtifacts} from './statistical.mjs';
-import {decodeToolResult,resolveToolResult} from './tool-result.mjs';
-import {pagedFilter,singleFilter,clearFilterValues} from './local-filter.mjs';
+import {resolveToolResult,expandRecords} from './tool-result.mjs';
+import {pagedFilter,singleFilter,clearFilterValues,staticFilterPage} from './local-filter.mjs';
 import {linkageValue,linkagePoint} from './linkage.mjs';
-const T={edit:'编辑',view:'退出编辑',add:'添加组件',import:'导入数据',undo:'撤销',redo:'重做',reload:'重新读取',export:'导出',close:'关闭',save:'保存',data:'数据',semantic:'指标语义',settings:'图表设置',source:'查询来源',remove:'删除',copy:'复制',empty:'导入数据，或通过 CLI / MCP 添加组件。'};
+const T={edit:'编辑',view:'退出编辑',undo:'撤销',redo:'重做',export:'导出',close:'关闭',empty:'导入数据，或通过 CLI / MCP 添加组件。'};
 const el=(tag,cls='',text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 const button=(label,fn,cls='')=>{const b=el('button',cls,label);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
 function showError(error){const n=document.getElementById('notice');if(n){if(n.closest('.toolbar'))document.querySelector('.dashboard-heading')?.append(n);n.textContent=error.message||String(error);n.className='notice error';n.hidden=false;}else console.error(error);}
 function download(name,body,type='application/json'){const a=el('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function field(label,node){const wrap=el('label','field');wrap.append(el('span','',label),node);return wrap;}
 function input(value='',kind='text'){const n=el('input');n.type=kind;n.value=value;return n;}
-function select(options,value){const n=el('select');for(const [key,label] of options){const o=el('option','',label);o.value=key;n.append(o);}n.value=value??options[0]?.[0]??'';return n;}
-function textarea(value){const n=el('textarea');n.value=typeof value==='string'?value:JSON.stringify(value,null,2);n.spellcheck=false;return n;}
 function dialog(title){const d=el('dialog','inspector'),head=el('header'),body=el('div','inspector-body');head.append(el('h2','',title),iconButton('close',T.close,()=>d.close()));d.append(head,body);d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();return {d,body};}
 function table(rows,{paginate=true,labels={}}={}){
   const wrap=el('div','data-table'),controls=el('div','table-controls'),body=el('div','table-scroll');
@@ -39,7 +42,8 @@ export async function start({echarts,GridStack,App}){
   let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,pendingLayout=null,dragging=false,renderQueued=false,linkage=null,app=null;
   let lastBreakpoint=null,transport,originalInstances=[],disposeToolbar=null,disposeReport=null;
   let renderedPage=null,renderedMode=null,reportEditing=null,reconciling=false,annotations=null;
-  let progressiveLoader=null,progressiveKey='',editBatch=null;
+  let progressiveLoader=null,progressiveKey='',editBatch=null,annotationContext=null;
+  const lifetime=viewLifetime();
   const fetched=new Set(),visibleComponents=new Set();
   const dataObserver=typeof IntersectionObserver==='undefined'?null:new IntersectionObserver(entries=>{for(const entry of entries){const id=entry.target.dataset.loadId;if(entry.isIntersecting){visibleComponents.add(id);progressiveLoader?.visible();}else visibleComponents.delete(id);}},{rootMargin:'300px'});
   const cards=new Map(),controllers=new Map(),reportHosts=new Map(),pendingMounts=new Map();
@@ -55,30 +59,37 @@ export async function start({echarts,GridStack,App}){
   const currentDraft=()=>{let draft=reportDrafts.get(doc.id);if(!draft){draft={text:reportMarkdown(doc),saved:reportMarkdown(doc),dirty:false,revision:doc.revision};reportDrafts.set(doc.id,draft);}return draft;};
   const bp=()=>window.innerWidth<650?'mobile':window.innerWidth<1050?'tablet':'desktop';
   const status=text=>{notice.textContent=text;notice.className='notice';};
-  const accept=(result,defer=false)=>{if(result?.error)throw Object.assign(Error(result.error.message),{code:result.error.code});if(result?.isError)throw Error(result.content?.[0]?.text||'Tool failed');if(!defer&&!result?.componentIds)statisticalArtifacts=updateStatisticalArtifacts(statisticalArtifacts,result);return result;};
-  const unpack=(result,defer=false)=>accept(decodeToolResult(result),defer);
+  const accept=(result,defer=false)=>{result=expandRecords(result);if(result?.error)throw Object.assign(Error(result.error.message),{code:result.error.code});if(result?.isError)throw Error(result.content?.[0]?.text||'Tool failed');if(!defer&&!result?.componentIds)statisticalArtifacts=updateStatisticalArtifacts(statisticalArtifacts,result);return result;};
+  const queueRequest=createRequestQueue(4);
+  const projectContext=createProjectContext((name,args)=>queueRequest(()=>app.callServerTool({name,arguments:args})));
+  const callMcp=(name,args)=>projectContext.call(name,args);
   const deferredResult=name=>['dashboard_get','dashboard_view','dashboard_refresh'].includes(name);
+  let loadStatic=null,staticClient=null;
+  if(boot.mode==='static'){const response=await fetch(boot.documentUrl,{cache:'no-store'});if(!response.ok)throw Error('网页配置加载失败');const payload=await response.json();boot.document=payload.document;boot.statisticalArtifacts=payload.statisticalArtifacts;statisticalArtifacts=payload.statisticalArtifacts||{};boot.interactive=true;boot.mode='offline';if(boot.document.staticWorker){staticClient=createStaticClient(boot.document,new URL(boot.documentUrl,location.href).href,boot.document.staticWorker);boot.document.progressive=true;boot.document.loading={maxConcurrent:1,debounceMs:120};}else loadStatic=staticData(boot.document);}
   if(boot.mode==='mcp'){
     app=new App({name:'Charts Design Dashboard',version:'0.6.0'},{},{autoResize:true});
     app.ontoolresult=async result=>{try{
-      const incoming=await resolveToolResult(result,(name,args)=>app.callServerTool({name,arguments:args}));
+      projectContext.accept(result);
+      const incoming=await resolveToolResult(result,callMcp);
+      projectContext.accept(incoming);
       if(incoming.document&&doc&&incoming.document.id===doc.id&&incoming.document.revision<doc.revision)return;
       const previous=statisticalArtifacts,value=accept(incoming);
       if(value.document){if(doc?.id!==value.document.id){switchRequest++;resetPageState();}if(doc&&(doc.id!==value.document.id||doc.revision!==value.document.revision)){undo=[];redo=[];}doc=value.document;}
       if(value.document&&!doc.computed){await refreshLocal();return;}
       if(value.document||previous!==statisticalArtifacts)render();
     }catch(e){showError(e);}};
-    app.onhostcontextchanged=context=>{if(doc&&context.displayMode)render();};
-    transport=async(name,args)=>accept(await resolveToolResult(await app.callServerTool({name,arguments:args}),(name,args)=>app.callServerTool({name,arguments:args})),deferredResult(name));await app.connect();
+    app.onteardown=async()=>{lifetime.dispose();return {};};
+    app.onhostcontextchanged=context=>{annotationContext?.sync(context);if(doc&&context.displayMode)render();};
+    transport=async(name,args)=>accept(await resolveToolResult(await callMcp(name,args),callMcp),deferredResult(name));await app.connect();if(supportsAnnotationContext(app))annotationContext=createAnnotationContext(app);
   }else if(boot.mode==='offline'){
-    doc=boot.document;transport=async()=>{throw Error('Offline snapshot: use Export JSON and import it through CLI to persist server-side changes.');};editing=false;
+    doc=boot.document;transport=async(name,args)=>{if(staticClient&&name==='dashboard_view')return staticClient.query(args);if(staticClient&&name==='runtime_report_error')return {};throw Error('此静态网页不支持该操作');};editing=false;
   }else{
     const fragment=location.hash.slice(1);let token='';try{token=sessionStorage.getItem('charts-runtime-token')||'';}catch{}
     const explicit=fragment.startsWith('token=');
     // New links identify credentials explicitly. Existing sessions keep document anchors inert.
     if(explicit||(!token&&fragment&&!/^(fig-|report-)/.test(fragment))){token=explicit?decodeURIComponent(fragment.slice(6)):fragment;try{sessionStorage.setItem('charts-runtime-token',token);}catch{}history.replaceState(null,'',location.pathname+location.search);}
     const authHeaders={'Content-Type':'application/json','Authorization':'Bearer '+token};
-    transport=async(name,args,options={})=>{const response=await fetch('/api/tools/'+name,{method:'POST',headers:authHeaders,body:JSON.stringify(args),signal:options.signal});return accept(await response.json(),deferredResult(name));};
+    transport=async(name,args,options={})=>{const response=await queueRequest(()=>fetch('/api/tools/'+name,{method:'POST',headers:authHeaders,body:JSON.stringify(args),signal:options.signal}));return accept(await response.json(),deferredResult(name));};
     const id=new URLSearchParams(location.search).get('board');
     if(id)doc=accept(await transport('dashboard_get',{dashboardId:id,dataMode:'local'})).document;
     else{const boards=(await transport('dashboard_list',{})).dashboards;if(boards.length)doc=accept(await transport('dashboard_get',{dashboardId:boards[0].id,dataMode:'local'})).document;}
@@ -116,24 +127,37 @@ export async function start({echarts,GridStack,App}){
     const run=async()=>{busy++;const previous=doc.revision;try{const request=typeof args==='function'?args():args;const result=await transport(name,{...request,dataMode:'local',dashboardId:doc.id,expectedRevision:request.expectedRevision??doc.revision});if(result.document){if(pushUndo&&!doc.progressive){undo.push(previous);redo=[];}doc=result.document;requestedFilters=null;const pending=reportDrafts.get(doc.id);if(pending&&reportMarkdown(doc)===pending.saved)pending.revision=doc.revision;if(rerender)render();else{statusLine();const u=toolbar.querySelector('[aria-label="'+T.undo+'"]'),r=toolbar.querySelector('[aria-label="'+T.redo+'"]');if(u)u.disabled=!undo.length;if(r)r.disabled=!redo.length;}}return result;}catch(e){showError(e);throw e;}finally{busy--;}};
     const next=queue.then(run,run);queue=next.catch(()=>{});return next;
   }
+  const filterPagesCache=new Map();
+  function loadFilterPage(filter,search='',offset=0){
+    if(Object.hasOwn(doc.staticFilterOptions||{},filter.id))return Promise.resolve(staticFilterPage(doc.staticFilterOptions[filter.id],search,offset));
+    const identity=JSON.stringify([doc.id,doc.dataVersion,filter.field,filter.componentIds.map(id=>doc.manifest.components[id]?.datasetId)]);
+    const key=identity+JSON.stringify([search.toLowerCase(),offset]);
+    if(filterPagesCache.has(key))return filterPagesCache.get(key);
+    const initial=doc.computed?.filterPages?.[filter.id];
+    if(!search&&!offset&&initial)return Promise.resolve(initial);
+    const request=transport('dashboard_filter_options',{dashboardId:doc.id,filterId:filter.id,search,offset}).catch(error=>{filterPagesCache.delete(key);throw error;});
+    filterPagesCache.set(key,request);if(filterPagesCache.size>256)filterPagesCache.delete(filterPagesCache.keys().next().value);return request;
+  }
   function ensureProgressive(){
     const key=doc.id+':'+doc.revision+':'+doc.dataVersion;
     if(progressiveKey===key)return;
-    progressiveLoader?.stop();progressiveKey=key;fetched.clear();
+    progressiveLoader?.stop();progressiveKey=key;fetched.clear();if(staticClient)for(const id of Object.keys(doc.computed?.components||{}))fetched.add(id);
     progressiveLoader=createProgressiveLoader({delay:doc.loading?.debounceMs??150,concurrency:doc.loading?.maxConcurrent??4,
       visible:id=>!dataObserver||visibleComponents.has(id),
       loading:(id,value)=>{const card=cards.get(id)?.card||reportHosts.get(id);if(card){card.setAttribute('aria-busy',String(value));card.dataset.loading=value?'true':'false';}},
       query:async(id,sequence)=>{
         const current=doc.id,base=requestedFilters||doc.manifest.filters,filters=linkage&&!editing?[...base.filter(f=>f.id!=='runtime-linkage'),...viewDoc().manifest.filters.filter(f=>f.id==='runtime-linkage')]:base;
-        const result=await transport('dashboard_view',{dashboardId:current,responseMode:'patch',componentIds:[id],expectedRevision:doc.revision,dataVersion:doc.dataVersion,filterSequence:sequence,filters,tableStates:viewTables,granularities:viewGranularities});
-        return result;
+        const started=performance.now();
+        const result=await transport('dashboard_view',{dashboardId:current,compactRecords:true,responseMode:'patch',componentIds:[id],expectedRevision:doc.revision,dataVersion:doc.dataVersion,filterSequence:sequence,filters,tableStates:viewTables,granularities:viewGranularities});
+        result.clientStarted=started;return result;
       },
       apply:(id,result)=>{
         if(progressiveKey!==key||result.revision!==doc.revision)return;
         const computed={...doc.computed};for(const map of ['components','tables','grouped','filterOptions','filterPages']){computed[map]={...computed[map]};if(['components','tables','grouped'].includes(map))delete computed[map][id];Object.assign(computed[map],result.computed?.[map]);}
         doc={...doc,computed};fetched.add(id);statisticalArtifacts=updateStatisticalArtifacts(statisticalArtifacts,{statisticalArtifacts:{...statisticalArtifacts,...result.statisticalArtifacts}});
         const card=cards.get(id)?.card||reportHosts.get(id);if(card){delete card.dataset.loadFailed;(card.shadowRoot||card).querySelector('.component-load-error')?.remove();mountComponent(card,id,false,true);}
-        transport('runtime_report_error',{dashboardId:doc.id,revision:doc.revision,requestId:result.requestId||'',code:'CLIENT_DATA_APPLIED'}).catch(()=>{});
+        transport('runtime_report_error',{dashboardId:doc.id,revision:doc.revision,requestId:result.requestId||'',code:'CLIENT_DATA_APPLIED',durationMs:performance.now()-(result.clientStarted??performance.now())}).catch(()=>{});
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{if(progressiveKey===key&&fetched.has(id))transport('runtime_report_error',{dashboardId:doc.id,revision:doc.revision,requestId:result.requestId||'',code:'CLIENT_FRAME_READY',durationMs:performance.now()-(result.clientStarted??performance.now())}).catch(()=>{});}));
       },
       failed:(id,error)=>{const card=cards.get(id)?.card||reportHosts.get(id);if(card){card.dataset.loadFailed='true';(card.shadowRoot||card).querySelector('.component-load-error')?.remove();const message=el('div','component-load-error',error.message);message.append(button('重试',()=>progressiveLoader.need(id)));(card.shadowRoot||card).append(message);}if(error.code==='REVISION_CONFLICT')reload().catch(showError);}
     });
@@ -181,7 +205,7 @@ export async function start({echarts,GridStack,App}){
   }
   function applyFilters(value){
     if(editing)return patch([{op:'set_filters',value}]);viewTables={};
-    if(doc.computed&&boot.mode!=='offline'){
+    if(doc.computed&&(boot.mode!=='offline'||staticClient)){
       const changed=new Set();for(const f of [...doc.manifest.filters,...value]){const before=doc.manifest.filters.find(x=>x.id===f.id),after=value.find(x=>x.id===f.id);if(JSON.stringify(before)!==JSON.stringify(after))for(const id of f.componentIds)changed.add(id);}
       // Clearing linkage also changes its consumers.
       if(lastLinkage)for(const id of Object.keys(doc.manifest.components))changed.add(id);
@@ -190,8 +214,8 @@ export async function start({echarts,GridStack,App}){
     doc={...doc,manifest:{...doc.manifest,filters:value}};render();return Promise.resolve();
   }
   function localQuery(id,changes){if(changes.tableState)viewTables={...viewTables,[id]:changes.tableState};if(changes.granularity)viewGranularities={...viewGranularities,[id]:changes.granularity};return refreshLocal(requestedFilters||doc.manifest.filters,[id]);}
-  const localExport=(id,options)=>transport('dataset_export',{dashboardId:doc.id,componentId:id,filters:viewDoc().manifest.filters,...options});
-  function clearLinkage(){linkage=null;if(doc.computed&&boot.mode!=='offline')return refreshLocal().catch(showError);render();}
+  const localExport=async(id,options)=>{if(staticClient){const result=await staticClient.query({componentIds:[id],filters:viewDoc().manifest.filters,tableStates:{[id]:{keyword:options.search,sortCol:options.sort?.[0]?.field,sortDir:options.sort?.[0]?.direction}},export:options});download(doc.manifest.components[id].title+'.csv',result.csv,'text/csv;charset=utf-8');return {export:{rowCount:result.rowCount,path:'浏览器下载',browser:true}};}return transport('dataset_export',{dashboardId:doc.id,componentId:id,filters:viewDoc().manifest.filters,...options});};
+  function clearLinkage(){linkage=null;if(doc.computed&&(boot.mode!=='offline'||staticClient))return refreshLocal().catch(showError);render();}
   const patch=(operations,rerender=true)=>mutate('dashboard_patch',()=>({operations:typeof operations==='function'?operations():operations}),true,rerender);
   // The grid already shows the dropped layout; re-rendering would tear down GridStack under the pointer.
   // Click-to-link is a reading aid: a temporary filter derived from the clicked category, never saved.
@@ -209,6 +233,7 @@ export async function start({echarts,GridStack,App}){
   function viewDoc(){
     if(!linkage||editing)return doc;
     const ids=Object.keys(doc.manifest.components).filter(id=>id!==linkage.sourceId&&linkStatus(id)?.ok);
+    if(!ids.length)return doc;
     return {...doc,manifest:{...doc.manifest,filters:[...doc.manifest.filters,{id:'runtime-linkage',label:linkage.label,field:linkage.field,op:linkage.op,values:linkage.values,componentIds:ids}]}};
   }
   function toggleLinkage(id,category){
@@ -239,13 +264,17 @@ export async function start({echarts,GridStack,App}){
   function saveLayout(rerender=false){clearTimeout(layoutTimer);layoutTimer=null;const pending=pendingLayout;pendingLayout=null;if(!pending||pending.dashboardId!==doc?.id)return false;patch([{op:'set_layout',breakpoint:pending.breakpoint,value:pending.value}],rerender).catch(showError);return true;}
   async function restore(direction){const from=direction==='undo'?undo:redo,to=direction==='undo'?redo:undo;if(!from.length)return;const target=from.pop(),current=doc.revision;try{await mutate('dashboard_restore',{revision:target},false,false);to.push(current);render();}catch(e){from.push(target);throw e;}}
   async function reload(){if(!doc)return;if(reportDrafts.get(doc.id)?.dirty&&!confirm('重新读取会放弃未保存的 Markdown，继续？'))return;const next=accept(await transport('dashboard_get',{dashboardId:doc.id,dataMode:'local'})).document;reportDrafts.delete(doc.id);if(next.revision!==doc.revision){undo=[];redo=[];}doc=next;render();}
+  function showUiUpdate(info){
+    const changed=Boolean(boot.uiBuildId&&info.uiBuildId&&boot.uiBuildId!==info.uiBuildId);
+    updateNotice.hidden=!changed;
+    updateNotice.textContent=changed?('新版界面已安装（'+info.uiBuildId+'），当前页面为 '+boot.uiBuildId+'。请先保存编辑和批注，再关闭此看板标签并打开最新预览。刷新报表只更新数据。'):'';
+  }
   async function refreshReport(force=false){
     if(!doc||refreshing||switching||editing||busy||pendingLayout||boot.mode==='offline')return;
     refreshing=true;
     try{
       const id=doc.id,[,info]=await Promise.all([refreshPages(),transport('runtime_info',{dashboardId:id})]);
-      const changed=Boolean(boot.uiBuildId&&info.uiBuildId&&boot.uiBuildId!==info.uiBuildId);
-      updateNotice.hidden=!changed;updateNotice.textContent=changed?'界面已有新版，请重新打开最新预览。报表数据仍可刷新。':'';
+      showUiUpdate(info);
       if(doc.id!==id||(!force&&info.dashboardRevision<=doc.revision))return;
       const seq=++viewRequest,previous=doc.revision;
       const result=await transport('dashboard_refresh',{dashboardId:id,dataMode:'local',filters:viewDoc().manifest.filters,tableStates:viewTables,granularities:viewGranularities});
@@ -256,7 +285,7 @@ export async function start({echarts,GridStack,App}){
     }finally{refreshing=false;const refresh=toolbar.querySelector('[aria-label="刷新报表"]');if(refresh)refresh.disabled=false;}
   }
   title.onchange=()=>patch([{op:'set_title',value:title.value}]).catch(showError);
-  function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?'离线快照 · ':''}版本 v${doc.revision}`);}
+  function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?(boot.interactive?'独立网页 · ':'离线快照 · '):''}版本 v${doc.revision}`);}
   function render(){
     annotations?.refresh();
     // Never rebuild GridStack mid-drag; flush an unsaved drop before replacing the grid.
@@ -281,12 +310,14 @@ export async function start({echarts,GridStack,App}){
     clearInlineEdit(badge);context.replaceChildren();if(editing){const setMeta=key=>value=>patch([{op:'set_meta',value:{...meta,[key]:value}}]);const org=el('span'),system=el('span');inlineEdit(org,{label:'组织',value:meta.org||'',save:setMeta('org')});inlineEdit(system,{label:'系统',value:meta.system||'',save:setMeta('system')});context.append(org,el('span','context-separator',' · '),system);context.hidden=false;inlineEdit(badge,{label:'状态标签',value:meta.statusText||'',save:setMeta('statusText')});badge.hidden=false;}else{context.textContent=[meta.org,meta.system].filter(Boolean).join(' · ');context.hidden=!context.textContent;badge.textContent=meta.statusText||'';badge.hidden=!badge.textContent;}mark.replaceChildren(icon(meta.iconKey==='plane'?'plane':'chart'));
     disposeToolbar?.();toolbar.replaceChildren();
     const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,async()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑？'))return;if(doc.progressive){if(!editing){editBatch=await transport('dashboard_edit_begin',{dashboardId:doc.id,expectedRevision:doc.revision});}else if(editBatch){const done=await transport('dashboard_edit_finish',{dashboardId:doc.id,expectedRevision:doc.revision,batchId:editBatch.batch_id});if(!done.ok){showError(Error('检查未通过，请查看诊断'));return;}editBatch=null;}}annotations?.reset();editing=!editing;render();});edit.disabled=boot.mode==='offline';edit.classList.remove('icon-button');edit.classList.add('mode-toggle');edit.append(el('span','',editing?T.view:T.edit));toolbar.append(edit);
-    const annotate=iconButton('comment',annotations?.active?'退出批注':'批注',()=>{if(editing){if(currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑并开始批注？'))return;editing=false;render();}annotations.toggle();});annotate.classList.add('annotation-toggle');annotate.setAttribute('aria-pressed',String(Boolean(annotations?.active)));toolbar.append(annotate);
-    if(editing)toolbar.append(iconButton('comment','页面批注',()=>annotationDialog(null)));
+    if(!editing){const annotate=iconButton('comment',annotations?.active?'退出批注':'批注',()=>annotations.toggle());annotate.classList.add('annotation-toggle');annotate.setAttribute('aria-pressed',String(Boolean(annotations?.active)));toolbar.append(annotate);}
     if(editing){const u=iconButton('undo',T.undo,()=>restore('undo')),r=iconButton('redo',T.redo,()=>restore('redo'));u.disabled=!undo.length;r.disabled=!redo.length;toolbar.append(u,r);}
     if(boot.mode!=='offline'){
       if(doc.progressive)toolbar.append(iconButton('history','版本历史',async()=>{const {body}=dialog('版本历史');let offset=0;const show=async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id,offset,limit:20});body.replaceChildren();for(const item of result.history){const row=el('div','field');row.append(el('span','',`v${item.revision} ${item.name||item.action}${item.published?' · 已发布':''}`),button('恢复',async()=>{await mutate('dashboard_restore',{revision:item.revision});}),button('命名／发布标记',()=>{const {d,body:form}=dialog('版本标记');const name=input(item.name||''),published=input('','checkbox');published.checked=Boolean(item.published);form.append(field('版本名称',name),field('发布版本',published),button('保存',async()=>{await transport('dashboard_version_label',{dashboardId:doc.id,expectedRevision:doc.revision,revision:item.revision,name:name.value,published:published.checked});d.close();await show();}));}),button('与当前比较',async()=>{const diff=await transport('dashboard_history_diff',{dashboardId:doc.id,fromRevision:item.revision,toRevision:doc.revision});const {body:detail}=dialog('版本差异');detail.append(el('pre','',diff.diff));}));body.append(row);}body.append(button('上一页',()=>{offset=Math.max(0,offset-20);return show();}),button('下一页',()=>{offset+=20;return show();}));};await show();}));
-      toolbar.append(iconButton('info','运行诊断',async()=>{const {body}=dialog('运行诊断');const report=await transport('dashboard_doctor',{dashboardId:doc.id,mode:'full'});body.append(el('p','',report.passed?'检查通过':'检查未通过'),button('复制请求编号',()=>navigator.clipboard.writeText(report.requestId)),table(report.checks));const logs=await transport('runtime_diagnostics',{dashboardId:doc.id,limit:30});body.append(table(logs.events));}));
+      toolbar.append(iconButton('info','运行诊断',async()=>{const {body}=dialog('运行诊断');const info=await transport('runtime_info',{dashboardId:doc.id});
+        body.append(el('p','',info.uiBuildId===boot.uiBuildId?'页面与服务版本一致':'此页面使用旧版本，请重新打开看板'),
+          table([{项目:info.projectRoot||'共享存储',页面版本:boot.uiBuildId,服务版本:info.uiBuildId,工作进程:info.processId,父进程:info.parentProcessId,批注方式:annotationContext?'附到对话':'页面保存'}]));
+        const report=await transport('dashboard_doctor',{dashboardId:doc.id,mode:'full'});body.append(el('p','',report.passed?'检查通过':'检查未通过'),button('复制请求编号',()=>navigator.clipboard.writeText(report.requestId)),table(report.checks));const logs=await transport('runtime_diagnostics',{dashboardId:doc.id,limit:30});body.append(table(logs.events));}));
       const refresh=iconButton('refresh','刷新报表',()=>refreshReport(true));refresh.disabled=refreshing||editing||Boolean(busy);toolbar.append(refresh);
       if(lastRefresh){const time=el('span','refresh-time','更新于 '+lastRefresh);toolbar.append(time);}
     }
@@ -294,26 +325,26 @@ export async function start({echarts,GridStack,App}){
 
     if(app){const context=app.getHostContext(),full=context?.displayMode==='fullscreen',mode=full?'inline':'fullscreen';
       if(!editing&&context?.availableDisplayModes?.includes(mode))toolbar.append(iconButton(full?'minimize':'maximize',full?'返回对话':'全屏查看',async()=>{await app.requestDisplayMode({mode});render();}));}
-    if(!editing)toolbar.append(iconButton('export',T.export,exportDialog));disposeToolbar=adaptiveActions(top,toolbar);statusLine();
+    if(!editing)toolbar.append(iconButton('export',T.export,exportDialog));disposeToolbar=adaptiveActions(top,toolbar);if(boot.mode==='offline'){toolbar.replaceChildren();toolbar.hidden=true;badge.hidden=true;}statusLine();
     // The version sits inline beside the edit toggle; long error messages keep their own line under the heading.
     if(editing&&!notice.classList.contains('error'))toolbar.prepend(notice);else heading.append(notice);
     filters.replaceChildren();filters.hidden=doc.manifest.viewMode==='report'||(!doc.manifest.filters.length&&!linkage&&!editing);
     for(const f of doc.manifest.filters){const c=doc.manifest.components[f.componentIds[0]],rows=f.componentIds.flatMap(id=>doc.snapshot.datasets[doc.manifest.components[id].datasetId]||[]);
       if(f.op==='in'){
         if(f.selectionMode==='single'){
-          const values=doc.computed?.filterOptions?.[f.id]??[...new Map(rows.map(r=>[JSON.stringify(r[f.field]),r[f.field]])).values()];
-          filters.append(singleFilter({filter:f,values,load:doc.progressive?((search,offset)=>transport('dashboard_filter_options',{dashboardId:doc.id,filterId:f.id,search,offset})):null,openMenu,closeMenu,icon,disabled:boot.mode==='offline',onApply:values=>{const fs=structuredClone(doc.manifest.filters);fs.find(item=>item.id===f.id).values=values;return applyFilters(fs);},onError:showError}));continue;
+          const values=doc.staticFilterOptions?.[f.id]??doc.computed?.filterOptions?.[f.id]??[...new Map(rows.map(r=>[JSON.stringify(r[f.field]),r[f.field]])).values()];
+          filters.append(singleFilter({filter:f,values,load:doc.progressive?((search,offset)=>loadFilterPage(f,search,offset)):null,openMenu,closeMenu,icon,disabled:(boot.mode==='offline'&&!boot.interactive),onApply:values=>{const fs=structuredClone(doc.manifest.filters);fs.find(item=>item.id===f.id).values=values;return applyFilters(fs);},onError:showError}));continue;
         }
-        const values=doc.computed?.filterOptions?.[f.id]??[...new Map(rows.map(r=>[JSON.stringify(r[f.field]),r[f.field]])).values()];
-        const firstPage=doc.computed?.filterPages?.[f.id]??{values,offset:0,totalValues:values.length,hasMore:false};
-        const load=async(search,offset)=>{if(doc.computed)return transport('dashboard_filter_options',{dashboardId:doc.id,filterId:f.id,search,offset});const matches=values.filter(value=>String(value??'').toLowerCase().includes(search.toLowerCase()));return {values:matches.slice(offset,offset+100),offset,totalValues:matches.length,hasMore:offset+100<matches.length};};
-        const group=pagedFilter({filter:f,firstPage,disabled:boot.mode==='offline',load,onApply:values=>{const fs=structuredClone(doc.manifest.filters);fs.find(item=>item.id===f.id).values=values;return applyFilters(fs);},onError:showError});
+        const values=doc.staticFilterOptions?.[f.id]??doc.computed?.filterOptions?.[f.id]??[...new Map(rows.map(r=>[JSON.stringify(r[f.field]),r[f.field]])).values()];
+        const firstPage=Object.hasOwn(doc.staticFilterOptions||{},f.id)?staticFilterPage(values):doc.computed?.filterPages?.[f.id]??{values,offset:0,totalValues:values.length,hasMore:false};
+        const load=async(search,offset)=>{if(doc.computed)return loadFilterPage(f,search,offset);const matches=values.filter(value=>String(value??'').toLowerCase().includes(search.toLowerCase()));return {values:matches.slice(offset,offset+100),offset,totalValues:matches.length,hasMore:offset+100<matches.length};};
+        const group=pagedFilter({filter:f,firstPage,disabled:(boot.mode==='offline'&&!boot.interactive),load,onApply:values=>{const fs=structuredClone(doc.manifest.filters);fs.find(item=>item.id===f.id).values=values;return applyFilters(fs);},onError:showError});
         const summary=f.values.length?(f.values.length===1?String(f.values[0]):`已选 ${f.values.length} 项`):'全部',trigger=button((f.label||f.field)+'：'+summary,()=>{if(doc.progressive)group.loadFirst();return openMenu(trigger,[],{label:f.label||f.field,content:group,align:'start'});},'filter-trigger');trigger.setAttribute('aria-haspopup','dialog');trigger.title=trigger.textContent;trigger.append(icon('down'));filters.append(trigger);
-      }else if(f.op==='contains'){const search=input(f.values[0]??''),wrap=el('div','filter-search');search.placeholder=f.label||'搜索';search.setAttribute('aria-label',f.label||f.field);search.disabled=boot.mode==='offline';const apply=()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=search.value.trim()?[search.value.trim()]:[];return applyFilters(fs);};search.onkeydown=e=>{if(e.key==='Enter')apply().catch(showError);};const submit=iconButton('search','应用搜索',apply);submit.disabled=boot.mode==='offline';wrap.append(search,submit);filters.append(wrap);
+      }else if(f.op==='contains'){const search=input(f.values[0]??''),wrap=el('div','filter-search');search.placeholder=f.label||'搜索';search.setAttribute('aria-label',f.label||f.field);search.disabled=(boot.mode==='offline'&&!boot.interactive);const apply=()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=search.value.trim()?[search.value.trim()]:[];return applyFilters(fs);};search.onkeydown=e=>{if(e.key==='Enter')apply().catch(showError);};const submit=iconButton('search','应用搜索',apply);submit.disabled=(boot.mode==='offline'&&!boot.interactive);wrap.append(search,submit);filters.append(wrap);
       }else{
         const a=input(f.values[0]??''),b=input(f.values[1]??''),fieldType=doc.manifest.datasets[c.datasetId].fields[f.field].type,numeric=fieldType==='number';
         const apply=()=>{const fs=structuredClone(doc.manifest.filters);fs.find(v=>v.id===f.id).values=a.value===''||b.value===''?[]:[numeric?Number(a.value):a.value,numeric?Number(b.value):b.value];return applyFilters(fs);};
-        const submit=button('应用范围',apply,'filter-apply'),reset=button('重置筛选',()=>{a.value=b.value='';return apply();},'filter-clear');a.disabled=b.disabled=submit.disabled=reset.disabled=boot.mode==='offline';
+        const submit=button('应用范围',apply,'filter-apply'),reset=button('重置筛选',()=>{a.value=b.value='';return apply();},'filter-clear');a.disabled=b.disabled=submit.disabled=reset.disabled=(boot.mode==='offline'&&!boot.interactive);
         const range=el('div','filter-panel'),heading=el('div','filter-panel-heading'),fields=el('div','filter-range-fields'),actions=el('div','filter-actions');heading.append(el('strong','',f.label||f.field));
         a.setAttribute('aria-label',(f.label||f.field)+'起始');b.setAttribute('aria-label',(f.label||f.field)+'结束');if(fieldType==='date'){a.type=b.type='date';}else if(numeric){a.type=b.type='number';}
         for(const [caption,control] of [['起始',a],['结束',b]]){const label=el('label','filter-range-field');label.append(el('span','',caption),control);fields.append(label);}
@@ -322,8 +353,8 @@ export async function start({echarts,GridStack,App}){
     }
     if(doc.manifest.filters.length||linkage){
       const active=doc.manifest.filters.filter(f=>f.values.length).length+(linkage?1:0),overview=el('div','filter-overview'),summary=el('span','filter-summary','已生效条件：'+active);
-      const clear=button('清除所有筛选',()=>{linkage=null;return applyFilters(clearFilterValues(doc.manifest.filters));},'filter-clear-all');
-      clear.disabled=boot.mode==='offline'||!active;overview.append(summary,clear);filters.append(overview);
+      const clear=button(doc.manifest.filters.some(f=>f.required)?'清除其他筛选':'清除所有筛选',()=>{linkage=null;return applyFilters(clearFilterValues(doc.manifest.filters));},'filter-clear-all');
+      clear.disabled=(boot.mode==='offline'&&!boot.interactive)||!active;overview.append(summary,clear);filters.append(overview);
     }
 
     root.querySelector('.linkage-chip')?.remove();
@@ -374,6 +405,16 @@ export async function start({echarts,GridStack,App}){
   }
 
   function mountComponent(card,id,quiet=false,immediate=false){
+    const dataset=doc.manifest.components[id].datasetId;
+    if(loadStatic&&dataset&&!Object.hasOwn(doc.snapshot.datasets,dataset)){
+      const rect=card.getBoundingClientRect();
+      card.replaceChildren(el('h2','',doc.manifest.components[id].title||''),el('p','muted','正在加载数据…'));
+      if(!immediate&&observer&&(rect.top>window.innerHeight+300||rect.bottom < -300)){
+        pendingMounts.set(card,()=>mountComponent(card,id,quiet,true));observer.observe(card);return;
+      }
+      loadStatic(dataset).then(()=>{if(card.isConnected)mountComponent(card,id,quiet,true);}).catch(error=>{card.replaceChildren(el('p','error',error.message),button('重试',()=>mountComponent(card,id,quiet,true)));});return;
+    }
+
     if(doc.progressive&&doc.manifest.components[id].kind!=='text'){
       card.dataset.loadId=id;dataObserver?.observe(card);
       const rect=card.getBoundingClientRect();if(rect.top<window.innerHeight+300&&rect.bottom>=-300)visibleComponents.add(id);
@@ -395,13 +436,13 @@ export async function start({echarts,GridStack,App}){
         if(c.kind==='text'||c.kind==='statistical'){
           if(card.shadowRoot){card.shadowRoot.replaceChildren(document.createElement('slot'));card.shadowRoot.adoptedStyleSheets=[];}
           const statistical=c.kind==='statistical';card.classList.add(statistical?'statistical-card':'text-card');
-          if(!quiet){const h=el('div','text-card-header'),heading=el('div','text-card-heading'),name=el('h2','text-heading',c.title),subtitle=el('p','component-description',c.subtitle||''),actions=el('div','text-card-actions');heading.append(name);if(c.subtitle||editing)heading.append(subtitle);actions.append(iconButton('info','指标定义与语义',()=>inspect(id)));if(editing){inlineEdit(name,{label:'图表标题',value:c.title,maxLength:240,save:value=>updateText(id,{title:value})});inlineEdit(subtitle,{label:'图表描述',value:c.subtitle||'',save:value=>updateText(id,{subtitle:value})});actions.append(iconButton('comment','图表批注',()=>annotationDialog(id)));}h.append(heading,actions);card.append(h);}
+          if(!quiet){const h=el('div','text-card-header'),heading=el('div','text-card-heading'),name=el('h2','text-heading',c.title),subtitle=el('p','component-description',c.subtitle||''),actions=el('div','text-card-actions');heading.append(name);if(c.subtitle||editing)heading.append(subtitle);actions.append(iconButton('info','指标定义与语义',()=>inspect(id)));if(editing){inlineEdit(name,{label:'图表标题',value:c.title,maxLength:240,save:value=>updateText(id,{title:value})});inlineEdit(subtitle,{label:'图表描述',value:c.subtitle||'',save:value=>updateText(id,{subtitle:value})});}h.append(heading,actions);card.append(h);}
           if(statistical)mountStatisticalImage(card,c,statisticalArtifacts[id]);else card.append(el('div','text-block',c.text));
           let signature=JSON.stringify([c,statisticalArtifacts[id],editing]);
           controllers.set(card,{id,update(nextDoc,nextEditing){const next=nextDoc.manifest.components[id];if(next.kind!==c.kind)return false;const changed=JSON.stringify([next,statisticalArtifacts[id],nextEditing]);if(changed!==signature){signature=changed;controllers.delete(card);card.replaceChildren();mountComponent(card,id,quiet,true);}return true;},destroy(){}});
 
         }
-        else {const instance=mountOriginal(card,{deferChart,onReady:()=>{if(!quiet)wireLinkage(id,controllers.get(card)?.app.state.chartInstances['original-'+id]);else quietPlot(controllers.get(card),c);},doc:quiet?doc:viewDoc(),id,editing:quiet?false:editing,readOnly:quiet||!editing||boot.mode==='offline',onInspect:inspect,onEdit:componentEditor,onAnnotate:annotationDialog,onText:updateText,onLocalQuery:boot.mode==='offline'?null:localQuery,onLocalExport:localExport,onType:(id,code)=>patch([{op:'set_original_chart',id,code}]).catch(showError),
+        else {const instance=mountOriginal(card,{deferChart,onReady:()=>{if(!quiet)wireLinkage(id,controllers.get(card)?.app.state.chartInstances['original-'+id]);else quietPlot(controllers.get(card),c);},doc:quiet?doc:viewDoc(),id,editing:quiet?false:editing,readOnly:quiet||!editing||boot.mode==='offline',onInspect:inspect,onText:updateText,onLocalQuery:boot.mode==='offline'&&!staticClient?null:localQuery,onLocalExport:localExport,onType:(id,code)=>patch([{op:'set_original_chart',id,code}]).catch(showError),
           onPresentation:(id,changes)=>{const old=doc.manifest.components[id],base=old.kind==='legacy'?old.config:old.presentation||{};
             if(Object.keys(changes).some(k=>JSON.stringify(base[k])!==JSON.stringify(changes[k]))){const value=old.kind==='legacy'?{...old,config:{...base,...changes}}:{...old,presentation:{...base,...changes}};return mutate('dashboard_patch',{operations:[{op:'put_component',id,value}]},true,false).catch(showError);}}
         });controllers.set(card,instance);originalInstances.push(instance);if(deferChart){pendingMounts.set(card,()=>{pendingMounts.delete(card);observer.unobserve(card);instance.ensure();});observer.observe(card);}}
@@ -415,26 +456,6 @@ export async function start({echarts,GridStack,App}){
     const draft=currentDraft();
     await mutate('dashboard_patch',()=>({expectedRevision:draft.revision,operations:[{op:'set_report_markdown',value:source}]}),true,false);
     draft.saved=source;draft.dirty=draft.text!==source;draft.revision=doc.revision;
-  }
-  function jsonEditor(name,value,save){const {d,body}=dialog(name),area=textarea(value);body.append(area,button(T.save,async()=>{await save(JSON.parse(area.value));d.close();}));}
-  function pageEditor(){
-    const meta=doc.manifest.meta??doc.manifest.originalWorkspace?.meta??{}, {d,body}=dialog('页面标题与描述'),name=input(doc.manifest.title),subtitle=textarea(meta.subtitle||''),org=input(meta.org||''),system=input(meta.system||'');
-    name.maxLength=240;subtitle.maxLength=1000;name.setAttribute('aria-label','页面标题');subtitle.setAttribute('aria-label','页面描述');
-    body.append(field('标题',name),field('描述',subtitle),field('机构',org),field('系统',system),button(T.save,async()=>{const value=Object.fromEntries(Object.entries(meta).filter(([key])=>['subtitle','org','system','statusText','iconKey'].includes(key)));await patch([{op:'set_title',value:name.value},{op:'set_meta',value:{...value,subtitle:subtitle.value,org:org.value,system:system.value}}]);d.close();}));
-  }
-  function componentEditor(id){
-    const old=doc.manifest.components[id];if(!old)return;
-    const {d,body}=dialog('标题与描述'),name=input(old.title),subtitle=textarea(old.subtitle??old.config?.subtitle??old.config?.description??'');name.maxLength=240;subtitle.maxLength=1000;name.setAttribute('aria-label','图表标题');subtitle.setAttribute('aria-label','图表描述');
-    body.append(field('标题',name),field('描述',subtitle),button(T.save,async()=>{await patch(()=>{const current=doc.manifest.components[id],value={...current,title:name.value,subtitle:subtitle.value};if(current.kind==='legacy'){value.config={...current.config,title:name.value,subtitle:subtitle.value};if(current.family==='kpi')value.config.label=name.value;}return [{op:'put_component',id,value}];});d.close();}));
-  }
-  function annotationDialog(componentId){
-    const {body}=dialog(componentId?'图表批注':'页面批注'),list=el('div','annotation-list'),draft=textarea('');draft.setAttribute('aria-label','新增批注');draft.maxLength=4000;
-    const writable=editing&&boot.mode!=='offline';
-    const update=async transform=>{await patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]);draw();};
-    function draw(){list.replaceChildren();const notes=(doc.manifest.annotations||[]).filter(n=>n.componentId===componentId);if(!notes.length)list.append(el('p','muted','暂无批注'));
-      for(const note of notes){const row=el('section','annotation-item'),area=textarea(note.text);area.setAttribute('aria-label','批注内容');area.maxLength=4000;area.disabled=!writable;row.append(el('p','muted',new Date(note.createdAt).toLocaleString('zh-CN')),area);if(writable)row.append(button('保存批注',()=>update(notes=>notes.map(n=>n.id===note.id?{...n,text:area.value}:n))),button('删除批注',()=>update(notes=>notes.filter(n=>n.id!==note.id))));list.append(row);}
-    }
-    body.append(list);if(writable)body.append(field('新增批注',draft),button('添加批注',async()=>{if(!draft.value.trim())throw Error('请输入批注');await update(notes=>[...notes,{id:'note-'+crypto.randomUUID(),componentId,text:draft.value.trim(),createdAt:new Date().toISOString()}]);draft.value='';}));draw();
   }
   async function inspect(id){
     const c=doc.manifest.components[id],{d,body}=dialog(c.title),content=el('div','inspector-content');
@@ -525,33 +546,17 @@ export async function start({echarts,GridStack,App}){
     }catch(error){sourceContent.replaceChildren(el('p','error',`来源读取失败：${error.message||error}`));}
     await dataReady;
   }
-  function catalogDialog(){
-    const {body}=dialog('原版组件目录'),search=input(''),list=el('div','catalog-list');search.placeholder='搜索图表名称、编号';body.append(el('p','muted','40 款原版图表 + 9 类 KPI。使用原版组件 JSON 或导入 Workspace，不用通用图表替换原配置。'),search,list);
-    const all=Array.isArray(catalog)?catalog:Object.entries(catalog).map(([code,v])=>({code,...v}));
-    function draw(){list.replaceChildren();for(const entry of all.filter(e=>JSON.stringify(e).toLowerCase().includes(search.value.toLowerCase()))){const row=el('div','catalog-row');row.append(el('strong','',entry.code||entry.id||''),el('span','',entry.nameZh||entry.title||entry.name||''),button('查看契约',()=>{const {body}=dialog(entry.nameZh||entry.title||entry.name||entry.id||entry.code);body.append(el('pre','code',JSON.stringify(entry,null,2)));}));list.append(row);}for(let i=1;i<=9;i++){const row=el('div','catalog-row');row.append(el('strong','','mc0'+i),el('span','',['标准指标','同比 / 环比','迷你趋势','目标进度','半环仪表','双指标','排名分层','阈值预警','分组拆解'][i-1]));list.append(row);}}
-    search.oninput=draw;draw();
-  }
-  function bindingEditor(id){
-    const c=doc.manifest.components[id],{d,body}=dialog('数据绑定 / '+c.title);
-    const targets={c01:['categories','values'],c02:['categories','values'],c03:['clusters','budget','actual'],c04:['fleets','deviations'],c06:['hubs','offSeason','peakSeason'],c07:['clusters','base2024','curr2025'],c08:['categories','domestic','intl'],t01:['months','rpk'],t02:['quarters','actual','forecast'],t04:['quarters','premium','economy','cargo','ancillary'],t06:['categories','revenue','yieldGrowth'],d01:['brackets','counts'],fn02:['quarters','revenue','cost'],fn03:['variables','negative','positive'],r02:['clusters','x','y','size']};
-    const shape=targets[c.config.code],template={datasetId:'',measures:{}};
-    if(c.family==='chart'&&shape){template.categoryField='';template.categoryTarget=shape[0];template.measures=Object.fromEntries(shape.slice(1).map(k=>[k,'']));}
-    if(c.family==='kpi'){template.measures=c.config.type==='mc06'?{leftVal:'',rightVal:''}:{value:''};if(c.config.type==='mc03')template.timeField='';}
-    const area=textarea(c.binding||template);
-    body.append(el('p','muted','引用已有 Dataset 和指标 ID，不改变原组件设计。比例按分子、分母重算；缺少映射会拒绝保存。'),area,el('pre','code',JSON.stringify({datasets:Object.fromEntries(Object.entries(doc.manifest.datasets).map(([k,v])=>[k,v.fields])),metrics:doc.manifest.metrics},null,2)),button(T.save,async()=>{await patch([{op:'put_component',id,value:{...c,binding:JSON.parse(area.value)}}]);d.close();}));
-    if(c.binding)body.append(button('移除绑定',async()=>{const value={...c};delete value.binding;delete value.datasetId;delete value.measures;const filters=doc.manifest.filters.map(f=>({...f,componentIds:f.componentIds.filter(k=>k!==id)})).filter(f=>f.componentIds.length);await patch([{op:'put_component',id,value},{op:'set_filters',value:filters}]);d.close();}));
-  }
-  function importData(){const {d,body}=dialog(T.import),name=input('dataset-'+Date.now().toString(36)),area=textarea('[]'),file=input('','file'),formatSelect=select([['json','JSON rows'],['csv','CSV']],'json');file.accept='.json,.csv';file.onchange=async()=>{area.value=await file.files[0].text();formatSelect.value=file.files[0].name.endsWith('.csv')?'csv':'json';};body.append(field('Dataset ID',name),file,formatSelect,area,button(T.save,async()=>{await mutate('dataset_import',{datasetId:name.value,...(formatSelect.value==='csv'?{csvText:area.value}:{rows:JSON.parse(area.value)}),name:file.files[0]?.name||name.value});d.close();}));}
-  function queryEditor(){const {d,body}=dialog('SQL / read-only'),alias=input('analytics'),ds=input('query-result'),sql=textarea('SELECT * FROM your_table LIMIT 100'),params=textarea('{}');body.append(el('p','muted','Only explicitly configured SQLite aliases are executable. No query runs on preview or chart switching.'),field('Connection alias',alias),field('Dataset ID',ds),field('SQL',sql),field('Parameters',params),button('执行只读查询',async()=>{if(!confirm('Execute this read-only query and save a new snapshot?'))return;await mutate('query_execute',{connection:alias.value,datasetId:ds.value,sql:sql.value,parameters:JSON.parse(params.value)});d.close();}));}
   function exportDialog(){
     const {d,body}=dialog(T.export);d.classList.add('export-dialog');
     body.append(el('p','export-intro','选择文件格式，保存当前看板。'));
     const choices=el('div','export-choices'),feedback=el('p','export-feedback'),savedFile=el('div','export-saved');feedback.setAttribute('role','status');
     const options=[['pdf','PDF','完整图表与筛选后全部明细'],['html','HTML','离线打开，保留当前视图'],['json','JSON','看板配置与本地数据引用']];
+    if(boot.mode!=='offline')options.push(['site','网页部署包','HTML、完整数据与可重建源码']);
     for(const [format,label,hint]of options){
       const b=button('',async()=>{
         const buttons=choices.querySelectorAll('button');buttons.forEach(n=>n.disabled=true);savedFile.replaceChildren();feedback.textContent=`正在生成 ${label}…`;
         try{
+          if(format==='site'){const result=await transport('dashboard_export_site',{dashboardId:doc.id});savedFile.append(el('p','export-path',result.export.directory),el('p','muted','发布 dist/；完整源码见同名 ZIP。'));feedback.textContent='独立网页与源码已生成';return;}
           if(boot.mode==='offline'){
             if(format==='pdf'){d.close();window.print();return;}
             if(format==='json')download(doc.id+'.json',JSON.stringify(doc,null,2));
@@ -559,7 +564,7 @@ export async function start({echarts,GridStack,App}){
               const shell=document.documentElement.cloneNode(true);shell.querySelectorAll('.workspace,dialog,.ui-tooltip').forEach(n=>n.remove());
               const script=[...shell.querySelectorAll('script')].find(n=>n.textContent.startsWith('window.__DASHBOARD_BOOT__='));
               if(!script)throw Error('未找到离线看板内容');
-              script.textContent='window.__DASHBOARD_BOOT__='+JSON.stringify({...boot,mode:'offline',document:doc}).replace(/</g,'\\u003c')+';';
+              script.textContent='window.__DASHBOARD_BOOT__='+JSON.stringify({...boot,mode:'offline',interactive:false,document:doc}).replace(/</g,'\\u003c')+';';
               download(doc.id+'.html','<!doctype html>'+shell.outerHTML,'text/html;charset=utf-8');
             }
           }else{
@@ -585,15 +590,16 @@ export async function start({echarts,GridStack,App}){
         }catch(error){feedback.textContent='导出失败：'+(error.message||error);}
         finally{buttons.forEach(n=>n.disabled=false);}
       },'export-choice');b.setAttribute('aria-label','导出 '+label);
-      const mark=el('span','export-format-icon');mark.append(icon(format));
+      const mark=el('span','export-format-icon');mark.append(icon(format==='site'?'export':format));
       b.append(mark,el('strong','',label),el('span','export-hint',hint),icon('export'));choices.append(b);
     }
     body.append(choices,el('p','export-scope','PDF 包含当前筛选下的全部明细，表格自动分页。HTML 保存当前视图；CSV 可单独导出完整明细。'),feedback,savedFile);
   }
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkage&&!document.querySelector('dialog[open]'))clearLinkage();});
   window.addEventListener('resize',()=>{if(doc&&bp()!==lastBreakpoint&&!pendingLayout&&!dragging&&!busy)render();});
-  if(boot.mode!=='offline')whileVisible(async()=>{if(!doc||editing||annotations?.active||busy||pendingLayout||dragging||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{await refreshReport();}catch(e){showError(e);}},5000);
-  if(boot.mode!=='offline')whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3));
+  if(boot.mode!=='offline')lifetime.add(whileVisible(async()=>{try{showUiUpdate(await transport('runtime_info',{}));}catch{}},30000));
+  if(boot.mode!=='offline')lifetime.add(whileVisible(async()=>{if(!doc||editing||annotations?.active||busy||pendingLayout||dragging||reportDrafts.get(doc.id)?.dirty||document.querySelector('dialog[open]'))return;try{await refreshReport();}catch(e){showError(e);}},5000));
+  if(boot.mode!=='offline')lifetime.add(whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3)));
   window.addEventListener('beforeunload',event=>{if([...reportDrafts.values()].some(draft=>draft.dirty)){event.preventDefault();event.returnValue='';}});
   window.__chartsReady=async()=>{
     for(const run of [...pendingMounts.values()])run();await document.fonts.ready;
@@ -605,7 +611,8 @@ export async function start({echarts,GridStack,App}){
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   };
   window.addEventListener('beforeprint',()=>{for(const run of [...pendingMounts.values()])run();});
-  annotations=createAnnotations({root,iconButton,getDocument:()=>doc,readOnly:boot.mode==='offline',save:transform=>patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]),onError:showError,onMode:active=>{const b=toolbar.querySelector('.annotation-toggle');if(b){b.setAttribute('aria-pressed',String(active));b.setAttribute('aria-label',active?'退出批注':'批注');b.title=active?'退出批注':'批注';b.dataset.tooltip=b.title;}}});
+  annotations=createAnnotations({root,iconButton,attachContext:annotationContext?note=>annotationContext.attach({...viewDoc(),projectRoot:projectContext.projectRoot},note):null,getDocument:()=>doc,readOnly:boot.mode==='offline',save:transform=>patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]),onError:showError,onMode:active=>{const b=toolbar.querySelector('.annotation-toggle');if(b){b.setAttribute('aria-pressed',String(active));b.setAttribute('aria-label',active?'退出批注':'批注');b.title=active?'退出批注':'批注';b.dataset.tooltip=b.title;}}});
+  lifetime.add(()=>{staticClient?.destroy();viewAbort?.abort();dataObserver?.disconnect();observer?.disconnect();annotations?.reset();disposeToolbar?.();disposeReport?.();});
   window.addEventListener('charts-error',event=>showError(event.detail));render();
 
 }

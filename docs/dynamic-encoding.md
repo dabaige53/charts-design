@@ -54,6 +54,10 @@
 
 ## 排名展示与无结果状态
 
-`c03` 支持 `topSeries`（按当前筛选净值合计降序取前 N 个系列）、`pinnedSeries`（在 N 个名额内优先保留的系列）、`visibleCount`（默认显示 10 行，超出时启用分类轴滑条）、`barWidth` 和 `adjustableBarWidth`（阅读时调节条形宽度）。这些选项仅影响图形，原数据和完整数据表不裁剪；未展示系列不合并为其他，组件描述应说明展示范围。
+`c03` 支持 `topSeries`（按当前筛选净值合计降序取前 N 个系列）、`pinnedSeries`（在 N 个名额内优先保留的系列）、`visibleCount`（默认显示 10 行，超出时启用分类轴滑条）、`barWidth` 和 `adjustableBarWidth`（阅读时调节条形宽度）。这些选项仅影响图形，原数据和完整数据表不裁剪；默认不合并未展示系列；设置 `otherSeriesLabel` 后将剩余系列合并为该名称，使柱长保留全部净值。`seriesRanking="category"` 按每个分类分别选取前 N 个系列；默认 `global` 按当前筛选范围整体选取。组件描述应说明展示范围。
 
 `emptyText` 设置无结果提示。保留卡片和操作区，以居中灰色文本提示，无旧点、旧柱或旧明细；恢复有结果时移除提示。动态提示框显示在指针附近，边界不足时换边。
+
+## KPI 同比与环比
+
+KPI `binding.comparisons` 可以将 `yoy`/`mom` 声明为绑定值之间的相对变化：`{"mom":{"current":"value","baseline":"mom","mode":"relative"}}`。`binding.measures.mom` 指向基期原值指标，先在当前筛选范围聚合本期和基期，再计算 `(本期-基期)/基期`；基期缺失或为零显示破折号。份额指标先分别汇总分子分母，禁止平均行级份额变化。业务口径需写明基期、固定范围和百分比与百分点区别。

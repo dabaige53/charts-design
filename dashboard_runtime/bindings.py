@@ -57,6 +57,10 @@ def validate_binding(doc, component):
         required = {'leftVal', 'rightVal'} if config.get('type') == 'mc06' else {'value'}
         require(required <= set(measures), 'Bind each KPI headline value')
         require(config.get('type', 'mc01') not in ('mc07', 'mc08', 'mc09'), 'Ranking/threshold/breakdown KPI requires a dedicated reviewed transform', 'BINDING_TRANSFORM_REQUIRED')
+        for target, comparison in b.get('comparisons', {}).items():
+            require(target in ('yoy', 'mom') and isinstance(comparison, dict), 'Comparisons target yoy/mom')
+            require(comparison.get('current') in measures and comparison.get('baseline') in measures, 'Comparison requires bound current and baseline values')
+            require(comparison.get('mode', 'relative') == 'relative', 'Only relative comparison is supported')
         if config.get('type') == 'mc03':
             field(m['datasets'][ds], b.get('timeField'))
     elif family == 'table':

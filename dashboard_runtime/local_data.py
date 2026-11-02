@@ -324,6 +324,37 @@ class LocalData:
                 ordering.append(f'{col} {direction}')
         return keys, selected, ' ORDER BY ' + ','.join(ordering + ['rowid'])
 
+    def _grouped_query(self, db, ref, filters, group_by, sum_fields, search):
+        table, metadata = self._version(db, ref)
+        fields = metadata['fields']
+        if not group_by or set(group_by) & set(sum_fields) or set(group_by + sum_fields) - set(fields):
+            raise ValueError('Invalid table grouping')
+        if any(fields[k]['type'] != 'number' for k in sum_fields):
+            raise ValueError('Table sums require numeric fields')
+        self._indexes(db, table, fields, filters)
+        where, params = self._where(fields, filters)
+        expressions = []
+        for k in fields:
+            col = self._column(fields, k)
+            expressions.append((col if k in group_by else f'SUM({col})' if k in sum_fields else 'NULL') + f' AS {col}')
+        grouped = 'SELECT ' + ','.join(expressions) + ', MIN(rowid) AS rowid, NULL AS _missing FROM ' + table + where
+        grouped += ' GROUP BY ' + ','.join(self._column(fields, k) for k in group_by)
+        search_where, search_params = self._where(fields, [], search)
+        return '(' + grouped + ')', fields, search_where, params + search_params
+
+    def grouped_rows(self, ref, filters, columns, sort, offset, limit, search, group_by, sum_fields):
+        started = time.perf_counter()
+        if type(limit) is not int or not 0 < limit <= MAX_RESULT_ROWS or type(offset) is not int or offset < 0:
+            raise ValueError('Invalid grouped table pagination')
+        if set(columns or []) - set(group_by + sum_fields):
+            raise ValueError('Displayed columns must be grouped or summed')
+        with self._connect() as db:
+            table, fields, where, params = self._grouped_query(db, ref, filters, group_by, sum_fields, search)
+            keys, selected, order = self._selection(fields, columns, sort)
+            total = db.execute('SELECT COUNT(*) FROM ' + table + where, params).fetchone()[0]
+            rows = db.execute('SELECT ' + selected + ' FROM ' + table + where + order + ' LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
+            return {'rows': [self._decode(keys, row, fields) for row in rows], 'totalRows': total, 'durationMs': (time.perf_counter()-started)*1000}
+
     def rows(self, ref, filters=None, columns=None, sort=None, offset=0, limit=100, search=''):
         started = time.perf_counter()
         if type(limit) is not int or not 0 < limit <= MAX_RESULT_ROWS or type(offset) is not int or offset < 0:
@@ -493,8 +524,8 @@ class LocalData:
             where = ' WHERE search_text(value, ?, ?)' if search else ''
             params = [search, kind] if search else []
             query = f'SELECT value FROM ({union})' + where + ' GROUP BY value'
-            total = db.execute('SELECT COUNT(*) FROM (' + query + ')', params).fetchone()[0]
-            records = db.execute(query + ' ORDER BY value LIMIT ? OFFSET ?', params + [limit, offset])
+            records = list(db.execute('SELECT value, COUNT(*) OVER() FROM (' + query + ') ORDER BY value LIMIT ? OFFSET ?', params + [limit, offset]))
+            total = records[0][1] if records else (db.execute('SELECT COUNT(*) FROM (' + query + ')', params).fetchone()[0] if offset else 0)
             values = [bool(row[0]) if row[0] is not None and kind == 'boolean' else row[0] for row in records]
             return {'values': values, 'totalValues': total, 'offset': offset, 'hasMore': offset+len(values) < total}
 
@@ -509,7 +540,7 @@ class LocalData:
             for row in db.execute(f'SELECT {selected}, _missing FROM {table}' + where + order, params):
                 yield self._decode(keys, row[:-1], fields, row[-1])
 
-    def export_csv(self, ref, output_path, filters=None, columns=None, sort=None, search=''):
+    def export_csv(self, ref, output_path, filters=None, columns=None, sort=None, search='', group_by=None, sum_fields=None):
         started = time.perf_counter()
         destination = Path(output_path).expanduser().resolve()
         if destination == self.path.resolve():
@@ -521,6 +552,10 @@ class LocalData:
             self._indexes(db, table, fields, filters, sort)
             where, params = self._where(fields, filters, search)
             keys, selected, order = self._selection(fields, columns, sort)
+            if group_by:
+                table, fields, where, params = self._grouped_query(db, ref, filters, group_by, sum_fields or [], search)
+                if set(keys) - set(group_by + (sum_fields or [])):
+                    raise ValueError('Export columns must be grouped or summed')
             cursor = db.execute(f'SELECT {selected} FROM {table}' + where + order, params)
             with destination.open('w', encoding='utf-8-sig', newline='') as output:
                 writer = csv.writer(output)

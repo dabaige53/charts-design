@@ -16,13 +16,14 @@ def test_new_annotation_targets_outer_component(tmp_path):
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             page.goto(f'http://127.0.0.1:{server.server_port}/')
+            page.add_style_tag(url=f'http://127.0.0.1:{server.server_port}/dashboard_runtime/web/styles.css')
             page.evaluate('''async () => {
               const {createAnnotations} = await import('/dashboard_runtime/web/annotations.mjs');
               const root = document.createElement('main'); document.body.append(root);
               const host = document.createElement('div'); host.dataset.componentId = 'chart';
               host.style.cssText = 'width:300px;height:200px'; root.append(host);
               const inner = document.createElement('button'); inner.dataset.componentId = 'inner';
-              inner.textContent = '图表内容'; host.attachShadow({mode:'open'}).append(inner);
+              inner.textContent = '航班月' + (String.fromCharCode(10) + '    ').repeat(40) + '区域'; host.attachShadow({mode:'open'}).append(inner);
               window.doc = {id:'board', manifest:{components:{chart:{title:'图表'}}, annotations:[]}};
               window.annotations = createAnnotations({root, getDocument:()=>window.doc,
                 save:async transform=>{window.doc.manifest.annotations=transform(window.doc.manifest.annotations)},
@@ -34,6 +35,9 @@ def test_new_annotation_targets_outer_component(tmp_path):
             panel = page.locator('.annotation-panel')
             assert '原位置已失效' not in panel.inner_text()
             assert page.locator('.annotation-outline').is_visible()
+            assert panel.locator('.annotation-context').bounding_box()['height'] < 65
+            assert panel.locator('header').is_visible()
+            assert panel.get_by_role('button', name='保存批注').is_visible()
             panel.locator('textarea').fill('测试批注')
             panel.get_by_role('button', name='保存批注').click()
             assert panel.get_by_text('测试批注').is_visible()
@@ -110,6 +114,45 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
             expect(panel.locator('textarea')).to_have_value('检查段落')
             page.screenshot(path='/private/tmp/annotations-missing-verified.png')
             assert not errors, errors
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_composer_submission_keeps_selection_mode(tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(root)))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f'http://127.0.0.1:{server.server_port}/')
+            page.evaluate('''async () => {
+              const {createAnnotations}=await import('/dashboard_runtime/web/annotations.mjs');
+              document.body.replaceChildren();
+              const root=document.createElement('main');document.body.append(root);
+              root.innerHTML='<p>First location</p><p>Second location</p>';
+              window.submitted=[];
+              window.annotations=createAnnotations({root,
+                getDocument:()=>({id:'board',manifest:{components:{},annotations:[]}}),
+                attachContext:async note=>window.submitted.push(note),
+                save:()=>{throw Error('Unexpected save')},readOnly:false,
+                onError:e=>{throw e},onMode:()=>{},iconButton:()=>document.createElement('button')});
+              window.annotations.toggle();
+            }''')
+            for location, comment in [('First location', 'First note'), ('Second location', 'Second note')]:
+                page.locator('main p', has_text=location).click()
+                page.get_by_role('textbox', name='新增位置批注').fill(comment)
+                page.get_by_role('button', name='提交', exact=True).click()
+                page.wait_for_function('document.querySelector(".annotation-panel").hidden')
+                assert page.evaluate('window.annotations.active')
+            assert page.evaluate('window.submitted.map(n=>n.text)') == ['First note', 'Second note']
+            page.keyboard.press('Escape')
+            assert not page.evaluate('window.annotations.active')
             browser.close()
     finally:
         server.shutdown()

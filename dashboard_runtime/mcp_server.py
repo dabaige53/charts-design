@@ -2,12 +2,14 @@
 from __future__ import annotations
 import asyncio
 import json
+import re
 import sys
 from .lifecycle import IdleLifetime, DEFAULT_IDLE_TIMEOUT
 from . import __version__
 from .assets import render_html, ui_build_id
 from .model import DashboardError, MAX_BYTES
 from .service import READ_ONLY, TOOLS
+from .project_routing import ProjectServices, project_result, project_schema
 
 LEGACY_URI = f'ui://charts-design/dashboard-v{__version__}.html'
 def current_ui_uri():
@@ -18,12 +20,24 @@ URI = current_ui_uri()
 MIME = 'text/html;profile=mcp-app'
 UI_TOOLS = {'dashboard_preview'}
 
+def current_preview_tool():
+    """A new tool identity also bypasses hosts caching old tool descriptors."""
+    return f'dashboard_preview_{ui_build_id()}'
+
+def is_preview_alias(name):
+    return re.fullmatch(r'dashboard_preview_[0-9a-f]{12}', name) is not None
+
+def is_ui_uri(uri):
+    # Historical conversations retain resource identities across worker restarts.
+    return re.fullmatch(r'ui://charts-design/dashboard-v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9a-f]{12})?\.html', str(uri)) is not None
+
 def result_text(result):
     """Transport.pack already bounds the payload; text-only hosts need all fields."""
     return json.dumps(result, ensure_ascii=False, allow_nan=False)
 
 def create_server(service, lifetime=None):
     lifetime = lifetime or IdleLifetime()
+    projects = ProjectServices(service)
     try:
         import mcp.types as types
         from mcp.server.lowlevel import Server
@@ -42,12 +56,17 @@ def create_server(service, lifetime=None):
         advertised_uri = current_ui_uri()
         known_uris.add(advertised_uri)
         result = []
-        for name, (description, schema) in TOOLS.items():
-            metadata = {'ui': {'resourceUri': advertised_uri}, 'ui/resourceUri': advertised_uri} if name in UI_TOOLS else {}
+        tools = {**TOOLS, current_preview_tool(): (
+            'Open the latest dashboard UI; prefer this build-specific preview over historical preview cards',
+            TOOLS['dashboard_preview'][1])}
+        for name, (description, schema) in tools.items():
+            schema = project_schema(schema)
+            preview = name in UI_TOOLS or is_preview_alias(name)
+            metadata = {'ui': {'resourceUri': advertised_uri}, 'ui/resourceUri': advertised_uri} if preview else {}
             if name == 'runtime_keepalive':
                 metadata = {'ui': {'visibility': ['app']}}
             tool = types.Tool(name=name, description=description, inputSchema=schema,
-                annotations=types.ToolAnnotations(readOnlyHint=name in READ_ONLY, destructiveHint=False, openWorldHint=False))
+                annotations=types.ToolAnnotations(readOnlyHint=preview or name in READ_ONLY, destructiveHint=False, openWorldHint=False))
             if metadata:
                 tool.meta = metadata
             result.append(tool)
@@ -57,15 +76,18 @@ def create_server(service, lifetime=None):
     @lifetime.track
     async def call_tool(name, arguments):
         nonlocal advertised_uri
+        selected = service
         try:
-            request = dict(arguments or {})
-            if name == 'dashboard_create' and not service.project_root:
-                raise DashboardError('PROJECT_REQUIRED', 'Specify --project-root for new dashboards; legacy --root supports existing dashboards only')
+            if is_preview_alias(name):
+                name = 'dashboard_preview'
+            selected, request = await asyncio.to_thread(projects.resolve, dict(arguments or {}))
+            if name == 'dashboard_create' and not selected.project_root:
+                raise DashboardError('PROJECT_REQUIRED', 'Pass projectRoot or start with --project-root for new dashboards; legacy --root supports existing dashboards only')
             if name in TOOLS and 'dataMode' in TOOLS[name][1].get('properties', {}):
                 request.setdefault('dataMode', 'local')
-            result = await asyncio.to_thread(service.call, name, request)
+            result = project_result(await asyncio.to_thread(selected.call, name, request), selected)
             if name not in ('runtime_result_chunk', 'runtime_diagnostics', 'runtime_report_error', 'runtime_keepalive'):
-                result = service.transport.pack(result, name)
+                result = project_result(selected.transport.pack(result, name), selected)
             uri = current_ui_uri()
             if advertised_uri != uri:
                 advertised_uri = uri
@@ -74,10 +96,10 @@ def create_server(service, lifetime=None):
                 await server.request_context.session.send_resource_list_changed()
             return types.CallToolResult(content=[types.TextContent(type='text', text=result_text(result))], structuredContent=result)
         except DashboardError as exc:
-            service.transport.log('', name, 'server', exc.code)
+            selected.transport.log('', name, 'server', exc.code)
             return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=json.dumps(exc.as_dict()))], structuredContent=exc.as_dict())
         except (KeyError, TypeError, ValueError) as exc:
-            service.transport.log('', name, 'server', type(exc).__name__)
+            selected.transport.log('', name, 'server', type(exc).__name__)
             return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=str(exc))])
 
     @server.list_resources()
@@ -96,14 +118,19 @@ def create_server(service, lifetime=None):
     @server.read_resource()
     @lifetime.track
     async def read_resource(uri):
-        if str(uri) in known_uris or str(uri) == current_ui_uri():
+        if str(uri) in known_uris or is_ui_uri(uri):
             return [ReadResourceContents(content=render_html('mcp', idle_timeout=lifetime.timeout),
                                          mime_type=MIME, meta={'ui': {'prefersBorder': True}})]
         if str(uri) == 'charts://catalog':
             return [ReadResourceContents(content=json.dumps(service.call('chart_catalog', {}), ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://contract':
             from .contract import CONTRACT
-            return [ReadResourceContents(content=json.dumps(CONTRACT, ensure_ascii=False), mime_type='application/json')]
+            contract = {**CONTRACT, 'tools': {name: {**tool, 'inputSchema': project_schema(tool['inputSchema'])}
+                for name, tool in CONTRACT['tools'].items()}, 'projectRouting': {
+                    'selector': 'projectRoot', 'scope': 'request', 'path': 'absolute asset directory',
+                    'omitted': 'startup project default or legacy store; never the last selected project',
+                    'preview': 'bind once from result.projectRoot; include it in all subsequent calls, including chunks'}}
+            return [ReadResourceContents(content=json.dumps(contract, ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://declarations':
             from .declarations import declaration_contract
             return [ReadResourceContents(content=json.dumps(declaration_contract(), ensure_ascii=False), mime_type='application/json')]

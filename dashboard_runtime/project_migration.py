@@ -2,7 +2,7 @@
 import json
 from .store import Store
 from .project import ProjectStore, write_json
-from .model import require, utcnow
+from .model import require
 
 
 def migrate_project(source_root, project_root, runtime_root, board_ids, apply=False):

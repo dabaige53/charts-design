@@ -1,6 +1,5 @@
 """Explicit read-only SQLite execution against operator-configured aliases only."""
 from __future__ import annotations
-import datetime as dt
 import json
 import sqlite3
 import time

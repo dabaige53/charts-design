@@ -1,6 +1,3 @@
-import os
-import json
-
 # Master Airline Routes Table Dataset (14 full columns, 36 comprehensive realistic routes)
 TABLE_COLUMNS = [
     {"key": "code", "title": "航线代码", "align": "left", "sortable": True, "visible": True},

@@ -68,3 +68,10 @@ test('excluding one value from all retains the values on unseen pages',async()=>
   const check=panel.children[2].children[0].children[0];check.checked=false;check.onchange();
   await panel.children[4].children[2].onclick();assert.deepEqual(changes,[['B','C']]);
 }));
+
+test('required month has no all entry and clear preserves the selected month',async()=>withDocument(async()=>{
+ const filter={id:'period',field:'month',label:'月份',selectionMode:'single',required:true,values:['2026-09']};let choices;const picked=[];
+ const trigger=singleFilter({filter,values:['2026-09','2026-08'],openMenu:(_anchor,entries)=>{choices=entries;},icon:()=>({}),onApply:values=>picked.push(values),onError:error=>{throw error;}});
+ trigger.onclick();assert.deepEqual(choices.map(c=>c.label),['2026-09','2026-08']);await choices[1].run();assert.deepEqual(picked,[['2026-08']]);
+ const cleared=clearFilterValues([{...filter,values:['2026-08']},{id:'office',values:['上海营业部']}]);assert.deepEqual(cleared.map(f=>f.values),[['2026-08'],[]]);
+}));

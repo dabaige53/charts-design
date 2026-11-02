@@ -194,4 +194,3 @@ Before presenting component HTML as complete:
 - required Tooltip, zoom, explanation, filtering, table, export, copy, and fullscreen behaviors are directly exercised where in scope;
 - existing-project migrations also pass Preservation Manifest inspection and baseline comparison.
 
-Generation is complete when every in-scope component and capability has observable evidence through the delivery gate.

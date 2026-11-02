@@ -154,7 +154,5 @@ tooltip: {
 ## 🚫 反模式与绝对禁止清单 (Anti-Patterns)
 
 - ❌ **严禁生成静态假数据/假 SVG 微图**：所有 Sparkline 与 Gauge 必须由 ECharts 实例动态渲染；
-- ❌ **严禁在双 Y 轴图表中将图例放置在右上角**；
 - ❌ **严禁原生 Select 箭头与文字堆叠**：必须采用物理隔离的自定义 Trigger 按钮；
 - ❌ **严禁 CSV 导出中文乱码**：必须在 CSV 内容头部注入 `\uFEFF` UTF-8 BOM 字符；
-- ❌ **严禁标题左侧添加粗竖条色块 (`border-l-4`)**。

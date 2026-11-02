@@ -4,7 +4,7 @@ The runtime extends charts-design. Original chart builders, KPI bodies, table an
 
 ## Run locally
 
-Python 3.10+ runs the CLI and local API. Node 22 is the tested UI build target.
+Python requirements and optional dependency groups are declared in `pyproject.toml`. UI dependencies and build scripts are in `runtime-ui/package.json`; CI selects the tested Python and Node versions in `.github/workflows/dashboard-runtime.yml`. Use the project-selected Python interpreter. The commands below use `python3` as its placeholder.
 
 ```sh
 npm --prefix runtime-ui install
@@ -30,7 +30,7 @@ python3 -m dashboard_runtime --root ./boards init report-demo --mode report --de
 python3 -m dashboard_runtime --root ./boards serve --port 8765
 ```
 
-Each generated artifact has one saved presentation: dashboard or report. Editing supports layout dragging and direct plain-text editing of page/component titles and descriptions. Component resizing is disabled. Adding, duplicating, deleting charts and importing data are hidden in the UI. Chart type switching remains available. Page and component annotations can be added, edited and removed; they persist in manifest.annotations through set_annotations and reopen with the saved artifact. Report Markdown remains editable. Report Markdown determines reading order, and chart fences reference existing component IDs.
+Each generated artifact has one saved presentation: dashboard or report. Editing supports layout dragging and direct plain-text editing of page/component titles and descriptions. Component resizing is disabled. Adding, duplicating, deleting charts and importing data are hidden in the UI. Chart type switching remains available. Annotation behavior depends on host capabilities; the rules and stored-note contract are in [位置引用与批注](annotation-composer.md). Report Markdown remains editable. Report Markdown determines reading order, and chart fences reference existing component IDs.
 
 For example, this is the entire source of a small report. The `trend` and `regions` components must already exist, or be created in the same atomic update:
 
@@ -64,7 +64,7 @@ For example, this is the entire source of a small report. The `trend` and `regio
 图表之后可以继续写分析、限制和下一步。
 ````
 
-Conclusions are authored and do not recalculate when filters change. Review the Markdown after changing data or filters. Raw HTML and ordinary code are not executable report instructions. The demo labels its synthetic snapshot and the limits of its observations; it does not imply an AI-generated diagnosis or an enterprise reporting workflow.
+Conclusions are authored and do not recalculate when filters change. Review the Markdown after changing data or filters. Raw HTML and ordinary code are not executable report instructions.
 
 ### Academic reading conventions
 
@@ -125,12 +125,12 @@ When `markdown` is present, it alone determines the report. Retained subtitle/bl
 
 ```sh
 python3 -m pip install 'mcp>=1.28,<2'
-python3 /absolute/path/charts-design/bin/dashboard_runtime.py --root /absolute/path/boards mcp
+node /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolute/path/runtime-cache mcp
 ```
 
-Web, CLI and MCP must use the same absolute `--root`. `mcp.json` uses `${PLUGIN_ROOT}`; replace it with actual paths in clients that do not expand the convention. Logs go to stderr; stdout is reserved for MCP protocol messages.
+MCP uses one entry point for multiple projects. Pass the absolute asset directory as `projectRoot` on every project call; it is not the Agent working directory. A call never selects a shared current project. Registration, source aliases, startup defaults, legacy `--root` compatibility and router requirements are defined in [项目资产与加载](project-runtime.md). CLI and the local HTTP editor use the storage selected at startup. `mcp.json` remains a legacy centralized-storage template and uses `${PLUGIN_ROOT}`; clients that do not expand it need actual absolute paths. Logs go to stderr; stdout is reserved for MCP protocol messages.
 
-Local MCP and web preview processes exit by default after 60 seconds without requests or a visible preview. Active requests finish before the idle countdown starts. Visible previews renew the lifetime every 20 seconds; hidden tabs stop all background polling. Documents and revision history remain saved. Adjust the positive timeout with `mcp --idle-timeout 120` or `serve --idle-timeout 120`. After exit, restart the web server; MCP clients must reconnect or relaunch the configured command (automatic relaunch depends on the host). Do not use background keepalive calls to retain an unused process.
+The Python worker and local web server exit by default after 60 seconds without requests or a visible preview. Active requests finish before the idle countdown starts. Visible previews renew the lifetime every 20 seconds; hidden tabs stop polling. Documents and history remain saved. The Node MCP launcher retains the stdio connection and restarts its Python worker on the next request, restoring initialization. Direct Python MCP entry points close the whole connection and require client reconnection. Restart an idle local web server before using it again. Adjust the positive timeout with `mcp --idle-timeout 120` or `serve --idle-timeout 120`; do not add background keepalive calls for unused processes.
 
 For project-local dependencies, use the selected Python interpreter to run `python -m pip install --target .mcp-test-deps --upgrade '.[mcp,statistics,test]'`. Pyright also searches this ignored directory. Save the interpreter and local paths in the ignored `.charts-runtime-env.json`:
 
@@ -146,24 +146,15 @@ For project-local dependencies, use the selected Python interpreter to run `pyth
 
 The Node launchers use this interpreter and dependency directory. With `isolated` enabled, they omit shared Python site-packages. `PYTHON` can explicitly override the interpreter; install the dependencies with the same Python version. Install the test browser with `node bin/python-runtime.js -m playwright install chromium --only-shell`, then run `npm test`. Tests run in separate directories to avoid duplicate module names. `npm run runtime:mcp` and `npm run runtime:serve` use the same setup.
 
-To enable this MCP only in this trusted project, add the server table to `.codex/config.toml` instead of running `codex mcp add`, which writes user-level configuration:
-
-```toml
-[mcp_servers.charts-design]
-command = "node"
-args = ["/absolute/path/charts-design/bin/dashboard-runtime.js", "--root", "/absolute/path/charts-design/.charts-runtime", "mcp"]
-enabled = true
-```
-
-Verify with `codex mcp get charts-design --json` from the project directory. Project-local configuration requires a trusted project. Refresh the MCP connection or reopen a project chat to load configuration changes in an existing desktop session.
+Registration is managed once through Magpie, with absolute paths for Node, the launcher and runtime cache. Do not create per-project registrations or modify Agent configuration as part of chart generation. Existing project-local registrations and `--project-root` startup defaults remain compatible; configuration changes belong to the registration-management task. Installation updates and reconnect checks are described in [本地 MCP 更新](local-mcp-update.md).
 
 Tools: `dashboard_create`, `dashboard_list`, `dashboard_get`, `dashboard_patch`, `dashboard_validate`, `dashboard_preview`, `dashboard_history`, `dashboard_restore`, `chart_catalog`, `dataset_import`, `query_execute`, `query_inspect`, `semantic_inspect`, `legacy_render`, `generation_examples`, `chart_declarations`.
 
-`dashboard_preview` links to the versioned resource `ui://charts-design/dashboard-v0.4.0.html`, MIME `text/html;profile=mcp-app`. It uses `@modelcontextprotocol/ext-apps` and the same built UI as the independent web editor. A normal MCP connection does not imply support for embedded MCP Apps. Actual Codex/ChatGPT host installation remains a separate acceptance step. Remote Streamable HTTP MCP, OAuth and hosted publishing are not included.
+Preview tools link to a resource whose URI includes the runtime version and UI build ID, with MIME `text/html;profile=mcp-app`. It uses `@modelcontextprotocol/ext-apps` and the same built UI as the independent web editor. Prefer the current build-specific preview tool listed by the server; the fixed `dashboard_preview` name remains compatible. Tool discovery, result chunking and stale-page checks are defined in [传输与诊断](mcp-transport-diagnostics.md). A normal MCP connection does not establish MCP Apps host acceptance. Remote Streamable HTTP MCP and OAuth are not included. Independent static-site export is available as described in [静态部署包](static-deployment.md); it does not provide a hosted multi-user backend.
 
 ## Canonical state and editing
 
-`dashboard_runtime.service.Service` is the mutation service for all transports. SQLite stores the document and last 100 revisions. Every edit supplies `expectedRevision`; stale writes fail with `REVISION_CONFLICT`. Batched operations validate and commit atomically.
+`dashboard_runtime.service.Service` is the mutation service for all transports. Every edit supplies `expectedRevision`; stale writes fail with `REVISION_CONFLICT`. Operations in one patch validate and commit atomically. Project mode stores drafts and checkpoints separately: begin a batch with `dashboard_edit_begin`, apply patches with the latest revision, then call `dashboard_edit_finish` with that revision and the batch ID. Finish runs full Doctor checks and creates one checkpoint; preview once after success. Legacy centralized storage retains its document/revision workflow. Storage, checkpoint retention, comparison and restore rules are defined in [项目资产与加载](project-runtime.md).
 
 Schema v2 separates components, datasets/field metadata, metric definitions, source/query provenance, per-breakpoint layout, and bounded snapshot rows. It contains no executable application code. View changes never execute SQL.
 
@@ -184,11 +175,11 @@ Example changes.json:
 ]
 ```
 
-Restore creates a new revision; it does not rewrite history. Browser undo/redo uses the same service. New external revisions clear the browser undo stack instead of silently undoing another writer's work. Web clients check for external revisions every five seconds.
+Restore creates a new revision; it does not rewrite history. Project-mode annotations are independent and survive design restore; legacy centralized revisions retain their historical annotation behavior. Browser undo/redo uses the same service. New external revisions clear the browser undo stack instead of silently undoing another writer's work. Visible, idle readers check for external revisions every five seconds; editing, annotations and unsaved input pause this polling.
 
-GridStack uses independent desktop/tablet/mobile 12/8/4-column layouts. This is flexible responsive positioning and resizing, not arbitrary overlapping pixel placement. Read/edit modes, component add/delete/duplicate, titles/descriptions, undo/redo, global filters, import/export and SQL/semantic inspectors remain available.
+GridStack uses independent desktop/tablet/mobile 12/8/4-column layouts. Edit mode supports layout dragging; component resizing is disabled. Adding, duplicating, deleting components and importing data remain API/CLI operations rather than visible editor controls. Read/edit modes, titles/descriptions, undo/redo, filters, export and SQL/semantic inspectors remain available.
 
-All main-card action buttons are real Lucide SVGs with accessible names, hover help and keyboard focus. Titles/descriptions stay upper-left, actions upper-right; narrow cards expose secondary actions through More. Menus and forms keep normal readable text. Table order, visibility, pagination and sorting persist. See `icon-header-and-bindings.md` for bindings and the component UI contract.
+Component action placement, Lucide controls, code-label visibility, table pagination and saved versus temporary presentation state are defined in [标题区与绑定](icon-header-and-bindings.md). Menus and forms retain readable text. Runtime previews and exports share the Runtime bundle; the standalone Python generators have their own card shell.
 
 ## Original components and chart switching
 
@@ -206,7 +197,7 @@ Metrics support sum, average, min, max, row count and ratio-of-sums. Filters rec
 
 ## Import data
 
-Use the web import dialog or the common CLI tool entrance:
+Use the common CLI tool entrance or `dataset_import` over MCP. Import controls are hidden in the current web editor:
 
 ```sh
 python3 -m dashboard_runtime --root ./boards call dataset_import --json-file import.json
@@ -263,7 +254,7 @@ MCP integration uses a real stdio SDK client. Browser acceptance uses actual Chr
 
 ## Remaining boundaries
 
-Complex original-data transforms, warehouse execution, remote MCP, multi-user permissions/RLS, enterprise approval, scheduled refresh, hosted publishing, and real Codex host installation are not complete. UI completion does not imply these platform capabilities exist. Keep the PR Draft until visual review, code review and target-host acceptance; do not merge automatically.
+Complex original-data transforms, warehouse execution, remote MCP, multi-user permissions/RLS, enterprise approval, scheduled refresh, a hosted application backend, and actual Codex host acceptance are not established by the checks described here. UI completion does not imply these platform capabilities exist. Keep the PR Draft until visual review, code review and target-host acceptance; do not merge automatically.
 
 Local server launch links now use an explicit `#token=...` fragment. Ordinary Markdown section and figure anchors never replace an existing session token. Legacy bare-token links are accepted for a fresh browser session; use the newly printed launch link to replace a token after a server restart.
 
@@ -274,21 +265,19 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 ## 在对话内展示 MCP App
 
-项目 Node 启动入口保留一个轻量连接进程。Python 运行进程空闲 60 秒后退出，下次请求才重启，并恢复 MCP 初始化协商；无后台轮询。这样可以释放图表运行环境，同时保持 Codex 的 stdio 连接。直接使用 Python 入口时会关闭整个连接，客户端需要自行重连。宿主断开或关闭连接后，Node 进程也会退出。完全关闭所有进程与保持现有 stdio 连接无法同时实现。
+单入口与 Python 工作进程生命周期按上方 MCP 章节执行。支持 MCP Apps 的宿主通过已注册的本地 MCP 展示界面；本项目不要求创建插件。
 
-不需要创建或安装插件。项目的 `.codex/config.toml` 连接本地 MCP 服务；支持 MCP Apps 的客户端可直接展示它提供的界面。
-
-`dashboard_create`、`dashboard_preview`、`dashboard_patch`、`dashboard_restore`、`dataset_import` 和 `query_execute` 都声明同一 `ui://` 界面资源，使用标准 `_meta.ui.resourceUri`，并保留旧客户端的 `ui/resourceUri` 字段。界面资源使用 `text/html;profile=mcp-app`，HTML、脚本和样式都已打包，不需要 CDN。
+只有 `dashboard_preview` 及当前构建的 `dashboard_preview_<uiBuildId>` 别名声明 `_meta.ui.resourceUri`，并保留旧客户端的 `ui/resourceUri` 字段。创建、修改、恢复、导入和查询工具不声明界面资源。页面内容来自同一 Runtime 构建，不需要 CDN。
 
 工具结果携带文档与统计图资源。界面通过官方 MCP Apps SDK 接收结果，通过宿主桥接调用工具保存图表类型与筛选状态；迟到的旧版本不会覆盖新版本。宿主支持全屏时，工具栏显示“全屏查看”和“返回对话”。`runtime_keepalive` 仅向 App 开放，界面可见时才调用。
 
-加载本项目 MCP 后，调用 `dashboard_preview` 并提供已保存的 `dashboardId`，可作为明确的展示入口。创建和修改操作也可由兼容宿主展示；具体出现为对话卡片还是面板由宿主决定。普通客户端仍获得结构化文档，HTML 导出用于离线快照。
+批次完成后，调用当前构建的预览工具，提供 `projectRoot` 和已保存的 `dashboardId`。具体出现为对话卡片还是面板由宿主决定。创建与修改返回保存结果；已有页面可按版本检测更新。普通客户端仍获得结构化结果，HTML 导出用于离线快照。
 
 `test_mcp_app_browser.py` 使用真实 MCP 服务、官方 `AppBridge` 和 Chromium 检查内嵌图表、MCP 更新、重新打开、全屏切换及旧结果保护。这是兼容宿主验收，不代表 Codex 桌面客户端已验收。若当前聊天尚未出现项目工具，需要重新加载项目 MCP；实际 Codex 展示须在加载后的聊天中检查。
 
 页面说明使用 `manifest.meta`：可选字段 `subtitle`、`org`、`system`、`statusText`，均为最多 1000 字符的文本。`set_meta` 整体替换这些字段；传入 `{}` 清空页面说明。未设置 `meta` 的旧导入项目继续读取 `originalWorkspace.meta`。标题仍使用 `manifest.title` / `set_title`。通过 MCP 的 `set_meta` 修改这些字段。
 
-同一 Runtime 中保存多个页面时，MCP 内嵌预览和本机看板在左上角标题旁显示下拉箭头。点击标题可选择其他已保存页面，列表由 `dashboard_list` 读取，切换通过 `dashboard_get` 加载。新建页面会在阅读模式下自动出现在入口中；看板和分析报告均可切换。切换后退出编辑，并清空临时表格状态、图表联动和撤销记录；未保存的报告 Markdown 按页面保留在当前会话中。仅有一个页面或打开离线 HTML 时不显示入口。
+同一已选资产项目中保存多个页面时，MCP 内嵌预览和本机看板在左上角标题旁显示下拉箭头。点击标题可选择其他已保存页面，列表由 `dashboard_list` 读取，切换通过 `dashboard_get` 加载。新建页面会在阅读模式下自动出现在入口中；看板和分析报告均可切换。切换后退出编辑，并清空临时表格状态、图表联动和撤销记录；未保存的报告 Markdown 按页面保留在当前会话中。仅有一个页面或打开离线 HTML 时不显示入口。
 
 组件的 `subtitle` 为最多 1000 字符的说明，图表、指标卡和表格均显示。原版组件未设置顶层说明时使用 `config.subtitle`。原生指标卡默认 `presentation.type=mc01`，也支持 `mc02`–`mc09`；同比、环比、目标等字段需要明确提供，系统不会自动推算。`mc03` 需要有效数据字段 `timeField` 或显式 `sparkData` / `sparkline`；`mc06` 需要 `leftVal` 和 `rightVal`。
 
@@ -296,11 +285,11 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 原生 KPI 筛选后只显示能重算的主值、时间趋势；未绑定的同比、环比、参考值等清空为 `—`，避免混用统计范围。需要这些衍生指标跟随筛选时，使用原版 KPI 的显式 `binding.measures`。表格列标题按 `title`、旧字段 `label`、`key` 的顺序读取。原版图表的月／季度控件常驻显示；目录中的 `filterBinding` 明确各组件是否支持动态重算，`snapshotOnly` 表示仅支持快照展示。
 
-界面批注保存为 `manifest.annotations`，每条包含 `id`、`componentId`（页面批注为 `null`）、`text`、`createdAt`。`set_annotations` 整体替换列表，最多 100 条，每条正文最多 4000 字。修改受版本检查约束；批注随 JSON 导出和版本恢复保留。离线 HTML 可查看批注，不能保存修改。
+位置引用、页面批注、字段限制与处理流程统一见 [批注说明](annotation-composer.md)。项目模式恢复设计不回退批注；JSON 导出保留已有批注，离线 HTML 只读。
 
 页面固定使用浅色样式，不提供深色模式切换；旧文档的 theme 字段仍可读取。
 
-预览与编辑明确分离：预览只显示查看操作；位置批注通过独立「批注」模式开放；原版类型切换只在编辑时开放。预览筛选、表格列配置、排序、分页与月季度切换只改变当前查看状态，不写入保存的默认配置。图表标题不显示 C01 等组件编号。右上角恢复原版直接入口：图表／数据表、导出数据、复制图片、全屏、指标定义与语义；月／季度切换同样位于操作区，窄屏换行，不隐藏到更多菜单。编辑模式下每张原版图表显示“切换图表类型”；目前只有 c01／c02 支持兼容切换，其余图表展示当前类型及暂无兼容类型的原因。旧版整页／整图批注入口和拖动仅在编辑模式出现，卡片尺寸调整保持关闭。表格保留自定义列配置、导出 Excel (CSV) 和底部分页。信息图标打开只读单页面板，沿用原示例的业务概览、图表结构、指标定义、计算公式与判定规则，下面连续展示查看语义、SQL 与来源记录、数据；全部内容直接展开，通过正文滚动查看，数据表不分页。定义优先采用当前绑定指标，查看语义展示实际计算方式、数据集、分组、展示换算及筛选范围，不拿目录示例定义替代已绑定的业务指标。已保存批注在业务说明内展示。
+预览与编辑的操作范围、标题区、直接入口与表格分页统一见 [标题区与绑定](icon-header-and-bindings.md)。信息图标打开只读“指标定义与语义”面板，展示业务概览、图表结构、指标定义、计算公式、判定规则、实际语义、SQL、来源记录和数据。定义优先采用当前绑定指标；查看语义展示实际数据集、分组、换算和筛选范围，不拿目录案例定义替代业务指标。已有批注在业务说明中展示。数据区的分页与图表转表的滚动范围见下方局部更新说明。
 
 
 ## 大数据看板：纯本地模式
@@ -315,11 +304,11 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 指标说明的文案要求见 [指标定义与统计口径写作规范](../skills/executive-charts/references/metric-definitions.md)。业务定义用中文说明统计对象、范围及数值含义，计算公式采用业务名称；实际字段与聚合表达式在查看语义中展示。不得从名称推断净额扣减、税费、退款、去重或绩效政策。
 
 
-## 1.1.0 / runtime 0.5.0：密集图表、筛选与刷新
+## 密集图表、筛选与刷新
 
 - 单轴柱状图超过 12 项、折线图超过 24 项时，默认显示可读窗口，保留完整数据；支持滑块、滚轮缩放、拖动和平移及重置。已有专用缩放配置保持有效，多绘图区图表不强行套用单轴规则。
 - 单选筛选器使用带独立箭头的自定义下拉按钮；多选弹窗内提供“全选 / 取消全选 / 应用”。取消全选清除未加载页的草稿选择；全部减去排除项会遍历选项页，避免丢失其他页。
-- `runtime_info` 只返回安装版本、UI 构建标识和报表版本；`dashboard_refresh` 使用最新定义重新读取当前视图，并保留读者筛选、表格和粒度状态。读者的临时条件不会写回正式报表。
+- `runtime_info` 返回安装版本、前后端构建标识、模块来源、进程与项目路径及报表版本，不读取图表明细；`dashboard_refresh` 使用最新定义重新读取当前视图，并保留读者筛选、表格和粒度状态。读者的临时条件不会写回正式报表。
 - 在线阅读界面提供“刷新报表”，可见且无未保存操作时每 5 秒检查报表版本；版本改变才重新取视图。离线 HTML 是当前视图快照，不自动取数。
 - MCP UI 资源地址随最新 bundle 内容变化，并发出资源与工具目录更新通知。已加载的旧 iframe 无法由服务端强制替换；新版界面检测到构建差异会提示重新打开最新预览。主机若仍缓存旧工具目录，需要重新连接 MCP 后打开新预览。
 
@@ -330,7 +319,7 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 ### 局部更新与性能验证
 
-`dashboard_view` 默认返回完整 `document`。交互调用可传 `responseMode: "patch"`、`componentIds` 和 `expectedRevision`，返回 `{id, revision, componentIds, computed, statisticalArtifacts}`。`computed.components`、`tables`、`grouped` 只包含选中的组件；省略字段表示保留已有值，空数组表示清空。省略 `componentIds` 表示全部，空列表表示不计算组件。仅在需要重新加载筛选选项时传 `includeFilterOptions: true`。版本不符返回 `REVISION_CONFLICT`；先刷新最新定义再重试。MCP 的完整局部响应仅存放于 `structuredContent`，文本块为摘要。
+`dashboard_view` 默认返回完整 `document`。交互调用可传 `responseMode: "patch"`、`componentIds` 和 `expectedRevision`，返回 `{id, revision, componentIds, computed, statisticalArtifacts}`。`computed.components`、`tables`、`grouped` 只包含选中的组件；省略字段表示保留已有值，空数组表示清空。省略 `componentIds` 表示全部，空列表表示不计算组件。仅在需要重新加载筛选选项时传 `includeFilterOptions: true`。版本不符返回 `REVISION_CONFLICT`；先刷新最新定义再重试。MCP 结构化结果与文本回退返回相同的小结果；超过阈值时均返回分块描述，消费者读取完整分块。不得把摘要或截断文本当完整响应，详细协议见传输与诊断文档。
 
 `component_data` 接受 `sort: [{field, direction}]` 与 `search`，沿用表格的排序和子串搜索规则。点击图表右上角说明图标打开的“指标定义与语义”弹窗，其数据区默认每页最多 20 行。图表的“切换为数据表”视图保留完整滚动浏览：超过 100 行时只创建可见行及上下缓冲行，按实际行高处理换行，滚动时保持列宽；切回图表、移除组件和更新数据时清理对应监听器。主表默认 10 行，已有明确设置保留。CSV、PDF 导出不受展示行数限制。
 
@@ -347,15 +336,4 @@ node bin/python-runtime.js tests/runtime/benchmark_incremental.py --output /tmp/
 
 ### 位置批注
 
-页面工具栏的「批注」可在查看模式直接使用。点击元素或拖选区域，输入内容并保存（支持 Cmd/Ctrl+Enter）；编号标记打开批注，列表支持跳转、修改与删除。Esc 退出批注模式。批注期间暂停页面自动刷新，避免打断输入；退出后恢复图表交互。离线 HTML 仅查看批注。批注不提供样式调整。
-
-`manifest.annotations` 保持原字段，并可增加 `anchor`：`scope` 为 component、text 或 page，`kind` 为 element 或 area，`quote` 为最多 1000 字的选中内容，`rect` 包含相对目标的 x、y、width、height（0–1）。文字定位另存 `occurrence`（相同引文的序号，从 0 开始）。报告图表也暴露 componentId，位置随图表移动与尺寸变化。文本使用引文匹配；引文改变或图表被移除后，批注列表显示位置失效，保留内容。跨组件框选绑定页面相对位置；页面结构变化可能使这类区域偏移。旧批注继续通过原入口读写，也出现在批注列表中。
-
-
-### Codex 读取并处理批注
-
-保存批注后，可在对话中说「读取这个页面的批注并按批注修改」，或指定批注编号。`dashboard_annotations({dashboardId})` 返回当前版本、全部原始批注（含引文、相对位置）、按批注 ID 索引的目标图表标题、类型和配置位置；不读取图表明细或生成图表。旧批注也包含在结果中。
-
-Codex 根据批注 ID 和 componentId 定位目标，再通过 `dashboard_get` 读取当前内容，使用最新 `expectedRevision` 调用 `dashboard_patch` 修改图表、页面信息或报告 Markdown。修改页面后保留批注，除非用户要求修改或删除批注。`dashboard_get` 的简短返回摘要也包含 `annotationCount`，便于发现待查看的批注。
-
-文字引文和区域坐标不是截图。目标不明确时需查看渲染后的页面；组件被删除时接口返回 `componentExists: false`。保存批注不自动运行 Codex；由用户在对话中发起处理。更新后重新连接 MCP 可发现新工具。
+位置引用、页面保存、锚点、失效位置及 Codex 读取处理的字段和流程统一见 [位置引用与对话批注](annotation-composer.md)。批注本身不自动触发 Agent，修改看板后保留原批注，除非用户要求修改或删除。

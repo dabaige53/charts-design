@@ -1,6 +1,6 @@
 # 高管分析报告与看板排版布局规范 (Executive Layout & Template Standards)
 
-在生成任何基于本设计系统的长图分析报告、管理驾驶舱或决策大屏时，必须严格遵守以下排版栅格结构：
+在生成任何基于本设计系统的长图分析报告、管理驾驶舱或决策大屏时，使用以下排版栅格结构。标题排版与页面、卡片宽度遵循 [设计规范](design_standards.md)。
 
 ---
 
@@ -33,8 +33,6 @@
 
 ## 2. 响应式与宽度约束
 
-- **页面容器最大宽度**：`max-w-[1600px] mx-auto`（确保在 2K / 4K / 超宽带鱼屏上不失焦）；
-- **图表卡片最小呼吸宽度**：`min-width: 580px`（双列网格下单图宽度 650px~760px，确保坐标轴与图例文本 100% 舒展）；
 - **表格列宽自适应**：必须包裹在 `overflow-x-auto border border-slate-200 rounded-lg bg-white shadow-2xs` 中，支持窄屏水平滚动，宽屏自然展开。
 
 ---
@@ -45,20 +43,3 @@
 - **环形/饼图/仪表盘 (`k01`, `m04` 等)**：容器高度 `h-[260px]` ~ `h-[280px]`；
 - **散点/四象限/桑基图 (`r01`, `f02` 等)**：容器高度 `h-[300px]` ~ `h-[340px]`；
 - **卡片内部 Padding**：`p-5` ~ `p-6`。
-
----
-
-## 4. 标题排版规范与去竖条准则 (Pure Typographic Heading Standard)
-
-> [!IMPORTANT]
-> **严禁在正式报告的标题左侧添加任何粗竖线/竖条颜色修饰（如 `border-l-4`, `border-l-primary`）**。
-> 咨询级高管排版必须依靠纯粹的**字体粗细、字号与字偶距层级（Typographic Hierarchy）**来构建视觉结构：
-> 
-> ```html
-> <!-- 正确示范：纯粹优雅的高管标题排版结构 -->
-> <div class="space-y-1">
->     <div class="text-[11px] font-bold text-primary tracking-widest uppercase">EVIDENCE CHAIN · 核心证据链</div>
->     <h2 class="text-base md:text-lg font-bold text-primary-strong tracking-tight">季度规模增长与大区横向透视</h2>
->     <p class="text-xs text-ink-muted leading-relaxed">依托双轴复合走势与垂直柱状对比，研判业务大盘增速拐点与大区贡献极差</p>
-> </div>
-> ```

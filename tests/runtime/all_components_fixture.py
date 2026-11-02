@@ -1,5 +1,4 @@
 """All original renderers, explicitly labelled fixture data, never a live fallback."""
-import copy
 import json
 from pathlib import Path
 import subprocess

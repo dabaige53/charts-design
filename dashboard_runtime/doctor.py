@@ -5,6 +5,7 @@ import time
 import uuid
 from .model import validate, DashboardError
 from .assets import ui_build_id
+from .build import BACKEND_BUILD_ID
 
 
 def data_version(doc):
@@ -14,7 +15,7 @@ def data_version(doc):
 def diagnose(service, board, mode='full'):
     doc = service.store.get(board, hydrate=False)
     request_id = uuid.uuid4().hex
-    report = {'dashboardId': board, 'requestId': request_id, 'revision': doc['revision'], 'dataVersion': data_version(doc), 'uiBuildId': ui_build_id(), 'mode': mode, 'checks': []}
+    report = {'dashboardId': board, 'requestId': request_id, 'revision': doc['revision'], 'dataVersion': data_version(doc), 'uiBuildId': ui_build_id(), 'backendBuildId': BACKEND_BUILD_ID, 'mode': mode, 'checks': []}
     def check(item, callback, component=None):
         start=time.perf_counter()
         try:

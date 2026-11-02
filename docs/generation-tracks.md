@@ -11,12 +11,15 @@
 
 ## 从空白报告生成，而非套一个静态页面
 
+每次 MCP 项目调用都显式传入 `projectRoot`，值为报表资产目录的绝对路径；包括案例与声明发现、读取、编辑、诊断和分块读取。以下示例省略重复参数。旧启动默认项目仅用于兼容，不沿用上一次调用的项目。
+
 1. `generation_examples {}` 发现两种案例；`generation_examples {"caseId":"academic-report"}` 返回母稿 Markdown、明确标注的合成来源、数据/指标/图表声明及完整 `operations`。
 2. `chart_declarations {}` 发现类型索引，`chart_declarations {"code":"c01"}` 阅读所选声明要求与工作示例；`chart_catalog {}` 选择合适图表；`charts://contract` 阅读操作合同。相应资源为 `charts://declarations`、`charts://catalog`。
 3. `dashboard_create {"dashboardId":"my-report","title":"我的分析报告"}` 建立空白文档，取得 revision。
-4. 调用方根据自己的数据和问题编写内容，并通过一次 `dashboard_patch` 提交 `put_source`、`put_dataset`、`put_metric`、`put_component`、`set_report_markdown`、`set_view_mode=report`。传入当前 `expectedRevision`。组件与 Markdown 引用在整批操作结束后统一校验，创建与嵌入可以在同一批完成。
-5. `dashboard_validate` 检查结构；`dashboard_preview` 返回同一真实渲染器使用的文档，并向支持 MCP Apps 的宿主暴露 UI。没有 UI 的宿主可通过本地 CLI serve/export 检查实际页面。
-6. 核对数值与单位、图号、图文顺序、指标定义、来源、局限及保存/重载。发生冲突时先读取新版本，不盲目覆盖。
+4. 用当前 `expectedRevision` 调用 `dashboard_edit_begin` 开始或恢复编辑批次，保存返回的批次 ID。调用方根据自己的数据和问题编写内容，并通过一次或多次 `dashboard_patch` 提交 `put_source`、`put_dataset`、`put_metric`、`put_component`、`set_report_markdown`、`set_view_mode=report`。传入当前 `expectedRevision`。组件与 Markdown 引用在整批操作结束后统一校验，创建与嵌入可以在同一批完成。
+5. 用最新 `expectedRevision` 和批次 ID 调用 `dashboard_edit_finish`；完整 Doctor 检查通过后生成一个检查点。检查失败时保留草稿、修正问题再完成批次。`dashboard_validate` 可用于中途结构检查，不能替代批次完成。
+6. 完成后预览一次，优先使用当前工具列表中的 `dashboard_preview_<uiBuildId>`；固定名称 `dashboard_preview` 保留兼容。只有预览工具声明界面资源。没有 UI 的宿主可通过本地 CLI serve/export 检查实际页面。
+7. 核对数值与单位、图号、图文顺序、指标定义、来源、局限及保存/重载。发生冲突时先读取新版本，不盲目覆盖。
 
 MCP 负责发现、验证、保存和渲染声明；调用它的模型或程序负责撰写分析文字。工具不会自动编造推断，也不会在筛选后悄悄改写文字。
 
@@ -40,7 +43,7 @@ MCP 负责发现、验证、保存和渲染声明；调用它的模型或程序�
 
 ## 声明式图表的适用范围
 
-原生八类图表绑定数据集、指标及字段，适合快速声明、聚合、筛选和嵌入报告。原组件以 `kind=legacy`、`family` 和 `config` 保留已有渲染器，仍需完整显式 data/presentation；不能只给 code 就期待生成正确业务含义。目录条目数与渲染器数不同，最新资源会分别说明计数和合同覆盖范围。
+新建交互图表使用 40 个原版注册代码，通过 `kind=legacy`、`family` 和 `config` 保留已有渲染器，并明确提供 data/presentation。需要筛选时再声明受支持的数据集、指标和字段绑定；不能只给 code 或 datasetId 就认定图表可正确计算。`chart_declarations` 按 `code` 查询，拒绝 `chartType` 参数；历史通用图表保留兼容读取。目录条目数与渲染器数不同，以当前目录和声明返回的范围为准。可选统计图使用单独的 statistical 声明。
 
 案例中的 Dashboard 和报告可复用相同数据声明，但分别生成独立文档。Dashboard 按看板布局打开，报告按 Markdown 单栏正文打开，页面不提供两种类型的切换按钮。生成阶段通过 `set_view_mode` 明确文档类型；报告只选择需要的图表嵌入正文。
 

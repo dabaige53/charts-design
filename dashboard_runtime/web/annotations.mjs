@@ -7,7 +7,7 @@ export function relativeRect(rect,base){
 export function absoluteRect(rect,base){return {left:base.left+rect.x*base.width,top:base.top+rect.y*base.height,width:rect.width*base.width,height:rect.height*base.height};}
 const textBlocks='p,h1,h2,h3,h4,li,blockquote,td,th,.text-block,.dashboard-description';
 const quote=n=>(n?.textContent||'').trim().slice(0,1000);
-export function createAnnotations({root,getDocument,save,readOnly,onError,onMode,iconButton}){
+export function createAnnotations({root,getDocument,save,readOnly,onError,onMode,iconButton,attachContext=null}){
   const layer=node('div','annotation-layer'),outline=node('div','annotation-outline'),pins=node('div','annotation-pins'),panel=node('aside','annotation-panel'),hint=node('div','annotation-hint','点击元素或拖选区域添加批注 · Esc 退出');
   panel.setAttribute('aria-label','批注面板');layer.append(outline,pins,hint,panel);document.body.append(layer);
   let active=false,selected=null,draft=null,gesture=null,frame=0,pageId=null,saving=false,opener=null;
@@ -39,12 +39,23 @@ export function createAnnotations({root,getDocument,save,readOnly,onError,onMode
   function openNote(note,isNew=false){
     selected=isNew?null:note;draft=isNew?note:null;header(isNew?'新增批注':'批注');
     const label=note.componentId?getDocument().manifest.components[note.componentId]?.title:'页面';
-    panel.append(node('p','muted',isNew||targetFor(note)?(note.anchor?.quote||label||'页面'):'原位置已失效，批注已保留'));
+    panel.append(node('p','muted annotation-context',isNew||targetFor(note)?(note.anchor?.quote||label||'页面'):'原位置已失效，批注已保留'));
     const area=node('textarea');area.value=isNew?'':note.text;area.maxLength=4000;area.setAttribute('aria-label',isNew?'新增位置批注':'位置批注内容');area.disabled=readOnly;panel.append(area);
     const error=node('p','annotation-error');error.setAttribute('role','alert');panel.append(error);
     const controls=node('div','annotation-panel-actions');
-    if(!readOnly){const submit=action('保存批注',async()=>{const text=area.value.trim();if(!text){error.textContent='请输入批注';area.focus();return;}try{if(await commit(items=>isNew?[...items,{...note,text}]:items.map(n=>n.id===note.id?{...n,text}:n)))showList();}catch(e){error.textContent=e.message;}});controls.append(submit);
-      if(!isNew)controls.append(action('删除批注',async()=>{if(await commit(items=>items.filter(n=>n.id!==note.id)))showList();}));
+    if(!readOnly){const submit=action(attachContext?'提交':'保存批注',async()=>{
+        if(saving)return;
+        const text=area.value.trim();if(!text){error.textContent='请输入批注';area.focus();return;}
+        error.textContent='';
+        try{
+          if(attachContext){
+            saving=true;panel.querySelectorAll('button,textarea').forEach(n=>n.disabled=true);
+            try{await attachContext({...note,text});selected=null;draft=null;panel.replaceChildren();panel.hidden=true;paint();}
+            finally{saving=false;panel.querySelectorAll('button,textarea').forEach(n=>n.disabled=false);}
+          }else if(await commit(items=>isNew?[...items,{...note,text}]:items.map(n=>n.id===note.id?{...n,text}:n)))showList();
+        }catch(e){error.textContent=e.message;}
+      });controls.append(submit);
+      if(!isNew&&!attachContext)controls.append(action('删除批注',async()=>{if(await commit(items=>items.filter(n=>n.id!==note.id)))showList();}));
       area.onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();submit.click();}};
     }
     controls.append(action('返回列表',showList));panel.append(controls);paint();area.focus();

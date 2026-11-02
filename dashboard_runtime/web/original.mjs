@@ -1,5 +1,6 @@
 import {encodingOption,encodingTable} from './encoding.mjs';
 import {resolveOriginal} from './bindings.mjs';
+import {componentInputSignature} from './input-signature.mjs';
 import {applyEChartsOptions} from './echarts-options.mjs';
 import {installChrome} from './chrome.mjs';
 /* Original components are extracted at build time, never reauthored as lookalikes. */
@@ -91,13 +92,14 @@ function originalConfig(doc,id){
     if(c.kind==='legacy')cfg.explanations[key]=raw.explanation||api.explanations[raw.type]||{title:c.title,overview:'原始指标卡片快照'};
   }else if(family==='table'){
     rows=doc.computed?.components?.[id]?.rows??(c.kind==='legacy'?raw.rows:visibleRows(doc,id));
+    if(!doc.computed?.components?.[id]&&c.presentation?.groupBy){const groups=new Map(),keys=c.presentation.groupBy,sums=c.presentation.sumFields||[];for(const row of rows){const key=JSON.stringify(keys.map(k=>row[k]??null));if(!groups.has(key))groups.set(key,Object.fromEntries([...keys.map(k=>[k,row[k]]),...sums.map(k=>[k,null])]));const target=groups.get(key);for(const k of sums)if(row[k]!=null)target[k]=(target[k]??0)+row[k];}rows=[...groups.values()];}
     cfg.table={...(raw||c.presentation||{}),id:key,title:c.title,rows,columns:raw?.columns||c.presentation?.columns||Object.entries(doc.manifest.datasets[c.datasetId].fields).map(([key,meta])=>({key,title:meta.label||key,align:meta.type==='number'?'right':'left'}))};
     cfg.table.columns=cfg.table.columns.map(col=>({...col,title:col.title??col.label??col.key}));
     if(doc.computed?.tables?.[id])cfg.table.remotePage=doc.computed.tables[id];
   }
   return {cfg,c,family,raw};
 }
-export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentation,onBinding,onAnnotate,onText,onLocalQuery,onLocalExport,editing=false,readOnly=false,deferChart=false,onReady}){
+export function mountOriginal(host,{doc,id,onInspect,onType,onPresentation,onText,onLocalQuery,onLocalExport,editing=false,readOnly=false,deferChart=false,onReady}){
   const shadow=host.shadowRoot||host.attachShadow({mode:'open'});shadow.replaceChildren();shadow.adoptedStyleSheets=[];appendOriginalStyle(shadow,originalStyle);host.dataset.theme='light';
   let {cfg,c,family,raw}=originalConfig(doc,id);const key='original-'+id;
   const container=node(family==='table'?'section':'div',family==='table'?'section-card':'');container.id={chart:'app-charts-grid',kpi:'app-kpis',table:'app-table-section'}[family];shadow.append(container);
@@ -186,9 +188,9 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
   const fullscreen=node('dialog');fullscreen.className='original-fullscreen';shadow.append(fullscreen);let placeholder=null;
   fullscreen.addEventListener('close',()=>{const card=fullscreen.querySelector('.section-card');if(card&&placeholder){card.classList.remove('card-fullscreen');placeholder.replaceWith(card);placeholder=null;const b=card.querySelector('.fullscreen-btn');if(b)setOriginalHtml(b,api.LUCIDE_ICONS.maximize);Object.values(app.state.chartInstances).forEach(i=>i.resize());}});
   shadow.addEventListener('click',e=>{const b=e.target.closest('.fullscreen-btn');if(!b)return;e.stopImmediatePropagation();if(fullscreen.open)fullscreen.close();else{const card=b.closest('.section-card');placeholder=document.createComment('original-card-position');card.replaceWith(placeholder);fullscreen.append(card);card.classList.add('card-fullscreen');setOriginalHtml(b,api.LUCIDE_ICONS.minimize);fullscreen.showModal();requestAnimationFrame(()=>Object.values(app.state.chartInstances).forEach(i=>i.resize()));}},{capture:true,signal:controller.signal});
-  let disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding,onAnnotate,onText});
+  let disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onText});
   const signature=value=>JSON.stringify(value,(key,item)=>['durationMs','totalDurationMs','cacheHits','responseBytes'].includes(key)?undefined:item);
-  const inputs=value=>signature([value.manifest.components[id],value.computed?.components?.[id],value.computed?.tables?.[id],value.computed?.grouped?.[id],value.manifest.metrics,value.manifest.datasets,value.manifest.filters.filter(f=>f.componentIds.includes(id)),value.computed?null:value.snapshot.datasets,value.computed?null:value.snapshot.componentData]);
+  const inputs=value=>componentInputSignature(value,id);
   let inputSignature=inputs(doc);
   let configSignature=signature(cfg),chromeSignature=signature([c.title,c.subtitle,c.config?.description,editing,raw?.statusBadge]);
   function update(nextDoc,nextEditing=false,nextReadOnly=false){
@@ -210,7 +212,7 @@ export function mountOriginal(host,{doc,id,onInspect,onEdit,onType,onPresentatio
     const nextChrome=signature([c.title,c.subtitle,c.config?.description,editing,raw?.statusBadge]);
     if(nextChrome!==chromeSignature){
       const choice=shadow.querySelector('select[aria-label="Chart type"]');if(choice)choice.disabled=readOnly;
-      disposeChrome();disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onEdit,onBinding,onAnnotate,onText});chromeSignature=nextChrome;
+      disposeChrome();disposeChrome=installChrome({shadow,app,component:c,family,id,editing,onInspect,onText});chromeSignature=nextChrome;
     }
     return true;
   }

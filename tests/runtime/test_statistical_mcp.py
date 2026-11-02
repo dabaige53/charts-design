@@ -1,6 +1,5 @@
 """The statistical backend is reachable through the existing official MCP server."""
 import asyncio
-import json
 import os
 from pathlib import Path
 import sys

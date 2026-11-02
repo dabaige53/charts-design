@@ -1,6 +1,6 @@
 ---
 name: executive-charts
-description: Build reusable executive chart, KPI, filter, table, and dashboard components from business data, then generate and verify final HTML with the bundled Python scripts. Use for new dashboards, component embedding, or upgrades of existing HTML/frontend projects.
+description: Build or revise ECharts dashboards with dataset-bound charts, KPI cards, filters and tables through the project MCP runtime or bundled HTML generators. Use for new dashboards, component embedding, or upgrades of existing HTML/frontend projects.
 ---
 
 # Executive Charts
@@ -11,17 +11,15 @@ The goal is a reusable business-component generation system whose deliverable is
 
 ## Project MCP editing and display
 
-Use a project-configured runtime (`--project-root` for durable assets and `--runtime-root` for disposable runtime files). Do not create business dashboards inside a plugin installation or shared cache directory.
+For MCP creation, edits, data replacement, installation or loading failures, read [the shared delivery workflow](references/mcp-delivery.md). It defines project storage, edit batches, semantic preservation and separate source/install/host acceptance.
 
-For a multi-step edit, call `dashboard_edit_begin`, apply draft patches with the latest concurrency revision, then call `dashboard_edit_finish`. If its Doctor report fails, fix the listed components and finish again. After success call `dashboard_preview` once; do not open previews after intermediate patches, data attachment or queries. Existing connected pages refresh in place. Report source checks, installed version and actual host rendering separately.
-
-Use `dashboard_view` with explicit component IDs for on-demand results; use full mode only for explicit complete exports or analysis. Never embed full dataset rows into a page to work around loading. Query `runtime_diagnostics` using a request ID when loading fails. Keep annotations independent of design restoration and preserve their context.
+Before revising an accepted dashboard, read [the existing-project checklist](references/existing-project-checklist.md), including for MCP dashboards without standalone HTML. Use the HTML Preservation Manifest only for the HTML branch; it is not evidence that MCP bindings survived.
 
 ## Runtime MCP reference case
 
 For local datasets that must remain outside the preview, read [local-data.md](references/local-data.md). Use `dataset_attach` to stream an operator-configured SQLite table into a versioned local dataset; bind components to that dataset. MCP returns local aggregate results and table pages by default. Use `dashboard_view` for unsaved reader filters, pagination, sorting and time-grain changes; `dataset_export` streams every matching row to a managed local CSV. Do not expand rows per chart, send full observations in component configs, or launch an HTTP service. Inspect data versions, row counts and sizes with `dashboard_data_inspect`.
 
-This is the Dashboard generation track. Preserve the existing Gallery and `examples/` cases. For the local runtime, call `generation_examples` with `{"caseId":"executive-dashboard"}` or read `charts://examples/executive-dashboard`: it returns synthetic KPI/chart/table/filter declarations ready for an atomic patch. Read `charts://declarations` for chart contracts and `charts://contract` for mutation rules; create, patch with the latest revision, validate, then preview.
+This is the Dashboard generation track. Preserve the existing Gallery and `examples/` cases. For the local runtime, call `generation_examples` with `{"caseId":"executive-dashboard"}` or read `charts://examples/executive-dashboard`: it returns synthetic KPI/chart/table/filter declarations ready for an atomic patch. Read `charts://declarations` for chart contracts and `charts://contract` for mutation rules. Pass `projectRoot` on every project call; create, begin an edit batch, patch with the latest revision, finish the batch and resolve Doctor errors, then preview once. New interactive charts use registered original codes and explicit supported bindings; `chartType` authoring is rejected, with compatibility reading for historical generic charts.
 
 For Markdown-first analytical documents, use [analytical-reports](../analytical-reports/SKILL.md) and its approved academic master instead of composing a dashboard grid. Both tracks reuse existing chart definitions and source/data semantics.
 
@@ -103,14 +101,13 @@ Before authoring or revising metric explanations, read [metric-definitions.md](r
 - **Typed metrics:** Give every displayed number a semantic type, unit, scale and precision. Record source parsing outcomes explicitly.
 - **KPI comparisons:** Keep numeric comparisons numeric until formatting; use metric bindings for units and precision. Legacy display strings must include their actual direction (`+12.4%`, `-1%`); never guess a sign from an unsigned string. Zero and missing values stay neutral. Run strict validation and check positive, negative, zero, missing and filtered states. Preserve signs during recomputation and label YoY/MoM explicitly.
 - **Prototype data:** Start from the smallest explicit fixture that covers the required states and filter choices. Reuse one dataset for calculations and tables; do not expand every dimension combination or duplicate rows for each visualization. Label synthetic data. Inspect row counts and serialized response size before preview; never silently sample real business data or narrow required filter coverage.
-- **Preview failures:** Separate JSON serialization, MCP transport, frontend decoding and rendering. Record the failing response and error position when available. A smaller response or a successful server JSON parse does not prove the preview is repaired; verify the target preview or report that verification is pending.
 - **Dynamic filters:** Represent filters as an array of 0–N business dimensions. Use business field keys rather than industry aliases.
 - **Explicit filter scope:** Declare every consumed data field with `--field` and every affected component with `--consumer`. Strict validation confirms this field-to-consumer mapping.
 - **Stable component identity:** Component `id` is the runtime and DOM identity. Chart `code` selects the visual renderer and may repeat across independently identified instances.
 - **Business-owned data:** Final workspaces contain explicit user/business data. Use catalog and preset data for structural preview.
 - **Business-owned presentation:** Declare `presentation` metadata for axes, series, Tooltip values, units, complete `tableHeaders`, and renderer-specific domains, thresholds, or labels.
 - **Bounded context:** Use `inspect --json` for summaries and edit one component file at a time.
-- **Visual system:** Generate chart-code badges, explicit units, the restrained categorical palette, and 红涨绿跌 semantics: red (`positive`) for increases, green (`negative`) for decreases, and neither for status or series identity. Colors come from `scripts/core/palette.py`. Read [references/design_standards.md](references/design_standards.md) when changing visual behavior.
+- **Visual system:** Standalone HTML generators retain chart-code badges; Runtime titles omit them and use the package-root `docs/icon-header-and-bindings.md` contract for action placement and pagination. Generate explicit units, the restrained categorical palette, and 红涨绿跌 semantics: red (`positive`) for increases, green (`negative`) for decreases, and neither for status or series identity. Colors come from `scripts/core/palette.py`. Read [references/design_standards.md](references/design_standards.md) when changing visual behavior.
 
 Select codes from [references/chart_catalog.json](references/chart_catalog.json). Use its metadata for chart choice and CLI-generated previews for visual comparison. Final component markup follows the component JSON → shared renderer → Runtime pipeline.
 

@@ -19,6 +19,7 @@ export function resolveOriginal(doc,id,granularity='month'){
       const metric=metrics[mid],n=aggregate(rows,metric),scaled=n==null?null:n*(b.scale?.[target]??1);const shown=target==='percent'?rounded(scaled,metric):scaled;
       raw[target]=target==='percent'?shown:(['yoy','mom'].includes(target)?formatComparison(scaled,metric):format(scaled,metric));
     }
+    for(const [target,comparison] of Object.entries(b.comparisons||{})){const current=aggregate(rows,metrics[b.measures[comparison.current]]),baseline=aggregate(rows,metrics[b.measures[comparison.baseline]]);raw[target]=formatComparison(current!=null&&baseline!=null&&baseline!==0?(current-baseline)/baseline:null,{format:'percent',scale:'fraction',decimals:1,unit:''});}
     if(raw.type==='mc03'){
       const groups=new Map();for(const r of rows){const k=r[b.timeField];if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);}
       const keys=[...groups.keys()].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));

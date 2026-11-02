@@ -1,6 +1,6 @@
 import * as echarts from './echarts.mjs';
 import { GridStack } from 'gridstack';
-import { App } from '@modelcontextprotocol/ext-apps';
+import { HostApp as App } from './host-app.mjs';
 import 'gridstack/dist/gridstack.min.css';
 import '../dashboard_runtime/web/styles.css';
 import '../dashboard_runtime/web/icons.css';

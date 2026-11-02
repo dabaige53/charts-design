@@ -18,3 +18,17 @@ test('visible preview renews; hidden or closed preview stops; restored page resu
   dispose();assert.equal(timers.size,0);
   doc.dispatchEvent(new Event('visibilitychange'));assert.equal(calls,3);
 });
+
+test('host teardown stops refresh and keepalive before pagehide',async()=>{
+  const {viewLifetime}=await import('../../dashboard_runtime/web/lifecycle.mjs');
+  const doc=new EventTarget(),win=new EventTarget(),timers=new Map();let calls=0,id=0;
+  doc.visibilityState='visible';
+  win.setInterval=fn=>{timers.set(++id,fn);return id;};win.clearInterval=id=>timers.delete(id);
+  const lifetime=viewLifetime();
+  lifetime.add(whileVisible(()=>calls++,5000,doc,win));
+  lifetime.add(whileVisible(()=>calls++,20000,doc,win));
+  assert.equal(timers.size,2);
+  lifetime.dispose();assert.equal(timers.size,0);
+  doc.dispatchEvent(new Event('visibilitychange'));win.dispatchEvent(new Event('pageshow'));
+  assert.equal(calls,2);
+});

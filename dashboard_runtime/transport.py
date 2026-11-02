@@ -16,20 +16,22 @@ class ResultTransport:
             db.execute('CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, at REAL, request_id TEXT, tool TEXT, stage TEXT, code TEXT, bytes INTEGER)')
 
             columns = {row[1] for row in db.execute('PRAGMA table_info(events)')}
-            for name, kind in [('dashboard_id','TEXT'), ('duration_ms','REAL'), ('revision','INTEGER')]:
+            for name, kind in [('dashboard_id','TEXT'), ('duration_ms','REAL'), ('revision','INTEGER'), ('backend_build_id','TEXT'), ('cache_hits','INTEGER')]:
                 if name not in columns:
                     db.execute(f'ALTER TABLE events ADD COLUMN {name} {kind}')
 
-    def log(self, request_id, tool, stage, code='', size=0, dashboard_id=None, duration_ms=None, revision=None):
+    def log(self, request_id, tool, stage, code='', size=0, dashboard_id=None, duration_ms=None, revision=None, cache_hits=None):
+        from .build import BACKEND_BUILD_ID
         with sqlite3.connect(self.path) as db:
-            db.execute('INSERT INTO events(at,request_id,tool,stage,code,bytes,dashboard_id,duration_ms,revision) VALUES(?,?,?,?,?,?,?,?,?)', (time.time(), request_id, tool, stage, code, size, dashboard_id, duration_ms, revision))
+            db.execute('INSERT INTO events(at,request_id,tool,stage,code,bytes,dashboard_id,duration_ms,revision,backend_build_id,cache_hits) VALUES(?,?,?,?,?,?,?,?,?,?,?)', (time.time(), request_id, tool, stage, code, size, dashboard_id, duration_ms, revision, BACKEND_BUILD_ID, cache_hits))
             db.execute('DELETE FROM events WHERE id <= (SELECT coalesce(max(id),0)-2000 FROM events)')
 
     def pack(self, result, tool):
         request_id = result.get('requestId') or uuid.uuid4().hex
         board = result.get('dashboardId') or result.get('id') or result.get('document', {}).get('id')
+        started = time.perf_counter()
         raw = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
-        self.log(request_id, tool, 'serialized', size=len(raw), dashboard_id=board)
+        self.log(request_id, tool, 'serialized', size=len(raw), dashboard_id=board, duration_ms=(time.perf_counter()-started)*1000)
         if len(raw) <= 48000:
             return result
         encoded = base64.b64encode(raw).decode('ascii')

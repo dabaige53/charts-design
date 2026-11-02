@@ -7,8 +7,7 @@ and generates a clean, zero-mock DASHBOARD_CONFIG dictionary for dashboard_templ
 import csv
 import re
 import os
-import math
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 
 
 def clean_num(val_str: str) -> float:

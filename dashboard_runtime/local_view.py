@@ -97,12 +97,12 @@ class LocalView:
                 sort = [{'field': state['sortCol'], 'direction': state.get('sortDir', 'asc')}] if state.get('sortCol') else []
                 search = state.get('keyword', '')
                 require(isinstance(search, str) and len(search) <= 1000, 'Table search must contain at most 1000 characters')
-                request = self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search)
+                request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', [])) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
                 total = request['totalRows']
                 last_page = max(1, (total+size-1)//size)
                 if page > last_page:
                     page = last_page
-                    request = self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search)
+                    request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', [])) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
                 raw.update({'rows': request['rows'], 'columns': columns})
                 computed['tables'][key] = {'page': page, 'pageSize': size, 'totalRows': total, 'sortCol': state.get('sortCol'), 'sortDir': state.get('sortDir', 'asc'), 'keyword': search, 'durationMs': request['durationMs']}
                 computed['components'][key] = raw
@@ -136,6 +136,12 @@ class LocalView:
                             if name in raw:
                                 raw[name] = '—'
                         raw['subLabel'] = '当前筛选范围'
+                if binding:
+                    for target, comparison in binding.get('comparisons', {}).items():
+                        current = values[mids[comparison['current']]]
+                        baseline = values[mids[comparison['baseline']]]
+                        change = (current - baseline) / baseline if current is not None and baseline not in (None, 0) else None
+                        raw[target] = formatted(change, {'format': 'percent', 'scale': 'fraction', 'decimals': 1, 'unit': ''}, True)
                 time_field = binding.get('timeField') if binding else raw.get('timeField')
                 if raw.get('type') == 'mc03' and time_field:
                     mid = mids.get('value') if binding else c['measures'][0]

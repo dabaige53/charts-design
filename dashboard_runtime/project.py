@@ -2,11 +2,10 @@
 from pathlib import Path
 import copy
 import json
-import sqlite3
 import uuid
 from .store import Store
 from .local_data import LocalData
-from .model import apply_operations, validate, json_bytes, require, utcnow
+from .model import apply_operations, json_bytes, require, utcnow
 
 DEFAULTS = {'history': {'keepCheckpoints': 100}, 'loading': {'debounceMs': 150, 'maxConcurrent': 4, 'pageSize': 50}}
 
@@ -182,4 +181,5 @@ class ProjectStore(Store):
                     row=db.execute('SELECT document FROM boards WHERE id=? AND revision=?', (board, revision)).fetchone()
                 require(row is not None, 'Checkpoint not found')
                 documents.append(json.dumps(json.loads(row[0]), ensure_ascii=False, sort_keys=True, indent=2).splitlines())
-        return {'diff': '\n'.join(difflib.unified_diff(*documents, fromfile=str(first), tofile=str(second)))}
+        from .semantic_diff import semantic_diff
+        return {'diff': '\n'.join(difflib.unified_diff(*documents, fromfile=str(first), tofile=str(second))), 'semanticChanges': semantic_diff(*(json.loads('\n'.join(lines)) for lines in documents))}

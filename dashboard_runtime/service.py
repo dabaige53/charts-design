@@ -1,17 +1,21 @@
 """Transport-independent command service. Mutation arguments are always explicit."""
 from __future__ import annotations
 import copy
+import os
+from pathlib import Path
 import time
+from typing import Any
 from .model import DashboardError, apply_operations, identifier, inferred_fields, json_bytes, require, validate
 from .query import QueryRunner
 from .store import Store
 from .declarations import declaration_contract
 from .local_view import LocalView
+from .build import BACKEND_BUILD_ID, MODULE_ROOT
 
 class Service:
     def __init__(self, root, sources_file=None, project_root=None):
         from .project import ProjectStore
-        self.store = ProjectStore(project_root, root) if project_root else Store(root)
+        self.store: Any = ProjectStore(project_root, root) if project_root else Store(root)
         self.queries = QueryRunner(sources_file)
         self.project_root = project_root
         self.doctor_reports = {}
@@ -25,13 +29,16 @@ class Service:
         started = time.perf_counter()
         try:
             result = self._execute(tool, args)
-            if tool == 'dashboard_view':
+            if tool in ('dashboard_view', 'dashboard_filter_options'):
                 result['requestId'] = request_id
-                self.transport.log(request_id, tool, 'query_complete', dashboard_id=args.get('dashboardId'), duration_ms=(time.perf_counter()-started)*1000, revision=result.get('revision'))
+                if args.get('compactRecords'):
+                    from .wire import compact_records
+                    compact_records(result)
+                self.transport.log(request_id, tool, 'query_complete', dashboard_id=args.get('dashboardId'), duration_ms=(time.perf_counter()-started)*1000, revision=result.get('revision'), cache_hits=result.get('computed', {}).get('cacheHits'))
             return result
         except (DashboardError, ValueError, KeyError, OSError) as error:
             if isinstance(error, DashboardError):
-                error.request_id = request_id
+                setattr(error, 'request_id', request_id)
             self.transport.log(request_id, tool, 'failed', getattr(error, 'code', type(error).__name__), dashboard_id=args.get('dashboardId'), duration_ms=(time.perf_counter()-started)*1000)
             raise
 
@@ -45,6 +52,28 @@ class Service:
             doc['loading'] = self.store.config['loading']
             doc['progressive'] = True
             doc['computed'] = {'components': {}, 'tables': {}, 'grouped': {}, 'filterOptions': {}, 'filterPages': {}}
+            if tool in ('dashboard_preview', 'dashboard_refresh', 'dashboard_get'):
+                preload=set(doc['loading'].get('preloadFilterIds', []))
+                for f in doc['manifest']['filters']:
+                    if f['id'] in preload and f['op']=='in':
+                        import hashlib
+                        import json
+                        refs=doc['snapshot'].get('datasetRefs', {})
+                        definition=[f['field'], sorted({refs[doc['manifest']['components'][cid]['datasetId']]['version'] for cid in f['componentIds'] if doc['manifest']['components'][cid].get('datasetId') in refs})]
+                        cache_key=hashlib.sha256(json_bytes(definition)).hexdigest()
+                        cache_dir=self.transport.path.parent/'filter-options'
+                        cache_dir.mkdir(exist_ok=True)
+                        cache_file=cache_dir/(cache_key+'.json')
+                        try:
+                            page=json.loads(cache_file.read_text())
+                        except (FileNotFoundError, json.JSONDecodeError):
+                            page=self.views.filter_options(doc,f['id'],limit=100)
+                            import uuid
+                            temporary=cache_dir/(cache_key+'.'+uuid.uuid4().hex+'.tmp')
+                            temporary.write_text(json.dumps(page,ensure_ascii=False))
+                            temporary.replace(cache_file)
+                        doc['computed']['filterPages'][f['id']]=page
+                        doc['computed']['filterOptions'][f['id']]=page['values']
             return result
         if "document" in result:
             from .statistical import statistical_artifacts
@@ -77,8 +106,10 @@ class Service:
             request_id = args.get('requestId', '')
             code = args.get('code', 'CLIENT_DECODE_FAILED')
             require(isinstance(request_id, str) and len(request_id) <= 64, 'Invalid request ID')
-            require(code in ('CLIENT_DECODE_FAILED', 'CHUNK_MISMATCH', 'RESULT_EXPIRED','CLIENT_RENDER_FAILED','CLIENT_DATA_APPLIED'), 'Invalid diagnostic code')
-            self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'))
+            require(code in ('CLIENT_DECODE_FAILED', 'CHUNK_MISMATCH', 'RESULT_EXPIRED','CLIENT_RENDER_FAILED','CLIENT_DATA_APPLIED','CLIENT_DECODE_COMPLETE','CLIENT_FRAME_READY'), 'Invalid diagnostic code')
+            duration = args.get('durationMs')
+            require(duration is None or (type(duration) in (int, float) and 0 <= duration <= 3600000), 'Invalid duration')
+            self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
         if tool == 'dashboard_version_label':
@@ -100,12 +131,17 @@ class Service:
             report = self._call('dashboard_doctor', {'dashboardId': board, 'mode': 'full'})
             if not report['passed']:
                 return {'ok': False, 'doctor': report}
+            from .semantic_diff import semantic_diff
+            changes = semantic_diff(self.store.readable(board), self.store.get(board, hydrate=False))
             checkpoint = self.store.checkpoint(board, args['expectedRevision'], args.get('name', ''), args.get('published', False), args.get('batchId'))
-            return {'ok': True, 'checkpoint': checkpoint, 'doctor': report, 'nextAction': 'dashboard_preview', 'displayPolicy': 'once-after-finish'}
+            return {'ok': True, 'checkpoint': checkpoint, 'doctor': report, 'semanticChanges': changes, 'nextAction': 'dashboard_preview', 'displayPolicy': 'once-after-finish'}
         if tool == 'runtime_info':
             from .assets import ui_build_id
             from . import __version__
-            return {'version': __version__, 'uiBuildId': ui_build_id(),
+            return {'version': __version__, 'uiBuildId': ui_build_id(), 'backendBuildId': BACKEND_BUILD_ID, 'moduleRoot': MODULE_ROOT,
+                    'processId': os.getpid(), 'parentProcessId': os.getppid(),
+                    'projectRoot': str(Path(self.project_root).resolve()) if self.project_root else None,
+                    'runtimeRoot': str(Path(getattr(self.store, 'runtime_root', self.store.root)).resolve()),
                     'dashboardRevision': (self.store.display_revision(board) if self.project_root else self.store.revision(board)) if board else None}
         if tool == 'dashboard_refresh':
             doc = self.store.readable(board) if self.project_root else self.store.get(board, hydrate=False)
@@ -141,6 +177,9 @@ class Service:
         if tool == 'dashboard_export_open':
             from .exports import open_export
             return open_export(self.store.root, board, args.get('exportId'), args.get('format'), args.get('action'))
+        if tool == 'dashboard_export_site':
+            from .deployment import export_site
+            return export_site(self.store, board)
         if tool == 'dashboard_export':
             from .exports import export_dashboard
             doc = self.store.compact(self.store.get(board, hydrate=False))
@@ -235,7 +274,11 @@ class Service:
             export_dir = self.store.root / 'exports'
             export_dir.mkdir(mode=0o700, exist_ok=True)
             path = export_dir / (str(board) + '-' + uuid.uuid4().hex + '.csv')
-            return {'export': self.store.data.export_csv(ref, path, active, args.get('columns'), args.get('sort'), search=args.get('search', ''))}
+            presentation = component.get('presentation', {}) if component else {}
+            columns = args.get('columns')
+            if presentation.get('groupBy') and columns is None:
+                columns = [col['key'] for col in presentation['columns']]
+            return {'export': self.store.data.export_csv(ref, path, active, columns, args.get('sort'), search=args.get('search', ''), group_by=presentation.get('groupBy'), sum_fields=presentation.get('sumFields'))}
         if tool == 'dashboard_create':
             if args.get('document'):
                 require(not any(c.get('kind') == 'chart' for c in args['document'].get('manifest', {}).get('components', {}).values()), 'New charts must use the original 40 codes (kind=legacy, family=chart)', 'UNSUPPORTED_CHART_FAMILY')
@@ -274,7 +317,7 @@ class Service:
             if not report and cache.exists():
                 import json
                 report = json.loads(cache.read_text())
-            if (report.get('revision'), report.get('dataVersion'), report.get('uiBuildId')) != (doc['revision'], data_version(doc), ui_build_id()):
+            if (report.get('revision'), report.get('dataVersion'), report.get('uiBuildId'), report.get('backendBuildId')) != (doc['revision'], data_version(doc), ui_build_id(), BACKEND_BUILD_ID):
                 report = self._call('dashboard_doctor', {'dashboardId': board, 'mode': 'quick'})
             require(report['passed'], 'Doctor failed; query dashboard_doctor for component diagnostics', 'DOCTOR_FAILED')
             return {'document': doc, 'doctor': report}
@@ -294,7 +337,9 @@ class Service:
                     require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'New charts must use the original 40 codes', 'UNSUPPORTED_CHART_FAMILY')
                 if isinstance(op, dict) and op.get('op') == 'put_source' and isinstance(op.get('value'), dict):
                     op['value']['verification'] = 'supplied'
-            return {'document': self.store.mutate(board, args.get('expectedRevision'), ops)}
+            updated = self.store.mutate(board, args.get('expectedRevision'), ops)
+            from .semantic_diff import semantic_diff
+            return {'document': updated, 'semanticChanges': semantic_diff(current, updated)}
         if tool == 'dashboard_history':
             return {'history': self.store.history(board, args.get('offset', 0), args.get('limit', 50)) if self.project_root else self.store.history(board)}
         if tool == 'dashboard_restore':
@@ -348,7 +393,9 @@ class Service:
                 mid = 'metric-' + uuid.uuid5(uuid.NAMESPACE_URL, ds + ':' + key).hex[:20]
                 if info['type'] == 'number' and mid not in doc['manifest']['metrics']:
                     ops.append({'op': 'put_metric', 'id': mid, 'value': {'datasetId': ds, 'field': key, 'aggregation': 'sum', 'label': key, 'unit': '', 'definition': f'业务定义待确认：字段「{key}」的业务对象、记录粒度、纳入与排除条件尚未说明。当前配置仅对该字段求和。', 'status': 'unverified'}})
-            return {'document': self.store.mutate(board, args.get('expectedRevision'), ops)}
+            updated = self.store.mutate(board, args.get('expectedRevision'), ops)
+            from .semantic_diff import semantic_diff
+            return {'document': updated, 'semanticChanges': semantic_diff(doc, updated)}
         if tool == 'query_execute':
             doc = self.store.get(board)
             require(doc['revision'] == args.get('expectedRevision'), 'Reload before running a query', 'REVISION_CONFLICT')
@@ -446,3 +493,11 @@ TOOLS['runtime_report_error'][1]['properties'].update({'dashboardId':STR,'revisi
 TOOLS['runtime_report_error'][1]['properties']['code']['enum'].extend(['CLIENT_RENDER_FAILED','CLIENT_DATA_APPLIED'])
 
 TOOLS['dashboard_version_label'] = ('Name or protect an existing checkpoint without creating a new design revision', schema({**BOARD,'expectedRevision':INT,'revision':INT,'name':STR,'published':{'type':'boolean'}}, ('dashboardId','expectedRevision','revision')))
+
+TOOLS['runtime_report_error'][1]['properties']['durationMs'] = {'type': 'number', 'minimum': 0, 'maximum': 3600000}
+TOOLS['runtime_report_error'][1]['properties']['code']['enum'].extend(['CLIENT_DECODE_COMPLETE','CLIENT_FRAME_READY'])
+
+TOOLS['dashboard_view'][1]['properties']['compactRecords'] = {'type': 'boolean'}
+
+TOOLS['dashboard_export_site'] = ('Generate a standalone static website, complete attached data, and rebuildable JavaScript source ZIP in the project. No hosting upload. Returns file paths only.', schema({**BOARD}, ('dashboardId',)))
+READ_ONLY.add('dashboard_export_site')
