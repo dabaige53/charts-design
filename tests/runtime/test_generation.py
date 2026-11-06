@@ -3,6 +3,7 @@ from dashboard_runtime.generation import generation_examples
 from dashboard_runtime.model import DashboardError, new_document, apply_operations, validate
 from dashboard_runtime.service import Service, READ_ONLY
 
+# @wu-test type=integration | scope=生成案例 | protects=案例无法从空文档生成看板报告
 @pytest.mark.parametrize('case_id,mode',[('executive-dashboard','dashboard'),('academic-report','report')])
 def test_case_generates_from_blank(case_id,mode):
     case=generation_examples(case_id)
@@ -29,6 +30,7 @@ def test_case_generates_from_blank(case_id,mode):
     case['operations'].clear()
     assert generation_examples(case_id)['operations']
 
+# @wu-test type=boundary | scope=案例发现 | protects=读取案例创建看板或接受路径穿越
 def test_case_discovery_read_only(tmp_path):
     service=Service(tmp_path)
     assert len(service.call('generation_examples',{})['cases'])==2
@@ -38,6 +40,7 @@ def test_case_discovery_read_only(tmp_path):
         generation_examples('../other')
 
 
+# @wu-test type=integration | scope=示例绑定 | protects=多筛选下图表KPI未重算
 def test_executive_binding_recomputes_data_after_combined_filters():
     import json
     from pathlib import Path

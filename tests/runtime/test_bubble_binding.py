@@ -17,6 +17,7 @@ def bubble():
                         'measures': {'x': 'rate', 'y': 'amount', 'size': 'count'}, 'scale': {'x': 100}}}
 
 
+# @wu-test type=integration | scope=气泡绑定筛选 | protects=筛选后气泡指标或明细范围错误
 def test_bubble_recomputes_scoped_metrics_in_local_view(tmp_path):
     service = Service(tmp_path)
     service.call('dashboard_create', {'dashboardId': 'bubble', 'title': 'Bubble'})

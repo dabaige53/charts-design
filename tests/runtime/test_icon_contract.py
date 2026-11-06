@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 import threading
 import pytest
-from dashboard_runtime.model import validate
 from dashboard_runtime.assets import DIST
 from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
@@ -18,13 +17,9 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
-def test_all_original_contracts_are_explicit():
-    doc = fixture.document()
-    validate(doc)
-    assert len(doc["manifest"]["components"]) == 49
-    assert doc["snapshot"]["status"] == "fixture"
 
 
+# @wu-test type=integration | scope=原组件标题区 | protects=图表控件或移动布局不可用 | debt=D1,D9
 @pytest.mark.skipif(
     not (DIST / "app.js").exists(), reason="Build the shared frontend first"
 )

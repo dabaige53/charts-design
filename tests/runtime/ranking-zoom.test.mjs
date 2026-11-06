@@ -10,6 +10,7 @@ Reflect.deleteProperty(globalThis,'window');
 const builder=api.builders.c02;
 
 for(const [code,count,visible]of [['c01',100,12],['t01',100,24]]){
+  // @wu-test type=integration | scope=chart windowing | protects=图表窗口丢分类或无法回到首项
   test(`${code} keeps a bounded window without discarding categories`,()=>{
     const labels=Array.from({length:count},(_,i)=>`Period ${i}`),values=Array.from({length:count},(_,i)=>count-i);
     const data=code==='c01'?{categories:labels,values}:{months:labels,rpk:values};
@@ -27,6 +28,7 @@ for(const [code,count,visible]of [['c01',100,12],['t01',100,24]]){
   });
 }
 
+// @wu-test type=integration | scope=ranking chart window | protects=大排行末项不可达或导出被截断
 test('large rankings render a readable window and can reach the last category',()=>{
   const data={categories:Array.from({length:1000},(_,i)=>`Channel ${i}`),values:Array.from({length:1000},(_,i)=>1000-i)};
   const before=structuredClone(data);
@@ -52,6 +54,7 @@ test('large rankings render a readable window and can reach the last category',(
   }finally{chart.dispose();}
 });
 
+// @wu-test type=behavior | scope=ranking zoom | protects=小数据集显示多余滑块或丢行
 test('small or filtered rankings show all remaining rows without a redundant slider',()=>{
   for(const count of [0,1,12]){
     const data={categories:Array.from({length:count},(_,i)=>`Channel ${i}`),values:Array(count).fill(1)};

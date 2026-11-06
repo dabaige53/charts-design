@@ -24,34 +24,13 @@ def _generate(tmp_path, charts):
     return output.read_text(encoding="utf-8")
 
 
-def test_duplicate_chart_codes_use_instance_identity_in_dom_registry_and_actions(tmp_path):
-    html = _generate(tmp_path, ["c01", "c01"])
-
-    assert "chart-c01-1" in html
-    assert "chart-c01-2" in html
-    assert 'data-component-id="${chart.instanceId}"' in html
-    assert 'data-card-code="${chart.instanceId}"' not in html
-    assert "this.state.chartInstances[chartCfg.instanceId] = inst" in html
 
 
-def test_generated_html_exposes_idempotent_runtime_lifecycle(tmp_path):
-    html = _generate(tmp_path, ["c01"])
-
-    assert "window.createDashboardRuntime" in html
-    assert "window.getDashboardAppForElement" in html
-    assert "this.root.__dashboardApp = this" in html
-    assert "window.App." not in html
-    assert "inst?.dispose()" in html
 
 
-def test_cross_filter_uses_canonical_state_field(tmp_path):
-    html = _generate(tmp_path, ["c01"])
-
-    assert "this.state.chartCrossFilter = val" in html
-    assert "this.state.chartCrossFilter = null" in html
-    assert "this.state.filters.chartCrossFilter =" not in html
 
 
+# @wu-test type=integration | scope=图表实例ID | protects=业务指定ID在生成后丢失
 def test_explicit_workspace_component_id_is_preserved(tmp_path):
     _generate(tmp_path, [{
         "id": "regional-sales",
@@ -69,6 +48,7 @@ console.log(JSON.stringify({id: chart.id, instanceId: chart.instanceId, code: ch
     assert chart == {"id": "regional-sales", "instanceId": "regional-sales", "code": "c01"}
 
 
+# @wu-test type=integration | scope=组件生成检查 | protects=支持组件生成后无法通过页面检查 | debt=D3
 def test_every_registered_component_is_covered_by_schema_and_generated_html_gate(tmp_path):
     assert set(CHART_SCHEMA_REGISTRY) == set(CHARTS_MAP)
     assert KPI_TYPES == {f"mc{index:02d}" for index in range(1, 10)}

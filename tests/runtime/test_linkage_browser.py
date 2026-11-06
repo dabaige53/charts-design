@@ -21,6 +21,7 @@ def unbound_goal_document():
     ])
 
 
+# @wu-test type=integration | scope=图表联动 | protects=联动筛错明细误影响未绑定组件或写入看板
 def test_chart_click_links_compatible_components_and_blurs_the_rest(tmp_path):
     service = Service(tmp_path / "state")
     before = service.store.create("link", "Link", unbound_goal_document())

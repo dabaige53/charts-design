@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequestQueue} from '../../dashboard_runtime/web/request-queue.mjs';
 import {expandRecords} from '../../dashboard_runtime/web/tool-result.mjs';
+// @wu-test type=behavior | scope=request queue | protects=并发超限或失败后队列阻塞 | debt=D9
 test('one budget bounds multiple callers and failures release slots',async()=>{
  const queue=createRequestQueue(4);let active=0,peak=0;
  const results=await Promise.allSettled(Array.from({length:20},(_,i)=>queue(async()=>{
@@ -9,6 +10,7 @@ test('one budget bounds multiple callers and failures release slots',async()=>{
  })));
  assert.equal(peak,4);assert.equal(results.filter(r=>r.status==='fulfilled').length,19);
 });
+// @wu-test type=behavior | scope=packed records decoding | protects=展开记录丢失Unicode零或null
 test('column records preserve Unicode, zero, null and negative values',()=>{
  const value={computed:{components:{a:{data:{packedRecords:{keys:['value','label'],rows:[['西安','HO',0,null],['😀',null,-2,'机场']]}}}}}};
  const rows=expandRecords(value).computed.components.a.data.records;

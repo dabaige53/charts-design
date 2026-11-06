@@ -10,6 +10,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=看板拖动布局 | protects=拖动改变组件尺寸或布局未保存
 @pytest.mark.parametrize("grab", ["icon-center", "button-edge", "touch-center"])
 def test_drag_handle_moves_and_saves_without_resizing(tmp_path, grab):
     service = Service(tmp_path / "state")
@@ -87,6 +88,7 @@ def test_drag_handle_moves_and_saves_without_resizing(tmp_path, grab):
         thread.join()
 
 
+# @wu-test type=integration | scope=并发拖动保存 | protects=首笔保存完成中断正在进行的第二次拖动
 def test_second_drag_survives_inflight_layout_save(tmp_path):
     """A slow save must not rebuild the grid under a drag that is already in progress."""
     service = Service(tmp_path / "state")

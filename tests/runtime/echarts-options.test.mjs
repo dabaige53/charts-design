@@ -9,6 +9,7 @@ Object.defineProperty(globalThis,'window',{value:{},configurable:true});
 const api=createOriginalComponents(echarts,()=>{});
 Reflect.deleteProperty(globalThis,'window');
 
+// @wu-test type=behavior | scope=ECharts option merging | protects=覆盖配置丢失原数据或函数
 test('native overrides preserve preset data/functions and accept extra fields',()=>{
   const formatter=value=>String(value),preset={tooltip:{formatter},series:[{id:'bars',type:'bar',data:[1,2],label:{show:false,color:'#123B5D'}},{id:'line',type:'line',data:[3,4]}],xAxis:{type:'category',data:['A','B']}};
   const override={series:[{id:'line',lineStyle:{width:4}}],xAxis:[{axisLabel:{rotate:30}}],futureComponent:{nested:[1,2]},color:['#123B5D']};
@@ -31,6 +32,7 @@ function render(option,check){
   try{chart.setOption({...option,animation:false});check(chart,chart.renderToSVGString());}finally{chart.dispose();}
 }
 
+// @wu-test type=integration | scope=ECharts rendering | protects=原生颜色标签或坐标配置不生效
 test('column preset renders native colors, labels and axis options',()=>{
   const cfg={...api.builders.c01,data:{categories:['A','B'],values:[12,8]}};
   const preset=cfg.optionBuilder(cfg.data,'month',api.TOKENS,cfg);
@@ -44,6 +46,7 @@ test('column preset renders native colors, labels and axis options',()=>{
   });
 });
 
+// @wu-test type=integration | scope=ECharts visualMap | protects=筛选后类别颜色变化
 test('bubble visualMap category colors stay stable after filtering',()=>{
   const cfg={...api.builders.r02,data:{clusters:[[1,2,10,'Agent A'],[3,4,20,'Agent B']]}};
   const override={series:[{itemStyle:{color:null}}],visualMap:{type:'piecewise',dimension:3,categories:['Agent A','Agent B'],inRange:{color:['#123B5D','#A17B45']}}};
@@ -57,6 +60,7 @@ test('bubble visualMap category colors stay stable after filtering',()=>{
   }
 });
 
+// @wu-test type=integration | scope=ECharts runtime bundle | protects=自定义图形或brush在实际渲染中不可用
 test('full runtime registers native custom rendering and brush modules',()=>{
   render({xAxis:{},yAxis:{},brush:{toolbox:['rect'],xAxisIndex:0},series:[{type:'custom',data:[[1,2]],renderItem:()=>({type:'rect',shape:{x:30,y:30,width:40,height:20},style:{fill:'#A17B45'}})}]},(chart,svg)=>{
     assert.equal(chart.getModel().getSeriesByIndex(0).subType,'custom');
@@ -65,6 +69,7 @@ test('full runtime registers native custom rendering and brush modules',()=>{
   });
 });
 
+// @wu-test type=integration | scope=binding ECharts options | protects=覆盖配置替换筛选计算数据
 test('bound recomputation retains option overrides without replacing computed values',()=>{
   const doc={manifest:{components:{bar:{kind:'legacy',family:'chart',datasetId:'facts',config:{code:'c01',data:{categories:['old'],values:[999]},echarts:{series:[{label:{show:false}}]}},binding:{datasetId:'facts',categoryField:'region',categoryTarget:'categories',measures:{values:'amount'}}}},metrics:{amount:{aggregation:'sum',field:'amount'}},filters:[{field:'region',op:'in',values:['A'],componentIds:['bar']}]},snapshot:{datasets:{facts:[{region:'A',amount:12},{region:'B',amount:8}]}}};
   const raw=resolveOriginal(doc,'bar'),builder=api.builders.c01;

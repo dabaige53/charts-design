@@ -22,6 +22,7 @@ def retail_document():
     return apply_operations(new_document('retail', 'Synthetic retail'), ops)
 
 
+# @wu-test type=integration | scope=动态系列图表联动 | protects=筛选点击图表后系列和明细不一致 | debt=D6
 def test_dynamic_encoding_browser(tmp_path):
     from playwright.sync_api import sync_playwright
     service = Service(tmp_path / 'state')

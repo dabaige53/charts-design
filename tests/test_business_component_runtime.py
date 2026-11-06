@@ -33,6 +33,7 @@ def run_runtime(scenario):
     return json.loads(result.stdout)
 
 
+# @wu-test type=behavior | scope=KPI渲染 | protects=零值被替换为示例业务数值
 def test_kpi_zero_and_missing_values_never_use_business_samples():
     result = run_runtime("""
 const container = {innerHTML: '', children: []};
@@ -76,6 +77,7 @@ def bound_config():
     }
 
 
+# @wu-test type=integration | scope=筛选KPI图表导出 | protects=筛选后各组件数据不一致
 def test_filter_recomputes_scoped_kpi_chart_and_export_data_then_restores():
     config = bound_config()
     result = run_runtime(f"const config = {json.dumps(config)};" + """
@@ -111,6 +113,7 @@ console.log(JSON.stringify(result));
     assert result[1]['table']['rows'] == []
 
 
+# @wu-test type=boundary | scope=筛选绑定校验 | protects=无法解析的字段组件或聚合进入配置
 @pytest.mark.parametrize('mutation,code', [
     (lambda c: c['filters'][0].update(fields=['missing']), 'FILTER_FIELD_UNKNOWN'),
     (lambda c: c['filters'][0].update(componentIds=['missing']), 'FILTER_CONSUMER_UNKNOWN'),
@@ -125,10 +128,12 @@ def test_strict_filter_validation_rejects_unresolvable_bindings(mutation, code):
     assert code in {error['code'] for error in errors}
 
 
+# @wu-test type=behavior | scope=筛选绑定校验 | protects=完整有效绑定被拒绝
 def test_complete_binding_is_accepted():
     assert validate_resolved(bound_config(), strict=True)[0] == []
 
 
+# @wu-test type=boundary | scope=KPI比较值校验 | protects=含糊或无效比较值进入展示
 @pytest.mark.parametrize('value', ['12.4%', '1%', '1.2.3%', float('nan'), True, {}])
 def test_strict_kpi_rejects_ambiguous_comparisons(value):
     config = bound_config()
@@ -137,6 +142,7 @@ def test_strict_kpi_rejects_ambiguous_comparisons(value):
     assert any(e['code'] == 'KPI_COMPARISON_INVALID' and e['path'] == 'kpis[0].yoy' for e in errors)
 
 
+# @wu-test type=boundary | scope=KPI比较值校验 | protects=有效数字带符号值和空值被拒绝
 @pytest.mark.parametrize('value', [12.4, -1, 0, '+12.4%', '-1%', '0%', None, '—', '持平'])
 def test_strict_kpi_accepts_numeric_signed_and_empty_comparisons(value):
     config = bound_config()
@@ -144,6 +150,7 @@ def test_strict_kpi_accepts_numeric_signed_and_empty_comparisons(value):
     assert validate_resolved(config, strict=True)[0] == []
 
 
+# @wu-test type=behavior | scope=组件筛选范围 | protects=组件受到未声明筛选器影响
 def test_each_component_uses_only_its_declared_filters():
     config = bound_config()
     config['filters'].append({'id': 'channel', 'key': 'channel', 'type': 'multi-select',
@@ -164,6 +171,7 @@ console.log(JSON.stringify({kpi: app.getFilteredTableRows('revenue'),
     assert result['chart'] == result['table'] == []
 
 
+# @wu-test type=boundary | scope=KPI配置校验 | protects=缺少视觉数据的专用KPI被接受
 @pytest.mark.parametrize('card_type', ['mc03', 'mc06', 'mc09'])
 def test_specialized_kpis_require_their_visual_data(card_type):
     config = bound_config()
@@ -174,6 +182,7 @@ def test_specialized_kpis_require_their_visual_data(card_type):
     assert any(error['code'] == 'KPI_PRESENTATION_INVALID' for error in errors)
 
 
+# @wu-test type=behavior | scope=趋势卡渲染 | protects=缺数据时展示虚构趋势
 def test_sparkline_has_no_fallback_series():
     result = run_runtime("""
 const app = Object.create(DashboardApp.prototype);
@@ -185,6 +194,7 @@ console.log(JSON.stringify(widgetOptions));
     assert result == []
 
 
+# @wu-test type=behavior | scope=筛选匹配 | protects=east错误匹配southeast
 def test_declared_filters_match_exact_values_even_when_all_options_are_selected():
     config = bound_config()
     config['table']['rows'].append({'region': 'southeast', 'sales': 50})
@@ -199,6 +209,7 @@ console.log(JSON.stringify({multi: multi.map(r => r.region), single: app.getFilt
     assert result == {'multi': ['east', 'south'], 'single': ['east']}
 
 
+# @wu-test type=behavior | scope=多实例配置 | protects=一个实例筛选后污染其他实例或输入
 def test_two_runtimes_do_not_mutate_the_shared_input_config():
     config = bound_config()
     result = run_runtime(f"const config = {json.dumps(config)};" + """
@@ -213,6 +224,7 @@ console.log(JSON.stringify([left.config.kpis[0].value, right.config.kpis[0].valu
     assert result == ['128 万元', '224 万元', '224 万元']
 
 
+# @wu-test type=behavior | scope=KPI聚合 | protects=聚合值精度或空结果错误
 @pytest.mark.parametrize('aggregate,expected', [('sum', '224.0 万元'), ('mean', '112.0 万元'),
                                                ('min', '96.0 万元'), ('max', '128.0 万元'), ('count', '2.0 条')])
 def test_aggregation_and_precision(aggregate, expected):

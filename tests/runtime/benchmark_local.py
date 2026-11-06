@@ -98,6 +98,7 @@ def assert_compact(response, count, page_size=10):
     assert len(json.dumps(response).encode()) < 100_000
 
 
+# @wu-test type=integration | scope=本地数据查询导出 | protects=大数据查询分页或完整导出结果错误 | debt=D6,D10,D11
 def run_benchmark(root, count):
     root = Path(root)
     service, source, imported, configured, import_ms = attach(root, count)

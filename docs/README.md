@@ -42,6 +42,7 @@
 - [迭代复盘](retro-20261028.md)：2026-10-28 的改进原因、待办和性能结论。
 - [MCP 优化交付](mcp-improvements-20261028.md)：后续实现、传输体积与安装验收记录。
 - [性能原始记录](performance-results.json)：2026-10-20 的环境、测量、验证与限制。
+- [测试清剿记录](records/test-purge-20261106.md)：2026-11-06 的逐用例处置、附属资产清理和局部验证。
 - [零售验收截图](images/dynamic-encoding-retail.png)与[虚拟看板截图](images/transfer-prototype-validation.png)：配套历史附件。
 
 已有记录原位保留。新任务的方案和单次验收证据按文件管理规则存放，不覆盖旧记录中的历史事实。

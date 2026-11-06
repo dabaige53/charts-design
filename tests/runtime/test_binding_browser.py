@@ -18,6 +18,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
+# @wu-test type=integration | scope=原版组件筛选与表格配置 | protects=筛选结果不一致或列配置未保存 | debt=D1,D9
 @pytest.mark.skipif(
     not (DIST / "app.js").exists(), reason="Build shared frontend first"
 )

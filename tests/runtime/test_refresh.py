@@ -9,6 +9,7 @@ from dashboard_runtime.demo import document
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=看板刷新 | protects=旧筛选定义或读者选择被保存
 def test_refresh_uses_latest_filter_labels_without_saving_reader_values(tmp_path):
     service = Service(tmp_path)
     doc = service.store.create('refresh', 'Refresh', document())
@@ -30,6 +31,7 @@ def test_refresh_uses_latest_filter_labels_without_saving_reader_values(tmp_path
     assert len(info['uiBuildId']) == 12
 
 
+# @wu-test type=boundary | scope=刷新筛选 | protects=非法ID或单选多值进入刷新
 def test_refresh_rejects_invalid_single_selection_and_malformed_ids(tmp_path):
     service = Service(tmp_path)
     doc = document()

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {whileVisible} from '../../dashboard_runtime/web/lifecycle.mjs';
 
+// @wu-test type=behavior | scope=preview lifecycle | protects=隐藏页继续续期或恢复后不续期
 test('visible preview renews; hidden or closed preview stops; restored page resumes',()=>{
   const doc=new EventTarget(),win=new EventTarget(),timers=new Map();let next=0,calls=0;
   doc.visibilityState='visible';
@@ -19,6 +20,7 @@ test('visible preview renews; hidden or closed preview stops; restored page resu
   doc.dispatchEvent(new Event('visibilitychange'));assert.equal(calls,3);
 });
 
+// @wu-test type=behavior | scope=host lifetime | protects=宿主销毁后继续刷新和保活
 test('host teardown stops refresh and keepalive before pagehide',async()=>{
   const {viewLifetime}=await import('../../dashboard_runtime/web/lifecycle.mjs');
   const doc=new EventTarget(),win=new EventTarget(),timers=new Map();let calls=0,id=0;

@@ -6,6 +6,7 @@ from dashboard_runtime.exports import open_export
 from dashboard_runtime.model import DashboardError
 
 
+# @wu-test type=boundary | scope=导出文件打开 | protects=非托管路径或非法动作被打开 | debt=D6
 def test_open_only_a_managed_export(tmp_path):
     export_id = 'a' * 32
     file = tmp_path / 'exports' / export_id / 'board.pdf'
@@ -24,6 +25,7 @@ def test_open_only_a_managed_export(tmp_path):
         run.assert_not_called()
 
 
+# @wu-test type=boundary | scope=导出路径 | protects=符号链接绕过导出目录限制
 def test_symlink_cannot_escape_export_directory(tmp_path):
     outside = tmp_path / 'private'
     outside.mkdir()
@@ -36,6 +38,7 @@ def test_symlink_cannot_escape_export_directory(tmp_path):
     run.assert_not_called()
 
 
+# @wu-test type=integration | scope=报告PDF | protects=导出包含未引用私有表格
 def test_report_pdf_contains_only_referenced_tables(tmp_path):
     import copy
     import subprocess

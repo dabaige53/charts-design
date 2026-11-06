@@ -4,6 +4,7 @@ import pytest
 from dashboard_runtime.transport import ResultTransport
 from dashboard_runtime.model import DashboardError
 
+# @wu-test type=integration | scope=大响应传输 | protects=Unicode分块损坏或日志泄数据
 def test_large_unicode_response_and_metadata_logs(tmp_path):
     transport = ResultTransport(tmp_path)
     original = {'document': {'title': '真实数据', 'rows': ['机场😀"\\\n'] * 70000}}
@@ -20,6 +21,7 @@ def test_large_unicode_response_and_metadata_logs(tmp_path):
         transport.chunk({'requestId': 'missing', 'index': 0})
 
 
+# @wu-test type=integration | scope=响应缓存 | protects=其他预览worker重启丢未读块
 def test_response_survives_worker_restart_and_other_previews(tmp_path):
     producer = ResultTransport(tmp_path)
     original = {'rows': ['跨进程真实数据'] * 20000}
@@ -31,6 +33,7 @@ def test_response_survives_worker_restart_and_other_previews(tmp_path):
     assert json.loads(base64.b64decode(''.join(parts))) == original
 
 
+# @wu-test type=behavior | scope=分块过期 | protects=过期请求未报明确错误 | debt=D6
 def test_expired_response_is_logged(tmp_path):
     import sqlite3
     transport = ResultTransport(tmp_path)

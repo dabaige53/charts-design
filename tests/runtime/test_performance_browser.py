@@ -9,6 +9,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=报告正文图表更新 | protects=修改正文图注后图表状态丢失 | debt=D6
 @pytest.mark.parametrize('shared_styles', [True, False])
 def test_prose_and_changed_references_reuse_compatible_charts(tmp_path, shared_styles):
     service = Service(tmp_path)

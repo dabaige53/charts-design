@@ -34,6 +34,7 @@ console.log(JSON.stringify(app.getFilteredTableRows().length));
 """)
 
 
+# @wu-test type=integration | scope=预设筛选 | protects=初始筛选错误隐藏表格行
 @pytest.mark.parametrize("preset", sorted(PRESET_CONFIGS))
 def test_preset_filters_bind_table_columns_and_start_with_every_row(tmp_path, preset):
     filters, table = built_config(tmp_path, preset_name=preset)
@@ -46,12 +47,14 @@ def test_preset_filters_bind_table_columns_and_start_with_every_row(tmp_path, pr
     assert initial_row_count(filters, table) == len(table["rows"])
 
 
+# @wu-test type=behavior | scope=自定义表格筛选 | protects=缺字段的预设筛选继续出现
 def test_preset_dimensions_missing_from_a_custom_table_are_dropped(tmp_path):
     table = {"columns": [{"key": "region", "title": "区域"}], "rows": [{"region": "华东"}]}
     filters, _ = built_config(tmp_path, preset_name="executive_report", config_dict={"table": table})
     assert filters == []
 
 
+# @wu-test type=integration | scope=旧筛选转换 | protects=旧筛选绑定错误列或隐藏数据
 def test_legacy_object_filters_bind_to_the_column_holding_their_values():
     legacy = {
         "labels": {"time": "周期", "hub": "枢纽", "fleet": "机型"},
@@ -67,6 +70,7 @@ def test_legacy_object_filters_bind_to_the_column_holding_their_values():
     assert initial_row_count(filters, table) == 2
 
 
+# @wu-test type=integration | scope=表格CSV | protects=数值零被当作空值丢失
 def test_table_cells_and_csv_keep_zero_values():
     table = {"title": "明细", "columns": [{"key": "name", "title": "门店"}, {"key": "sales", "title": "销售额", "align": "right"},
                                           {"key": "note", "title": "备注"}],

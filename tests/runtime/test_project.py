@@ -1,6 +1,7 @@
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=项目草稿检查点 | protects=编辑恢复删除运行缓存后丢批注
 def test_drafts_checkpoints_notes_and_runtime_removal(tmp_path):
     project, runtime = tmp_path/'project', tmp_path/'runtime'
     service = Service(runtime, project_root=project)
@@ -28,6 +29,7 @@ def test_drafts_checkpoints_notes_and_runtime_removal(tmp_path):
     assert not (runtime/'data.sqlite3').exists()
 
 
+# @wu-test type=behavior | scope=渐进预览 | protects=预览提前携带完整数据或无法按组件加载
 def test_preview_has_no_component_results(tmp_path):
     from dashboard_runtime.demo import executive_document
     service=Service(tmp_path/'runtime', project_root=tmp_path/'project')
@@ -41,6 +43,7 @@ def test_preview_has_no_component_results(tmp_path):
     assert view['componentIds']==[component]
 
 
+# @wu-test type=integration | scope=检查点保留 | protects=历史清理删除受保护检查点
 def test_checkpoint_retention_protects_named_and_migration(tmp_path):
     from dashboard_runtime.project_migration import migrate_project
     from dashboard_runtime.store import Store

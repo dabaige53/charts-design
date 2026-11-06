@@ -10,6 +10,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=筛选弹窗列设置 | protects=弹窗超出视口或重开后列设置失效 | debt=D11
 @pytest.mark.parametrize("width", [1440, 390])
 def test_column_settings_reopen_and_filter_alignment(tmp_path, width):
     service = Service(tmp_path / "state")

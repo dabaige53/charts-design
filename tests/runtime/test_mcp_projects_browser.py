@@ -15,6 +15,7 @@ from dashboard_runtime.demo import executive_document
 from dashboard_runtime.mcp_server import URI
 
 
+# @wu-test type=integration | scope=MCP多项目隔离 | protects=同ID看板跨项目修改或接收其他项目结果
 def test_two_project_previews_share_one_connection(tmp_path):
     root = Path(__file__).resolve().parents[2]
     bundle = tmp_path / 'host.js'

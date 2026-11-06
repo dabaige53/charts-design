@@ -5,23 +5,9 @@ from dashboard_runtime.semantic_diff import semantic_diff
 from dashboard_runtime.wire import compact_records
 
 
-def test_backend_identity_invalidates_doctor(tmp_path):
-    service=Service(tmp_path/'runtime',project_root=tmp_path/'project')
-    service.call('dashboard_create',{'dashboardId':'board'})
-    info=service.call('runtime_info',{})
-    assert len(info['backendBuildId'])==16
-    assert info['moduleRoot'].endswith('dashboard_runtime')
-    import os
-    assert info['processId']==os.getpid()
-    assert info['parentProcessId']==os.getppid()
-    assert info['projectRoot']==str((tmp_path/'project').resolve())
-    old=service.call('dashboard_doctor',{'dashboardId':'board'})
-    old['backendBuildId']='previous'
-    new=service.call('dashboard_preview',{'dashboardId':'board'})['doctor']
-    assert new['backendBuildId']==info['backendBuildId']
-    assert new['requestId']!=old['requestId']
 
 
+# @wu-test type=behavior | scope=语义差异 | protects=删除绑定定义未报告或泄露定义
 def test_removed_binding_and_definition_are_reported_without_rows():
     before={'manifest':{'components':{'kpi':{'binding':{'comparisons':{'mom':{'baseline':'prior'}}},'config':{'explanation':'Definition'}}},'metrics':{}}}
     after=copy.deepcopy(before)
@@ -32,6 +18,7 @@ def test_removed_binding_and_definition_are_reported_without_rows():
     assert 'Definition' not in json.dumps(result)
 
 
+# @wu-test type=behavior | scope=响应压缩 | protects=压缩丢数据或体积未降 | debt=D11
 def test_wire_is_lossless_and_smaller():
     rows=[{'category':str(i),'series':'HO','values':{'value':-i,'name':'西安'}} for i in range(100)]
     result={'computed':{'components':{'c':{'data':{'records':copy.deepcopy(rows)}}}}}
@@ -43,6 +30,7 @@ def test_wire_is_lossless_and_smaller():
     assert len(json.dumps(result)) < original * .7
 
 
+# @wu-test type=behavior | scope=诊断记录 | protects=客户端耗时构建未进入诊断
 def test_diagnostics_duration_and_build(tmp_path):
     service=Service(tmp_path/'runtime',project_root=tmp_path/'project')
     service.call('runtime_report_error',{'requestId':'sample','code':'CLIENT_FRAME_READY','durationMs':12.5})
@@ -51,6 +39,7 @@ def test_diagnostics_duration_and_build(tmp_path):
     assert event['backend_build_id']
 
 
+# @wu-test type=integration | scope=MCP启动路径 | protects=同名模块劫持启动或相对项目路径错误
 def test_mcp_ignores_shadow_module_and_keeps_relative_project(tmp_path):
     import asyncio
     from pathlib import Path

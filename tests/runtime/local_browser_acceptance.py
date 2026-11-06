@@ -26,6 +26,7 @@ from dashboard_runtime.service import Service
 REPO = Path(__file__).resolve().parents[2]
 
 
+# @wu-test type=integration | scope=MCP浏览器验收 | protects=筛选搜索分页CSV丢行或原版展示不一致 | debt=D6,D9,D11
 async def accept(workspace, output, originals=None):
     output.mkdir(parents=True, exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix='.browser-', dir=output))

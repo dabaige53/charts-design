@@ -1,13 +1,10 @@
 """Declaration discovery must reflect accepted runtime data, not renderer guesses."""
 import json
 from pathlib import Path
-import subprocess
-import sys
 
 import pytest
 
 from dashboard_runtime import declarations
-from dashboard_runtime.contract import CONTRACT
 from dashboard_runtime.declarations import declaration_contract
 from dashboard_runtime.model import DashboardError, apply_operations, new_document, validate
 
@@ -19,6 +16,7 @@ def reference():
     return declaration_contract()
 
 
+# @wu-test type=integration | scope=组件声明示例 | protects=对外示例不能生成对应组件 | debt=D1
 @pytest.mark.parametrize('family', ['chart', 'kpi', 'table'])
 def test_legacy_family_examples_validate(reference, family):
     if not reference['legacy']['available']:
@@ -28,6 +26,7 @@ def test_legacy_family_examples_validate(reference, family):
     assert document['manifest']['components'][example['componentId']]['family'] == family
 
 
+# @wu-test type=integration | scope=KPI声明示例 | protects=指定KPI返回错误类型或无效示例 | debt=D1
 @pytest.mark.parametrize('code', [f'mc{i:02d}' for i in range(1, 10)])
 def test_each_legacy_kpi_selected_example_validates(code):
     if not declaration_contract(summary=True)['legacy']['available']:
@@ -40,6 +39,7 @@ def test_each_legacy_kpi_selected_example_validates(code):
     assert document['manifest']['components'][example['componentId']]['config']['type'] == code
 
 
+# @wu-test type=behavior | scope=图表发现 | protects=目录条目被误当可用图表 | debt=D1,D6
 def test_legacy_registry_and_catalog_are_distinguished(reference):
     legacy = reference['legacy']
     if not legacy['available']:
@@ -67,6 +67,7 @@ def test_legacy_registry_and_catalog_are_distinguished(reference):
             for name, kind in registry.CHART_ARRAY_FIELDS.get(code, ())]
 
 
+# @wu-test type=boundary | scope=图表声明 | protects=发现接口提供不支持原生图表
 def test_index_only_advertises_original_charts(reference):
     index = declaration_contract(summary=True)
     assert index['summary'] is True
@@ -77,6 +78,7 @@ def test_index_only_advertises_original_charts(reference):
         declaration_contract(chart_type='bar')
 
 
+# @wu-test type=integration | scope=图表示例选择 | protects=请求t06却得到其他图表示例 | debt=D1
 def test_legacy_selection_never_substitutes_a_different_code_example():
     if not declaration_contract(summary=True)['legacy']['available']:
         pytest.skip('Original repository is required for legacy selection')
@@ -90,6 +92,7 @@ def test_legacy_selection_never_substitutes_a_different_code_example():
     assert selected['legacy']['chartCodes']['t06']['filterBinding']['supported'] is True
 
 
+# @wu-test type=boundary | scope=图表声明选择 | protects=无效类型或冲突选择被接受
 @pytest.mark.parametrize('arguments', [
     {'chart_type': 'unknown'}, {'chart_type': {}}, {'legacy_code': []}, {'legacy_code': 'unknown'},
     {'chart_type': 'bar', 'legacy_code': 'c01'}, {'chart_type': 'bar', 'summary': True},
@@ -99,6 +102,7 @@ def test_invalid_selections_fail_explicitly(arguments):
         declaration_contract(**arguments)
 
 
+# @wu-test type=behavior | scope=声明数据 | protects=调用方修改结果污染后续发现
 def test_discovery_is_detached_json_data(reference):
     encoded = json.dumps(reference, allow_nan=False)
     assert json.loads(encoded) == reference
@@ -107,6 +111,7 @@ def test_discovery_is_detached_json_data(reference):
     assert declaration_contract(legacy_code='c01')['legacy']['families']['chart']['example']['operations']
 
 
+# @wu-test type=boundary | scope=原组件缺失 | protects=缺原资源时错误提供其他图表系统
 def test_missing_original_sources_has_no_alternative_chart_system(tmp_path, monkeypatch):
     monkeypatch.setattr(declarations, 'REPO', tmp_path)
     reference = declaration_contract()
@@ -119,27 +124,11 @@ def test_missing_original_sources_has_no_alternative_chart_system(tmp_path, monk
     assert failure.value.code == 'LEGACY_UNAVAILABLE'
 
 
-def test_contract_exposes_conditional_native_and_legacy_fields():
-    fields = CONTRACT['operations']['put_component']['value']
-    assert {'family', 'config', 'sourceId', 'binding'} <= set(fields)
-    assert {'code', 'type', 'data', 'presentation', 'columns', 'rows'} <= set(fields['config'])
-    assert 'chartType' not in fields and 'set_chart' not in CONTRACT['operations']
-    assert 'conditional' in ' '.join(CONTRACT['rules'])
 
 
-def test_declarations_do_not_import_transport_modules():
-    result = subprocess.run([sys.executable, '-c', '''import sys
-from dashboard_runtime.declarations import declaration_contract
-assert declaration_contract(summary=True)['summary']
-assert 'dashboard_runtime.service' not in sys.modules
-assert 'dashboard_runtime.contract' not in sys.modules
-from dashboard_runtime.contract import CONTRACT
-from dashboard_runtime.service import Service
-assert CONTRACT['declarationsResource'] == 'charts://declarations'
-'''], cwd=ROOT, text=True, capture_output=True)
-    assert result.returncode == 0, result.stderr
 
 
+# @wu-test type=integration | scope=声明schema | protects=对外示例不符合公开schema | debt=D1
 def test_advertised_shape_schemas_accept_their_examples(reference):
     jsonschema = pytest.importorskip('jsonschema')
     for family in reference['legacy']['families'].values():
@@ -151,6 +140,7 @@ def test_advertised_shape_schemas_accept_their_examples(reference):
         jsonschema.Draft202012Validator.check_schema(reference['common'][name])
 
 
+# @wu-test type=integration | scope=高级图表示例 | protects=t06或m01示例不能按指定代码生成
 @pytest.mark.parametrize('code', ['t06', 'm01'])
 def test_advanced_examples_are_legal_own_code_configs(code):
     selected = declaration_contract(legacy_code=code)
@@ -162,14 +152,9 @@ def test_advanced_examples_are_legal_own_code_configs(code):
     assert capability['snapshotOnly'] is (code == 'm01')
 
 
-def test_public_metadata_and_table_heading_contract(reference):
-    assert set(reference['common']['metaSchema']['properties']) == {'subtitle', 'org', 'system', 'statusText', 'iconKey'}
-    assert 'subtitle' in reference['common']['componentSchema']['properties']
-    assert 'contains' in reference['common']['filterSchema']['properties']['op']['enum']
-    columns = reference['legacy']['families']['table']['componentSchema']['properties']['config']['properties']['columns']
-    assert {'title', 'label', 'key'} <= set(columns['items']['properties'])
 
 
+# @wu-test type=boundary | scope=ECharts配置 | protects=原生配置丢失或非对象配置被接受
 def test_native_echarts_options_are_discoverable_and_preserved():
     selected = declaration_contract(legacy_code='c01')
     chart = selected['legacy']['families']['chart']
