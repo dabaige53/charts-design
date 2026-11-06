@@ -19,6 +19,7 @@ benchmark = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(benchmark)
 
 
+# @wu-test type=integration | scope=PDF表格导出 | protects=多批次导出漏行乱序
 def test_pdf_exports_every_sorted_row_across_batches(tmp_path):
     service, _, _, _, _ = benchmark.attach(tmp_path, 1005)
     doc = service.store.get('acceptance', hydrate=False)
@@ -40,6 +41,7 @@ def local(tmp_path):
     return benchmark.attach(tmp_path, 240)
 
 
+# @wu-test type=integration | scope=本地服务 | protects=导入到导出丢数据 | debt=D7
 def test_local_service_end_to_end_small_fixture(tmp_path):
     report = benchmark.run_benchmark(tmp_path, 240)
     assert report['status'] == 'passed'
@@ -48,6 +50,7 @@ def test_local_service_end_to_end_small_fixture(tmp_path):
     assert max(report['historyDocumentBytes']) < 32_000
 
 
+# @wu-test type=integration | scope=筛选视图导出 | protects=图表表格导出筛选范围不同 | debt=D11
 def test_local_filtered_components_and_reader_state_not_saved(local, tmp_path):
     service, _, imported, configured, _ = local
     benchmark.assert_compact(imported, 240)
@@ -78,6 +81,7 @@ def test_local_filtered_components_and_reader_state_not_saved(local, tmp_path):
     assert sum(int(row['amount']) for row in rows) == expected['amount']
 
 
+# @wu-test type=integration | scope=表格CLI导出 | protects=添加说明后丢列或导出不完整
 def test_native_table_preserves_presentation_columns_with_explanation(local, tmp_path, capsys):
     from dashboard_runtime.__main__ import main
     service, _, _, _, _ = local
@@ -100,6 +104,7 @@ def test_native_table_preserves_presentation_columns_with_explanation(local, tmp
     assert len(json.loads(snapshot.read_text())['snapshot']['datasets']['facts']) == 240
 
 
+# @wu-test type=integration | scope=筛选选项分页 | protects=高基数选项漏项或无法选末项
 def test_option_pages_cover_the_complete_high_cardinality_domain(local):
     service, _, _, _, _ = local
     canonical = service.store.get('acceptance', hydrate=False)
@@ -121,6 +126,7 @@ def test_option_pages_cover_the_complete_high_cardinality_domain(local):
     assert viewed['computed']['tables']['details']['totalRows'] == 1
 
 
+# @wu-test type=integration | scope=数据版本共享 | protects=数据别名恢复后引用错误 | debt=D6
 def test_version_shared_by_two_dataset_aliases_and_restore(local):
     service, _, _, configured, _ = local
     before = service.store.get('acceptance', hydrate=False)
@@ -137,6 +143,7 @@ def test_version_shared_by_two_dataset_aliases_and_restore(local):
     assert restored['document']['snapshot']['datasetRefs'] == {'facts': original_ref}
 
 
+# @wu-test type=integration | scope=旧数据迁移 | protects=迁移回滚丢原数据 | debt=D6
 def test_legacy_inline_snapshot_migration_backup_and_rollback(tmp_path):
     service = Service(tmp_path / 'store')
     rows = [benchmark.source_row(i) for i in range(24)]

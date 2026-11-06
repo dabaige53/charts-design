@@ -5,6 +5,7 @@ import {statisticalImageSource,updateStatisticalArtifacts,mountStatisticalImage}
 const svg='data:image/svg+xml;base64,PHN2Zy8+';
 const png='data:image/png;base64,YQ==';
 
+// @wu-test type=boundary | scope=statistical image source | protects=远程危险或错误格式图片URL被接受
 test('Statistical image sources allow only exact embedded SVG/PNG Base64 URLs',()=>{
   for(const value of [svg,png])assert.equal(statisticalImageSource(value),value);
   for(const value of [undefined,null,{},'',
@@ -18,6 +19,7 @@ test('Statistical image sources allow only exact embedded SVG/PNG Base64 URLs',(
   }
 });
 
+// @wu-test type=behavior | scope=statistical artifacts | protects=切换文档后显示旧统计图
 test('Derived artifacts refresh on responses and clear instead of leaking across documents',()=>{
   const initial=Object.create(null),artifact={dataUri:svg,caption:'One raw observation per row.'};
   const first=updateStatisticalArtifacts(initial,{document:{id:'first'},statisticalArtifacts:{plot:artifact}});
@@ -30,6 +32,7 @@ test('Derived artifacts refresh on responses and clear instead of leaking across
   for(const value of [null,[],{},'invalid'])assert.deepEqual(Object.keys(updateStatisticalArtifacts(first,{statisticalArtifacts:value})),[]);
 });
 
+// @wu-test type=boundary | scope=statistical artifacts | protects=原型污染或非法字段进入展示
 test('Artifact records are isolated own properties and accept only string display fields',()=>{
   const result=updateStatisticalArtifacts(Object.create(null),{statisticalArtifacts:JSON.parse('{"__proto__":{"caption":"Safe"},"invalid":null,"plot":{"caption":42,"dataUri":false,"error":"Unavailable","extra":"ignored"}}')});
   assert.equal(Object.getPrototypeOf(result),null);
@@ -51,6 +54,7 @@ function withDocument(run){
   try{run(createElement('section'));}finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
 }
 
+// @wu-test type=boundary | scope=statistical image mounting | protects=图注HTML执行或图片失败无提示
 test('Statistical mount creates an inert image with title alt and literal caption',()=>withDocument(card=>{
   const caption='<img src=x onerror=alert(1)>; n = 3';
   mountStatisticalImage(card,{title:'Distribution'},{dataUri:svg,caption});
@@ -65,6 +69,7 @@ test('Statistical mount creates an inert image with title alt and literal captio
   assert.equal(figure.children.at(-1).attributes.role,'alert');
 }));
 
+// @wu-test type=boundary | scope=statistical image mounting | protects=缺失或远程图片被加载且无错误提示
 test('Missing, failed and remote artifacts show clear errors without assigning image URLs',()=>{
   for(const [artifact,expected] of [
     [undefined,/未包含生成的图片/],

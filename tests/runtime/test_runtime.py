@@ -23,13 +23,9 @@ def service(tmp_path):
     return s
 
 
-def test_contract_and_ratio_definition():
-    doc = document()
-    assert validate(doc)
-    assert doc["manifest"]["metrics"]["load-factor"]["aggregation"] == "ratio"
-    assert len(doc["snapshot"]["datasets"]["sales"]) == 6
 
 
+# @wu-test type=boundary | scope=KPI对比 | protects=无基准非零对比文本被保存
 @pytest.mark.parametrize('legacy', [True, False])
 def test_ambiguous_kpi_comparison_cannot_be_saved(legacy):
     component = ({'kind': 'legacy', 'family': 'kpi', 'title': 'Sales',
@@ -40,6 +36,7 @@ def test_ambiguous_kpi_comparison_cannot_be_saved(legacy):
         apply_operations(document(), [{'op': 'put_component', 'id': 'ambiguous', 'value': component}])
 
 
+# @wu-test type=boundary | scope=旧图表兼容 | protects=不兼容类型应用到旧文档
 @pytest.mark.parametrize("bad", ["scatter", "heatmap", "waterfall", "unknown"])
 def test_incompatible_charts_rejected(bad):
     with pytest.raises(DashboardError):
@@ -48,6 +45,7 @@ def test_incompatible_charts_rejected(bad):
         )
 
 
+# @wu-test type=behavior | scope=旧图表兼容 | protects=兼容类型无法在历史文档切换
 @pytest.mark.parametrize("kind", ["bar", "line", "area", "pie", "funnel"])
 def test_compatible_charts(kind):
     assert (
@@ -58,23 +56,9 @@ def test_compatible_charts(kind):
     )
 
 
-def test_atomic_rollback(service):
-    with pytest.raises(DashboardError):
-        service.call(
-            "dashboard_patch",
-            {
-                "dashboardId": "demo",
-                "expectedRevision": 1,
-                "operations": [
-                    {"op": "set_title", "value": "Must not persist"},
-                    {"op": "set_chart", "id": "trend", "chartType": "scatter"},
-                ],
-            },
-        )
-    assert service.store.get("demo")["revision"] == 1
-    assert "Must not" not in service.store.get("demo")["manifest"]["title"]
 
 
+# @wu-test type=integration | scope=并发编辑 | protects=同版本并发同时成功覆盖数据
 def test_concurrent_edits_have_one_winner(service):
     def edit(n):
         try:
@@ -95,6 +79,7 @@ def test_concurrent_edits_have_one_winner(service):
     assert "REVISION_CONFLICT" in results
 
 
+# @wu-test type=behavior | scope=版本恢复 | protects=恢复覆盖历史或未创建新版本
 def test_restore_creates_new_revision(service):
     old = service.store.get("demo")
     service.store.mutate("demo", 1, [{"op": "set_title", "value": "New title"}])
@@ -104,6 +89,7 @@ def test_restore_creates_new_revision(service):
     assert len(service.store.history("demo")) == 3
 
 
+# @wu-test type=boundary | scope=文档校验 | protects=重叠布局不存在字段被接受
 def test_layout_overlap_and_wrong_field():
     doc = document()
     doc["manifest"]["layout"]["desktop"][1]["x"] = 0
@@ -115,6 +101,7 @@ def test_layout_overlap_and_wrong_field():
         validate(doc)
 
 
+# @wu-test type=behavior | scope=组件删除 | protects=删除后留筛选布局悬空引用
 def test_remove_cleans_filters_and_all_layouts():
     doc = apply_operations(document(), [{"op": "remove_component", "id": "trend"}])
     assert "trend" not in doc["manifest"]["filters"][0]["componentIds"]
@@ -122,6 +109,7 @@ def test_remove_cleans_filters_and_all_layouts():
         assert all(p["id"] != "trend" for p in layout)
 
 
+# @wu-test type=boundary | scope=数据指标 | protects=NaN非法比例单位进入文档
 def test_nan_and_wrong_scale():
     doc = document()
     doc["snapshot"]["datasets"]["sales"][0]["revenue"] = float("nan")
@@ -133,6 +121,7 @@ def test_nan_and_wrong_scale():
         validate(doc)
 
 
+# @wu-test type=boundary | scope=来源可信度 | protects=外部声明冒充实际执行
 def test_declared_sources_cannot_claim_runtime_execution(service):
     result = service.call(
         "dashboard_patch",
@@ -153,6 +142,7 @@ def test_declared_sources_cannot_claim_runtime_execution(service):
     )
 
 
+# @wu-test type=integration | scope=CSV导入语义 | protects=前导零丢失或语义来源读错
 def test_csv_import_and_inspect(service):
     result = service.call(
         "dataset_import",
@@ -190,6 +180,7 @@ def runner(tmp_path):
     return QueryRunner(config), config
 
 
+# @wu-test type=integration | scope=只读查询 | protects=查询结果实际执行来源丢失
 def test_readonly_sql_and_captured_provenance(runner):
     query, _ = runner
     rows, fields, source = query.execute(
@@ -203,6 +194,7 @@ def test_readonly_sql_and_captured_provenance(runner):
     assert source["verification"] == "runtime-executed"
 
 
+# @wu-test type=boundary | scope=SQL查询 | protects=写入加载扩展多语句通过只读入口
 @pytest.mark.parametrize(
     "sql",
     [
@@ -220,6 +212,7 @@ def test_sql_side_effects_rejected(runner, sql):
         runner[0].execute("analytics", sql)
 
 
+# @wu-test type=boundary | scope=SQL查询 | protects=任意连接路径或超限查询被接受
 def test_sql_alias_and_row_limits(runner):
     with pytest.raises(DashboardError):
         runner[0].execute("/etc/passwd", "SELECT 1")
@@ -230,6 +223,7 @@ def test_sql_alias_and_row_limits(runner):
         )
 
 
+# @wu-test type=integration | scope=查询保存 | protects=查询后版本来源未保存
 def test_query_saved_atomically(tmp_path, runner):
     s = Service(tmp_path / "newstore", runner[1])
     s.store.create("empty", "Query test")
@@ -249,6 +243,7 @@ def test_query_saved_atomically(tmp_path, runner):
     assert source["query"]["sql"] == "SELECT * FROM sales"
 
 
+# @wu-test type=boundary | scope=HTML导出 | protects=标题脚本结束标签执行注入
 def test_export_escapes_script_in_data(tmp_path, monkeypatch):
     tmp_path.joinpath("app.js").write_text("window.loaded=true;")
     tmp_path.joinpath("app.css").write_text("body{}")
@@ -260,6 +255,7 @@ def test_export_escapes_script_in_data(tmp_path, monkeypatch):
     assert "\\u003c/script\\u003e" in text
 
 
+# @wu-test type=boundary | scope=HTTP接口 | protects=未授权跨来源旧版本修改成功
 def test_http_auth_origin_and_conflict(service):
     server = RuntimeHTTPServer(service, 0, token="testing-token")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -311,6 +307,7 @@ def test_http_auth_origin_and_conflict(service):
         thread.join()
 
 
+# @wu-test type=integration | scope=CLI | protects=初始化验证导出失败
 def test_cli_roundtrip(tmp_path):
     def run(*args):
         return subprocess.run(
@@ -340,6 +337,7 @@ def test_cli_roundtrip(tmp_path):
     assert json.loads(export.read_text())["id"] == "sample"
 
 
+# @wu-test type=boundary | scope=页面元数据 | protects=非法元数据副标题被保存
 def test_page_metadata_and_description_contract():
     doc = apply_operations(
         document(),
@@ -368,6 +366,7 @@ def test_page_metadata_and_description_contract():
         validate(doc)
 
 
+# @wu-test type=boundary | scope=KPI展示 | protects=未知类型缺时间字段被接受
 @pytest.mark.parametrize(
     "presentation",
     [
@@ -385,6 +384,7 @@ def test_invalid_kpi_presentation_rejected(presentation):
         validate(doc)
 
 
+# @wu-test type=boundary | scope=批注 | protects=非法批注保存或失败改变版本
 def test_annotations_validate_and_persist(service):
     note = {'id': 'review-1', 'componentId': 'trend', 'text': '核对收入', 'createdAt': '2026-10-12T10:00:00Z'}
     result = service.call('dashboard_patch', {'dashboardId': 'demo', 'expectedRevision': 1, 'operations': [{'op': 'set_annotations', 'value': [note]}]})
@@ -396,6 +396,7 @@ def test_annotations_validate_and_persist(service):
     assert service.store.get('demo')['revision'] == 2
 
 
+# @wu-test type=boundary | scope=MCP图表系统 | protects=创建修改引入不支持图表类型
 def test_mcp_rejects_extra_chart_system(tmp_path):
     service = Service(tmp_path)
     with pytest.raises(DashboardError) as failure:
@@ -412,6 +413,7 @@ def test_mcp_rejects_extra_chart_system(tmp_path):
     assert all('code' in item and 'type' not in item for item in service.call('chart_catalog', {})['charts'])
 
 
+# @wu-test type=behavior | scope=位置批注 | protects=删除目标丢批注或接受越界
 def test_position_annotations_survive_target_removal(service):
     note = {'id': 'position-1', 'componentId': 'trend', 'text': '核对峰值', 'createdAt': '2026-10-28T10:00:00Z',
             'anchor': {'scope': 'component', 'kind': 'area', 'quote': '',

@@ -13,6 +13,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+# @wu-test type=integration | scope=看板阅读与编辑 | protects=标题描述和批注修改后无法保存 | debt=D1,D6,D9
 def test_display_preserves_chart_switch_and_service_updates(tmp_path):
     from playwright.sync_api import sync_playwright
 
@@ -115,6 +116,7 @@ def test_display_preserves_chart_switch_and_service_updates(tmp_path):
         thread.join()
 
 
+# @wu-test type=integration | scope=看板元数据展示 | protects=导入描述丢失或组件描述作为HTML执行 | debt=D1
 def test_metadata_and_component_descriptions_survive_render(tmp_path):
     from playwright.sync_api import sync_playwright
 

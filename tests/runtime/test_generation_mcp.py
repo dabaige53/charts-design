@@ -14,6 +14,7 @@ from mcp.types import TextResourceContents
 from pydantic import AnyUrl
 
 
+# @wu-test type=integration | scope=MCP报告创建 | protects=调用方无法发现创建报告或读正确数据 | debt=D1
 def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
     async def check():
         params = StdioServerParameters(

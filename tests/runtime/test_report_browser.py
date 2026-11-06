@@ -8,6 +8,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=报告阅读服务更新 | protects=图注普通代码或服务更新后报告显示错误
 def test_report_reading_and_service_updates(tmp_path):
     service = Service(tmp_path / 'state')
     service.store.create('report-demo', 'Report', report_document('report-demo'))

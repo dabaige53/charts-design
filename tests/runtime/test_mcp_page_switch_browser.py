@@ -15,6 +15,7 @@ from dashboard_runtime.demo import executive_document
 from dashboard_runtime.mcp_server import URI
 
 
+# @wu-test type=integration | scope=MCP页面切换 | protects=切换页面丢失内容编辑模式或未保存草稿
 def test_mcp_page_switch(tmp_path):
     root = Path(__file__).resolve().parents[2]
     bundle = tmp_path / 'host.js'

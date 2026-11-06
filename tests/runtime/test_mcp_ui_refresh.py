@@ -13,6 +13,7 @@ from mcp.types import TextResourceContents
 from pydantic import AnyUrl
 
 
+# @wu-test type=integration | scope=MCP UI更新 | protects=构建后宿主用旧资源或旧工具不可调用 | debt=D1
 def test_running_worker_announces_new_ui_resource(tmp_path):
     assets = tmp_path / 'assets'
     assets.mkdir()

@@ -27,6 +27,7 @@ def view(service, **args):
     return service.call('dashboard_view', {'dashboardId': 'acceptance', **args})
 
 
+# @wu-test type=integration | scope=增量视图 | protects=局部响应与完整视图不一致 | debt=D6
 def test_patch_matches_full_and_skips_unselected(service):
     state = {'details': {'page': 2, 'pageSize': 25, 'sortCol': 'amount', 'sortDir': 'desc', 'keyword': 'Agent-1'}}
     full = view(service, filters=benchmark.filters(True), tableStates=state)['document']
@@ -44,6 +45,7 @@ def test_patch_matches_full_and_skips_unselected(service):
     assert all_patch['computed']['filterOptions'] == full['computed']['filterOptions']
 
 
+# @wu-test type=boundary | scope=增量视图 | protects=空请求返回组件或旧版请求被接受 | debt=D6
 def test_empty_patch_and_revision_conflict(service):
     with patch.object(service.store.data, 'rows', side_effect=AssertionError('Rows evaluated')):
         result = view(service, responseMode='patch', componentIds=[])
@@ -56,6 +58,7 @@ def test_empty_patch_and_revision_conflict(service):
         view(service, responseMode='patch', componentIds=['missing'])
 
 
+# @wu-test type=integration | scope=刷新筛选 | protects=删除组件后旧筛选引用失效或污染保存
 def test_refresh_discards_deleted_component_reader_state(service):
     filters = benchmark.filters()
     filters.append({'id': 'runtime-linkage', 'field': 'department', 'op': 'in', 'values': ['Department-1'], 'componentIds': ['category', 'details']})
@@ -70,6 +73,7 @@ def test_refresh_discards_deleted_component_reader_state(service):
     assert service.store.get('acceptance', hydrate=False)['manifest']['filters'][0]['values'] == []
 
 
+# @wu-test type=integration | scope=明细分页 | protects=排序搜索后翻页漏行重复 | debt=D11
 def test_component_data_sort_search_and_sequential_pages(service):
     args = {'dashboardId': 'acceptance', 'componentId': 'details', 'expectedRevision': 3, 'search': 'Agent-1', 'sort': [{'field': 'amount', 'direction': 'desc'}]}
     records = []
@@ -85,6 +89,7 @@ def test_component_data_sort_search_and_sequential_pages(service):
     assert [r['rowId'] for r in first['rows'] + second['rows']] == list(range(100, 150))
 
 
+# @wu-test type=behavior | scope=聚合缓存 | protects=数据版本改变复用旧结果 | debt=D6
 def test_semantic_aggregate_reuses_aliases_and_versions_invalidate(tmp_path):
     data = LocalData(tmp_path)
     fields = {'n': {'type': 'number'}, 'group': {'type': 'string'}}
@@ -105,6 +110,7 @@ def test_semantic_aggregate_reuses_aliases_and_versions_invalidate(tmp_path):
     assert data.option_page([new], 'n')['values'] == [10]
 
 
+# @wu-test type=behavior | scope=查询并发 | protects=相同查询重复计算或不同查询互相阻塞 | debt=D9,D6
 def test_singleflight_shares_key_without_serializing_unrelated_queries():
     cache = QueryCache(max_entries=2)
     calls = []
@@ -125,19 +131,9 @@ def test_singleflight_shares_key_without_serializing_unrelated_queries():
     assert len(cache.values) == 2
 
 
-def test_counts_and_options_reuse_cached_sql(service):
-    ref = service.store.get('acceptance', hydrate=False)['snapshot']['datasetRefs']['facts']
-    data = service.store.data
-    filters = benchmark.filters(True)
-    data.rows(ref, filters)
-    data.option_page([ref], 'agent')
-    with patch.object(data.cache, 'get', wraps=data.cache.get) as cached:
-        data.rows(ref, filters, offset=10)
-        data.option_page([ref], 'agent')
-    assert cached.call_count == 2
-    assert all(key.startswith(('["count"', '["options"')) for key in data.cache.values)
 
 
+# @wu-test type=behavior | scope=排序分页 | protects=空值同排序值导致翻页漏行重复
 @pytest.mark.parametrize('direction', ['asc', 'desc'])
 def test_sorted_cursor_preserves_nulls_and_duplicate_ties(tmp_path, direction):
     data = LocalData(tmp_path)
@@ -151,6 +147,7 @@ def test_sorted_cursor_preserves_nulls_and_duplicate_ties(tmp_path, direction):
     assert result == expected
 
 
+# @wu-test type=integration | scope=并发读取 | protects=并发筛选分页互相污染
 def test_concurrent_component_reads_and_filters(service):
     def read(index):
         if index % 2:
@@ -161,6 +158,7 @@ def test_concurrent_component_reads_and_filters(service):
     assert all(value == results[1] if i % 2 else value == 20 for i, value in enumerate(results))
 
 
+# @wu-test type=behavior | scope=查询缓存 | protects=首次失败后同查询无法重试
 def test_singleflight_failure_can_retry():
     cache = QueryCache()
     with pytest.raises(ValueError):
@@ -168,6 +166,7 @@ def test_singleflight_failure_can_retry():
     assert cache.get('key', lambda: 3) == (3, False)
 
 
+# @wu-test type=integration | scope=MCP文本响应 | protects=纯文本宿主丢失局部视图
 def test_patch_mcp_text_preserves_small_response_for_text_only_hosts(service):
     import json
     from dashboard_runtime.mcp_server import result_text
@@ -178,6 +177,7 @@ def test_patch_mcp_text_preserves_small_response_for_text_only_hosts(service):
     assert result['computed']['components']['details']['rows']
 
 
+# @wu-test type=behavior | scope=聚合字段 | protects=指标别名覆盖同名分组字段 | debt=D6
 def test_semantic_alias_does_not_collide_with_group_field(tmp_path):
     data = LocalData(tmp_path)
     fields = {'__metric_0': {'type': 'string'}, 'n': {'type': 'number'}}

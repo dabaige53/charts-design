@@ -13,6 +13,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
+# @wu-test type=integration | scope=局部更新表格分页 | protects=刷新或重复翻页后组件失效焦点或数据范围错误 | debt=D6
 def test_reconcile_modes_resize_refresh_and_repeated_pages(tmp_path):
     service, *_ = fixture.attach(tmp_path, 240)
     server = RuntimeHTTPServer(service, 0, 'incremental-test')
@@ -74,6 +75,7 @@ def test_reconcile_modes_resize_refresh_and_repeated_pages(tmp_path):
         thread.join()
 
 
+# @wu-test type=integration | scope=表格搜索请求队列 | protects=旧搜索结果覆盖最新搜索 | debt=D9
 def test_latest_search_wins_with_one_active_read(tmp_path):
     service, *_ = fixture.attach(tmp_path, 240)
     call = service.call

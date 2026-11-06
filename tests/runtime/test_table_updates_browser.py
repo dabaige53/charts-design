@@ -13,6 +13,7 @@ benchmark = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(benchmark)
 
 
+# @wu-test type=integration | scope=表格查询局部更新 | protects=翻页搜索并发编辑后焦点内容丢失 | debt=D6
 def test_table_queries_keep_grid_charts_columns_and_search_focus(tmp_path):
     service, *_ = benchmark.attach(tmp_path, 240)
     server = RuntimeHTTPServer(service, 0, 'table-updates')

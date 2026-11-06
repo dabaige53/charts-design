@@ -18,6 +18,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
+# @wu-test type=boundary | scope=全组件夹具 | protects=夹具漏掉新增组件后浏览器验收静默少测 | debt=D3
 def test_all_original_contracts_are_explicit():
     doc = fixture.document()
     validate(doc)
@@ -25,6 +26,7 @@ def test_all_original_contracts_are_explicit():
     assert doc["snapshot"]["status"] == "fixture"
 
 
+# @wu-test type=integration | scope=原组件标题区 | protects=图表控件或移动布局不可用 | debt=D1,D9
 @pytest.mark.skipif(
     not (DIST / "app.js").exists(), reason="Build the shared frontend first"
 )

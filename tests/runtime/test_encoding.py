@@ -3,6 +3,7 @@ from dashboard_runtime.local_view import LocalView
 from dashboard_runtime.encoding import resolve_encoding
 
 
+# @wu-test type=integration | scope=动态编码 | protects=比例属性聚合或空筛选结果错误
 def test_local_dynamic_aggregate(tmp_path):
     data = LocalData(tmp_path)
     fields = {k: {'type': 'number' if k in ('market', 'ho', 'minutes') else 'string'} for k in ('od', 'market', 'ho', 'minutes', 'grade')}
@@ -14,6 +15,7 @@ def test_local_dynamic_aggregate(tmp_path):
     assert resolve_encoding(view, ref, m, c, [{'field': 'od', 'op': 'in', 'values': ['absent']}]) == []
 
 
+# @wu-test type=integration | scope=动态系列 | protects=筛选后系列或销售额错误
 def test_retail_series_and_filter_parity(tmp_path):
     data = LocalData(tmp_path)
     fields = {k: {'type': 'number' if k == 'sales' else 'string'} for k in ('region', 'product', 'sales')}
@@ -25,6 +27,7 @@ def test_retail_series_and_filter_parity(tmp_path):
     assert {r['series'] for r in rows} == {'Tea', 'Coffee'}
 
 
+# @wu-test type=boundary | scope=动态绑定声明 | protects=不存在系列字段被保存
 def test_dynamic_declaration_validation():
     import pytest
     from dashboard_runtime.model import new_document, apply_operations, DashboardError

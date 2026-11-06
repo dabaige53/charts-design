@@ -4,6 +4,7 @@ from dashboard_runtime.demo import executive_document
 from pathlib import Path
 
 
+# @wu-test type=integration | scope=静态部署包 | protects=部署缺数据构建文件或泄露查询参数
 def test_site_is_independent_and_keeps_all_used_rows(tmp_path):
     s=Service(tmp_path/'runtime',project_root=tmp_path/'project')
     s.call('dashboard_create',{'dashboardId':'demo','document':executive_document('demo')})

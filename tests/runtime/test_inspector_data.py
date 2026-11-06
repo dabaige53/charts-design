@@ -5,6 +5,7 @@ from dashboard_runtime.model import DashboardError
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=数据检查器分页 | protects=筛选分页漏行或读取改变版本
 def test_inspector_reads_all_filtered_pages_and_keeps_revision(tmp_path):
     service = Service(tmp_path)
     doc = document('inspector')
@@ -30,6 +31,7 @@ def test_inspector_reads_all_filtered_pages_and_keeps_revision(tmp_path):
         service.call('component_data', {**request, 'limit': 1001})
 
 
+# @wu-test type=integration | scope=在线离线检查器 | protects=语义来源分页在页面不可见
 def test_single_page_inspector_online_and_offline(tmp_path):
     import threading
     from playwright.sync_api import sync_playwright, expect
@@ -86,6 +88,7 @@ def test_single_page_inspector_online_and_offline(tmp_path):
         thread.join()
 
 
+# @wu-test type=integration | scope=原组件说明 | protects=SQL长口径或参数展示错误
 def test_legacy_explanation_keeps_sql_in_source_and_long_scope_in_rows(tmp_path):
     from playwright.sync_api import sync_playwright
     from dashboard_runtime.assets import export_document

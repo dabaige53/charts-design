@@ -8,6 +8,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=integration | scope=本地预览生命周期 | protects=可见页面提前关闭或关闭后服务不退出 | debt=D9
 def test_visible_preview_keeps_running_and_closed_preview_exits(tmp_path):
     service = Service(tmp_path)
     service.store.create('demo', 'Demo', document())

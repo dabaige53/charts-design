@@ -4,6 +4,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from test_encoding_browser import retail_document
 
 
+# @wu-test type=integration | scope=渐进加载筛选 | protects=筛选后可见组件未更新 | debt=D6,D7
 def test_project_progressive_browser(tmp_path):
     from playwright.sync_api import sync_playwright, expect
     service=Service(tmp_path/'runtime',project_root=tmp_path/'project')

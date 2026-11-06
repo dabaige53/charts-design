@@ -44,6 +44,7 @@ def renderer_page():
         browser.close()
 
 
+# @wu-test type=integration | scope=离线渲染更新 | protects=更新丢失图例选择缩放或指标值 | debt=D1,D6
 def test_update_retains_canvas_chrome_and_interaction_state(renderer_page):
     page = renderer_page
     page.evaluate('''() => {
@@ -77,6 +78,7 @@ def test_update_retains_canvas_chrome_and_interaction_state(renderer_page):
     assert page.evaluate('spark.isDisposed() && runtime.app===null')
 
 
+# @wu-test type=integration | scope=离线表格窗口导出 | protects=大表滚动或导出丢行 | debt=D1,D6
 def test_large_page_window_sort_and_csv_keep_all_rows(renderer_page):
     page = renderer_page
     page.evaluate('runtime.app.state.table.pageSize=600;runtime.app.renderTableEngine()')
@@ -98,6 +100,7 @@ def test_large_page_window_sort_and_csv_keep_all_rows(renderer_page):
     assert page.evaluate('runtime.app===null')
 
 
+# @wu-test type=integration | scope=图表数据表导出 | protects=切换数据表更新后丢行或CSV不完整 | debt=D1
 def test_chart_data_view_retains_all_rows_and_exports_every_row(renderer_page):
     page = renderer_page
     page.evaluate('''() => {
@@ -128,6 +131,7 @@ def test_chart_data_view_retains_all_rows_and_exports_every_row(renderer_page):
     assert pane.locator('[data-chart-table-page]').count() == 0
 
 
+# @wu-test type=integration | scope=离线配置更新 | protects=更新标题筛选列配置后显示错误 | debt=D1,D6
 def test_offline_update_refreshes_declarations_without_replacing_table_body(renderer_page):
     page = renderer_page
     page.evaluate('''() => {
@@ -163,6 +167,7 @@ def test_offline_update_refreshes_declarations_without_replacing_table_body(rend
     assert page.locator('[data-dashboard-table-title]').inner_text() == '再次更新'
 
 
+# @wu-test type=integration | scope=图表数据表滚动更新 | protects=滚动缺行导出不完整或切换后失效 | debt=D1,D6
 def test_chart_data_window_scroll_resize_updates_and_cleanup(renderer_page):
     page = renderer_page
     page.add_style_tag(content='''
@@ -221,6 +226,7 @@ def test_chart_data_window_scroll_resize_updates_and_cleanup(renderer_page):
     page.evaluate('runtime.destroy()')
 
 
+# @wu-test type=integration | scope=图表数据表换行 | protects=换行后滚动末尾记录不可达 | debt=D1,D6
 def test_chart_data_window_handles_wrapped_rows(renderer_page):
     page = renderer_page
     page.add_style_tag(content='''
@@ -250,6 +256,7 @@ def test_chart_data_window_handles_wrapped_rows(renderer_page):
     assert page.evaluate('oldApp._chartTableCleanups.size') == 0
 
 
+# @wu-test type=integration | scope=打包离线图表数据表 | protects=两种页面大表末行不可达或导出不完整
 def test_chart_data_window_in_bundled_and_offline_pages(tmp_path):
     import importlib.util
     import threading

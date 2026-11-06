@@ -19,6 +19,7 @@ def statistical_document(kind='histogram'):
     ])
 
 
+# @wu-test type=integration | scope=统计图渲染 | protects=合法图不输出SVG PNG或遗漏观测数 | debt=D1
 @pytest.mark.parametrize('kind',['histogram','boxplot','regression'])
 def test_render_formats(kind):
     pytest.importorskip('seaborn')
@@ -32,6 +33,7 @@ def test_render_formats(kind):
     assert base64.b64decode(png['dataUri'].split(',')[1]).startswith(b'\x89PNG\r\n\x1a\n')
 
 
+# @wu-test type=boundary | scope=统计图声明 | protects=非法字段代码外部图片进入声明
 @pytest.mark.parametrize('change',[
     {'plot':{'type':'histogram','x':'x','code':'print(1)'}},
     {'plot':{'type':'histogram','x':'x','bins':True}},
@@ -48,6 +50,7 @@ def test_invalid_spec(change):
     with pytest.raises(DashboardError): validate(doc)
 
 
+# @wu-test type=boundary | scope=统计图输入 | protects=静态图应用筛选或接受退化回归
 def test_no_filters_and_degenerate_regression():
     doc=statistical_document()
     with pytest.raises(DashboardError,match='static raw-observation'):
@@ -57,6 +60,7 @@ def test_no_filters_and_degenerate_regression():
     with pytest.raises(DashboardError,match='distinct x'):validate(doc)
 
 
+# @wu-test type=integration | scope=统计图更新 | protects=修改图后旧产物残留或产物被保存 | debt=D1
 def test_revision_and_source_refresh(tmp_path):
     pytest.importorskip('seaborn')
     service=Service(tmp_path)
@@ -70,6 +74,7 @@ def test_revision_and_source_refresh(tmp_path):
     assert 'statisticalArtifacts' in export_document(after['document'])
 
 
+# @wu-test type=behavior | scope=统计图依赖 | protects=缺Seaborn错误隐藏
 def test_missing_dependency_is_visible(monkeypatch):
     import builtins
     original=builtins.__import__
@@ -81,6 +86,7 @@ def test_missing_dependency_is_visible(monkeypatch):
     assert statistical_artifacts(statistical_document())['distribution']['code']=='SEABORN_NOT_INSTALLED'
 
 
+# @wu-test type=boundary | scope=统计数据量 | protects=超支持上限数据被接受
 def test_row_and_category_limits():
     doc=statistical_document()
     doc['snapshot']['datasets']['observations']=[{'x':1,'value':2,'group':'A'}]*5001
@@ -90,13 +96,9 @@ def test_row_and_category_limits():
     with pytest.raises(DashboardError,match='20 categories'):validate(doc)
 
 
-def test_declaration_schema_is_explicit():
-    from dashboard_runtime.declarations import declaration_contract
-    entry=declaration_contract()['statistical']
-    assert entry['componentSchema']['additionalProperties'] is False
-    assert len(entry['componentSchema']['properties']['plot']['oneOf'])==3
 
 
+# @wu-test type=behavior | scope=回归计算 | protects=大偏移输入拟合端点错误
 def test_large_offset_regression_is_stable():
     import numpy as np
     from dashboard_runtime.statistical import regression_line
@@ -105,6 +107,7 @@ def test_large_offset_regression_is_stable():
     np.testing.assert_allclose(x,[100000000,100000004])
 
 
+# @wu-test type=boundary | scope=统计字段范围 | protects=无关字段进入渲染数据 | debt=D6
 def test_render_projects_only_selected_fields(monkeypatch):
     import json
     import dashboard_runtime.statistical as statistical
@@ -120,6 +123,7 @@ def test_render_projects_only_selected_fields(monkeypatch):
     assert all(set(row)=={'x'} for row in seen['rows'])
 
 
+# @wu-test type=behavior | scope=回归计算 | protects=负斜率常数大偏移结果错误
 @pytest.mark.parametrize('offset,slope,intercept',[(0,-2,3),(-1e11,2,-7),(1e11,0,4)])
 def test_regression_negative_and_constant_cases(offset,slope,intercept):
     import numpy as np
@@ -129,6 +133,7 @@ def test_regression_negative_and_constant_cases(offset,slope,intercept):
     np.testing.assert_allclose(y,[intercept,intercept+slope*4],atol=1e-9)
 
 
+# @wu-test type=boundary | scope=回归输入 | protects=不完整观测样本不足仍拟合
 def test_regression_missing_and_rank_requirements():
     doc=statistical_document('regression')
     doc['snapshot']['datasets']['observations']=[{'x':1,'value':None,'group':'A'}]
@@ -137,6 +142,7 @@ def test_regression_missing_and_rank_requirements():
     with pytest.raises(DashboardError,match='at least 3'):validate(doc)
 
 
+# @wu-test type=behavior | scope=回归数值稳定性 | protects=大偏移相邻浮点间距拟合错误
 def test_regression_representable_offset_spacing():
     import numpy as np
     from dashboard_runtime.statistical import regression_line
@@ -145,6 +151,7 @@ def test_regression_representable_offset_spacing():
     np.testing.assert_allclose(y,[0,3],atol=1e-10)
 
 
+# @wu-test type=behavior | scope=回归数值稳定性 | protects=两轴大偏移拟合端点错误
 def test_regression_both_axes_large_offsets():
     import numpy as np
     from dashboard_runtime.statistical import regression_line

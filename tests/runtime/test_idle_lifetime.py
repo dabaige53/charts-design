@@ -12,6 +12,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=behavior | scope=空闲生命周期 | protects=长请求结束后立即超时
 def test_busy_request_gets_full_idle_grace_after_completion():
     now = [0]
     lifetime = IdleLifetime(60, lambda: now[0])
@@ -24,12 +25,14 @@ def test_busy_request_gets_full_idle_grace_after_completion():
     assert lifetime.expired()
 
 
+# @wu-test type=boundary | scope=空闲超时 | protects=非正数非有限超时使清理失效
 @pytest.mark.parametrize('timeout', [0, -1, float('nan'), float('inf')])
 def test_timeout_cannot_disable_default_cleanup(timeout):
     with pytest.raises(ValueError):
         IdleLifetime(timeout)
 
 
+# @wu-test type=integration | scope=HTTP保活 | protects=保活时过早退出或退出丢数据 | debt=D9
 def test_http_keepalive_then_shutdown_preserves_saved_state(tmp_path):
     service = Service(tmp_path)
     service.call('dashboard_create', {'dashboardId': 'retained'})
@@ -54,6 +57,7 @@ def test_http_keepalive_then_shutdown_preserves_saved_state(tmp_path):
         thread.join()
 
 
+# @wu-test type=integration | scope=MCP空闲退出 | protects=无请求MCP进程持续运行 | debt=D1
 def test_real_mcp_process_exits_without_calls(tmp_path):
     pytest.importorskip('mcp')
     process = subprocess.Popen([sys.executable, '-m', 'dashboard_runtime', '--root', str(tmp_path),

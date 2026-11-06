@@ -1,6 +1,7 @@
 from dashboard_runtime.local_data import LocalData
 
 
+# @wu-test type=behavior | scope=实体比例 | protects=筛选后重复计数或退款未抵消
 def test_entity_ratio_deduplicates_after_filters_and_nets_refunds(tmp_path):
     data = LocalData(tmp_path)
     fields = {'agent': {'type': 'string'}, 'region': {'type': 'string'},

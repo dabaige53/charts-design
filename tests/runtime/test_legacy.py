@@ -1,6 +1,7 @@
 import pytest
 from dashboard_runtime.legacy import REPO,render
 
+# @wu-test type=behavior | scope=原模板渲染 | protects=标题未转义或占位符残留 | debt=D1
 @pytest.mark.skipif(not (REPO/'skills/executive-charts/scripts/generate_chart.py').exists(),reason='Original repository is needed for legacy adapter acceptance')
 def test_legacy_template_uses_explicit_data():
     config={'id':'regions','code':'c01','title':'Real values <not markup>','unit':'USD',

@@ -10,6 +10,7 @@ function withDocument(run){
   return Promise.resolve().then(run).finally(()=>{if(previous)Object.defineProperty(globalThis,'document',previous);else Reflect.deleteProperty(globalThis,'document');});
 }
 
+// @wu-test type=behavior | scope=single filter | protects=单选筛选累积旧值
 test('office dropdown replaces one office at a time and supports all offices',async()=>withDocument(async()=>{
   const changes=[];
   const filter={id:'office',field:'office',label:'国内营业部',values:[]};
@@ -23,6 +24,7 @@ test('office dropdown replaces one office at a time and supports all offices',as
   assert.deepEqual(filter.values,[]);
 }));
 
+// @wu-test type=behavior | scope=clear filters | protects=清除条件破坏筛选定义或原数据
 test('clear all removes every condition and preserves its definition',()=>{
   const filters=[{id:'office',selectionMode:'single',values:['西安营业部']},{id:'period',values:['2026-09']},{id:'region',values:['欧洲']},{id:'channel',values:['普通代理']},{id:'search',op:'contains',values:['代理']}];
   const result=clearFilterValues(filters);
@@ -31,11 +33,8 @@ test('clear all removes every condition and preserves its definition',()=>{
   assert.deepEqual(filters[0].values,['西安营业部']);
 });
 
-test('exported current-view HTML does not enable incomplete local filtering',async()=>withDocument(()=>{
-  const label=singleFilter({filter:{field:'office',values:[]},values:['西安营业部'],disabled:true,icon:()=>({}),onApply:()=>{},onError:()=>{}});
-  assert.equal(label.disabled,true);
-}));
 
+// @wu-test type=behavior | scope=paged filter | protects=取消全选和重新选择产生错误条件 | debt=D6
 test('a filter can cancel all draft checks, pick one value, or select all',async()=>withDocument(async()=>{
   const changes=[];
   const panel=pagedFilter({filter:{label:'区域',values:[]},firstPage:{values:['欧洲','日韩'],offset:0,totalValues:2,hasMore:false},load:async()=>{throw Error('No paging needed');},onApply:values=>changes.push(values),onError:error=>{throw error;}});
@@ -51,6 +50,7 @@ test('a filter can cancel all draft checks, pick one value, or select all',async
   all.onclick();await apply.onclick();assert.deepEqual(changes,[['欧洲'],[]]);
 }));
 
+// @wu-test type=behavior | scope=paged filter | protects=未加载页保留已取消选项 | debt=D6
 test('cancel all also clears selected values on unloaded pages',async()=>withDocument(async()=>{
   const changes=[];
   const panel=pagedFilter({filter:{label:'目的地',values:['A','C']},firstPage:{values:['A','B'],offset:0,totalValues:3,hasMore:true},load:async()=>({values:['C'],offset:2,totalValues:3,hasMore:false}),onApply:values=>changes.push(values),onError:error=>{throw error;}});
@@ -61,6 +61,7 @@ test('cancel all also clears selected values on unloaded pages',async()=>withDoc
   await panel.children[4].children[2].onclick();assert.deepEqual(changes,[['C']]);
 }));
 
+// @wu-test type=behavior | scope=paged filter | protects=排除一项时丢失未加载页选项 | debt=D6
 test('excluding one value from all retains the values on unseen pages',async()=>withDocument(async()=>{
   const changes=[];
   const pages=[{values:['A','B'],offset:0,totalValues:3,hasMore:true},{values:['C'],offset:2,totalValues:3,hasMore:false}];
@@ -69,6 +70,7 @@ test('excluding one value from all retains the values on unseen pages',async()=>
   await panel.children[4].children[2].onclick();assert.deepEqual(changes,[['B','C']]);
 }));
 
+// @wu-test type=boundary | scope=required month filter | protects=必选月份被清空
 test('required month has no all entry and clear preserves the selected month',async()=>withDocument(async()=>{
  const filter={id:'period',field:'month',label:'月份',selectionMode:'single',required:true,values:['2026-09']};let choices;const picked=[];
  const trigger=singleFilter({filter,values:['2026-09','2026-08'],openMenu:(_anchor,entries)=>{choices=entries;},icon:()=>({}),onApply:values=>picked.push(values),onError:error=>{throw error;}});

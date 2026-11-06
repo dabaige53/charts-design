@@ -11,6 +11,7 @@ from dashboard_runtime.model import DashboardError
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=behavior | scope=资源缓存 | protects=构建更新后仍显示旧资源 | debt=D6
 def test_asset_reads_are_reused_and_rebuilds_invalidate(tmp_path, monkeypatch):
     monkeypatch.setattr(assets, 'DIST', tmp_path)
     js, css = tmp_path / 'app.js', tmp_path / 'app.css'
@@ -45,6 +46,7 @@ def test_asset_reads_are_reused_and_rebuilds_invalidate(tmp_path, monkeypatch):
     assert 'rebuilt' in assets.render_html()
 
 
+# @wu-test type=behavior | scope=runtime_info | protects=返回过期版本号 | debt=D6
 def test_runtime_info_reads_revision_without_loading_document(tmp_path, monkeypatch):
     service = Service(tmp_path)
     service.store.create('demo', 'Demo', document())

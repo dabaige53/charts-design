@@ -10,6 +10,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
+# @wu-test type=integration | scope=MCP统计图 | protects=客户端无法创建查看导出统计图 | debt=D1
 def test_statistical_stdio_authoring(tmp_path):
     async def check():
         params=StdioServerParameters(command=sys.executable,args=['-m','dashboard_runtime','--project-root',str(tmp_path/'project'),'--runtime-root',str(tmp_path/'runtime'),'mcp'],env={**os.environ,'PYTHONPATH':str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')})

@@ -24,6 +24,7 @@ def dashboard_config(output_file):
     return json.loads(result.stdout)
 
 
+# @wu-test type=integration | scope=独立图表CLI | protects=命令未生成带标题的目标图表
 def test_chart_generation(tmp_path):
     print("Testing standalone chart generation (t06)...")
     out_file = tmp_path / "chart.html"
@@ -41,6 +42,7 @@ def test_chart_generation(tmp_path):
     assert 'data-explain-chart="T06"' in html
     print("✓ Standalone chart test passed!")
 
+# @wu-test type=integration | scope=Dashboard CLI | protects=指定标题或图表组合丢失
 def test_dashboard_generation(tmp_path):
     print("Testing custom dashboard composition...")
     out_file = tmp_path / "dashboard.html"
@@ -58,6 +60,7 @@ def test_dashboard_generation(tmp_path):
     assert [chart["code"] for chart in config["charts"]] == ["c01", "t06", "r01", "fn01"]
     print("✓ Dashboard composition test passed!")
 
+# @wu-test type=integration | scope=预设生成 | protects=预设标题或指标丢失
 def test_preset_generation(tmp_path):
     print("Testing retail_ecommerce preset...")
     out_file = tmp_path / "retail.html"
@@ -74,6 +77,7 @@ def test_preset_generation(tmp_path):
     assert "kpi-gmv" in [kpi["id"] for kpi in config["kpis"]]
     print("✓ Retail preset test passed!")
 
+# @wu-test type=integration | scope=JSON配置生成 | protects=用户配置的筛选和图表丢失
 def test_config_generation(tmp_path):
     print("Testing custom JSON config generation...")
     cfg_file = tmp_path / "config.json"
@@ -112,6 +116,7 @@ def test_config_generation(tmp_path):
     assert [chart["code"] for chart in config["charts"]] == ["c01", "t06", "k01"]
     print("✓ Custom JSON config test passed!")
 
+# @wu-test type=integration | scope=CSV生成 | protects=业务数据未进入页面或混入航空示例
 def test_from_csv_generation(tmp_path):
     print("Testing --from-csv automated generation...")
     sample_csv = tmp_path / "sales.csv"
@@ -142,6 +147,7 @@ def run_cli(*args):
     return res
 
 
+# @wu-test type=integration | scope=HTML检查CLI | protects=重复DOM ID未报告或有效页面被拒绝
 def test_generated_html_inspector_contract():
     print("Testing generated HTML inspector contract...")
     with tempfile.TemporaryDirectory(prefix="charts-design-html-inspector-") as tmp:
@@ -170,6 +176,7 @@ def test_generated_html_inspector_contract():
         }]
     print("✓ Generated HTML inspector contract test passed!")
 
+# @wu-test type=integration | scope=Workspace CLI | protects=创建添加组件或构建结果丢失
 def test_workspace_generation():
     print("Testing composable dashboard workspace...")
     with tempfile.TemporaryDirectory(prefix="charts-design-workspace-") as tmp:
@@ -223,6 +230,7 @@ def test_workspace_generation():
     print("✓ Composable workspace test passed!")
 
 
+# @wu-test type=integration | scope=Workspace筛选配置 | protects=筛选范围未保存或缺字段未报错
 def test_workspace_filter_scope_contract():
     print("Testing explicit workspace filter scope...")
     with tempfile.TemporaryDirectory(prefix="charts-design-filter-scope-") as tmp:
