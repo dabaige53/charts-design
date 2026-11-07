@@ -17,7 +17,7 @@
 
 ## 验证范围
 
-- 自动测试：新增 `test_server.py`、`test_layouts.py`、`test_kpi_cards.py`、`test_recommend.py`、`adaptive.test.mjs`，并更新全组件、声明与生成案例测试。最终结果见本节末尾。
+- 自动测试：新增 `test_server.py`、`test_layouts.py`、`test_kpi_cards.py`、`test_recommend.py`、`adaptive.test.mjs`，并更新全组件、声明与生成案例测试。按 CI 顺序的最终结果：前端构建（40 种图表、16 种指标卡）与 `npm run check` 通过；`tests/runtime` 391 通过、1 失败（见下文已知问题，改动前即失败）；`node --test tests/runtime/*.test.mjs` 93 通过；`tests`（不含 runtime）91 通过。
 - 浏览器：通过服务器分享链接在 Chromium 中打开看板、报告、编辑页与手机宽度页面，均无脚本或 CSP 错误、无横向溢出；伪造令牌显示失效提示。全组件测试逐个渲染 40 种图表与 16 种指标卡。
 - 修复：项目模式下报告图表一直停留在“等待加载…”（渐进加载按组件 ID 查找报告图表，而报告图表按“组件:序号”保存）；本地 `serve` 与服务器预览均受影响，现已修复并有浏览器测试覆盖。
 
