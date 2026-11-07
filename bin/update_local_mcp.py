@@ -9,8 +9,12 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
-import tomllib
+
+if sys.version_info < (3, 11):  # tomllib is in the standard library from 3.11
+    sys.exit('update_local_mcp.py requires Python 3.11 or newer (tomllib); the runtime itself supports 3.10.')
+import tomllib  # noqa: E402
 
 
 def replace_entry(text: str, entry: Path) -> str:
