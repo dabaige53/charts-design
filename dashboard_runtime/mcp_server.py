@@ -33,11 +33,41 @@ def is_ui_uri(uri):
 
 def result_text(result):
     """Transport.pack already bounds the payload; text-only hosts need all fields."""
-    return json.dumps(result, ensure_ascii=False, allow_nan=False)
+    return json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
 
-def create_server(service, lifetime=None):
+UNPACKED = ('runtime_result_chunk', 'runtime_diagnostics', 'runtime_report_error', 'runtime_keepalive')
+
+
+class McpProfile:
+    """Transport-specific policy. The local stdio profile changes nothing.
+
+    A self-hosted server substitutes project sandboxing, hides tools that act on
+    the server desktop and decorates results with browser links.
+    """
+    hidden_tools = frozenset()
+    extra_tools: dict = {}
+
+    def projects(self, service):
+        return ProjectServices(service)
+
+    def describe(self, name, description):
+        return description
+
+    def schema(self, name, schema):
+        return project_schema(schema)
+
+    def call(self, name, request, selected):
+        """Handle a profile-owned tool, or return None to use the shared service."""
+        return None
+
+    def decorate(self, name, request, result, selected):
+        return project_result(result, selected)
+
+
+def create_server(service, lifetime=None, profile=None):
     lifetime = lifetime or IdleLifetime()
-    projects = ProjectServices(service)
+    profile = profile or McpProfile()
+    projects = profile.projects(service)
     try:
         import mcp.types as types
         from mcp.server.lowlevel import Server
@@ -58,9 +88,12 @@ def create_server(service, lifetime=None):
         result = []
         tools = {**TOOLS, current_preview_tool(): (
             'Open the latest dashboard UI; prefer this build-specific preview over historical preview cards',
-            TOOLS['dashboard_preview'][1])}
+            TOOLS['dashboard_preview'][1]), **profile.extra_tools}
         for name, (description, schema) in tools.items():
-            schema = project_schema(schema)
+            if name in profile.hidden_tools:
+                continue
+            description = profile.describe('dashboard_preview' if is_preview_alias(name) else name, description)
+            schema = profile.schema(name, schema)
             preview = name in UI_TOOLS or is_preview_alias(name)
             metadata = {'ui': {'resourceUri': advertised_uri}, 'ui/resourceUri': advertised_uri} if preview else {}
             if name == 'runtime_keepalive':
@@ -80,21 +113,30 @@ def create_server(service, lifetime=None):
         try:
             if is_preview_alias(name):
                 name = 'dashboard_preview'
+            if name in profile.hidden_tools or (name not in TOOLS and name not in profile.extra_tools):
+                raise DashboardError('UNKNOWN_TOOL', f'Unsupported tool: {name}', 404)
             selected, request = await asyncio.to_thread(projects.resolve, dict(arguments or {}))
             if name == 'dashboard_create' and not selected.project_root:
                 raise DashboardError('PROJECT_REQUIRED', 'Pass projectRoot or start with --project-root for new dashboards; legacy --root supports existing dashboards only')
             if name in TOOLS and 'dataMode' in TOOLS[name][1].get('properties', {}):
                 request.setdefault('dataMode', 'local')
-            result = project_result(await asyncio.to_thread(selected.call, name, request), selected)
-            if name not in ('runtime_result_chunk', 'runtime_diagnostics', 'runtime_report_error', 'runtime_keepalive'):
-                result = project_result(selected.transport.pack(result, name), selected)
+            def execute():
+                handled = profile.call(name, request, selected)
+                return profile.decorate(name, request, handled if handled is not None else selected.call(name, request), selected)
+            result = await asyncio.to_thread(execute)
+            text = None
+            if name not in UNPACKED:
+                packed, text = selected.transport.encode(result, name)
+                if packed is not result:
+                    result, text = profile.decorate('runtime_result_chunk', request, packed, selected), None
             uri = current_ui_uri()
             if advertised_uri != uri:
                 advertised_uri = uri
                 known_uris.add(uri)
                 await server.request_context.session.send_tool_list_changed()
                 await server.request_context.session.send_resource_list_changed()
-            return types.CallToolResult(content=[types.TextContent(type='text', text=result_text(result))], structuredContent=result)
+            # The measured compact JSON doubles as the text fallback; serialize once.
+            return types.CallToolResult(content=[types.TextContent(type='text', text=text if text is not None else result_text(result))], structuredContent=result)
         except DashboardError as exc:
             selected.transport.log('', name, 'server', exc.code)
             return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=json.dumps(exc.as_dict()))], structuredContent=exc.as_dict())
@@ -111,8 +153,10 @@ def create_server(service, lifetime=None):
                 types.Resource(uri=AnyUrl('charts://catalog'), name='Chart catalog', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://contract'), name='Runtime tools and typed operations', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://declarations'), name='Chart declaration requirements', mimeType='application/json'),
+                types.Resource(uri=AnyUrl('charts://layouts'), name='Dashboard layout templates', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples'), name='Dashboard and report reference cases', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples/executive-dashboard'), name='Dashboard generation case', mimeType='application/json'),
+                types.Resource(uri=AnyUrl('charts://examples/operations-scorecard'), name='Contrasting scorecard dashboard case', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples/academic-report'), name='Approved academic report master', mimeType='application/json')]
 
     @server.read_resource()
@@ -131,10 +175,13 @@ def create_server(service, lifetime=None):
                     'omitted': 'startup project default or legacy store; never the last selected project',
                     'preview': 'bind once from result.projectRoot; include it in all subsequent calls, including chunks'}}
             return [ReadResourceContents(content=json.dumps(contract, ensure_ascii=False), mime_type='application/json')]
+        if str(uri) == 'charts://layouts':
+            from .layouts import templates_catalog
+            return [ReadResourceContents(content=json.dumps(templates_catalog(), ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://declarations':
             from .declarations import declaration_contract
             return [ReadResourceContents(content=json.dumps(declaration_contract(), ensure_ascii=False), mime_type='application/json')]
-        if str(uri) == 'charts://examples' or str(uri) in ('charts://examples/executive-dashboard', 'charts://examples/academic-report'):
+        if str(uri) == 'charts://examples' or str(uri) in ('charts://examples/executive-dashboard', 'charts://examples/operations-scorecard', 'charts://examples/academic-report'):
             args = {} if str(uri) == 'charts://examples' else {'caseId':str(uri).rsplit('/',1)[1]}
             return [ReadResourceContents(content=json.dumps(service.call('generation_examples', args), ensure_ascii=False), mime_type='application/json')]
         raise ValueError('Unknown resource')

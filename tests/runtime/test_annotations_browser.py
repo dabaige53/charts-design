@@ -5,6 +5,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+# Screenshots land in component-review/, uploaded as CI evidence (macOS-only /private/tmp failed on Linux runners).
+EVIDENCE = Path('component-review')
+
 
 def test_new_annotation_targets_outer_component(tmp_path):
     root = Path(__file__).resolve().parents[2]
@@ -99,7 +102,7 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
             panel.get_by_role('button', name='1. 检查图表', exact=True).click()
             expect(panel.locator('textarea')).to_have_value('检查图表')
             expect(page.locator('.annotation-outline')).to_be_visible()
-            page.screenshot(path='/private/tmp/annotations-chart-verified.png')
+            page.screenshot(path=str(EVIDENCE / 'annotations-chart-verified.png'))
             panel.get_by_role('button', name='返回列表').click()
             # Remove the anchored paragraph from the saved report, preserving annotations.
             doc = service.store.get('report-demo')
@@ -112,7 +115,7 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
             panel.get_by_role('button', name='2. 检查段落').click()
             expect(panel).to_contain_text('原位置已失效，批注已保留')
             expect(panel.locator('textarea')).to_have_value('检查段落')
-            page.screenshot(path='/private/tmp/annotations-missing-verified.png')
+            page.screenshot(path=str(EVIDENCE / 'annotations-missing-verified.png'))
             assert not errors, errors
             browser.close()
     finally:

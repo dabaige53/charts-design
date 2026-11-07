@@ -21,7 +21,7 @@ spec.loader.exec_module(fixture)
 def test_all_original_contracts_are_explicit():
     doc = fixture.document()
     validate(doc)
-    assert len(doc["manifest"]["components"]) == 49
+    assert len(doc["manifest"]["components"]) == 56
     assert doc["snapshot"]["status"] == "fixture"
 
 

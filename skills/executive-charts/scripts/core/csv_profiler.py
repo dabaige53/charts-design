@@ -531,7 +531,7 @@ def profile_csv(file_path: str, custom_title: str = None) -> Dict[str, Any]:
         charts.append(r01_code)
         explanations['r01'] = {
             'title': f"各{entity_col['clean_name']}{primary_amount_col['clean_name']}与{growth_col['clean_name']}战略四象限",
-            'overview': f"以规模与增速构建二维坐标系，精准识别高增领跑、存量稳健与承压预警单元。",
+            'overview': "以规模与增速构建二维坐标系，精准识别高增领跑、存量稳健与承压预警单元。",
             'type': "波士顿矩阵四象限图",
             'period': period_str or "考核周期",
             'comparison': "全网均值基准线",
@@ -606,7 +606,7 @@ def profile_csv(file_path: str, custom_title: str = None) -> Dict[str, Any]:
         charts.append(c03_code)
         explanations['c03'] = {
             'title': f"各{entity_col['clean_name']}{growth_col['clean_name']}分化",
-            'overview': f"以 0% 为基线呈现各业务单元的同比增速偏离度，快速发现经营下滑风险点。",
+            'overview': "以 0% 为基线呈现各业务单元的同比增速偏离度，快速发现经营下滑风险点。",
             'type': "正负偏离柱状图",
             'period': period_str or "考核周期",
             'comparison': "0% 增长基线",

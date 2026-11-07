@@ -7,6 +7,7 @@ import time
 from decimal import Decimal, ROUND_HALF_UP
 
 from .model import apply_operations, json_bytes, require
+from .bindings import KPI_NUMERIC_TARGETS
 from .local_data import QueryCache, semantic_filters
 
 
@@ -125,7 +126,7 @@ class LocalView:
                     for target, mid in mids.items():
                         value = values[mid]
                         value = None if value is None else value * binding.get('scale', {}).get(target, 1)
-                        raw[target] = value if target == 'percent' else formatted(value, m['metrics'][mid], target in ('yoy', 'mom'))
+                        raw[target] = value if target in KPI_NUMERIC_TARGETS else formatted(value, m['metrics'][mid], target in ('yoy', 'mom'))
                 else:
                     metric = m['metrics'][c['measures'][0]]
                     raw.update({'type': raw.get('type', 'mc01'), 'label': c['title'], 'value': formatted(values[c['measures'][0]], metric),
@@ -135,6 +136,9 @@ class LocalView:
                         for name in ('yoy', 'mom', 'subVal', 'leftVal', 'rightVal', 'trendLabel', 'gaugeSub'):
                             if name in raw:
                                 raw[name] = '—'
+                        # Snapshot geometry cannot follow reader filters; show it as missing.
+                        for name in ('percent', 'actual', 'target', 'currentValue', 'priorValue', 'stats', 'items'):
+                            raw.pop(name, None)
                         raw['subLabel'] = '当前筛选范围'
                 if binding:
                     for target, comparison in binding.get('comparisons', {}).items():
@@ -143,7 +147,7 @@ class LocalView:
                         change = (current - baseline) / baseline if current is not None and baseline not in (None, 0) else None
                         raw[target] = formatted(change, {'format': 'percent', 'scale': 'fraction', 'decimals': 1, 'unit': ''}, True)
                 time_field = binding.get('timeField') if binding else raw.get('timeField')
-                if raw.get('type') == 'mc03' and time_field:
+                if raw.get('type') in ('mc03', 'mc12') and time_field:
                     mid = mids.get('value') if binding else c['measures'][0]
                     spark, hit = self.aggregate(ref, {mid: definitions[mid]}, active, [time_field])
                     computed['cacheHits'] += int(hit)

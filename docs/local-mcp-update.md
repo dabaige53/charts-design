@@ -12,6 +12,7 @@
 node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace
 ```
 
+- 更新脚本读取 Codex 的 TOML 配置，需要 Python 3.11 及以上（标准库 `tomllib`）；Runtime 本身支持 Python 3.10。
 - 保留原 Node 命令、其余启动参数、启用状态和看板数据目录。
 - 不提交或推送 Git，不修改看板数据，不创建配置备份。
 - 构建或启动检查失败时不切换配置；配置在构建期间变化时停止。

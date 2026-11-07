@@ -4,7 +4,7 @@
 
 | 目标 | Skill | 可执行参考案例 |
 | --- | --- | --- |
-| KPI、图表、表格、筛选组成的 Dashboard | `skills/executive-charts/SKILL.md` | `charts://examples/executive-dashboard` |
+| KPI、图表、表格、筛选组成的 Dashboard | `skills/executive-charts/SKILL.md` | `charts://examples/executive-dashboard`、`charts://examples/operations-scorecard` |
 | Markdown 正文与嵌入图表组成的论文式报告 | `skills/analytical-reports/SKILL.md` | `charts://examples/academic-report` |
 
 原 Dashboard HTML 案例继续保留在 `skills/executive-charts/examples/`。分析报告以当前认可的学术单栏案例作为母稿；其唯一 Markdown 源文是 `dashboard_runtime/examples/academic-report.md`，CLI 示例和 MCP 案例均从它读取。
@@ -14,7 +14,7 @@
 每次 MCP 项目调用都显式传入 `projectRoot`，值为报表资产目录的绝对路径；包括案例与声明发现、读取、编辑、诊断和分块读取。以下示例省略重复参数。旧启动默认项目仅用于兼容，不沿用上一次调用的项目。
 
 1. `generation_examples {}` 发现两种案例；`generation_examples {"caseId":"academic-report"}` 返回母稿 Markdown、明确标注的合成来源、数据/指标/图表声明及完整 `operations`。
-2. `chart_declarations {}` 发现类型索引，`chart_declarations {"code":"c01"}` 阅读所选声明要求与工作示例；`chart_catalog {}` 选择合适图表；`charts://contract` 阅读操作合同。相应资源为 `charts://declarations`、`charts://catalog`。
+2. `chart_recommend {"intent":"trend","measures":1}` 按问题与数据形态排列候选图表；`chart_declarations {}` 发现类型索引与指标卡选型 `kpiGuide`，`chart_declarations {"code":"c01"}` 阅读所选声明要求与工作示例；`layout_templates {}` 选择构图；`charts://contract` 阅读操作合同。相应资源为 `charts://declarations`、`charts://catalog`、`charts://layouts`。
 3. `dashboard_create {"dashboardId":"my-report","title":"我的分析报告"}` 建立空白文档，取得 revision。
 4. 用当前 `expectedRevision` 调用 `dashboard_edit_begin` 开始或恢复编辑批次，保存返回的批次 ID。调用方根据自己的数据和问题编写内容，并通过一次或多次 `dashboard_patch` 提交 `put_source`、`put_dataset`、`put_metric`、`put_component`、`set_report_markdown`、`set_view_mode=report`。传入当前 `expectedRevision`。组件与 Markdown 引用在整批操作结束后统一校验，创建与嵌入可以在同一批完成。
 5. 用最新 `expectedRevision` 和批次 ID 调用 `dashboard_edit_finish`；完整 Doctor 检查通过后生成一个检查点。检查失败时保留草稿、修正问题再完成批次。`dashboard_validate` 可用于中途结构检查，不能替代批次完成。
@@ -50,6 +50,10 @@ MCP 负责发现、验证、保存和渲染声明；调用它的模型或程序�
 ## 指标口径、数据说明与备注
 
 使用标准 Markdown 脚注语法：正文 `收入[^revenue]`，末尾定义 `[^revenue]: 指标按观察范围对收入求和，单位万元。` 渲染为带编号、可跳转和返回正文的文末「注释」。重复引用复用编号；未定义的引用保留为原文，交付前应补齐。网页没有稳定分页，故不假称为逐页页脚。较长定义放在普通 `## 附录：指标口径` 中。母稿同时演示注释与附录，正文与说明均由调用方通过 `set_report_markdown` 生成并保存。
+
+## 两个对照看板案例
+
+`executive-dashboard` 与 `operations-scorecard` 使用同一份合成数据与指标，构图完全不同：前者为经典三段式（mc01–mc04、t06、c01），后者使用 `scorecard` 布局模板、mc16 主指标、mc11 环形、mc13 子弹目标、mc14 双期对比、mc12 迷你柱与 mc05 仪表，以及 c02 排名、c03 预算对实际、t01 走势，并以 `apply_layout_template` 而非手写坐标排版。两者都不应被整体复制：先用 `chart_recommend` 按问题选图、按 `kpiGuide` 选指标卡、用 `layout_templates` 选构图。选型规则见 `skills/executive-charts/references/kpi-cards.md` 与 `layout_templates.md`。
 
 ## 完整经营看板案例与能力边界
 

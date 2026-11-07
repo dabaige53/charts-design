@@ -53,3 +53,9 @@
 :host([data-load-failed="true"]) .card-body-wrap,:host([data-load-failed="true"]) .kpi-headline,:host([data-load-failed="true"]) .component-table-body{visibility:hidden}
 
 .component-load-error{position:absolute;inset:80px 12px auto;padding:16px;color:#a63d36;background:#fff7f5;font-size:13px;z-index:5}.component-load-error button{margin-left:12px}
+/* KPI headlines shrink with narrow cards (6-up scorecards, phones) instead of wrapping inside a unit. */
+#app-kpis>.section-card{container-type:inline-size}
+#app-kpis .text-xl,#app-kpis .text-2xl,#app-kpis .text-4xl{white-space:nowrap}
+@container (max-width:260px){#app-kpis .text-4xl{font-size:1.75rem!important;line-height:2rem!important}#app-kpis .text-2xl{font-size:1.25rem!important;line-height:1.75rem!important}#app-kpis .text-xl{font-size:1.125rem!important;line-height:1.5rem!important}}
+@container (max-width:200px){#app-kpis .text-4xl{font-size:1.5rem!important}#app-kpis .text-2xl{font-size:1.125rem!important}}
+@container (max-width:200px){#app-kpis [id^="kpi-ring-"]{width:3rem!important;height:3rem!important}}

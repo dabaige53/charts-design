@@ -29,12 +29,14 @@ def configurations():
 
 def document():
     charts=configurations();ops=[{'op':'put_source','id':'catalog-fixture','value':{'kind':'fixture','name':'Explicit original catalog demonstration values'}},{'op':'set_status','value':'fixture'}]
-    for i in range(1,10):
+    from dashboard_runtime.kpi_cards import kpi_example
+    for i in range(1,17):
         code='mc%02d'%i
         config={'id':code,'type':code,'label':code.upper()+' 指标卡','value':'86.5%','yoy':'+2.1 pts','mom':'+0.5 pts','isPositive':True,'subLabel':'同期基准','subVal':'84.4%','statusBadge':'示例','sparkMonths':['1','2','3','4','5'],'sparkData':[70,78,74,82,86.5],'leftVal':'120','rightVal':'104','leftLabel':'示例指标 A','rightLabel':'示例指标 B','percent':86.5,'trendLabel':'示例趋势','rankBadge':'示例等级','thresholdLabel':'示例阈值','segLeftWidth':'60%','segRightWidth':'40%'}
+        if i>=10:config={**kpi_example(code),'id':code,'label':code.upper()+' 指标卡'}
         ops.append({'op':'put_component','id':code,'value':{'kind':'legacy','family':'kpi','title':config['label'],'config':config,'sourceId':'catalog-fixture'}})
     for code,c in sorted(charts.items()):ops.append({'op':'put_component','id':code,'value':{'kind':'legacy','family':'chart','title':c['title'],'config':c,'sourceId':'catalog-fixture'}})
-    doc=apply_operations(new_document('all-components','原版组件全量验收 / 40 + 9'),ops)
+    doc=apply_operations(new_document('all-components','原版组件全量验收 / 40 + 16'),ops)
     for bp,cols in [('desktop',12),('tablet',8),('mobile',4)]:
         positions=[];y=0;x=0;rowh=0
         for key,c in doc['manifest']['components'].items():

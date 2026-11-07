@@ -116,7 +116,7 @@ def test_validate_rejects_unknown_kpi_type_and_mismatched_chart_vectors(tmp_path
     }), encoding="utf-8")
     (workspace / "filters.json").write_text("[]", encoding="utf-8")
     (workspace / "table.json").write_text('{"columns":[],"rows":[]}', encoding="utf-8")
-    (workspace / "kpis" / "k.json").write_text('{"id":"k","type":"mc10","label":"Revenue","value":"1","unit":"元"}', encoding="utf-8")
+    (workspace / "kpis" / "k.json").write_text('{"id":"k","type":"mc99","label":"Revenue","value":"1","unit":"元"}', encoding="utf-8")
     (workspace / "charts" / "c.json").write_text('{"id":"c","code":"c01","title":"Trend","unit":"元","data":{"categories":["A","B"],"values":[1]}}', encoding="utf-8")
 
     result = run_cli("dashboard", "validate", workspace, "--strict", "--json")

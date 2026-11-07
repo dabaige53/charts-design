@@ -6,7 +6,9 @@ import math
 import re
 
 
-KPI_TYPES = frozenset(f"mc{index:02d}" for index in range(1, 10))
+KPI_TYPES = frozenset(f"mc{index:02d}" for index in range(1, 17))
+# Cards whose shape needs a trend series (labels + finite values of equal length).
+KPI_SERIES_TYPES = frozenset(("mc03", "mc12"))
 
 
 def validate_kpi_comparisons(kpi: dict[str, Any], path: str) -> list[dict[str, str]]:
@@ -44,12 +46,15 @@ def validate_kpi_presentation(kpi: dict[str, Any], path: str) -> list[dict[str, 
     def error(field, message):
         errors.append({"code": "KPI_PRESENTATION_INVALID", "path": f"{path}.{field}", "message": message})
 
+    def finite(value):
+        return type(value) in (int, float) and math.isfinite(value)
+
     card_type = kpi.get("type")
     if card_type in ("mc04", "mc05"):
         value = str(kpi.get("value", "")).replace(",", "")
         if not re.match(r"^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)", value):
             error("value", "Progress and gauge cards need a numeric display value")
-    if card_type == "mc03":
+    if card_type in KPI_SERIES_TYPES:
         months, data = kpi.get("sparkMonths"), kpi.get("sparkData")
         if not isinstance(months, list) or not months or not all(isinstance(m, str) for m in months):
             error("sparkMonths", "Declare non-empty sparkline period labels")
@@ -78,6 +83,54 @@ def validate_kpi_presentation(kpi: dict[str, Any], path: str) -> list[dict[str, 
         for field in ("subLabel", "subVal"):
             if kpi.get(field) in (None, ""):
                 error(field, "Declare the segment label and value")
+    if card_type == "mc10":
+        stats = kpi.get("stats")
+        names = ("min", "p25", "median", "p75", "max")
+        if not isinstance(stats, dict) or not all(finite(stats.get(name)) for name in names):
+            error("stats", "Declare finite min, p25, median, p75 and max from the observed distribution")
+        elif not all(stats[a] <= stats[b] for a, b in zip(names, names[1:])):
+            error("stats", "Distribution statistics must satisfy min <= p25 <= median <= p75 <= max")
+        if kpi.get("value") in (None, ""):
+            error("value", "Declare the displayed median")
+    if card_type == "mc11":
+        percent = kpi.get("percent")
+        if percent is None:
+            value = str(kpi.get("value", "")).replace(",", "")
+            if not re.match(r"^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)", value):
+                error("percent", "Ring progress needs a numeric percent (0-100 scale) or a numeric display value")
+        elif not finite(percent) or percent < 0:
+            error("percent", "Ring progress percent must be a finite number >= 0 (100 = target reached)")
+    if card_type == "mc13":
+        for field in ("actual", "target"):
+            if not finite(kpi.get(field)):
+                error(field, "Bullet cards need finite numeric actual and target values")
+        ranges = kpi.get("ranges", [])
+        if not isinstance(ranges, list) or len(ranges) > 3 or not all(finite(v) for v in ranges):
+            error("ranges", "Qualitative ranges are up to three finite numbers in the same unit as actual")
+        if "max" in kpi and not (finite(kpi["max"]) and kpi["max"] > 0):
+            error("max", "Scale maximum must be a positive finite number")
+        if kpi.get("rangeBasis", "value") not in ("value", "target"):
+            error("rangeBasis", "rangeBasis is value (absolute limits) or target (fractions of target)")
+    if card_type == "mc14":
+        for field in ("currentValue", "priorValue"):
+            if not finite(kpi.get(field)):
+                error(field, "Period comparison needs finite numeric current and prior values")
+    if card_type == "mc15":
+        items = kpi.get("items")
+        if not isinstance(items, list) or not 1 <= len(items) <= 4:
+            error("items", "Declare 1-4 list items")
+        else:
+            for index, item in enumerate(items):
+                if not isinstance(item, dict) or item.get("label") in (None, "") or item.get("value") in (None, ""):
+                    error(f"items[{index}]", "Each item needs label and value")
+                elif item.get("delta") is not None:
+                    for problem in validate_kpi_comparisons({"yoy": item["delta"]}, f"{path}.items[{index}]"):
+                        errors.append({**problem, "path": f"{path}.items[{index}].delta"})
+    if card_type == "mc16":
+        if kpi.get("value") in (None, ""):
+            error("value", "Declare the headline value")
+        if kpi.get("note") is not None and (not isinstance(kpi["note"], str) or len(kpi["note"]) > 120):
+            error("note", "The takeaway note is text of at most 120 characters")
     return errors
 
 

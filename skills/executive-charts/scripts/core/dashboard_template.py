@@ -613,6 +613,17 @@ __FILTER_BINDINGS_JS__
             return value ?? '—';
         }
 
+        function kpiNumber(value, unit) {
+            const number = Number(value);
+            if (value === null || value === undefined || value === '' || !Number.isFinite(number)) return '—';
+            return number.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) + (unit ? ' ' + unit : '');
+        }
+
+        function kpiShare(value, top) {
+            const number = Number(value);
+            return top > 0 && Number.isFinite(number) ? Math.max(0, Math.min(100, number / top * 100)) : null;
+        }
+
         function trendBadgeClass(value) {
             const direction = trendDirection(value);
             if (direction > 0) return 'bg-positive/10 text-positive border-positive/20';
@@ -1020,6 +1031,189 @@ __FILTER_BINDINGS_JS__
                         `;
                     }
 
+                    // 10. mc10: Median & Dispersion Range Card (gallery design, now registered)
+                    if (cardType === 'mc10') {
+                        const stats = kpi.stats || {};
+                        const low = Number(stats.min), high = Number(stats.max), span = high - low;
+                        const at = value => span > 0 && Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, (Number(value) - low) / span * 100)) : null;
+                        const q1 = at(stats.p25), q3 = at(stats.p75), mid = at(stats.median);
+                        const show = value => kpiNumber(value, '');
+                        return `
+                            <div class="section-card p-4 flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-ink-muted font-medium">${kpi.label}${kpi.sampleText ? `<span class="ml-1.5 text-[10px] text-ink-subtle font-mono">${kpi.sampleText}</span>` : ''}</span>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc10'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <div class="flex items-baseline gap-1.5">
+                                        <span class="text-[11px] text-ink-subtle">${kpi.valueLabel || '中位数'}</span>
+                                        <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                    </div>
+                                    ${kpi.meanText ? `<span class="text-[10px] text-ink-subtle font-mono">${kpi.meanText}</span>` : ''}
+                                </div>
+                                <div class="relative h-3 my-2" role="img" aria-label="分布：最小 ${show(stats.min)}，P25 ${show(stats.p25)}，中位数 ${show(stats.median)}，P75 ${show(stats.p75)}，最大 ${show(stats.max)}">
+                                    <div class="absolute inset-x-0 top-1/2 h-px bg-rule"></div>
+                                    <div class="absolute left-0 top-0.5 h-2 w-px bg-ink-subtle"></div>
+                                    <div class="absolute right-0 top-0.5 h-2 w-px bg-ink-subtle"></div>
+                                    ${q1 !== null && q3 !== null ? `<div class="absolute top-0 h-3 rounded-sm bg-primary-soft border border-primary/30" style="left: ${q1}%; width: ${Math.max(0.5, q3 - q1)}%;"></div>` : ''}
+                                    ${mid !== null ? `<div class="absolute -top-0.5 h-4 w-0.5 bg-primary" style="left: calc(${mid}% - 1px);"></div>` : ''}
+                                </div>
+                                <div class="pt-1.5 border-t border-slate-100 text-[10px] text-ink-subtle flex items-center justify-between font-mono">
+                                    <span>最小 ${show(stats.min)}</span>
+                                    <span class="text-ink-muted">P25 ${show(stats.p25)} ─ P75 ${show(stats.p75)}</span>
+                                    <span>最大 ${show(stats.max)}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // 11. mc11: Ring Progress Card (Real Dynamic ECharts Ring)
+                    if (cardType === 'mc11') {
+                        return `
+                            <div class="section-card p-4 flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc11'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                </div>
+                                <div class="flex items-center gap-3 my-0.5">
+                                    <div id="kpi-ring-${kpi.id}" class="w-16 h-16 shrink-0"></div>
+                                    <div class="min-w-0">
+                                        <div class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</div>
+                                        ${kpi.trendLabel ? `<span class="inline-block mt-0.5 text-[10px] text-primary font-semibold bg-primary/8 border border-primary/20 px-1.5 py-0.5 rounded font-mono">${kpi.trendLabel}</span>` : ''}
+                                    </div>
+                                </div>
+                                <div class="pt-1.5 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
+                                    <span>${kpi.subLabel || '目标'}</span>
+                                    <span class="text-primary font-semibold">${kpi.subVal ?? '—'}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // 12. mc12: Mini Column Trend Card (Real Dynamic ECharts Bars)
+                    if (cardType === 'mc12') {
+                        return `
+                            <div class="section-card p-4 flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc12'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <div class="flex items-baseline gap-1.5">
+                                        <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                        ${kpi.yoy == null ? '' : `<span class="text-xs font-bold ${trendTextClass(kpi.yoy)} font-mono">${comparisonText(kpi.yoy)}</span>`}
+                                    </div>
+                                    ${kpi.trendLabel ? `<span class="text-[10px] text-ink-muted font-semibold border border-slate-200 bg-slate-50 px-1.5 py-0.5 rounded font-mono">${kpi.trendLabel}</span>` : ''}
+                                </div>
+                                <div id="kpi-bars-${kpi.id}" class="w-full h-12 my-1"></div>
+                                <div class="pt-1.5 border-t border-slate-100 text-[10px] text-ink-subtle flex items-center justify-between font-mono">
+                                    <span>${kpi.subLabel || '最近周期'}</span>
+                                    <span class="text-ink-muted font-semibold">${kpi.subVal ?? '—'}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // 13. mc13: Bullet Target Card (actual bar, target marker, qualitative ranges)
+                    if (cardType === 'mc13') {
+                        const actual = Number(kpi.actual), target = Number(kpi.target);
+                        // rangeBasis 'target' expresses bands as fractions of the (possibly recomputed) target.
+                        const basis = kpi.rangeBasis === 'target' ? (Number.isFinite(target) ? target : NaN) : 1;
+                        const ranges = (Array.isArray(kpi.ranges) ? kpi.ranges : []).map(value => Number(value) * basis).filter(Number.isFinite).sort((a, b) => a - b).slice(0, 3);
+                        const declared = Number(kpi.max);
+                        const top = Number.isFinite(declared) && declared > 0 ? declared : Math.max(Number.isFinite(actual) ? actual : 0, Number.isFinite(target) ? target : 0, ...ranges) * 1.15;
+                        const bar = kpiShare(actual, top), marker = kpiShare(target, top);
+                        const shades = ['#C5D0DC', '#D9E1E9', '#ECF0F4'];
+                        return `
+                            <div class="section-card p-4 flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc13'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                </div>
+                                <div class="flex flex-wrap items-baseline justify-between gap-x-2">
+                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                    ${kpi.yoy == null ? '' : `<span class="text-[11px] font-bold ${trendTextClass(kpi.yoy)} font-mono">${comparisonText(kpi.yoy)}</span>`}
+                                </div>
+                                <div class="relative h-5 my-1.5 rounded-sm overflow-hidden bg-[#F4F6F8]" role="img" aria-label="实际 ${kpiNumber(actual, kpi.unit)}，目标 ${kpiNumber(target, kpi.unit)}">
+                                    ${ranges.slice().reverse().map((limit, index) => `<div class="absolute inset-y-0 left-0" style="width: ${kpiShare(limit, top) ?? 0}%; background: ${shades[(ranges.length - 1 - index) % shades.length]};"></div>`).join('')}
+                                    ${bar === null ? '' : `<div class="absolute left-0 top-1/2 -translate-y-1/2 h-2 bg-primary rounded-sm" style="width: ${bar}%;"></div>`}
+                                    ${marker === null ? '' : `<div class="absolute top-0 h-5 w-0.5 bg-primary-strong" style="left: calc(${marker}% - 1px);"></div>`}
+                                </div>
+                                <div class="pt-1.5 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono">
+                                    <span>${kpi.subLabel || '目标'}</span>
+                                    <span class="text-primary font-semibold">${kpi.subVal ?? kpiNumber(target, kpi.unit)}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // 14. mc14: Period Comparison Card (current vs prior, paired bars)
+                    if (cardType === 'mc14') {
+                        const current = Number(kpi.currentValue), prior = Number(kpi.priorValue);
+                        const top = Math.max(Number.isFinite(current) ? Math.abs(current) : 0, Number.isFinite(prior) ? Math.abs(prior) : 0);
+                        const width = value => { const share = kpiShare(Math.abs(Number(value)), top); return share === null ? 0 : Math.max(2, share); };
+                        return `
+                            <div class="section-card p-4 flex flex-col justify-between">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc14'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                </div>
+                                <div class="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                                    <span class="text-2xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value ?? '—'}</span>
+                                    ${kpi.yoy == null ? '' : `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${trendBadgeClass(kpi.yoy)} font-mono">${kpi.deltaLabel || '较上期'} ${comparisonText(kpi.yoy)}</span>`}
+                                </div>
+                                <div class="space-y-1 my-1.5 text-[10px] font-mono">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-12 shrink-0 truncate text-ink-muted">${kpi.currentLabel || '本期'}</span>
+                                        <div class="flex-1 h-2 rounded-sm bg-slate-100 overflow-hidden"><div class="h-full rounded-sm bg-primary" style="width: ${width(current)}%;"></div></div>
+                                        <span class="w-20 shrink-0 text-right text-ink font-semibold tabular-nums">${kpi.currentText ?? kpiNumber(current, kpi.unit)}</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-12 shrink-0 truncate text-ink-subtle">${kpi.priorLabel || '上期'}</span>
+                                        <div class="flex-1 h-2 rounded-sm bg-slate-100 overflow-hidden"><div class="h-full rounded-sm bg-[#8EA4B8]" style="width: ${width(prior)}%;"></div></div>
+                                        <span class="w-20 shrink-0 text-right text-ink-muted tabular-nums">${kpi.priorText ?? kpiNumber(prior, kpi.unit)}</span>
+                                    </div>
+                                </div>
+                                ${kpi.subLabel || kpi.subVal != null ? `<div class="pt-1.5 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono"><span>${kpi.subLabel || ''}</span><span class="text-primary font-semibold">${kpi.subVal ?? '—'}</span></div>` : ''}
+                            </div>
+                        `;
+                    }
+
+                    // 15. mc15: Metric List Card (2-4 related sub-metrics)
+                    if (cardType === 'mc15') {
+                        const items = (Array.isArray(kpi.items) ? kpi.items : []).slice(0, 4);
+                        return `
+                            <div class="section-card p-4 flex flex-col">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-ink-muted font-medium">${kpi.label}</span>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc15'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                </div>
+                                ${kpi.value == null ? '' : `<div class="flex items-baseline gap-1.5"><span class="text-xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums">${kpi.value}</span>${kpi.valueLabel ? `<span class="text-[10px] text-ink-subtle">${kpi.valueLabel}</span>` : ''}</div>`}
+                                <div class="mt-1 divide-y divide-slate-100 text-[11px]">
+                                    ${items.map(item => `<div class="flex items-center justify-between gap-2 py-1"><span class="text-ink-muted truncate">${item?.label ?? '—'}</span><span class="flex items-baseline gap-1.5 font-mono"><span class="text-ink font-semibold tabular-nums">${item?.value ?? '—'}</span>${item?.delta == null ? '' : `<span class="text-[10px] font-bold ${trendTextClass(item.delta)}">${comparisonText(item.delta)}</span>`}</span></div>`).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // 16. mc16: Hero Number Card (typographic headline with takeaway)
+                    if (cardType === 'mc16') {
+                        return `
+                            <div class="section-card p-4 flex flex-col justify-between">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-bold text-primary tracking-widest uppercase">${kpi.label}</span>
+                                    <button class="chart-explain-btn" data-explain-chart="${kpi.explainKey || 'mc16'}" aria-label="查看指标说明" title="查看指标说明">${LUCIDE_ICONS.info}</button>
+                                </div>
+                                <div class="flex items-baseline gap-2 mt-1.5">
+                                    <span class="text-4xl font-extrabold text-primary-strong tracking-tight font-mono tabular-nums leading-none">${kpi.value ?? '—'}</span>
+                                    ${kpi.yoy == null ? '' : `<span class="text-xs font-bold ${trendTextClass(kpi.yoy)} font-mono">${comparisonText(kpi.yoy)}</span>`}
+                                </div>
+                                ${kpi.note ? `<p class="text-xs text-ink-muted leading-snug mt-1.5 line-clamp-2">${kpi.note}</p>` : ''}
+                                ${kpi.subLabel || kpi.subVal != null ? `<div class="pt-1.5 mt-1 border-t border-slate-100 text-[11px] text-ink-subtle flex items-center justify-between font-mono"><span>${kpi.subLabel || ''}</span><span class="text-primary font-semibold">${kpi.subVal ?? '—'}</span></div>` : ''}
+                            </div>
+                        `;
+                    }
+
                     // Default Standard Card Fallback
                     return `
                         <div class="section-card p-4 flex flex-col justify-between">
@@ -1052,7 +1246,7 @@ __FILTER_BINDINGS_JS__
                     if (old && old.dataset.kpiType === card.dataset.kpiType) {
                         old.dataset.kpiSignature = card.dataset.kpiSignature;
                         // Keep widget hosts (and their ECharts canvas) while refreshing card text.
-                        card.querySelectorAll('[id^="kpi-spark-"], [id^="kpi-gauge-"]').forEach(host => {
+                        card.querySelectorAll('[id^="kpi-spark-"], [id^="kpi-gauge-"], [id^="kpi-ring-"], [id^="kpi-bars-"]').forEach(host => {
                             const existing = old.querySelector(`#${CSS.escape(host.id)}`);
                             if (existing) host.replaceWith(existing);
                         });
@@ -1388,6 +1582,8 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     if (oldKPIs.get(kpi.id) === (kpi.type || 'mc01')) {
                         if (kpi.type === 'mc03') compatible.add(`kpi-spark-${kpi.id}`);
                         if (kpi.type === 'mc05') compatible.add(`kpi-gauge-${kpi.id}`);
+                        if (kpi.type === 'mc11') compatible.add(`kpi-ring-${kpi.id}`);
+                        if (kpi.type === 'mc12') compatible.add(`kpi-bars-${kpi.id}`);
                     }
                 });
                 Object.entries(this.state.chartInstances).forEach(([id, instance]) => {
@@ -1528,6 +1724,82 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                             });
                         }
                     }
+                    // 3. mc11: Ring Progress (full-circle gauge)
+                    if (kpi.type === 'mc11') {
+                        const dom = this.getById(`kpi-ring-${kpi.id}`);
+                        if (dom) {
+                            const percent = Number.isFinite(Number(kpi.percent)) && kpi.percent !== null && kpi.percent !== '' ? Number(kpi.percent) : parseKPIValue(kpi.value);
+                            if (percent === null || !Number.isFinite(percent)) {
+                                this.state.chartInstances[`kpi-ring-${kpi.id}`]?.clear();
+                                return;
+                            }
+                            const inst = echarts.getInstanceByDom?.(dom) || echarts.init(dom);
+                            this.state.chartInstances[`kpi-ring-${kpi.id}`] = inst;
+                            inst.setOption({
+                                animation: true,
+                                series: [{
+                                    type: 'gauge',
+                                    startAngle: 90,
+                                    endAngle: -270,
+                                    min: 0,
+                                    max: 100,
+                                    radius: '94%',
+                                    center: ['50%', '50%'],
+                                    progress: { show: true, roundCap: true, width: 7, itemStyle: { color: TOKENS.palette.primary } },
+                                    axisLine: { lineStyle: { width: 7, color: [[1, '#E2E8F0']] } },
+                                    axisTick: { show: false },
+                                    splitLine: { show: false },
+                                    axisLabel: { show: false },
+                                    pointer: { show: false },
+                                    anchor: { show: false },
+                                    title: { show: false },
+                                    detail: { show: true, offsetCenter: [0, 0], fontSize: 12, fontWeight: 700, color: TOKENS.palette.primaryStrong, fontFamily: 'JetBrains Mono, Menlo, monospace', formatter: () => `${Math.round(percent)}%` },
+                                    data: [{ value: Math.max(0, Math.min(100, percent)) }]
+                                }]
+                            });
+                        }
+                    }
+
+                    // 4. mc12: Mini Column Trend (latest period emphasized)
+                    if (kpi.type === 'mc12') {
+                        const dom = this.getById(`kpi-bars-${kpi.id}`);
+                        if (dom) {
+                            const labels = kpi.sparkMonths;
+                            const values = kpi.sparkData;
+                            if (!Array.isArray(labels) || !Array.isArray(values) || !values.length || labels.length !== values.length) {
+                                this.state.chartInstances[`kpi-bars-${kpi.id}`]?.clear();
+                                return;
+                            }
+                            const inst = echarts.getInstanceByDom?.(dom) || echarts.init(dom);
+                            this.state.chartInstances[`kpi-bars-${kpi.id}`] = inst;
+                            const last = values.length - 1;
+                            inst.setOption({
+                                animation: true,
+                                animationDuration: 400,
+                                grid: { top: 4, bottom: 2, left: 2, right: 2 },
+                                tooltip: {
+                                    trigger: 'axis',
+                                    axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(18, 59, 93, 0.06)' } },
+                                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                    borderColor: TOKENS.palette.rule,
+                                    borderWidth: 1,
+                                    padding: [4, 8],
+                                    extraCssText: 'box-shadow: 0 2px 8px rgba(18, 59, 93, 0.08); border-radius: 4px; z-index: 50;',
+                                    formatter: params => {
+                                        const p = params[0];
+                                        return `<div class="text-[11px] font-mono"><span class="font-bold text-primary">${p.name}:</span> <span class="font-bold text-ink">${p.value ?? '—'}${kpi.unit ? ' ' + kpi.unit : ''}</span></div>`;
+                                    }
+                                },
+                                xAxis: { type: 'category', show: false, data: labels },
+                                yAxis: { type: 'value', show: false, min: value => Math.min(0, value.min) },
+                                series: [{
+                                    type: 'bar',
+                                    barCategoryGap: '28%',
+                                    data: values.map((value, index) => ({ value, itemStyle: { color: index === last ? TOKENS.palette.primary : 'rgba(18, 59, 93, 0.26)', borderRadius: [2, 2, 0, 0] } }))
+                                }]
+                            });
+                        }
+                    }
                 });
             }
 
@@ -1582,7 +1854,7 @@ __EXPLANATION_DIALOG_RENDERER_JS__
                     });
                     this._resizeObserver?.disconnect();
                     this._resizeObserver = observer;
-                    this.queryAll('.card-chart-pane, .section-card div[id^="kpi-spark-"], .section-card div[id^="kpi-gauge-"]').forEach(el => observer.observe(el));
+                    this.queryAll('.card-chart-pane, .section-card div[id^="kpi-spark-"], .section-card div[id^="kpi-gauge-"], .section-card div[id^="kpi-ring-"], .section-card div[id^="kpi-bars-"]').forEach(el => observer.observe(el));
                 }
 
                 if (!this._resizeBound) {

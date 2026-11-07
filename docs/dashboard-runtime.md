@@ -148,9 +148,9 @@ The Node launchers use this interpreter and dependency directory. With `isolated
 
 Registration is managed once through Magpie, with absolute paths for Node, the launcher and runtime cache. Do not create per-project registrations or modify Agent configuration as part of chart generation. Existing project-local registrations and `--project-root` startup defaults remain compatible; configuration changes belong to the registration-management task. Installation updates and reconnect checks are described in [本地 MCP 更新](local-mcp-update.md).
 
-Tools: `dashboard_create`, `dashboard_list`, `dashboard_get`, `dashboard_patch`, `dashboard_validate`, `dashboard_preview`, `dashboard_history`, `dashboard_restore`, `chart_catalog`, `dataset_import`, `query_execute`, `query_inspect`, `semantic_inspect`, `legacy_render`, `generation_examples`, `chart_declarations`.
+Tools: `dashboard_create`, `dashboard_list`, `dashboard_get`, `dashboard_patch`, `dashboard_validate`, `dashboard_preview`, `dashboard_history`, `dashboard_restore`, `chart_catalog`, `dataset_import`, `query_execute`, `query_inspect`, `semantic_inspect`, `legacy_render`, `generation_examples`, `chart_declarations`, `chart_recommend`, `layout_templates`. The self-hosted server adds `dashboard_share` and `dashboard_share_revoke` and hides `dashboard_export_open`.
 
-Preview tools link to a resource whose URI includes the runtime version and UI build ID, with MIME `text/html;profile=mcp-app`. It uses `@modelcontextprotocol/ext-apps` and the same built UI as the independent web editor. Prefer the current build-specific preview tool listed by the server; the fixed `dashboard_preview` name remains compatible. Tool discovery, result chunking and stale-page checks are defined in [传输与诊断](mcp-transport-diagnostics.md). A normal MCP connection does not establish MCP Apps host acceptance. Remote Streamable HTTP MCP and OAuth are not included. Independent static-site export is available as described in [静态部署包](static-deployment.md); it does not provide a hosted multi-user backend.
+Preview tools link to a resource whose URI includes the runtime version and UI build ID, with MIME `text/html;profile=mcp-app`. It uses `@modelcontextprotocol/ext-apps` and the same built UI as the independent web editor. Prefer the current build-specific preview tool listed by the server; the fixed `dashboard_preview` name remains compatible. Tool discovery, result chunking and stale-page checks are defined in [传输与诊断](mcp-transport-diagnostics.md). A normal MCP connection does not establish MCP Apps host acceptance. Remote Streamable HTTP MCP with bearer tokens, project names instead of server paths and expiring browser preview links is provided by the self-hosted server described in [自托管服务器](self-hosted-server.md); OAuth and multi-user permissions are not included. Independent static-site export is available as described in [静态部署包](static-deployment.md); it does not provide a hosted multi-user backend.
 
 ## Canonical state and editing
 
@@ -177,13 +177,13 @@ Example changes.json:
 
 Restore creates a new revision; it does not rewrite history. Project-mode annotations are independent and survive design restore; legacy centralized revisions retain their historical annotation behavior. Browser undo/redo uses the same service. New external revisions clear the browser undo stack instead of silently undoing another writer's work. Visible, idle readers check for external revisions every five seconds; editing, annotations and unsaved input pause this polling.
 
-GridStack uses independent desktop/tablet/mobile 12/8/4-column layouts. Edit mode supports layout dragging; component resizing is disabled. Adding, duplicating, deleting components and importing data remain API/CLI operations rather than visible editor controls. Read/edit modes, titles/descriptions, undo/redo, filters, export and SQL/semantic inspectors remain available.
+GridStack uses independent desktop/tablet/mobile 12/8/4-column layouts. `apply_layout_template` computes all three from one of seven named compositions (executive, focus, bento, sidebar, grid3, narrative, scorecard), runs after the rest of its batch, is saved as `manifest.layoutTemplate` and re-flows when components are added or removed; `set_layout` replaces it. Without a template, new components are placed by role (KPI rows, paired charts, full-width tables/text) instead of stacking full width. Selection rules: `skills/executive-charts/references/layout_templates.md`. Edit mode supports layout dragging; component resizing is disabled. Adding, duplicating, deleting components and importing data remain API/CLI operations rather than visible editor controls. Read/edit modes, titles/descriptions, undo/redo, filters, export and SQL/semantic inspectors remain available.
 
 Component action placement, Lucide controls, code-label visibility, table pagination and saved versus temporary presentation state are defined in [标题区与绑定](icon-header-and-bindings.md). Menus and forms retain readable text. Runtime previews and exports share the Runtime bundle; the standalone Python generators have their own card shell.
 
 ## Original components and chart switching
 
-The runtime directly bundles all 40 original chart builders, 9 KPI rendering branches, the detail table and business explanation dialog. Bodies run inside ShadowRoots, not nested iframe cards. Source extraction preserves the original geometry, labels, microcharts and original actions while replacing the header controls with consistent SVG chrome.
+The runtime directly bundles all 40 original chart builders, 16 KPI rendering branches (the original mc01–mc09 plus mc10–mc16, added in the same shared engine for selection variety), the detail table and business explanation dialog. Bodies run inside ShadowRoots, not nested iframe cards. Source extraction preserves the original geometry, labels, microcharts and original actions while replacing the header controls with consistent SVG chrome.
 
 ```sh
 python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
@@ -250,11 +250,11 @@ node --test tests/runtime/*.test.mjs
 
 HTML is a read-only snapshot with bundled original components, ECharts, icons and UI; it needs no CDN after building. It is not a live shared dashboard. JSON preserves editable canonical state. The historical standalone Python generators remain separate compatibility entrances and retain their own historical behavior.
 
-MCP integration uses a real stdio SDK client. Browser acceptance uses actual Chromium, ECharts and GridStack. The full component test renders all 40 charts and 9 KPI types, checks icon-only headers, original chart/table actions and CSV downloads, and writes screenshots plus `component-review/coverage.json`. This is rendering and behavioral coverage, not a claim of pixel-exact equivalence with historical screenshots. Optional unavailable runtimes are explicitly skipped outside CI, never counted as passed.
+Test layers, local commands and CI jobs are described in [测试与 CI](testing.md). MCP integration uses a real stdio SDK client. Browser acceptance uses actual Chromium, ECharts and GridStack. The full component test renders all 40 charts and 16 KPI types, checks icon-only headers, original chart/table actions and CSV downloads, and writes screenshots plus `component-review/coverage.json`. This is rendering and behavioral coverage, not a claim of pixel-exact equivalence with historical screenshots. Optional unavailable runtimes are explicitly skipped outside CI, never counted as passed.
 
 ## Remaining boundaries
 
-Complex original-data transforms, warehouse execution, remote MCP, multi-user permissions/RLS, enterprise approval, scheduled refresh, a hosted application backend, and actual Codex host acceptance are not established by the checks described here. UI completion does not imply these platform capabilities exist. Keep the PR Draft until visual review, code review and target-host acceptance; do not merge automatically.
+Complex original-data transforms, warehouse execution, OAuth, multi-user permissions/RLS, enterprise approval, scheduled refresh, and actual Codex host acceptance are not established by the checks described here. The self-hosted server provides token-authenticated remote MCP and browser previews, not a multi-tenant application backend. UI completion does not imply these platform capabilities exist. Keep the PR Draft until visual review, code review and target-host acceptance; do not merge automatically.
 
 Local server launch links now use an explicit `#token=...` fragment. Ordinary Markdown section and figure anchors never replace an existing session token. Legacy bare-token links are accepted for a fresh browser session; use the newly printed launch link to replace a token after a server restart.
 
@@ -279,7 +279,7 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 同一已选资产项目中保存多个页面时，MCP 内嵌预览和本机看板在左上角标题旁显示下拉箭头。点击标题可选择其他已保存页面，列表由 `dashboard_list` 读取，切换通过 `dashboard_get` 加载。新建页面会在阅读模式下自动出现在入口中；看板和分析报告均可切换。切换后退出编辑，并清空临时表格状态、图表联动和撤销记录；未保存的报告 Markdown 按页面保留在当前会话中。仅有一个页面或打开离线 HTML 时不显示入口。
 
-组件的 `subtitle` 为最多 1000 字符的说明，图表、指标卡和表格均显示。原版组件未设置顶层说明时使用 `config.subtitle`。原生指标卡默认 `presentation.type=mc01`，也支持 `mc02`–`mc09`；同比、环比、目标等字段需要明确提供，系统不会自动推算。`mc03` 需要有效数据字段 `timeField` 或显式 `sparkData` / `sparkline`；`mc06` 需要 `leftVal` 和 `rightVal`。
+组件的 `subtitle` 为最多 1000 字符的说明，图表、指标卡和表格均显示。原版组件未设置顶层说明时使用 `config.subtitle`。原生指标卡默认 `presentation.type=mc01`，也支持 `mc02`–`mc16`（选型见 `skills/executive-charts/references/kpi-cards.md`）；同比、环比、目标等字段需要明确提供，系统不会自动推算。`mc03` 需要有效数据字段 `timeField` 或显式 `sparkData` / `sparkline`；`mc06` 需要 `leftVal` 和 `rightVal`。
 
 仪表盘筛选栏右侧常驻显示条件摘要与文字按钮“清除所有筛选”，不再显示左侧的大号重置按钮。清除操作同时取消单选、多选、范围、搜索和图表联动条件；无条件时按钮保持可见并禁用。窄屏时摘要与清除按钮换到同一行。多组件筛选的候选项取关联数据集的并集。新增 `op=contains`：`values` 为空或一个最多 1000 字符的文本，对明确声明的字符串 `field` 做不区分大小写的包含匹配；仅影响 `componentIds`。全页搜索使用本地数据版本，不重新执行来源 SQL。表格自己的搜索框只搜索本表。
 

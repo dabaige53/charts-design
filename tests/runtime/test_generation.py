@@ -31,7 +31,8 @@ def test_case_generates_from_blank(case_id,mode):
 
 def test_case_discovery_read_only(tmp_path):
     service=Service(tmp_path)
-    assert len(service.call('generation_examples',{})['cases'])==2
+    cases=service.call('generation_examples',{})['cases']
+    assert [case['id'] for case in cases]==['executive-dashboard','operations-scorecard','academic-report']
     assert service.call('dashboard_list',{})=={'dashboards':[]}
     assert 'generation_examples' in READ_ONLY
     with pytest.raises(DashboardError):
@@ -61,3 +62,25 @@ assert.deepEqual(resolveOriginal(doc,'trend').data.month.revenue,[]);
 """
     result = subprocess.run(['node', '--input-type=module', '-e', script], input=json.dumps(doc), text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_operations_case_contrasts_the_executive_case_and_recomputes(tmp_path):
+    executive = apply_operations(new_document('a', 'A'), generation_examples('executive-dashboard')['operations'])
+    case = generation_examples('operations-scorecard')
+    assert any(op['op'] == 'apply_layout_template' for op in case['operations'])
+    assert not any(op['op'] == 'set_layout' for op in case['operations'])
+    doc = apply_operations(new_document('fresh', 'Blank'), case['operations'])
+    m = doc['manifest']
+    assert m['layoutTemplate']['id'] == 'scorecard'
+    kinds = lambda d, family: {c['config'].get('type') or c['config'].get('code') for c in d['manifest']['components'].values() if c.get('family') == family}
+    assert not kinds(doc, 'kpi') & kinds(executive, 'kpi')
+    assert not kinds(doc, 'chart') & kinds(executive, 'chart')
+    assert all(c.get('binding') for c in m['components'].values() if c['kind'] == 'legacy')
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    service.call('dashboard_create', {'dashboardId': 'ops', 'document': doc})
+    assert service.call('dashboard_doctor', {'dashboardId': 'ops', 'mode': 'full'})['passed']
+    filters = [{**f, 'values': ['华南基地']} if f['id'] == 'region' else f for f in m['filters']]
+    computed = service.call('dashboard_view', {'dashboardId': 'ops', 'dataMode': 'local', 'filters': filters})['document']['computed']['components']
+    assert (computed['budget-bullet']['actual'], computed['budget-bullet']['target']) == (206, 225)
+    assert computed['period-compare']['priorValue'] == 165
+    assert computed['region-rank']['data']['categories'] == ['华南基地']

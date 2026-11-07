@@ -71,7 +71,7 @@ console.log(JSON.stringify({id: chart.id, instanceId: chart.instanceId, code: ch
 
 def test_every_registered_component_is_covered_by_schema_and_generated_html_gate(tmp_path):
     assert set(CHART_SCHEMA_REGISTRY) == set(CHARTS_MAP)
-    assert KPI_TYPES == {f"mc{index:02d}" for index in range(1, 10)}
+    assert KPI_TYPES == {f"mc{index:02d}" for index in range(1, 17)}
 
     output = tmp_path / "all-components.html"
     generate_dashboard(

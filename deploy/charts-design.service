@@ -1,0 +1,27 @@
+# systemd unit for a checkout at /opt/charts-design (see docs/self-hosted-server.md).
+# Install: sudo cp deploy/charts-design.service /etc/systemd/system/ && sudo systemctl enable --now charts-design
+[Unit]
+Description=Charts Design server (remote MCP + previews)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=charts
+Group=charts
+WorkingDirectory=/opt/charts-design
+EnvironmentFile=/etc/charts-design/charts.env
+Environment=PYTHONPATH=/opt/charts-design
+Environment=CHARTS_WORKSPACE=/var/lib/charts-design/projects
+Environment=CHARTS_RUNTIME_ROOT=/var/lib/charts-design/runtime
+ExecStart=/opt/charts-design/.venv/bin/python -m dashboard_runtime server --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/charts-design
+
+[Install]
+WantedBy=multi-user.target

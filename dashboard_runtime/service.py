@@ -172,6 +172,13 @@ class Service:
             return generation_examples(args.get('caseId'))
         if tool == 'chart_declarations':
             return declaration_contract(chart_type=args.get('chartType'), legacy_code=args.get('code'), summary=not (args.get('chartType') or args.get('code')))
+        if tool == 'layout_templates':
+            from .layouts import templates_catalog
+            return templates_catalog()
+        if tool == 'chart_recommend':
+            from .recommend import recommend_charts
+            doc = self.store.get(board, hydrate=False) if board else None
+            return recommend_charts({key: value for key, value in args.items() if key not in ('dashboardId', 'dataMode')}, doc)
         if tool == 'dashboard_list':
             return {'dashboards': self.store.list()}
         if tool == 'dashboard_export_open':
@@ -349,7 +356,11 @@ class Service:
             charts = [{'code': code} for code in reference['legacy']['chartCodes']]
             from .legacy import catalog
             from .statistical import statistical_declarations
-            return {'statistical': statistical_declarations(), 'charts': charts, 'legacy': catalog(), 'originalKpis': ['mc%02d'%i for i in range(1,10)], 'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
+            from .kpi_cards import PATTERNS, kpi_guide
+            kpis = sorted(reference['legacy']['kpiTypes'])
+            return {'statistical': statistical_declarations(), 'charts': charts, 'legacy': catalog(), 'originalKpis': kpis,
+                    'kpiGuide': kpi_guide(kpis), 'kpiPatterns': PATTERNS,
+                    'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
             doc = self.store.get(board, hydrate=False)
             c = doc['manifest']['components'].get(args.get('componentId'))
@@ -447,10 +458,17 @@ TOOLS.update({
 READ_ONLY.add('legacy_render')
 
 TOOLS.update({
-    'generation_examples': ('Discover Dashboard and analytical-report generation cases; select caseId for reusable atomic declarations and the academic Markdown master. All case data is synthetic.', schema({'caseId': {'type':'string','enum':['executive-dashboard','academic-report']}})),
+    'generation_examples': ('Discover Dashboard and analytical-report generation cases; select caseId for reusable atomic declarations and the academic Markdown master. The two dashboard cases use different layouts, KPI shapes and charts on the same data: compose for the question rather than copying one. All case data is synthetic.', schema({'caseId': {'type':'string','enum':['executive-dashboard','operations-scorecard','academic-report']}})),
     'chart_declarations': ('Discover available declaration types; select an original chart/KPI code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'code':STR}))
 })
 READ_ONLY.update({'generation_examples','chart_declarations'})
+TOOLS['layout_templates'] = ('Discover named dashboard compositions (executive, focus, bento, sidebar, grid3, narrative, scorecard) and how to apply one with the apply_layout_template operation. Choose by content; avoid giving every dashboard the same layout.', schema())
+READ_ONLY.add('layout_templates')
+TOOLS['chart_recommend'] = ('Rank registered chart codes for a business question (intent) and data shape, mark which support filter bindings, suggest matching KPI shapes, and down-rank codes the dashboard already uses. Use before choosing codes; then read chart_declarations for the chosen code.',
+    schema({'intent': {'enum': ['comparison', 'ranking', 'trend', 'composition', 'distribution', 'relationship', 'flow', 'change', 'attribution', 'target', 'forecast']},
+            'categories': {'type': 'integer', 'minimum': 1}, 'measures': {'type': 'integer', 'minimum': 1}, 'hasTime': {'type': 'boolean'},
+            'dashboardId': STR, 'datasetId': STR}, ('intent',)))
+READ_ONLY.add('chart_recommend')
 
 TOOLS["statistical_render"] = ("Render a declared Seaborn component as bounded SVG or PNG with raw-observation provenance", schema({**TARGET, "format": {"enum": ["svg", "png"]}}, ("dashboardId", "componentId")))
 READ_ONLY.add("statistical_render")
