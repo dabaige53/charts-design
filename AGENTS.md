@@ -20,6 +20,7 @@
 - 排查预览、大响应或版本缓存时读 [传输与诊断](docs/mcp-transport-diagnostics.md)：预览入口、分块读取和请求日志。
 - 修改独立网页导出时读 [静态部署包](docs/static-deployment.md)：数据范围、重建、发布和验收边界。
 - 部署远程 MCP、修改服务器或网页预览与分享链接时读 [自托管服务器](docs/self-hosted-server.md)：入口、令牌、项目隔离、链接权限与边界。
+- 修改测试、CI 或检查脚本时读 [测试与 CI](docs/testing.md)：五层检查、浏览器标记、本地准备与产物。
 - 使用 Dashboard 生成器时读 [executive-charts](skills/executive-charts/SKILL.md)：组件编排、业务数据和生成检查。
 - 生成 Markdown 分析报告时读 [analytical-reports](skills/analytical-reports/SKILL.md)：学术单栏正文与图文核对。
 - 使用 MCP 创建、编辑或诊断时读 [共享交付流程](skills/executive-charts/references/mcp-delivery.md)：项目参数、语义保留、批次完成与一次预览。
@@ -35,4 +36,4 @@
 
 ## 修改与检查
 
-检查入口以 `package.json` 和 `.github/workflows/dashboard-runtime.yml` 为准。文档修改检查本地链接、章节锚点与旧路径引用；Skill 入口修改运行 `npm run check:skills`。修改运行代码时，按影响选择现有测试；历史记录中的通过结果不代表当前源码已经验证。
+检查入口以 `package.json` 和 `.github/workflows/dashboard-runtime.yml` 为准，分层与命令见 [测试与 CI](docs/testing.md)。文档修改检查本地链接、章节锚点与旧路径引用；Skill 入口修改运行 `npm run check:skills`。修改运行代码时，按影响选择现有测试；历史记录中的通过结果不代表当前源码已经验证。

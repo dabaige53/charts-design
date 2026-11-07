@@ -8,13 +8,18 @@
   },
   "scripts": {
     "test": "node bin/python-runtime.js -m pytest tests --ignore=tests/runtime -q && node bin/python-runtime.js -m pytest tests/runtime -q && node --test tests/runtime/*.test.mjs",
-    "check": "npm run check:skills && node --check bin/cli.js && node --check bin/python-runtime.js && node --check bin/mcp-runtime.js && node --check bin/dashboard-runtime.js && node bin/python-runtime.js -m py_compile skills/executive-charts/scripts/dashboard_workspace.py skills/executive-charts/scripts/generate_dashboard.py skills/executive-charts/scripts/core/*.py",
+    "test:unit": "node bin/python-runtime.js -m pytest tests/runtime -q -m \"not browser\" && node --test tests/runtime/*.test.mjs && node bin/python-runtime.js -m pytest tests --ignore=tests/runtime -q",
+    "test:browser": "node bin/python-runtime.js -m pytest tests/runtime -q -m browser",
+    "test:container": "docker build -f deploy/Dockerfile -t charts-design:local . && python3 tests/deploy/container_smoke.py --image charts-design:local",
+    "check": "npm run check:skills && npm run check:docs && node --check bin/check-doc-links.js && node --check bin/cli.js && node --check bin/python-runtime.js && node --check bin/mcp-runtime.js && node --check bin/dashboard-runtime.js && node bin/python-runtime.js -m py_compile skills/executive-charts/scripts/dashboard_workspace.py skills/executive-charts/scripts/generate_dashboard.py skills/executive-charts/scripts/core/*.py tests/deploy/container_smoke.py",
+    "check:skills": "node bin/check-skill-links.js",
+    "check:docs": "node bin/check-doc-links.js",
+    "lint:py": "ruff check",
     "runtime:build": "npm --prefix runtime-ui install && npm --prefix runtime-ui run build",
     "runtime:test": "node bin/python-runtime.js -m pytest tests/runtime -q && node --test tests/runtime/*.test.mjs",
     "runtime:serve": "node bin/dashboard-runtime.js serve",
     "runtime:mcp": "node bin/dashboard-runtime.js mcp",
-    "prepack": "npm --prefix runtime-ui run build",
-    "check:skills": "node bin/check-skill-links.js"
+    "prepack": "npm --prefix runtime-ui run build"
   },
   "files": [
     "bin/",
@@ -55,7 +60,8 @@
     "deploy/docker-compose.yml",
     "deploy/charts-design.service",
     "deploy/nginx.conf",
-    "deploy/environment.example"
+    "deploy/environment.example",
+    "docs/testing.md"
   ],
   "keywords": [
     "mckinsey",

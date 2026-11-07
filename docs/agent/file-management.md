@@ -17,7 +17,7 @@
 | `deploy/` | 自托管服务器的 Dockerfile、compose、systemd 与 nginx 示例 | 服务器参数或运行方式变化时同步 `docs/self-hosted-server.md`；不存放令牌、密钥或 `charts.env` |
 | `examples/`、`skills/executive-charts/examples/` | 人工浏览与视觉比较案例 | 作为展示材料，不把案例数据当真实业务输入 |
 | `dashboard_runtime/examples/academic-report.md` | 分析报告案例的唯一 Markdown 母稿 | CLI 与 MCP 案例共同读取，避免独立副本 |
-| `tests/`、`.github/workflows/` | 自动检查与 CI | 以已有命令及 CI 配置确定检查入口 |
+| `tests/`、`.github/workflows/` | 自动检查与 CI；`tests/deploy/` 为部署镜像冒烟检查 | 以已有命令及 CI 配置确定检查入口，分层见 `docs/testing.md` |
 
 Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原位。项目级文档正文放在 `docs/`，不为工具发现另建根目录正文、链接入口或符号链接。适配 Skill 或插件要求时优先改用已有正文；自动发现失败时直接读取实际路径。
 
