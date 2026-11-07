@@ -352,7 +352,11 @@ class Service:
             charts = [{'code': code} for code in reference['legacy']['chartCodes']]
             from .legacy import catalog
             from .statistical import statistical_declarations
-            return {'statistical': statistical_declarations(), 'charts': charts, 'legacy': catalog(), 'originalKpis': ['mc%02d'%i for i in range(1,10)], 'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
+            from .kpi_cards import PATTERNS, kpi_guide
+            kpis = sorted(reference['legacy']['kpiTypes'])
+            return {'statistical': statistical_declarations(), 'charts': charts, 'legacy': catalog(), 'originalKpis': kpis,
+                    'kpiGuide': kpi_guide(kpis), 'kpiPatterns': PATTERNS,
+                    'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
             doc = self.store.get(board, hydrate=False)
             c = doc['manifest']['components'].get(args.get('componentId'))
@@ -450,7 +454,7 @@ TOOLS.update({
 READ_ONLY.add('legacy_render')
 
 TOOLS.update({
-    'generation_examples': ('Discover Dashboard and analytical-report generation cases; select caseId for reusable atomic declarations and the academic Markdown master. All case data is synthetic.', schema({'caseId': {'type':'string','enum':['executive-dashboard','academic-report']}})),
+    'generation_examples': ('Discover Dashboard and analytical-report generation cases; select caseId for reusable atomic declarations and the academic Markdown master. The two dashboard cases use different layouts, KPI shapes and charts on the same data: compose for the question rather than copying one. All case data is synthetic.', schema({'caseId': {'type':'string','enum':['executive-dashboard','operations-scorecard','academic-report']}})),
     'chart_declarations': ('Discover available declaration types; select an original chart/KPI code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'code':STR}))
 })
 READ_ONLY.update({'generation_examples','chart_declarations'})

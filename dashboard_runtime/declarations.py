@@ -139,8 +139,8 @@ def _advanced_configs():
 
 
 def _binding_capability(code, family='chart'):
-    from .bindings import SERIES_TARGETS
-    supported = code in SERIES_TARGETS if family == 'chart' else code not in ('mc07', 'mc08', 'mc09')
+    from .bindings import KPI_SNAPSHOT_ONLY, SERIES_TARGETS
+    supported = code in SERIES_TARGETS if family == 'chart' else code not in KPI_SNAPSHOT_ONLY
     return {'supported': supported, 'snapshotOnly': not supported,
             'requiresExplicitBinding': True,
             'description': 'Explicit dataset/metric binding recomputes after scoped filters.' if supported else 'Snapshot rendering only; filter binding requires a dedicated reviewed transform.'}
@@ -179,28 +179,26 @@ def _legacy(common):
                          'seriesLabels': ['Value'], 'tooltipValueLabels': ['Value'],
                          'units': ['units'], 'tableHeaders': ['Region', 'Value']},
     }
+    from .kpi_cards import GUIDE, kpi_example
     kpi_configs = {}
     for code in kpis:
-        config = {'type': code, 'label': 'Synthetic example value', 'value': '12',
-                  'unit': 'units', 'yoy': '+2%', 'mom': '+1%', 'isPositive': True,
-                  'statusBadge': 'Example', 'subLabel': 'Previous', 'subVal': '10',
-                  'percent': 60, 'trendLabel': 'Synthetic trend', 'rankBadge': '2 / 5',
-                  'thresholdLabel': 'Example threshold', 'segLeftWidth': '60%', 'segRightWidth': '40%'}
-        if code == 'mc03':
-            config.update({'sparkMonths': ['Jan', 'Feb', 'Mar'], 'sparkData': [8, 10, 12]})
-        if code == 'mc06':
-            config.pop('value')
-            config.update({'leftLabel': 'Actual', 'leftVal': '12', 'rightLabel': 'Target', 'rightVal': '20'})
+        guide = GUIDE.get(code, {})
+        # Synthetic, shape-specific examples: each card type documents the
+        # fields that actually render, not one generic config for all.
+        config = kpi_example(code) if code in GUIDE else {'type': code, 'label': 'Synthetic example value', 'value': '12'}
+        required = {'mc06': ['label'], 'mc10': ['label', 'value', 'stats'], 'mc11': ['label', 'value', 'percent'],
+                    'mc12': ['label', 'value', 'sparkMonths', 'sparkData'], 'mc13': ['label', 'value', 'actual', 'target'],
+                    'mc14': ['label', 'value', 'currentValue', 'priorValue'], 'mc15': ['label', 'items']}.get(code, ['label', 'value'])
         kpi_configs[code] = {
+            'name': guide.get('name'), 'question': guide.get('question'),
+            'fields': guide.get('fields', {}), 'bindableTargets': guide.get('bind', []),
             'filterBinding': _binding_capability(code, 'kpi'),
-            'configSelector': {'type': code}, 'required': ['label'] + (
-                ['leftVal', 'rightVal'] if code == 'mc06' else ['value']),
+            'configSelector': {'type': code}, 'required': required,
             'completeJsonSchema': False, 'exampleConfig': config,
         }
         if code == 'mc03':
             kpi_configs[code]['requiredOneOf'] = [['sparkData'], ['sparkline']]
         if code == 'mc06':
-            kpi_configs[code]['required'] = ['label']
             kpi_configs[code]['requiredOneOf'] = [['value'], ['leftVal', 'rightVal']]
     families = {}
     for family in ('chart', 'kpi', 'table'):
@@ -246,7 +244,7 @@ def _legacy(common):
         'chartCodes': chart_codes, 'kpiTypes': kpi_configs, 'families': families,
         'limits': [
             'Annotations use manifest.annotations / set_annotations: up to 100 entries with unique id, componentId (existing component or null for page), text (1-4000 characters), and createdAt. Page metadata uses set_meta with subtitle/org/system/statusText/iconKey (chart or plane). Component subtitle is saved separately from title. Table column headings use title, then legacy label, then key. Filters use explicit consumers; contains takes one text value and an empty values list disables it.',
-            'Catalog entries are discovery metadata, not a list of chart renderers: the bundled catalog has 45 entries including KPI and table entries. The bundled validator registry has 40 chart codes and 9 KPI types.',
+            f'Catalog entries are discovery metadata, not a list of chart renderers: the bundled catalog has {len(catalog)} entries including KPI and table entries. The bundled validator registry has {len(codes)} chart codes and {len(kpis)} KPI types.',
             'Per-code requirements are extracted from the installed Python registry. They are partial guidance, not complete JSON Schemas. Nested object rules, matrix dimensions, scalar fields and specialized checks remain in the authoritative validator.',
             'registeredArrayFields does not enumerate every required data field: for example t06 requires month and quarter objects, m01 requires target, and m04 requires rate and target.',
             'presentationRequirements uses axis keys and required lengths for seriesLabels, tooltipValueLabels, units and optional labels; numeric/domain pairs name additional required fields. A series count of lines means len(data.lines); tableHeaderCount can be months+1 or stages+1.',
@@ -314,6 +312,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
     from .statistical import statistical_declarations
     result['statistical'] = statistical_declarations()
     if summary:
+        from .kpi_cards import GUIDE as KPI_GUIDE, PATTERNS as KPI_PATTERNS, kpi_guide
         legacy = result['legacy']
         result = {
             'schemaVersion': result['schemaVersion'],
@@ -321,7 +320,9 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             'statistical': {'backend':'seaborn','types':result['statistical']['types'],'component':result['statistical']['component'],'resource':'charts://declarations','renderTool':'statistical_render'},
             'dynamicEncoding': result['dynamicEncoding'],
             'summary': True, 'resource': 'charts://declarations',
-            'usage': 'Choose code for one of the 40 original charts or 9 KPI types. The full resource also documents the table family.',
+            'usage': f"Choose code for one of the {len(legacy['chartCodes'])} original charts or {len(legacy['kpiTypes'])} KPI types. The full resource also documents the table family.",
+            'kpiGuide': kpi_guide([code for code in legacy['kpiTypes'] if code in KPI_GUIDE]),
+            'kpiPatterns': KPI_PATTERNS,
             'legacy': {
                 'available': legacy['available'], 'counts': legacy['counts'],
                 'chartCodes': list(legacy['chartCodes']), 'kpiTypes': list(legacy['kpiTypes']),

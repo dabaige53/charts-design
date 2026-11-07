@@ -15,7 +15,12 @@ SERIES_TARGETS = {
     't06': ('categories', ('revenue', 'yieldGrowth')),
     'r02': ('clusters', ('x', 'y', 'size')),
 }
-KPI_TARGETS = {'value', 'leftVal', 'rightVal', 'subVal', 'yoy', 'mom', 'percent'}
+# Numeric targets drive card geometry (ring, bullet, paired bars) and stay unformatted.
+KPI_NUMERIC_TARGETS = {'percent', 'actual', 'target', 'currentValue', 'priorValue'}
+KPI_TARGETS = {'value', 'leftVal', 'rightVal', 'subVal', 'yoy', 'mom'} | KPI_NUMERIC_TARGETS
+# Ranking, threshold, segment, distribution and list cards need reviewed transforms.
+KPI_SNAPSHOT_ONLY = frozenset(('mc07', 'mc08', 'mc09', 'mc10', 'mc15'))
+KPI_TIME_SERIES = frozenset(('mc03', 'mc12'))
 
 def validate_binding(doc, component):
     b = component.get('binding')
@@ -56,12 +61,12 @@ def validate_binding(doc, component):
         require(set(measures) <= KPI_TARGETS, 'Unknown KPI binding target')
         required = {'leftVal', 'rightVal'} if config.get('type') == 'mc06' else {'value'}
         require(required <= set(measures), 'Bind each KPI headline value')
-        require(config.get('type', 'mc01') not in ('mc07', 'mc08', 'mc09'), 'Ranking/threshold/breakdown KPI requires a dedicated reviewed transform', 'BINDING_TRANSFORM_REQUIRED')
+        require(config.get('type', 'mc01') not in KPI_SNAPSHOT_ONLY, 'Ranking/threshold/breakdown/distribution/list KPI requires a dedicated reviewed transform', 'BINDING_TRANSFORM_REQUIRED')
         for target, comparison in b.get('comparisons', {}).items():
             require(target in ('yoy', 'mom') and isinstance(comparison, dict), 'Comparisons target yoy/mom')
             require(comparison.get('current') in measures and comparison.get('baseline') in measures, 'Comparison requires bound current and baseline values')
             require(comparison.get('mode', 'relative') == 'relative', 'Only relative comparison is supported')
-        if config.get('type') == 'mc03':
+        if config.get('type') in KPI_TIME_SERIES:
             field(m['datasets'][ds], b.get('timeField'))
     elif family == 'table':
         require(not measures, 'Table bindings consume rows, not aggregate measures')

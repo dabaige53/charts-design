@@ -28,7 +28,7 @@ def test_legacy_family_examples_validate(reference, family):
     assert document['manifest']['components'][example['componentId']]['family'] == family
 
 
-@pytest.mark.parametrize('code', [f'mc{i:02d}' for i in range(1, 10)])
+@pytest.mark.parametrize('code', [f'mc{i:02d}' for i in range(1, 17)])
 def test_each_legacy_kpi_selected_example_validates(code):
     if not declaration_contract(summary=True)['legacy']['available']:
         pytest.skip('Original repository is required for legacy validation')
@@ -50,7 +50,7 @@ def test_legacy_registry_and_catalog_are_distinguished(reference):
     assert [{key: value for key, value in entry.items() if key != 'filterBinding'} for entry in legacy['catalogEntries']] == catalog
     assert all('filterBinding' in entry for entry in legacy['catalogEntries'])
     assert legacy['counts'] == {
-        'catalogEntries': 45, 'registeredChartCodes': 40, 'registeredKpiTypes': 9}
+        'catalogEntries': 57, 'registeredChartCodes': 40, 'registeredKpiTypes': 16}
     assert set(legacy['chartCodes']) == set(registry.CHART_CODES)
     assert set(legacy['kpiTypes']) == set(registry.KPI_TYPES)
     assert 'r05' in legacy['chartCodes']

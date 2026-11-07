@@ -57,3 +57,13 @@ test('bubble aggregation follows filters and keeps the clicked agent identity',(
  d.manifest.filters[0].values=['missing'];
  assert.deepEqual(resolveOriginal(d,'bubble').data.clusters,[]);
 });
+test('bullet, comparison and mini-bar KPIs keep geometry numeric while headlines stay formatted',()=>{
+ const d=structuredClone(source);
+ d.manifest.components.bullet={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc13',value:'old',actual:1,target:1},binding:{datasetId:'ds',measures:{value:'revenue',actual:'revenue',target:'revenue'}}};
+ d.manifest.components.compare={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc14',value:'old',currentValue:1,priorValue:1},binding:{datasetId:'ds',measures:{value:'revenue',currentValue:'revenue',priorValue:'revenue'}}};
+ d.manifest.components.bars={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc12',value:'old'},binding:{datasetId:'ds',measures:{value:'revenue'},timeField:'date'}};
+ d.manifest.filters=[{componentIds:['bullet','compare','bars'],field:'region',op:'in',values:['East']}];
+ const bullet=resolveOriginal(d,'bullet');assert.equal(bullet.actual,120);assert.equal(typeof bullet.target,'number');assert.equal(typeof bullet.value,'string');
+ const compare=resolveOriginal(d,'compare');assert.equal(compare.currentValue,120);assert.equal(compare.priorValue,120);
+ const bars=resolveOriginal(d,'bars');assert.deepEqual(bars.sparkMonths,['2026-01-01','2026-02-01']);assert.deepEqual(bars.sparkData,[100,20]);
+});

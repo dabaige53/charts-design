@@ -473,6 +473,138 @@
     "axisRules": "主数值+进度条槽位+倒计时备注"
   },
   {
+    "id": "mc05",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "迷你半环仪表卡",
+    "nameEn": "Mini Semi-Gauge Metric Card",
+    "seriesType": "HTML Card + ECharts Gauge",
+    "legend": "none",
+    "bestFor": "0~100 区间内的单一达成度/正常率，强调与满分的距离",
+    "axisRules": "主数值+半环刻度（percent 或数值 value）+基准对照"
+  },
+  {
+    "id": "mc06",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "双指标并列卡",
+    "nameEn": "Dual-Metric Split Card",
+    "seriesType": "HTML Card (2 columns)",
+    "legend": "none",
+    "bestFor": "成对查看规模与效率、供给与需求两个同级指标",
+    "axisRules": "左右两栏数值与各自同比，底部匹配度；需要 leftTitle/leftVal/rightTitle/rightVal"
+  },
+  {
+    "id": "mc07",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "排位梯队徽章卡",
+    "nameEn": "Ranking Tier Badge Card",
+    "seriesType": "HTML Card + Badge",
+    "legend": "none",
+    "bestFor": "行业/区域排名、评级梯队与份额定位",
+    "axisRules": "徽章+名次文字 rankSub+排位标记 rankBadge；仅快照"
+  },
+  {
+    "id": "mc08",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "阈值预警卡",
+    "nameEn": "Threshold Alert Card",
+    "seriesType": "HTML Card (attention style)",
+    "legend": "none",
+    "bestFor": "超出红线或预警阈值的异常指标，需要醒目但不使用涨跌红绿",
+    "axisRules": "琥珀色预警框+alertLabel 阈值说明；仅快照"
+  },
+  {
+    "id": "mc09",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "结构分段卡",
+    "nameEn": "Segment Breakdown Card",
+    "seriesType": "HTML Card + Split Bar",
+    "legend": "none",
+    "bestFor": "两类构成的占比（国内/国际、新客/老客）",
+    "axisRules": "双色分段条 segLeftWidth+segRightWidth=100，底部为两段标签与数值；仅快照"
+  },
+  {
+    "id": "mc10",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "中位数极差分布卡",
+    "nameEn": "Median & Dispersion Range Card",
+    "seriesType": "HTML Card + Range Box",
+    "legend": "none",
+    "bestFor": "客单价、时长等偏态分布的中位数、四分位区间与极值",
+    "axisRules": "中位数主值+P25~P75 区间盒+最小/最大；stats 需 min≤p25≤median≤p75≤max；仅快照"
+  },
+  {
+    "id": "mc11",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "环形进度卡",
+    "nameEn": "Ring Progress Card",
+    "seriesType": "HTML Card + ECharts Ring",
+    "legend": "none",
+    "bestFor": "年度/季度目标完成度，环形比进度条更聚焦单一完成率",
+    "axisRules": "环内完成度 percent+右侧实际值+底部目标 subVal；可绑定 value/percent/subVal"
+  },
+  {
+    "id": "mc12",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "迷你柱趋势卡",
+    "nameEn": "Mini Column Trend Card",
+    "seriesType": "HTML Card + ECharts Bars",
+    "legend": "none",
+    "bestFor": "按月/周的离散周期取值，强调最近一期与前几期的高低",
+    "axisRules": "主数值+迷你柱（最后一期强调）；sparkMonths/sparkData 或绑定 timeField"
+  },
+  {
+    "id": "mc13",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "子弹目标卡",
+    "nameEn": "Bullet Target Card",
+    "seriesType": "HTML Card + Bullet Bar",
+    "legend": "none",
+    "bestFor": "实际值对目标线，并显示欠佳/达标/优秀等定性区间",
+    "axisRules": "实际条+目标竖线+最多 3 个 ranges；actual/target 为数值，可绑定"
+  },
+  {
+    "id": "mc14",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "双期对比卡",
+    "nameEn": "Period Comparison Card",
+    "seriesType": "HTML Card + Paired Bars",
+    "legend": "none",
+    "bestFor": "本期与上期/基期的规模对比和变动方向",
+    "axisRules": "主数值+变动徽章+本期/上期双条；currentValue/priorValue 为数值，可绑定"
+  },
+  {
+    "id": "mc15",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "指标清单卡",
+    "nameEn": "Metric List Card",
+    "seriesType": "HTML Card + List",
+    "legend": "none",
+    "bestFor": "同一主题下 2~4 个子指标并列（渠道、品类、环节）",
+    "axisRules": "可选主数值+最多 4 行 label/value/delta；仅快照"
+  },
+  {
+    "id": "mc16",
+    "catId": 9,
+    "category": "经典指标卡",
+    "nameZh": "大字主指标卡",
+    "nameEn": "Hero Number Card",
+    "seriesType": "HTML Card (typographic)",
+    "legend": "none",
+    "bestFor": "页面北极星指标或一句话结论，配一行作者撰写的解读",
+    "axisRules": "大号数字+同比+note 解读（≤120 字）；可绑定 value/yoy/subVal"
+  },
+  {
     "id": "tb01",
     "catId": 10,
     "category": "数据展示表格",

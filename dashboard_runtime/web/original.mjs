@@ -3,6 +3,7 @@ import {resolveOriginal} from './bindings.mjs';
 import {componentInputSignature} from './input-signature.mjs';
 import {applyEChartsOptions} from './echarts-options.mjs';
 import {installChrome} from './chrome.mjs';
+import {adaptOption,widthBucket} from './adaptive.mjs';
 /* Original components are extracted at build time, never reauthored as lookalikes. */
 import DOMPurify from 'dompurify';
 import {createOriginalComponents} from '../../runtime-ui/generated/original-engine.mjs';
@@ -84,8 +85,8 @@ function originalConfig(doc,id){
     if(c.kind!=='legacy'&&!doc.computed?.components?.[id]){
       const m=doc.manifest.metrics[c.measures[0]],value=aggregate(visibleRows(doc,id),m);
       raw={...(c.presentation||{}),type:c.presentation?.type||'mc01',label:c.title,value:format(value,m),yoy:c.presentation?.yoy??'—',statusBadge:m.status==='reviewed'?'已复核':'待复核',subLabel:c.presentation?.subLabel||'统计口径',subVal:c.presentation?.subVal||({sum:'合计',ratio:'分子 / 分母',avg:'平均',count:'计数'}[m.aggregation]||m.aggregation)};
-      if(doc.manifest.filters.some(f=>f.componentIds.includes(id)&&f.values.length)){for(const key of ['yoy','mom','subVal','leftVal','rightVal','trendLabel','gaugeSub'])if(key in raw)raw[key]='—';raw.subLabel='当前筛选范围';}
-      if(raw.type==='mc03'&&c.presentation?.timeField){const groups=new Map();for(const row of visibleRows(doc,id)){const k=row[c.presentation.timeField];if(!groups.has(k))groups.set(k,[]);groups.get(k).push(row);}raw.sparkMonths=[...groups.keys()];raw.sparkData=[...groups.values()].map(r=>{const v=aggregate(r,m);return m.format==='percent'&&v!=null?v*100:v;});}
+      if(doc.manifest.filters.some(f=>f.componentIds.includes(id)&&f.values.length)){for(const key of ['yoy','mom','subVal','leftVal','rightVal','trendLabel','gaugeSub'])if(key in raw)raw[key]='—';for(const key of ['percent','actual','target','currentValue','priorValue','stats','items'])delete raw[key];raw.subLabel='当前筛选范围';}
+      if((raw.type==='mc03'||raw.type==='mc12')&&c.presentation?.timeField){const groups=new Map();for(const row of visibleRows(doc,id)){const k=row[c.presentation.timeField];if(!groups.has(k))groups.set(k,[]);groups.get(k).push(row);}raw.sparkMonths=[...groups.keys()];raw.sparkData=[...groups.values()].map(r=>{const v=aggregate(r,m);return m.format==='percent'&&v!=null?v*100:v;});}
       cfg.explanations[key]={title:m.label,overview:m.definition,type:raw.type,period:m.period||'当前筛选范围',metrics:[{name:m.label,definition:m.definition,formula:m.aggregation==='ratio'?`SUM(${m.numerator}) / SUM(${m.denominator})`:`${m.aggregation.toUpperCase()}(${m.field||'*'})`,rule:'展示样式不代表指标已认证'}]};
     }
     cfg.kpis=[{...structuredClone(raw),sparkData:raw.sparkData??raw.sparkline,id:key,explainKey:raw.explainKey||key}];
@@ -102,6 +103,10 @@ function originalConfig(doc,id){
 export function mountOriginal(host,{doc,id,onInspect,onType,onPresentation,onText,onLocalQuery,onLocalExport,editing=false,readOnly=false,deferChart=false,onReady}){
   const shadow=host.shadowRoot||host.attachShadow({mode:'open'});shadow.replaceChildren();shadow.adoptedStyleSheets=[];appendOriginalStyle(shadow,originalStyle);host.dataset.theme='light';
   let {cfg,c,family,raw}=originalConfig(doc,id);const key='original-'+id;
+  // Every option is adapted to the canvas it is drawn in (template cells vary from 4 to 12 columns).
+  let builtBucket=null;const chartWidth=()=>shadow.getElementById?.(key)?.clientWidth||host.clientWidth||0;
+  const adaptive=config=>{const chart=family==='chart'?config.charts?.[0]:null;if(!chart)return config;const build=chart.optionBuilder;chart.optionBuilder=(...args)=>{const width=chartWidth();builtBucket=widthBucket(width);return adaptOption(build(...args),width);};return config;};
+  adaptive(cfg);
   const container=node(family==='table'?'section':'div',family==='table'?'section-card':'');container.id={chart:'app-charts-grid',kpi:'app-kpis',table:'app-table-section'}[family];shadow.append(container);
   const overlay=node('dialog','explanation-dialog');overlay.id='app-explain-dialog';shadow.append(overlay);
   const feedback=node('div');feedback.id='app-toast-container';shadow.append(feedback);
@@ -118,6 +123,12 @@ export function mountOriginal(host,{doc,id,onInspect,onType,onPresentation,onTex
   const ensure=()=>{if(!deferred)return;deferred=false;initCharts();onReady?.();};
   shadow.addEventListener('click',ensure,{capture:true,signal:controller.signal});
   app.init();
+  if(family==='chart'&&typeof ResizeObserver!=='undefined'){
+    const resized=new ResizeObserver(()=>{const width=chartWidth();if(!(width>0)||widthBucket(width)===builtBucket)return;
+      const inst=app.state.chartInstances[key],chart=app.config.charts?.[0];if(!inst||!chart||inst.isDisposed?.())return;
+      app.setChartOption(inst,chart.optionBuilder(chart.data,app.state.chartGranularities[key],api.TOKENS,chart));});
+    resized.observe(host);controller.signal.addEventListener('abort',()=>resized.disconnect());
+  }
   if(family==='kpi'&&['mc01','mc02','mc03','mc04','mc05'].includes(raw.type)){for(const span of shadow.querySelectorAll('#app-kpis span'))if(span.textContent.trim()==='—'&&!span.classList.contains('text-2xl'))span.hidden=true;}
 
   let updateTable=null,renderTableRows=null;
@@ -206,7 +217,7 @@ export function mountOriginal(host,{doc,id,onInspect,onType,onPresentation,onTex
         const previousColumns=signature(cfg.table.columns);cfg.table.columns=next.cfg.table.columns;
         if(previousColumns!==signature(cfg.table.columns)){app.state.table.orderedColumns=cfg.table.columns;app.state.table.visibleCols=new Set(cfg.table.columns.map(col=>col.key));app.renderColCheckboxes();}
         updateTable?.(next.cfg.table,next.cfg.table.remotePage);
-      }else {app.updateConfig(next.cfg);cfg=app.config;}
+      }else {app.updateConfig(adaptive(next.cfg));cfg=app.config;}
       configSignature=nextSignature;
     }
     const nextChrome=signature([c.title,c.subtitle,c.config?.description,editing,raw?.statusBadge]);

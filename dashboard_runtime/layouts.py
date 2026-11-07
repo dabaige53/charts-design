@@ -16,6 +16,10 @@ COLS = {'desktop': 12, 'tablet': 8, 'mobile': 4}
 HEIGHT = {'kpi': 4, 'chart': 8, 'table': 8, 'text': 5}
 # KPI shapes that carry two values or a wide bar read better with more width.
 WIDE_KPIS = {'mc06', 'mc09'}
+# On phones these shapes take the full row even in a 2-up KPI grid.
+MOBILE_FULL_KPIS = WIDE_KPIS | {'mc10', 'mc11', 'mc13', 'mc14', 'mc15', 'mc16'}
+# List and hero-with-takeaway cards need one more row; a KPI row takes its tallest card's height.
+TALL_KPIS = {'mc15', 'mc16'}
 
 TEMPLATES = {
     'executive': {
@@ -112,23 +116,35 @@ class Flow:
             self.row([key], [self.cols], height)
 
 
-def kpi_rows(flow: Flow, kpis: list, per_row: int, components: dict):
-    """Balanced KPI rows; dual-value and segment cards claim two slots."""
+def kpi_height(component: dict) -> int:
+    return HEIGHT['kpi'] + (1 if kpi_type(component) in TALL_KPIS else 0)
+
+
+def kpi_size(component: dict, per_row: int, breakpoint: str) -> int:
+    kind = kpi_type(component)
+    if breakpoint == 'mobile':
+        return per_row if kind in MOBILE_FULL_KPIS else 1
+    return 2 if kind in WIDE_KPIS and per_row >= 3 else 1
+
+
+def kpi_rows(flow: Flow, kpis: list, per_row: int, components: dict, breakpoint: str = 'desktop'):
+    """Balanced KPI rows; wide shapes claim two slots (the full row on phones)."""
     if not kpis:
         return
-    rows, current, weight = [], [], 0
-    for key in kpis:
-        size = 2 if kpi_type(components[key]) in WIDE_KPIS and per_row >= 3 else 1
-        if current and weight + size > per_row:
+    sizes = {key: kpi_size(components[key], per_row, breakpoint) for key in kpis}
+    if all(size == 1 for size in sizes.values()):
+        rows = [[(key, 1) for key in chunk] for chunk in balanced(kpis, per_row)]
+    else:
+        rows, current, weight = [], [], 0
+        for key in kpis:
+            size = sizes[key]
+            if current and weight + size > per_row:
+                rows.append(current)
+                current, weight = [], 0
+            current.append((key, size))
+            weight += size
+        if current:
             rows.append(current)
-            current, weight = [], 0
-        current.append((key, size))
-        weight += size
-    if current:
-        rows.append(current)
-    # Rebalance a lonely last row with the previous one when that keeps rows even.
-    if len(rows) > 1 and len(rows[-1]) == 1 and len(rows[-2]) > 2 and all(size == 1 for _, size in rows[-2]):
-        rows[-1].insert(0, rows[-2].pop())
     for row_items in rows:
         units = sum(size for _, size in row_items)
         unit_widths = split(flow.cols, units)
@@ -136,7 +152,7 @@ def kpi_rows(flow: Flow, kpis: list, per_row: int, components: dict):
         for _, size in row_items:
             widths.append(sum(unit_widths[index:index + size]))
             index += size
-        flow.row([key for key, _ in row_items], widths, HEIGHT['kpi'])
+        flow.row([key for key, _ in row_items], widths, max(kpi_height(components[key]) for key, _ in row_items))
 
 
 def sequence_rows(flow: Flow, items: list, chart_per_row: int, chart_height: int, roles: dict):
@@ -177,23 +193,25 @@ def compute_layout(manifest: dict, template: str, order=None) -> dict:
             kpi_per_row = 6 if desktop else 4 if tablet else 2
         if template == 'sidebar' and desktop and kpis:
             # Left metric column (3/12), wide chart column (9/12).
-            for index, key in enumerate(kpis):
-                flow.place(key, 0, index * HEIGHT['kpi'], 3, HEIGHT['kpi'])
+            top = 0
+            for key in kpis:
+                flow.place(key, 0, top, 3, kpi_height(components[key]))
+                top += kpi_height(components[key])
             y = 0
             for key in body:
                 height = HEIGHT[roles[key]]
                 flow.place(key, 3, y, 9, height)
                 y += height
-            flow.y = max(len(kpis) * HEIGHT['kpi'], y)
+            flow.y = max(top, y)
             flow.full(tables, HEIGHT['table'])
             result[breakpoint] = flow.placements
             continue
-        kpi_rows(flow, kpis, kpi_per_row, components)
+        kpi_rows(flow, kpis, kpi_per_row, components, breakpoint)
         if template == 'focus' and charts:
             hero = charts[0]
             rest = [key for key in body if key != hero]
             flow.full([hero], 10 if cols > 4 else HEIGHT['chart'])
-            sequence_rows(flow, rest, 3 if desktop else 2 if tablet else 1, 7 if cols > 4 else HEIGHT['chart'], roles)
+            sequence_rows(flow, rest, 3 if desktop else 2 if tablet else 1, HEIGHT['chart'], roles)
         elif template == 'bento' and cols > 4:
             patterns = ([[8, 4], [4, 8], [6, 6], [4, 4, 4]] if desktop else [[8], [4, 4]])
             pattern_index, pending = 0, []
@@ -206,7 +224,7 @@ def compute_layout(manifest: dict, template: str, order=None) -> dict:
                     chunk = pending[index:index + len(widths)]
                     if len(chunk) < len(widths):
                         widths = split(cols, len(chunk))
-                    flow.row(chunk, widths, 7 if len(chunk) >= 3 else HEIGHT['chart'])
+                    flow.row(chunk, widths, HEIGHT['chart'])
                     index += len(chunk)
                     pattern_index += 1
                 pending.clear()
@@ -235,8 +253,7 @@ def compute_layout(manifest: dict, template: str, order=None) -> dict:
                 per_row = 2 if template in ('grid3', 'scorecard') else 1
             elif not desktop:
                 per_row = 1
-            height = 7 if per_row >= 3 else HEIGHT['chart']
-            sequence_rows(flow, body, per_row, height, roles)
+            sequence_rows(flow, body, per_row, HEIGHT['chart'], roles)
         flow.full(tables, HEIGHT['table'])
         result[breakpoint] = flow.placements
     return result
@@ -252,7 +269,7 @@ def auto_place(manifest: dict, key: str, component: dict):
     kind = role(component)
     for breakpoint, cols in COLS.items():
         layout = manifest['layout'][breakpoint]
-        height = HEIGHT[kind]
+        height = kpi_height(component) if kind == 'kpi' else HEIGHT[kind]
         if kind == 'kpi':
             width = {'desktop': 3, 'tablet': 4, 'mobile': 4}[breakpoint]
             if kpi_type(component) in WIDE_KPIS and breakpoint == 'desktop':

@@ -387,12 +387,12 @@ def validate(doc):
                 validate_comparisons(presentation, f'components.{key}.presentation')
                 require(len(c['measures']) == 1, 'KPI must have one headline measure')
                 card_type = presentation.get('type', 'mc01')
-                require(isinstance(card_type, str) and card_type in {f'mc{i:02}' for i in range(1, 10)}, 'Unknown KPI presentation type')
-                if presentation.get('type') == 'mc03':
+                require(isinstance(card_type, str) and card_type in {f'mc{i:02}' for i in range(1, 17)}, 'Unknown KPI presentation type')
+                if presentation.get('type') in ('mc03', 'mc12'):
                     if 'timeField' in presentation:
                         field(m['datasets'][ds], presentation['timeField'])
                     else:
-                        require(isinstance(presentation.get('sparkData', presentation.get('sparkline')), list), 'mc03 requires timeField or explicit sparkData')
+                        require(isinstance(presentation.get('sparkData', presentation.get('sparkline')), list), 'mc03/mc12 require timeField or explicit sparkData')
                 if presentation.get('type') == 'mc06':
                     require('leftVal' in presentation and 'rightVal' in presentation, 'mc06 requires explicit leftVal and rightVal')
             else:

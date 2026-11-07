@@ -117,6 +117,10 @@ def import_workspace(path, board_id):
     from .model import validate
     return validate(result), notes
 
+# Cards added after the original nine validate their shape with the shared schema.
+SHAPED_KPIS = frozenset(('mc10', 'mc11', 'mc12', 'mc13', 'mc14', 'mc15', 'mc16'))
+
+
 def validate_original(component):
     """Validate explicit original contracts before any web/CLI/MCP state is saved."""
     config = component.get('config')
@@ -137,9 +141,20 @@ def validate_original(component):
         validate_comparisons(config, 'config')
         require(config.get('type', 'mc01') in schemas.KPI_TYPES, 'Unknown original KPI type')
         require(isinstance(config.get('label'), str), 'Original KPI requires a label')
-        require('value' in config or (config.get('type') == 'mc06' and 'leftVal' in config and 'rightVal' in config), 'Original KPI requires explicit values')
-        if config.get('type') == 'mc03':
+        kind = config.get('type', 'mc01')
+        require('value' in config or (kind == 'mc06' and 'leftVal' in config and 'rightVal' in config)
+                or (kind == 'mc15' and isinstance(config.get('items'), list)), 'Original KPI requires explicit values')
+        if kind == 'mc03':
             require(isinstance(config.get('sparkData', config.get('sparkline')), list), 'Sparkline needs explicit sparkData, never preview defaults')
+        if kind in SHAPED_KPIS:
+            # Shape fields a binding computes at render time are not required in the snapshot.
+            binding = component.get('binding') if isinstance(component.get('binding'), dict) else {}
+            provided = set(binding.get('measures', {}) or {})
+            if binding.get('timeField'):
+                provided |= {'sparkMonths', 'sparkData'}
+            errors = [error for error in schemas.validate_kpi_presentation(config, 'config')
+                      if error['path'].split('.')[1].split('[')[0] not in provided]
+            require(not errors, 'Original KPI contract: ' + json.dumps(errors, ensure_ascii=False))
     else:
         require(isinstance(config.get('columns'), list) and isinstance(config.get('rows'), list), 'Original table requires columns and rows')
         keys = [col.get('key') for col in config['columns'] if isinstance(col, dict)]

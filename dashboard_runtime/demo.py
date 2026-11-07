@@ -115,3 +115,52 @@ def executive_document(board_id='executive-demo'):
             positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': cols, 'h': 9}, {'id': 'regions', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}, {'id': 'details', 'x': 0, 'y': y + 16, 'w': cols, 'h': 7}]
         ops.append({'op': 'set_layout', 'breakpoint': bp, 'value': positions})
     return apply_operations(doc, ops)
+
+
+def operations_document(board_id='operations-demo'):
+    """Contrasting master: dense KPI wall, different card shapes and chart codes.
+
+    Same declared synthetic rows and metrics as the executive master, so the two
+    cases differ only in composition. Every bound value recomputes under filters.
+    """
+    doc = executive_document(board_id)
+    ops: list[dict] = [{'op': 'set_filters', 'value': []}]
+    ops += [{'op': 'remove_component', 'id': key} for key in ('total', 'load', 'passengers', 'goal', 'trend', 'regions')]
+    ops += [{'op': 'set_title', 'value': '航空运营指标墙 · 收入、运力与目标'},
+            {'op': 'set_meta', 'value': {'iconKey': 'plane', 'subtitle': '一屏查看收入目标、同比基期与运力利用', 'org': '航空运营管理中心', 'statusText': '运营监控'}}]
+    def kpi(key, title, config, measures, **binding):
+        ops.append({'op': 'put_component', 'id': key, 'value': {'kind': 'legacy', 'family': 'kpi', 'title': title, 'sourceId': 'fixture',
+                    'config': {'label': title, **config}, 'binding': {'datasetId': 'sales', 'measures': measures, **binding}}})
+    kpi('north-star', '营业收入', {'type': 'mc16', 'value': '484 万元', 'yoy': '+24.1%', 'note': '收入高于基期；9 月较 8 月小幅回落，需结合更长周期复核。', 'subLabel': '预算收入', 'subVal': '525 万元'},
+        {'value': 'revenue', 'yoy': 'yield-growth', 'subVal': 'budget'})
+    kpi('budget-ring', '预算完成度', {'type': 'mc11', 'value': '484 万元', 'percent': 92.19, 'trendLabel': '按所选范围', 'subLabel': '预算收入', 'subVal': '525 万元'},
+        {'value': 'revenue', 'percent': 'attainment', 'subVal': 'budget'}, scale={'percent': 100})
+    kpi('budget-bullet', '收入对预算', {'type': 'mc13', 'value': '484 万元', 'actual': 484, 'target': 525, 'ranges': [0.8, 1.0], 'rangeBasis': 'target', 'unit': '万元', 'subLabel': '预算收入', 'subVal': '525 万元'},
+        {'value': 'revenue', 'actual': 'revenue', 'target': 'budget', 'subVal': 'budget'})
+    kpi('period-compare', '收入对基期', {'type': 'mc14', 'value': '484 万元', 'yoy': '+24.1%', 'currentLabel': '本期', 'currentValue': 484, 'priorLabel': '基期', 'priorValue': 390, 'unit': '万元'},
+        {'value': 'revenue', 'currentValue': 'revenue', 'priorValue': 'baseline-revenue', 'yoy': 'yield-growth'})
+    kpi('passenger-bars', '旅客运输量', {'type': 'mc12', 'value': '376 万人次', 'sparkMonths': ['2026-07-01', '2026-08-01', '2026-09-01'], 'sparkData': [117, 133, 126], 'subLabel': '可用座位', 'subVal': '450 万座'},
+        {'value': 'passengers', 'subVal': 'seats'}, timeField='month')
+    kpi('load-gauge', '客座率', {'type': 'mc05', 'value': '83.56%', 'percent': 83.56, 'gaugeSub': '运力利用', 'subLabel': '可用座位', 'subVal': '450 万座'},
+        {'value': 'load-factor', 'percent': 'load-factor', 'subVal': 'seats'}, scale={'percent': 100})
+    def chart(key, title, subtitle, config, binding):
+        ops.append({'op': 'put_component', 'id': key, 'value': {'kind': 'legacy', 'family': 'chart', 'title': title, 'subtitle': subtitle,
+                    'sourceId': 'fixture', 'config': config, 'binding': {'datasetId': 'sales', **binding}}})
+    chart('region-rank', '各基地收入排序', '按营业收入降序比较基地规模',
+          {'code': 'c02', 'unit': '万元', 'data': {'categories': ['华东基地', '华南基地'], 'values': [278, 206]},
+           'presentation': {'axisLabels': {'x': '收入', 'y': '基地'}, 'seriesLabels': ['营业收入'], 'tooltipValueLabels': ['营业收入'], 'units': ['万元'], 'tableHeaders': ['基地', '营业收入']}},
+          {'categoryField': 'region', 'categoryTarget': 'categories', 'measures': {'values': 'revenue'}, 'orderBy': {'target': 'values', 'direction': 'desc'}})
+    chart('budget-actual', '预算与实际收入', '同一基地的预算收入与实际收入并列',
+          {'code': 'c03', 'unit': '万元', 'data': {'clusters': ['华东基地', '华南基地'], 'budget': [300, 225], 'actual': [278, 206]},
+           'presentation': {'axisLabels': {'x': '基地', 'y': '收入'}, 'seriesLabels': ['预算收入', '实际收入'], 'tooltipValueLabels': ['预算收入', '实际收入'], 'units': ['万元', '万元'], 'tableHeaders': ['基地', '预算收入', '实际收入', '差额', '达成率']}},
+          {'categoryField': 'region', 'categoryTarget': 'clusters', 'measures': {'budget': 'budget', 'actual': 'revenue'}})
+    chart('passenger-trend', '月度旅客运输量', '按月追踪旅客规模，可切换季度',
+          {'code': 't01', 'unit': '万人次', 'data': {'months': ['2026-07', '2026-08', '2026-09'], 'rpk': [117, 133, 126]},
+           'presentation': {'axisLabels': {'x': '月份', 'y': '旅客'}, 'seriesLabels': ['旅客运输量'], 'tooltipValueLabels': ['旅客运输量'], 'units': ['万人次'], 'tableHeaders': ['月份', '旅客运输量', '环比']}},
+          {'categoryField': 'month', 'categoryTarget': 'months', 'measures': {'rpk': 'passengers'}, 'timeGrain': True})
+    consumers = ['north-star', 'budget-ring', 'budget-bullet', 'period-compare', 'passenger-bars', 'load-gauge', 'region-rank', 'budget-actual', 'passenger-trend', 'details']
+    ops.append({'op': 'set_filters', 'value': [
+        {'id': 'region', 'label': '区域', 'field': 'region', 'op': 'in', 'values': [], 'componentIds': consumers},
+        {'id': 'period', 'label': '月份范围', 'field': 'month', 'op': 'range', 'values': [], 'componentIds': consumers}]})
+    ops.append({'op': 'apply_layout_template', 'template': 'scorecard', 'order': consumers})
+    return apply_operations(doc, ops)
