@@ -172,6 +172,9 @@ class Service:
             return generation_examples(args.get('caseId'))
         if tool == 'chart_declarations':
             return declaration_contract(chart_type=args.get('chartType'), legacy_code=args.get('code'), summary=not (args.get('chartType') or args.get('code')))
+        if tool == 'layout_templates':
+            from .layouts import templates_catalog
+            return templates_catalog()
         if tool == 'dashboard_list':
             return {'dashboards': self.store.list()}
         if tool == 'dashboard_export_open':
@@ -451,6 +454,8 @@ TOOLS.update({
     'chart_declarations': ('Discover available declaration types; select an original chart/KPI code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'code':STR}))
 })
 READ_ONLY.update({'generation_examples','chart_declarations'})
+TOOLS['layout_templates'] = ('Discover named dashboard compositions (executive, focus, bento, sidebar, grid3, narrative, scorecard) and how to apply one with the apply_layout_template operation. Choose by content; avoid giving every dashboard the same layout.', schema())
+READ_ONLY.add('layout_templates')
 
 TOOLS["statistical_render"] = ("Render a declared Seaborn component as bounded SVG or PNG with raw-observation provenance", schema({**TARGET, "format": {"enum": ["svg", "png"]}}, ("dashboardId", "componentId")))
 READ_ONLY.add("statistical_render")

@@ -461,6 +461,11 @@ def validate(doc):
                 require(value is None or (kind == 'number' and type(value) in (int, float)) or (kind in ('string', 'date') and isinstance(value, str)) or (kind == 'boolean' and type(value) is bool), 'Filter value type differs from its field')
             if f['op'] == 'range' and f['values']:
                 require(None not in f['values'] and f['values'][0] <= f['values'][1], 'Invalid filter range')
+    if 'layoutTemplate' in m:
+        from .layouts import TEMPLATES
+        saved = m['layoutTemplate']
+        require(isinstance(saved, dict) and saved.get('id') in TEMPLATES and set(saved) <= {'id', 'order'}, 'Invalid manifest.layoutTemplate')
+        require(all(key in m['components'] for key in saved.get('order', [])), 'manifest.layoutTemplate.order refers to a missing component')
     for bp, columns in COLS.items():
         layout = m['layout'].get(bp)
         require(isinstance(layout, list), f'{bp}: layout must be an array')
@@ -474,17 +479,28 @@ def validate(doc):
     return doc
 
 def place_new(m, key, c):
-    height = 4 if c.get('kind') == 'kpi' or c.get('family') == 'kpi' else 6
-    for bp, cols in COLS.items():
-        layout = m['layout'][bp]
-        y = max((p['y'] + p['h'] for p in layout), default=0)
-        layout.append({'id': key, 'x': 0, 'y': y, 'w': cols, 'h': height})
+    """Role-aware append: KPI rows, paired charts, full-width tables and text."""
+    from .layouts import auto_place
+    auto_place(m, key, c)
+
+
+def apply_layout_template(m, template, order=None):
+    from .layouts import TEMPLATES, compute_layout
+    require(template in TEMPLATES, f'Unknown layout template: {template}; read layout_templates for choices', 'UNKNOWN_LAYOUT')
+    require(order is None or (isinstance(order, list) and all(isinstance(key, str) for key in order) and len(order) == len(set(order))),
+            'Layout order must be a list of unique component IDs')
+    missing = [key for key in order or [] if key not in m['components']]
+    require(not missing, f'Layout order refers to missing components: {", ".join(missing[:5])}')
+    m['layout'] = compute_layout(m, template, order)
+    m['layoutTemplate'] = {'id': template, **({'order': list(order)} if order else {})}
 
 def apply_operations(doc, operations):
     require(isinstance(operations, list) and 0 < len(operations) <= 200, 'Expected 1-200 operations')
     result = copy.deepcopy(doc)
     m, s = result['manifest'], result['snapshot']
     initialize_report = False
+    # Templates apply after the batch so components created later in it are included.
+    pending_template, membership = None, set(m['components'])
     for op in operations:
         require(isinstance(op, dict), 'Operation must be an object')
         kind = op.get('op')
@@ -551,6 +567,11 @@ def apply_operations(doc, operations):
             bp = op.get('breakpoint', 'desktop')
             require(bp in COLS, 'Unknown breakpoint')
             m['layout'][bp] = copy.deepcopy(op.get('value'))
+            # An explicit layout (including editor drags) replaces the template.
+            m.pop('layoutTemplate', None)
+            pending_template = None
+        elif kind == 'apply_layout_template':
+            pending_template = (op.get('template'), copy.deepcopy(op.get('order')))
         elif kind in ('set_title', 'set_theme', 'set_filters', 'set_meta', 'set_annotations'):
             m[kind[4:]] = copy.deepcopy(op.get('value'))
         elif kind == 'set_view_mode':
@@ -576,6 +597,13 @@ def apply_operations(doc, operations):
             s['localMode'] = op['value'] == 'local'
         else:
             raise DashboardError('UNKNOWN_OPERATION', f'Unsupported operation: {kind}')
+    if pending_template is not None:
+        apply_layout_template(m, *pending_template)
+    elif m.get('layoutTemplate') and set(m['components']) != membership:
+        # A saved template re-flows when components are added or removed.
+        saved = m['layoutTemplate']
+        order = [key for key in saved.get('order', []) if key in m['components']]
+        apply_layout_template(m, saved['id'], order or None)
     if initialize_report and 'markdown' not in m.get('report', {}):
         if 'report' in m:
             validate_report(m['report'], m['components'])

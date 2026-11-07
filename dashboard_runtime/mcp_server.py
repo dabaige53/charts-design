@@ -153,6 +153,7 @@ def create_server(service, lifetime=None, profile=None):
                 types.Resource(uri=AnyUrl('charts://catalog'), name='Chart catalog', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://contract'), name='Runtime tools and typed operations', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://declarations'), name='Chart declaration requirements', mimeType='application/json'),
+                types.Resource(uri=AnyUrl('charts://layouts'), name='Dashboard layout templates', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples'), name='Dashboard and report reference cases', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples/executive-dashboard'), name='Dashboard generation case', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples/academic-report'), name='Approved academic report master', mimeType='application/json')]
@@ -173,6 +174,9 @@ def create_server(service, lifetime=None, profile=None):
                     'omitted': 'startup project default or legacy store; never the last selected project',
                     'preview': 'bind once from result.projectRoot; include it in all subsequent calls, including chunks'}}
             return [ReadResourceContents(content=json.dumps(contract, ensure_ascii=False), mime_type='application/json')]
+        if str(uri) == 'charts://layouts':
+            from .layouts import templates_catalog
+            return [ReadResourceContents(content=json.dumps(templates_catalog(), ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://declarations':
             from .declarations import declaration_contract
             return [ReadResourceContents(content=json.dumps(declaration_contract(), ensure_ascii=False), mime_type='application/json')]

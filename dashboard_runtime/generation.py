@@ -35,7 +35,7 @@ def generation_examples(case_id=None):
     if case_id is None:
         return {'cases':[{'id':key, **value, 'uri':f'charts://examples/{key}'} for key,value in CASES.items()],
                 'policy':'Examples are synthetic references, not user data. Select a case explicitly, replace data and recompute every narrative claim before real use.',
-                'workflow':['chart_declarations', 'generation_examples(caseId)', 'dashboard_create', 'dashboard_patch(expectedRevision, operations)', 'dashboard_validate', 'dashboard_preview']}
+                'workflow':['chart_declarations', 'layout_templates', 'generation_examples(caseId)', 'dashboard_create', 'dashboard_patch(expectedRevision, operations incl. apply_layout_template)', 'dashboard_validate', 'dashboard_preview']}
     require(case_id in CASES, 'Unknown generation case', 'UNKNOWN_EXAMPLE')
     doc = (report_document if case_id == 'academic-report' else executive_document)('example')
     return {'id':case_id, **CASES[case_id], 'synthetic':True, 'operations':case_operations(doc),
