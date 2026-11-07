@@ -588,8 +588,11 @@ export async function start({echarts,GridStack,App}){
               try{await transport('dashboard_export_open',{dashboardId:doc.id,exportId:file.id,format,action});feedback.textContent=action==='open'?'已请求打开文件':'已在文件夹中显示';}
               catch(error){feedback.textContent=error.message||String(error);}
             },'export-file-action');
-            const actions=el('div','export-file-actions');if(!remote)actions.append(localAction('open','打开文件'),localAction('reveal','在文件夹中显示'));
-            savedFile.append(el('span','export-filename',file.filename),actions);if(file.path&&!remote)savedFile.append(el('p','export-path',file.path));
+            // Server exports carry a signed downloadUrl; desktop file actions only exist for local runtimes.
+            const actions=el('div','export-file-actions'),served=Boolean(file.downloadUrl);
+            if(served&&app)actions.append(button('在浏览器中下载',async()=>{try{await app.openLink({url:file.downloadUrl});feedback.textContent='已请求在浏览器中打开下载链接';}catch(error){feedback.textContent=error.message||String(error);}},'export-file-action'));
+            else if(!remote&&!served)actions.append(localAction('open','打开文件'),localAction('reveal','在文件夹中显示'));
+            savedFile.append(el('span','export-filename',file.filename),actions);if(file.path&&!remote&&!served)savedFile.append(el('p','export-path',file.path));
             feedback.textContent=remote?`${label} 已生成并下载`:`${label} 已保存到本机`;
             if(app){
               try{

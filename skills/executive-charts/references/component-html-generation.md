@@ -113,8 +113,15 @@ Completion criterion: every filter has one `data-component-id`, every strict fil
 | `mc07` | Ranking or tier badge card |
 | `mc08` | Threshold alert card |
 | `mc09` | Segment breakdown card |
+| `mc10` | Median with P25–P75 range box and min/max (distribution) |
+| `mc11` | Value with ECharts ring progress container |
+| `mc12` | Value with ECharts mini column trend container (last period emphasized) |
+| `mc13` | Bullet: actual bar, target marker, optional qualitative ranges |
+| `mc14` | Current vs prior period paired bars with change badge |
+| `mc15` | Metric list: 1–4 related sub-metrics with signed changes |
+| `mc16` | Hero number with an authored one-line takeaway |
 
-Every KPI explanation action uses `data-explain-chart`; the shared dialog renders its definition and formula. Sparkline and gauge DOM are initialized after the cards render. Define a supported `binding` for each filter-dependent KPI. Missing optional values render as a dash; specialized cards require their explicit visual data in strict workspaces. Zero remains zero.
+Every KPI explanation action uses `data-explain-chart`; the shared dialog renders its definition and formula. Sparkline, gauge, ring and mini-bar DOM are initialized as ECharts instances after the cards render. Define a supported `binding` for each filter-dependent KPI. Missing optional values render as a dash; specialized cards require their explicit visual data in strict workspaces. Zero remains zero.
 
 Completion criterion: every KPI root preserves `kpi.id`, the selected type has all data it displays, and any filter-dependent value has a verified recomputation path.
 

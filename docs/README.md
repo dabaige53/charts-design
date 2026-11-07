@@ -15,6 +15,7 @@
 | [设计规范](../skills/executive-charts/references/design_standards.md) | 修改组件配色、排版、几何或表格时查阅 | 设计要求变化 |
 | [指标定义](../skills/executive-charts/references/metric-definitions.md) | 撰写业务说明与统计口径时查阅 | 指标说明要求变化 |
 | [MCP 共享交付流程](../skills/executive-charts/references/mcp-delivery.md) | 创建、编辑、替换数据或诊断 MCP 页面时查阅 | 交付流程变化 |
+| [指标卡选型](../skills/executive-charts/references/kpi-cards.md) 与 [布局模板](../skills/executive-charts/references/layout_templates.md) | 选择指标卡形态与看板构图时查阅 | 卡片类型、模板或选型规则变化 |
 
 ## 当前实现与操作
 
@@ -31,6 +32,7 @@
 | [本地 MCP 更新](local-mcp-update.md) | 更新安装包、判断重连或重开页面时查阅 | 更新入口和进程行为变化 |
 | [传输与诊断](mcp-transport-diagnostics.md) | 排查大响应、旧预览或日志时查阅 | 传输与诊断行为变化 |
 | [静态部署包](static-deployment.md) | 导出、重建或发布独立网页时查阅；末节为当次验收 | 导出与重建方式变化 |
+| [自托管服务器](self-hosted-server.md) | 部署远程 MCP、网页预览与分享链接时查阅；末节为当次验收 | 入口、鉴权、项目隔离或链接权限变化 |
 
 ## 历史记录与证据
 
@@ -41,6 +43,7 @@
 - [动态编码验收](dynamic-encoding-validation.md)：2026-10-28 的产品检查和虚拟看板集成。
 - [迭代复盘](retro-20261028.md)：2026-10-28 的改进原因、待办和性能结论。
 - [MCP 优化交付](mcp-improvements-20261028.md)：后续实现、传输体积与安装验收记录。
+- [自托管、构图与指标卡验收](records/2026-11-07-server-layout-kpi.md)：2026-11-07 的性能对比、验证范围与未验证项。
 - [性能原始记录](performance-results.json)：2026-10-20 的环境、测量、验证与限制。
 - [零售验收截图](images/dynamic-encoding-retail.png)与[虚拟看板截图](images/transfer-prototype-validation.png)：配套历史附件。
 

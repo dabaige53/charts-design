@@ -23,6 +23,19 @@ This is the Dashboard generation track. Preserve the existing Gallery and `examp
 
 For Markdown-first analytical documents, use [analytical-reports](../analytical-reports/SKILL.md) and its approved academic master instead of composing a dashboard grid. Both tracks reuse existing chart definitions and source/data semantics.
 
+## Compose for the question, not from one template
+
+Generated dashboards must not all look alike. Decide the composition from the business questions before writing operations:
+
+1. For each evidence block, call `chart_recommend` with its intent (comparison, ranking, trend, composition, distribution, relationship, flow, change, attribution, target, forecast) and data shape. It ranks registered codes, marks filter-bindable ones, suggests KPI shapes and down-ranks codes already on the page.
+2. Choose KPI shapes per question from [the KPI selection guide](references/kpi-cards.md) (16 types, mc01–mc16). Use two to four different shapes in a KPI row; mc01 is not the default for every metric.
+3. Choose one of the seven layout templates in [layout templates](references/layout_templates.md) and apply it with `apply_layout_template`; do not hand-write coordinates or stack every card full width. Different pages of one project should not repeat one composition.
+4. Compare the two dashboard generation cases (`executive-dashboard` and `operations-scorecard`): they share data but differ in layout, KPI shapes and charts. Copy neither; use them to see the contract.
+
+## Self-hosted server
+
+When the MCP runs as the self-hosted server (`python3 -m dashboard_runtime server`), `projectRoot` is a project name on that server, `dashboard_preview` also returns `previewUrl` (an expiring read-only browser link) and `dashboard_share` creates view or edit links. Give the link to the user after the edit batch finishes. Deployment and security are described in package-root `docs/self-hosted-server.md`.
+
 ## Route the task
 
 - For one chart, provide a complete chart component JSON and run `scripts/generate_chart.py --config`; deliver the generated HTML component.

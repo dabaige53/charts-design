@@ -11,7 +11,7 @@ The existing versioned service, MCP tools, CLI, query provenance and GridStack l
 ## Preservation contract
 
 - Workspace import keeps every original chart config, presentation, KPI type and fields, and table columns/rows. No chart-type substitution and no KPI-to-text conversion.
-- All 40 original chart builders and 9 KPI renderer branches are bundled from source. Examples are preview fixtures only; real components still require explicit business data.
+- All 40 original chart builders and 16 KPI renderer branches (mc01–mc09 original, mc10–mc16 added to the same engine) are bundled from source. Examples are preview fixtures only; real components still require explicit business data.
 - Original chart card shell, geometry, units, tooltip/legend configuration, applicable granularity buttons, chart/table toggle, CSV, 2x PNG, fullscreen and rich explanation content are retained.
 - Original table sorting, columns drawer, column visibility/reordering, restore defaults, pagination and copy/export controls are retained. Native runtime tables also use that renderer.
 - Original aggregate snapshots do not become live cross-filtered datasets merely because they were imported. Original filter definitions are preserved as metadata until their data bindings are deliberately configured.
@@ -19,7 +19,7 @@ The existing versioned service, MCP tools, CLI, query provenance and GridStack l
 
 ## Verification
 
-`tests/runtime/test_fidelity.py` checks lossless migration and uses real Chromium for original toolbar, mini-trend KPI, period persistence, chart/table toggle, explanation dialog, column visibility/restore, offline bundling and mobile overflow. This is a representative integration test, not a pixel-perfect audit of all 40 charts, all 9 KPI variants or all browsers.
+`tests/runtime/test_fidelity.py` checks lossless migration and uses real Chromium for original toolbar, mini-trend KPI, period persistence, chart/table toggle, explanation dialog, column visibility/restore, offline bundling and mobile overflow. This is a representative integration test, not a pixel-perfect audit of all 40 charts, all 16 KPI variants or all browsers.
 
 Rebuild after checkout:
 

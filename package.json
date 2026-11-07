@@ -48,7 +48,14 @@
     "docs/mcp-transport-diagnostics.md",
     "runtime-ui/generated/",
     "runtime-ui/package-lock.json",
-    "docs/static-deployment.md"
+    "docs/static-deployment.md",
+    "docs/self-hosted-server.md",
+    "deploy/Dockerfile",
+    "deploy/Dockerfile.dockerignore",
+    "deploy/docker-compose.yml",
+    "deploy/charts-design.service",
+    "deploy/nginx.conf",
+    "deploy/environment.example"
   ],
   "keywords": [
     "mckinsey",

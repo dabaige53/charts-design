@@ -53,6 +53,26 @@ python3 -m dashboard_runtime --root ./boards serve --port 8765
 
 源文保存在 `manifest.report.markdown`，CLI/MCP 使用 `set_report_markdown` 更新。图表 ID 必须指向已有的非文字组件；`caption`（最多 500 字符）和 `source`（最多 1,000 字符）是可选纯文字字符串，仅含 `componentId` 的旧代码块仍有效。图号按源文顺序生成，`[图](#fig-trend)` 自动显示对应图号并跳转；同一组件出现多次时，引用指向第一次出现的位置。二级章节标题自动编号，源文不必手写编号；作者、摘要、关键词及来源须由作者提供，不自动补写。保存时校验引用和 JSON，拒绝未知字段与重复键，普通代码块不会执行。分析文字由作者维护，筛选图表后需要复核文字结论。支持 JSON 保存/恢复及离线 HTML 导出，旧版段落块报告仍可读取。完整合同、CLI/MCP 源文工作流和使用边界见 [Runtime 文档](docs/dashboard-runtime.md)。
 
+## 自托管服务器：远程 MCP + 网页预览
+
+在自己的服务器上运行一个进程，同时提供 Streamable HTTP MCP（Bearer 令牌）和看板、分析报告的浏览器预览。`dashboard_preview` 会额外返回带签名、可过期、可撤销的 `previewUrl`，不支持 MCP Apps 的客户端也能把链接交给读者；`dashboard_share` 可签发只读或编辑链接。
+
+```bash
+npm --prefix runtime-ui ci && npm --prefix runtime-ui run build
+python3 -m pip install 'mcp>=1.28,<2'
+python3 -m dashboard_runtime server --workspace /data/projects --public-url https://charts.example.com --token "<随机长令牌>"
+claude mcp add --transport http charts-design https://charts.example.com/mcp --header "Authorization: Bearer <随机长令牌>"
+```
+
+远程调用中的 `projectRoot` 是项目名，不接受任意服务器路径。Docker、systemd 与 nginx 示例在 `deploy/`；部署、权限与边界见 [自托管服务器](docs/self-hosted-server.md)。
+
+## 构图与指标卡：按问题选择，避免千篇一律
+
+- **7 种布局模板**：`executive`、`focus`、`bento`、`sidebar`、`grid3`、`narrative`、`scorecard`，一条 `apply_layout_template` 操作同时生成桌面/平板/手机布局；未指定模板时新组件按角色排列，不再全宽堆叠。见 [布局模板](skills/executive-charts/references/layout_templates.md)。
+- **16 种指标卡**：在原有 mc01–mc09 之外新增中位数极差、环形进度、迷你柱趋势、子弹目标、双期对比、指标清单、大字主指标（mc10–mc16），并给出每种卡回答的问题、字段与可绑定目标。见 [指标卡选型](skills/executive-charts/references/kpi-cards.md)。
+- **按问题选图**：`chart_recommend` 根据分析意图与数据形态排列 40 种图表，标注可筛选绑定的图形，并降低本页已用图形的排序。
+- **图表自适应**：窄卡片中自动为轴名称留出空间、截断拥挤类目、滚动过长图例；指标卡数值不再在单位中间换行。
+
 ## 推荐：积木式构建 Dashboard
 
 CLI workspace 将筛选器、KPI、图表和表格拆成独立小文件。Agent 可以逐块添加、检查和验证，只在 `build` 阶段于内存中合并完整配置。
@@ -119,6 +139,7 @@ charts-design/
 │   ├── README.md                       # 文档总览
 │   └── agent/file-management.md         # 文件存放与维护规则
 ├── bin/                                # CLI、MCP 启动与本地更新入口
+├── deploy/                             # 自托管服务器的 Docker、systemd、nginx 示例
 ├── dashboard_runtime/                  # 状态、数据、查询、MCP 与共享网页模块
 │   └── examples/academic-report.md      # 分析报告案例的唯一 Markdown 母稿
 ├── runtime-ui/                         # 原组件提取与前端打包

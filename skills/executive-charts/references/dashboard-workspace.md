@@ -69,7 +69,14 @@ Keep the display value and unit consistent. Optional comparisons render as a das
 - `mc03`: non-empty `sparkMonths` and finite `sparkData` arrays of equal length;
 - `mc04` / `mc05`: a numeric display value, including zero;
 - `mc06`: explicit `leftTitle`, `leftVal`, `rightTitle`, and `rightVal`;
-- `mc09`: `segLeftWidth` and `segRightWidth` percentages totaling 100, with explicit `subLabel` and `subVal`.
+- `mc09`: `segLeftWidth` and `segRightWidth` percentages totaling 100, with explicit `subLabel` and `subVal`;
+- `mc10`: displayed median `value` and finite `stats` with `min <= p25 <= median <= p75 <= max`;
+- `mc11`: `percent` (0–100 scale, may exceed 100) or a numeric display value;
+- `mc12`: `sparkMonths` and finite `sparkData` of equal length, like `mc03`;
+- `mc13`: finite `actual` and `target`; optional up to three ascending `ranges` (`rangeBasis: "target"` makes them fractions of target) and positive `max`;
+- `mc14`: finite `currentValue` and `priorValue`;
+- `mc15`: 1–4 `items`, each with `label`, `value` and an optional signed `delta`;
+- `mc16`: headline `value`; optional `note` of at most 120 characters.
 
 These fields have no sample-data fallback.
 
@@ -212,7 +219,7 @@ Warnings identify missing units or incomplete executive metadata. Resolve releva
 
 The workspace contract covers all shipped component families:
 
-- KPI cards: `mc01`–`mc09` (9 types);
+- KPI cards: `mc01`–`mc16` (16 types; see the selection guide in [kpi-cards.md](kpi-cards.md));
 - chart renderers: every code returned by `generate_chart.py --list` (currently 40 codes across `c`, `d`, `f`, `fn`, `k`, `m`, `r` and `t` families);
 - dynamic filters: 0–N `select` or `multi-select` components with explicit fields and consumers;
 - one structured table component with stable column keys and typed units;
