@@ -52,8 +52,7 @@ VIEW_TOOLS = frozenset({
     'dashboard_get', 'dashboard_view', 'dashboard_refresh', 'dashboard_filter_options',
     'component_data', 'query_inspect', 'semantic_inspect', 'statistical_render',
     'dashboard_annotations', 'dashboard_list', 'runtime_info', 'runtime_keepalive',
-    'runtime_report_error', 'runtime_result_chunk', 'dashboard_export', 'dataset_export',
-    'legacy_render',
+    'runtime_report_error', 'dashboard_export', 'dataset_export', 'legacy_render',
 })
 # An edit link additionally saves layout, titles, descriptions and checkpoints.
 EDIT_TOOLS = VIEW_TOOLS | frozenset({
@@ -490,7 +489,25 @@ def create_app(server: RemoteServer):
 
     settings = server.settings
     base = settings.base_path
-    manager = StreamableHTTPSessionManager(app=server.mcp, stateless=settings.stateless, security_settings=settings.security())
+    import inspect
+    options = {}
+    if 'max_request_body_size' in inspect.signature(StreamableHTTPSessionManager).parameters:
+        # dataset_import and patches accept up to 16 MiB, like the local transports.
+        options['max_request_body_size'] = MAX_BYTES + 1024 * 1024
+    manager = StreamableHTTPSessionManager(app=server.mcp, stateless=settings.stateless, security_settings=settings.security(), **options)
+
+    async def read_body(request: Request, limit: int) -> bytes:
+        """Refuse oversized bodies before buffering them, with or without Content-Length."""
+        declared = request.headers.get('content-length')
+        if declared is not None and (not declared.isdigit() or int(declared) > limit):
+            raise DashboardError('PAYLOAD_TOO_LARGE', f'Body must contain at most {limit} bytes', 413)
+        chunks, size = [], 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > limit:
+                raise DashboardError('PAYLOAD_TOO_LARGE', f'Body must contain at most {limit} bytes', 413)
+            chunks.append(chunk)
+        return b''.join(chunks)
 
     def bearer(request: Request) -> str:
         value = request.headers.get('authorization', '')
@@ -566,9 +583,9 @@ def create_app(server: RemoteServer):
                 raise DashboardError('NOT_FOUND', 'Project not found', 404)
             if request.headers.get('content-type', '').split(';')[0].strip() != 'application/json':
                 raise DashboardError('CONTENT_TYPE', 'Use application/json', 415)
-            body = await request.body()
-            if not 0 < len(body) <= MAX_BYTES:
-                raise DashboardError('PAYLOAD_TOO_LARGE', 'Body must contain 1 byte to 16 MiB', 413)
+            body = await read_body(request, MAX_BYTES)
+            if not body:
+                raise DashboardError('INVALID_REQUEST', 'Body must contain a JSON object', 400)
             result = await asyncio.to_thread(server.call_viewer, project, name, json.loads(body), principal)
             raw = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
             return compressed(request, raw, 'application/json', {'Cache-Control': 'no-store'})
@@ -590,7 +607,7 @@ def create_app(server: RemoteServer):
         try:
             if not (settings.insecure_no_auth or server.admin(bearer(request))):
                 raise DashboardError('UNAUTHORIZED', '访问令牌无效', 401)
-            args = json.loads(await request.body() or b'{}')
+            args = json.loads(await read_body(request, 64 * 1024) or b'{}')
             require(isinstance(args, dict), 'Arguments must be an object', 'INVALID_REQUEST')
             project = server.projects.name(args.get('project'))
             if not server.projects.exists(project):

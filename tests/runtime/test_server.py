@@ -204,3 +204,19 @@ def test_share_pages_render_dashboard_and_report_read_only(tmp_path):
             page.locator('.markdown-chart canvas').first.wait_for()
             assert errors == []
             browser.close()
+
+
+def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
+    import http.client
+    port = free_port()
+    server = start(tmp_path, port)
+    token = server.links.share('sales', 'exec', 'view')['url'].split('#token=')[1]
+    with Running(create_app(server), port):
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
+        connection.request('POST', '/api/v1/p/sales/tools/dashboard_get', body=b'{}',
+                           headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'Content-Length': str(64 * 1024 * 1024)})
+        response = connection.getresponse()
+        assert response.status == 413
+        assert json.loads(response.read())['error']['code'] == 'PAYLOAD_TOO_LARGE'
+        status, _ = post(f'http://127.0.0.1:{port}/api/v1/p/sales/tools/runtime_result_chunk', {'requestId': 'x', 'index': 0}, token)
+        assert status == 403
