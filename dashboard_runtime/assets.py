@@ -50,6 +50,46 @@ def render_html(mode='web', document=None, legacy=None, idle_timeout: float=60):
             '<title>Charts Design</title><style>' + styles + '</style></head><body>'
             '<script>window.__DASHBOARD_BOOT__=' + payload + ';</script><script>' + javascript + '</script></body></html>')
 
+@lru_cache(maxsize=2)
+def _raw_assets(directory, signature):
+    build_id = _read_assets(directory, signature)[0]
+    return build_id, (Path(directory) / 'app.js').read_bytes(), (Path(directory) / 'app.css').read_bytes()
+
+
+def bundle_assets():
+    """Return (build id, JavaScript bytes, CSS bytes) for HTTP servers that cache assets."""
+    js, css = DIST / 'app.js', DIST / 'app.css'
+    if not js.exists() or not css.exists():
+        raise DashboardError('ASSETS_NOT_BUILT', 'Build the UI first: npm --prefix runtime-ui install && npm --prefix runtime-ui run build', 503)
+    return _raw_assets(*_asset_signature())
+
+
+def boot_script(boot):
+    """Inline boot JSON that cannot terminate its script element."""
+    payload = json.dumps(boot, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
+    return 'window.__DASHBOARD_BOOT__=' + payload + ';'
+
+
+def render_shell(boot, asset_base, title='Charts Design'):
+    """Page shell that references the bundle by content hash instead of inlining 2.5 MB.
+
+    Used by the self-hosted server; browsers cache the immutable assets across
+    every dashboard and report page. Returns (html, inline boot script) so the
+    caller can pin the script in its Content-Security-Policy.
+    """
+    build_id = bundle_assets()[0]
+    boot = {'uiBuildId': build_id, 'statisticalArtifacts': {}, 'legacy': {}, **boot}
+    script = boot_script(boot)
+    import html as escape
+    page = ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<meta name="referrer" content="no-referrer">'
+            f'<title>{escape.escape(title)}</title>'
+            f'<link rel="stylesheet" href="{asset_base}/app.{build_id}.css"></head><body>'
+            f'<script>{script}</script><script src="{asset_base}/app.{build_id}.js"></script></body></html>')
+    return page, script
+
+
 def export_document(document):
     return render_html('offline', document)
 

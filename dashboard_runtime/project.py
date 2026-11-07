@@ -73,7 +73,7 @@ class ProjectStore(Store):
             db.execute('INSERT OR REPLACE INTO annotations VALUES(?,?)', (doc['id'], raw))
             db.execute('INSERT INTO annotation_events VALUES(?,?,?,?)', (doc['id'], utcnow(), doc['revision'], raw))
 
-    def _files(self, board):
+    def _files(self, board, rewrite=False):
         """Portable readable mirrors; SQLite is the transactional project index."""
         folder = self.root / board
         with self.connect() as db:
@@ -82,16 +82,25 @@ class ProjectStore(Store):
             write_json(folder / 'annotations.json', self._notes(db, board))
             events = [dict(r) for r in db.execute('SELECT * FROM annotation_events WHERE board_id=?', (board,))]
             write_json(folder / 'annotation-history.json', events)
-            revisions = list(db.execute('SELECT * FROM revisions WHERE board_id=?', (board,)))
             write_json(folder / 'history.json', [dict(r) for r in db.execute('SELECT r.revision,r.created_at,r.action,m.name,m.published FROM revisions r LEFT JOIN checkpoint_meta m ON r.board_id=m.board_id AND r.revision=m.revision WHERE r.board_id=? ORDER BY r.revision DESC',(board,))])
+            # Checkpoint rows are immutable once written, so their readable
+            # mirrors only need writing once. Rewriting every retained
+            # checkpoint on each draft patch made edits O(history).
+            directory = folder / 'checkpoints'
+            existing = {path.name for path in directory.glob('*.json')} if directory.exists() else set()
+            if rewrite:
+                for name in existing:
+                    (directory / name).unlink(missing_ok=True)
+                existing = set()
             keep = set()
-            for revision in revisions:
-                path = folder / 'checkpoints' / f'{revision["revision"]}.json'
-                keep.add(path.name)
-                write_json(path, json.loads(revision['document']))
-            for path in (folder / 'checkpoints').glob('*.json'):
-                if path.name not in keep:
-                    path.unlink()
+            for (revision,) in db.execute('SELECT revision FROM revisions WHERE board_id=?', (board,)):
+                name = f'{revision}.json'
+                keep.add(name)
+                if name not in existing:
+                    row = db.execute('SELECT document FROM revisions WHERE board_id=? AND revision=?', (board, revision)).fetchone()
+                    write_json(directory / name, json.loads(row[0]))
+            for name in existing - keep:
+                (directory / name).unlink(missing_ok=True)
 
     def create(self, board_id, title, document=None):
         doc = super().create(board_id, title, document)
@@ -132,6 +141,12 @@ class ProjectStore(Store):
                 db.execute('INSERT OR REPLACE INTO revisions VALUES(?,?,?,?,?)', (board_id, doc['revision'], utcnow(), f'restore:{restore_revision}', json_bytes(stored).decode()))
         self._files(board_id)
         return self.get(board_id)
+
+    def migrate(self, board_id, expected_revision):
+        # Migration rewrites stored checkpoints in place; refresh their mirrors.
+        result = super().migrate(board_id, expected_revision)
+        self._files(board_id, rewrite=True)
+        return result
 
     def begin(self, board, expected):
         require(self.revision(board) == expected, 'Reload before editing', 'REVISION_CONFLICT')
