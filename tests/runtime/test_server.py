@@ -23,6 +23,7 @@ def settings(tmp_path, **extra):
     return ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'ws' / '.runtime', tokens=(TOKEN,), port=8000, **extra)
 
 
+# @wu-test type=boundary | scope=分享链接签名 | protects=篡改过期或错类型令牌被接受 | debt=D1
 def test_signer_rejects_tampering_kind_and_expiry():
     signer = Signer(b'k' * 32)
     token = signer.sign({'k': 'share', 'p': 'sales', 'd': 'demo', 'exp': int(time.time()) + 60})
@@ -35,6 +36,7 @@ def test_signer_rejects_tampering_kind_and_expiry():
     assert signer.verify('not-a-token', 'share') is None
 
 
+# @wu-test type=boundary | scope=远程项目路径 | protects=项目参数逃逸工作区或非法名称被接受 | debt=D1
 def test_projects_stay_inside_the_workspace(tmp_path):
     projects = WorkspaceProjects(settings(tmp_path))
     assert projects.name(None) == 'default'
@@ -49,6 +51,7 @@ def test_projects_stay_inside_the_workspace(tmp_path):
             projects.name(value)
 
 
+# @wu-test type=boundary | scope=服务器配置 | protects=无令牌或非回环地址免认证启动及签名密钥权限过宽 | debt=D1
 def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     with pytest.raises(DashboardError, match='bearer token'):
         RemoteServer(ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'rt'))
@@ -62,6 +65,7 @@ def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     assert oct((tmp_path / 'rt' / 'server-secret').stat().st_mode & 0o777) == '0o600'
 
 
+# @wu-test type=boundary | scope=分享链接权限 | protects=只读或编辑链接可调用越权工具 | debt=D1,D3
 def test_view_links_cannot_write():
     assert 'dashboard_patch' not in VIEW_TOOLS and 'dashboard_patch' in EDIT_TOOLS
     assert not {'dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open'} & EDIT_TOOLS
@@ -115,6 +119,7 @@ def free_port():
         return probe.getsockname()[1]
 
 
+# @wu-test type=integration | scope=远程MCP与分享链接 | protects=跨项目读写或只读链接写入或撤销后链接仍可用 | debt=D1
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
 def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
     from mcp import ClientSession
@@ -175,6 +180,7 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
         assert page.headers['Referrer-Policy'] == 'no-referrer'
 
 
+# @wu-test type=integration | scope=分享页面 | protects=只读页出现编辑入口或令牌留在地址栏或图表不渲染 | debt=D1
 def test_share_pages_render_dashboard_and_report_read_only(tmp_path):
     from dashboard_runtime.assets import DIST
     if not (DIST / 'app.js').exists():
@@ -205,6 +211,7 @@ def test_share_pages_render_dashboard_and_report_read_only(tmp_path):
             browser.close()
 
 
+# @wu-test type=boundary | scope=查看接口 | protects=超大请求体被读取或分块接口对链接开放 | debt=D1
 def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
     import http.client
     port = free_port()

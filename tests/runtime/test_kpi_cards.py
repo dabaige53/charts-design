@@ -17,12 +17,14 @@ def put(doc, key, config, binding=None):
     return apply_operations(doc, [{'op': 'put_component', 'id': key, 'value': value}])
 
 
+# @wu-test type=integration | scope=KPI指南示例 | protects=对外示例不能生成对应类型指标卡
 @pytest.mark.parametrize('code', sorted(GUIDE))
 def test_every_guide_example_is_a_valid_card(code):
     doc = put(executive_document('kpi'), 'card', kpi_example(code))
     assert doc['manifest']['components']['card']['config']['type'] == code
 
 
+# @wu-test type=boundary | scope=KPI结构校验 | protects=分位倒序或负比例等非法配置被接受
 @pytest.mark.parametrize('code,change', [
     ('mc10', {'stats': {'min': 1, 'p25': 5, 'median': 3, 'p75': 6, 'max': 9}}),
     ('mc11', {'percent': -5}),
@@ -37,6 +39,7 @@ def test_malformed_shapes_are_rejected(code, change):
         put(executive_document('kpi'), 'card', {**kpi_example(code), **change})
 
 
+# @wu-test type=behavior | scope=KPI发现 | protects=按类型选择却拿到通用示例或错误绑定说明 | debt=D3
 def test_discovery_explains_each_shape_instead_of_one_generic_example():
     summary = declaration_contract(summary=True)
     guide = {item['code']: item for item in summary['kpiGuide']}
@@ -47,6 +50,7 @@ def test_discovery_explains_each_shape_instead_of_one_generic_example():
     assert selected['exampleConfig']['type'] == 'mc14' and 'thresholdLabel' not in selected['exampleConfig']
 
 
+# @wu-test type=boundary | scope=KPI绑定 | protects=仅快照类型被错误绑定数据
 @pytest.mark.parametrize('code', ['mc10', 'mc15'])
 def test_snapshot_only_shapes_refuse_bindings(code):
     with pytest.raises(DashboardError) as error:
@@ -54,6 +58,7 @@ def test_snapshot_only_shapes_refuse_bindings(code):
     assert error.value.code == 'BINDING_TRANSFORM_REQUIRED'
 
 
+# @wu-test type=integration | scope=KPI筛选重算 | protects=筛选后几何字段或文本未按真实数据重算
 def test_bound_shapes_recompute_numeric_geometry_under_filters(tmp_path):
     doc = executive_document('kpi')
     doc = put(doc, 'bullet', {'type': 'mc13', 'label': '收入对预算', 'value': '—', 'unit': '万元', 'subLabel': '预算'},

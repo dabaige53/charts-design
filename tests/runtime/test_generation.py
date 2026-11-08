@@ -67,6 +67,7 @@ assert.deepEqual(resolveOriginal(doc,'trend').data.month.revenue,[]);
     assert result.returncode == 0, result.stderr
 
 
+# @wu-test type=integration | scope=运营案例 | protects=运营案例与高管案例雷同或筛选后指标未重算
 def test_operations_case_contrasts_the_executive_case_and_recomputes(tmp_path):
     executive = apply_operations(new_document('a', 'A'), generation_examples('executive-dashboard')['operations'])
     case = generation_examples('operations-scorecard')

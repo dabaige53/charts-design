@@ -64,6 +64,7 @@ test('bubble aggregation follows filters and keeps the clicked agent identity',(
  d.manifest.filters[0].values=['missing'];
  assert.deepEqual(resolveOriginal(d,'bubble').data.clusters,[]);
 });
+// @wu-test type=behavior | scope=KPI binding geometry | protects=筛选后几何字段变成文本或数值未重算
 test('bullet, comparison and mini-bar KPIs keep geometry numeric while headlines stay formatted',()=>{
  const d=structuredClone(source);
  d.manifest.components.bullet={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc13',value:'old',actual:1,target:1},binding:{datasetId:'ds',measures:{value:'revenue',actual:'revenue',target:'revenue'}}};

@@ -47,6 +47,7 @@
 - [自托管、构图与指标卡验收](records/2026-11-07-server-layout-kpi.md)：2026-11-07 的性能对比、验证范围与未验证项。
 - [性能原始记录](performance-results.json)：2026-10-20 的环境、测量、验证与限制。
 - [测试清剿记录](records/test-purge-20261106.md)：2026-11-06 的逐用例处置、附属资产清理和局部验证。
+- [测试清剿变基记录](records/test-purge-rebase-20261108.md)：2026-11-08 变基到 PR #6 之后的冲突处理、新增标注、待决定项和验证结果。
 - [零售验收截图](images/dynamic-encoding-retail.png)与[虚拟看板截图](images/transfer-prototype-validation.png)：配套历史附件。
 
 已有记录原位保留。新任务的方案和单次验收证据按文件管理规则存放，不覆盖旧记录中的历史事实。

@@ -103,6 +103,7 @@ def wait_healthy(base, seconds=90):
     raise AssertionError(f'{base}/health did not become healthy within {seconds}s')
 
 
+# @wu-test type=integration | scope=部署镜像 | protects=部署后鉴权失效或编辑批次失败或只读链接可写
 def run_checks(base, token):
     wait_healthy(base)
     status, _, _ = http('POST', base + '/mcp', {}, {'Content-Type': 'application/json'})
