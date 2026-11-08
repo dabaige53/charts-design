@@ -46,7 +46,9 @@ class QueryRunner:
             require(len(tuples) <= MAX_QUERY_ROWS, f'Query exceeds {MAX_QUERY_ROWS} rows. Aggregate or narrow the query; rows are not silently truncated.')
             rows = [dict(zip(columns, row)) for row in tuples]
             require(all(not isinstance(v, bytes) for row in rows for v in row.values()), 'Binary columns cannot be rendered; select displayable fields')
-        except sqlite3.Error as exc:
+        except (sqlite3.Error, sqlite3.Warning) as exc:
+            # Python <= 3.11 raises sqlite3.Warning (not an sqlite3.Error) for
+            # multiple statements; reject it the same way on every version.
             raise DashboardError('QUERY_REJECTED', str(exc)) from exc
         finally:
             connection.close()

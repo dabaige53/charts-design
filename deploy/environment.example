@@ -1,0 +1,18 @@
+# Copy to deploy/charts.env (Docker) or /etc/charts-design/charts.env (systemd).
+# Generate access values with:  python3 -c "import secrets;print(secrets.token_urlsafe(32))"
+
+# Public HTTPS address used in preview and download links.
+CHARTS_PUBLIC_URL=https://charts.example.com
+# Bearer tokens accepted on /mcp, comma separated (rotate by listing old and new).
+CHARTS_SERVER_TOKENS=replace-with-a-long-random-value
+# Optional fixed link-signing key (32+ characters). Without it the server
+# generates one under CHARTS_RUNTIME_ROOT and keeps it across restarts.
+# CHARTS_SERVER_SECRET=
+# Default lifetime of browser links, in hours.
+CHARTS_SHARE_TTL_HOURS=168
+# Project used when an MCP call omits projectRoot.
+CHARTS_DEFAULT_PROJECT=default
+# Reverse proxies trusted for X-Forwarded-For / X-Forwarded-Proto.
+CHARTS_FORWARDED_ALLOW_IPS=127.0.0.1
+# Operator-owned read-only SQLite source aliases (JSON file), optional.
+# CHARTS_SOURCES=/data/sources.json

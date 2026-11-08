@@ -34,9 +34,10 @@ Use standard Markdown named notes for metric definitions, provenance or key qual
 
 Read [the shared MCP delivery workflow](../executive-charts/references/mcp-delivery.md) before creating, editing, replacing data or diagnosing loading. Use its project storage, edit-batch and one-preview workflow for reports too.
 
-- Pass the absolute asset directory as `projectRoot` on every project call. Create an empty artifact with `dashboard_create`, or inspect the existing document and referenced component IDs. Begin an edit batch with the latest revision. Preserve accepted Markdown, captions, notes and sources outside the requested change.
+- Pass the absolute asset directory as `projectRoot` on every project call (on the self-hosted server, the project name). Create an empty artifact with `dashboard_create`, or inspect the existing document and referenced component IDs. Begin an edit batch with the latest revision. Preserve accepted Markdown, captions, notes and sources outside the requested change.
 - Adapt the case's declarations: replace sources, data, metrics, chart IDs, captions and every numeric statement. Apply declarations, `set_report_markdown` and `set_view_mode`=`report` together so references resolve after the batch.
 - Finish the edit batch and resolve its Doctor errors before one preview. Re-read after a revision conflict.
+- On the self-hosted server, the preview result includes `previewUrl`: an expiring read-only browser link that renders the same single-column paper with numbered figures. Give it to the reader; figures load as they scroll into view.
 - Inspect actual rendering: prose–figure–prose order, units/legends, caption numbering, source notes, figure links, and reading-mode controls. Check save/reload when authoring. Report host acceptance as pending if only tool output was observed.
 - Data or filter changes update charts, not authored claims. Recompute each affected numeric statement against the same data version and filter scope, or explicitly keep the narrative tied to its original snapshot. Record unresolved statements rather than reusing stale values.
 

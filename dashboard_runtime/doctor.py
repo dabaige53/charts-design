@@ -16,6 +16,7 @@ def diagnose(service, board, mode='full'):
     doc = service.store.get(board, hydrate=False)
     request_id = uuid.uuid4().hex
     report = {'dashboardId': board, 'requestId': request_id, 'revision': doc['revision'], 'dataVersion': data_version(doc), 'uiBuildId': ui_build_id(), 'backendBuildId': BACKEND_BUILD_ID, 'mode': mode, 'checks': []}
+    events = []
     def check(item, callback, component=None):
         start=time.perf_counter()
         try:
@@ -23,7 +24,8 @@ def diagnose(service, board, mode='full'):
             report['checks'].append({'check': item, 'componentId': component, 'status': 'passed'})
         except (DashboardError, ValueError, KeyError, OSError, sqlite3.Error) as error:
             report['checks'].append({'check': item, 'componentId': component, 'status': 'failed', 'code': getattr(error, 'code', type(error).__name__), 'message': str(error), 'action': '检查该组件绑定和项目数据文件'})
-        service.transport.log(request_id, 'dashboard_doctor', item, size=0, dashboard_id=board, duration_ms=(time.perf_counter()-start)*1000, revision=doc['revision'])
+        # One diagnostic transaction per Doctor run instead of one per check.
+        events.append((request_id, 'dashboard_doctor', item, '', 0, board, (time.perf_counter()-start)*1000, doc['revision'], None))
     import sqlite3
     check('definition', lambda: validate(doc))
     for key, ref in doc['snapshot'].get('datasetRefs', {}).items():
@@ -42,4 +44,5 @@ def diagnose(service, board, mode='full'):
         check('component', calculate, key)
     report['warnings']=[{'code':'ANNOTATION_ANCHOR_UNAVAILABLE','annotationId': note['id']} for note in doc['manifest'].get('annotations',[]) if note.get('componentId') and note['componentId'] not in doc['manifest']['components']]
     report['passed']=all(item['status']=='passed' for item in report['checks'])
+    service.transport.log_many(events)
     return report

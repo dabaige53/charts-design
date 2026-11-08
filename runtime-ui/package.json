@@ -9,17 +9,17 @@
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.1.2",
-    "dompurify": "3.4.16",
+    "dompurify": "3.4.17",
     "echarts": "6.1.0",
     "gridstack": "12.3.3",
     "lucide": "0.468.0",
-    "markdown-it": "14.3.2",
+    "markdown-it": "14.3.3",
     "markdown-it-footnote": "4.0.0"
   },
   "devDependencies": {
     "acorn": "8.15.0",
     "esbuild": "0.25.9",
-    "postcss": "8.5.6",
+    "postcss": "8.5.32",
     "tailwindcss": "3.4.17"
   }
 }

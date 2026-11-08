@@ -12,11 +12,15 @@ For KPI comparisons, bind real prior-period data at the same scope and grain. Co
 
 For tooltip references, inspect content and interaction together: heading, aggregate total, denominator, units, series order/colors, value/share rows and pointer placement. When showing only top series, state whether totals include hidden series; verify that the tooltip and table use that same definition. Loading, empty results and errors are distinct states; a completed empty result clears the previous result.
 
+## Compose before writing
+
+Pick chart codes with `chart_recommend`, KPI shapes from `kpiGuide` (returned by `chart_declarations {}`), and one composition from `layout_templates`. Put `apply_layout_template` in the same batch as the components; it runs after the other operations. Vary compositions across the pages of a project.
+
 ## Save and display
 
 1. Resolve the project's durable assets and the disposable runtime directory. Keep data references, design checkpoints and annotations in the project. Prefer existing immutable data versions over duplicate copies.
 2. Begin an edit batch, apply draft changes with the latest revision, and finish it. Resolve Doctor errors before automatic display. If checks are explicitly waived, preserve the draft and report the skipped gate; do not label it validated.
-3. Preview once after the batch is ready. Use component-scoped `dashboard_view` patches for reader interactions, search/page large filter lists and paginate tables. Use file exports for full data.
+3. Preview once after the batch is ready. On the self-hosted server the preview result also carries `previewUrl`, an expiring read-only browser link for hosts without MCP Apps; `dashboard_share` issues view/edit links and `dashboard_share_revoke` invalidates them. Use component-scoped `dashboard_view` patches for reader interactions, search/page large filter lists and paginate tables. Use file exports for full data.
 4. Check the actual target page for the changed states. Report source checks, installed package, connected worker and host rendering separately. A preview response or test host is not actual host acceptance. A required restart remains pending until the connected worker is verified.
 
 Annotations remain independent of design restoration. Preserve their original context when anchors become unavailable.
@@ -38,6 +42,10 @@ Paths below are relative to the package root:
 - `dashboard_runtime/service.py`: MCP operations and diagnostics.
 - `skills/executive-charts/scripts/core/dashboard_template.py`: shared original-chart engine source. Rebuild through `runtime-ui`; generated engine files are build output.
 - `docs/project-runtime.md`: storage, loading and edit lifecycle; `docs/mcp-transport-diagnostics.md`: transport diagnosis; `docs/dynamic-encoding.md`: dynamic bindings.
+
+## Self-hosted server
+
+`python3 -m dashboard_runtime server` serves Streamable HTTP MCP on `/mcp` with bearer tokens and browser previews of dashboards and reports. `projectRoot` is then a project name inside the server workspace, never an arbitrary server path. Desktop file actions (`dashboard_export_open`) are unavailable remotely; exports return signed `downloadUrl` links instead. See package-root `docs/self-hosted-server.md` for deployment, tokens, share links and limits.
 
 ## Standalone hosting
 

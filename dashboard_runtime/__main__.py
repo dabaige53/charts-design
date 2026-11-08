@@ -79,7 +79,46 @@ def parser():
         default=DEFAULT_IDLE_TIMEOUT,
         help="Exit after this many idle seconds (default: 60)",
     )
+    server = sub.add_parser(
+        "server",
+        help="Self-hosted server: remote Streamable HTTP MCP plus browser previews (see docs/self-hosted-server.md)",
+    )
+    for target in (server, sub.add_parser("share", help="Print an expiring browser link for one dashboard on a server workspace")):
+        target.add_argument("--workspace", help="Directory holding one sub-directory per project (env CHARTS_WORKSPACE)")
+        target.add_argument("--public-url", help="External base URL used in links, e.g. https://charts.example.com (env CHARTS_PUBLIC_URL)")
+        target.add_argument("--token", action="append", help="Bearer token accepted on /mcp; repeat to rotate (env CHARTS_SERVER_TOKENS)")
+        target.add_argument("--token-file", help="File with one bearer token per line (env CHARTS_SERVER_TOKEN_FILE)")
+        target.add_argument("--share-ttl-hours", type=float, help="Default lifetime of browser links (default 168)")
+        target.add_argument("--default-project", help="Project used when a call omits projectRoot (default: default)")
+        target.add_argument("--host", help="Bind address (default 127.0.0.1; use 0.0.0.0 in containers)")
+        target.add_argument("--port", type=int, help="Port (default 8000)")
+        target.add_argument("--stateless", action="store_true", help="Stateless MCP sessions for load-balanced replicas")
+        target.add_argument("--allowed-host", action="append", help="Extra Host header accepted by /mcp")
+        target.add_argument("--forwarded-allow-ips", help="Reverse proxies trusted for X-Forwarded-* (default 127.0.0.1)")
+    server.add_argument("--insecure-no-auth", action="store_true", help="Loopback-only trial without tokens")
+    share = sub.choices["share"]
+    share.add_argument("project")
+    share.add_argument("dashboard")
+    share.add_argument("--access", choices=["view", "edit"], default="view")
+    share.add_argument("--hours", type=float, help="Link lifetime in hours")
     return p
+
+
+def server_command(args):
+    from .server import Links, ShareState, Signer, WorkspaceProjects, serve, settings_from_args
+    if args.command == "server":
+        serve(settings_from_args(args))
+        return None
+    # Links are signed with the server secret; minting one needs no bearer token.
+    args.insecure_no_auth = False
+    settings = settings_from_args(args)
+    projects = WorkspaceProjects(settings)
+    project = projects.name(args.project)
+    if not projects.exists(project):
+        raise DashboardError("NOT_FOUND", "Project not found in the server workspace")
+    projects.service(project).store.revision(args.dashboard)
+    links = Links(settings, Signer(settings.secret), ShareState(settings.runtime / "server-state.sqlite3"))
+    return {"dashboardId": args.dashboard, "project": project, **links.share(project, args.dashboard, args.access, args.hours)}
 
 
 def read_json(path):
@@ -89,6 +128,11 @@ def read_json(path):
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
+        if args.command in ("server", "share"):
+            result = server_command(args)
+            if result is not None:
+                print(json.dumps(result, ensure_ascii=False))
+            return 0
         service = Service(args.runtime_root or args.root, args.sources, project_root=args.project_root)
         if not args.project_root and args.command != 'mcp':
             print("Legacy --root mode: migrate to --project-root; new CLI dashboards require a project.", file=sys.stderr)

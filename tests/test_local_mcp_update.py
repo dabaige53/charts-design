@@ -1,8 +1,10 @@
 import importlib.util
 from pathlib import Path
-import tomllib
 
 import pytest
+
+# The Codex configuration updater needs tomllib (Python 3.11+); the runtime supports 3.10.
+tomllib = pytest.importorskip('tomllib', reason='bin/update_local_mcp.py requires Python 3.11+')
 
 spec = importlib.util.spec_from_file_location('update_local_mcp', Path(__file__).parents[1] / 'bin/update_local_mcp.py')
 assert spec is not None and spec.loader is not None

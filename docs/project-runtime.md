@@ -2,7 +2,7 @@
 
 ## 存储
 
-项目内 `charts-project.json` 管理历史和加载参数；`dashboards/dashboards.sqlite3` 是事务索引与权威状态，`dashboards/<id>/draft.json`、`checkpoints/*.json`、`annotations.json` 和 `annotation-history.json` 是自动生成的可读镜像，不能另行手工维护。`data/data.sqlite3` 保存不可变数据版本。运行目录仅用于传输缓存及诊断；删除新运行缓存不删除项目资产。既有集中目录不自动清理。
+项目内 `charts-project.json` 管理历史和加载参数；`dashboards/dashboards.sqlite3` 是事务索引与权威状态，`dashboards/<id>/draft.json`、`checkpoints/*.json`、`annotations.json` 和 `annotation-history.json` 是自动生成的可读镜像，不能另行手工维护。检查点写入后不再变化，其镜像只在首次出现时写出；迁移改写检查点时整体重写镜像。`data/data.sqlite3` 保存不可变数据版本。运行目录仅用于传输缓存及诊断；删除新运行缓存不删除项目资产。既有集中目录不自动清理。
 
 项目默认配置：普通检查点保留100个，筛选合并150毫秒，最多4个组件查询并发，表格50行。命名和发布检查点保护。数据不自动清理，避免删除仍被历史或批注引用的数据。设计JSON和数据内容不应作为含敏感数据的公共仓库产物提交。
 
@@ -27,6 +27,10 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 每个项目使用固定的 `Service` 和资产目录；运行缓存保存在统一运行目录的 `projects/<项目路径标识>/` 下。不存在“当前项目”，一次调用不会改变下一次调用的项目。传输分块与诊断同样按项目隔离，重启后可用原项目参数继续读取尚未过期的分块。数据源别名继续由启动时的 `--sources` 配置，不允许工具请求另设数据源配置。
 
 预览结果和分块描述携带顶层 `projectRoot`，不改写看板文档，也不写入项目的草稿、历史或数据。通用 HTML 资源不绑定项目；每个预览页面在接收首次结果时固定项目，随后自动为筛选、刷新、页面切换、批注、导出、分块读取和后台检查附加该项目。页面收到其他项目的结果时拒绝覆盖，需另开预览。附到对话的批注引用包含项目路径，避免同名看板混淆。多项目预览须使用本版本新生成的预览入口；历史宿主已缓存的旧页面代码不会因服务端更新而自动替换。
+
+### 自托管服务器中的项目
+
+`server` 命令以一个工作区目录承载全部项目。远程调用的 `projectRoot` 是项目名（字母、数字、`-`、`_`），对应 `<workspace>/<项目名>/`，目录结构与本地项目相同；运行缓存在 `<workspace>/.runtime/projects/<项目名>/`。工作区直接子目录的绝对路径也被接受，其他路径以 `PROJECT_OUTSIDE_WORKSPACE` 拒绝。结果中的 `projectRoot` 返回项目名。部署、令牌与分享链接见 [自托管服务器](self-hosted-server.md)。
 
 ### 兼容与 Router
 

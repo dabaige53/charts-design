@@ -19,6 +19,7 @@ const T={edit:'编辑',view:'退出编辑',undo:'撤销',redo:'重做',export:'�
 const el=(tag,cls='',text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 const button=(label,fn,cls='')=>{const b=el('button',cls,label);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
 function showError(error){const n=document.getElementById('notice');if(n){if(n.closest('.toolbar'))document.querySelector('.dashboard-heading')?.append(n);n.textContent=error.message||String(error);n.className='notice error';n.hidden=false;}else console.error(error);}
+function fetchDownload(url){const a=el('a');a.href=url;a.download='';a.rel='noopener';document.body.append(a);a.click();a.remove();}
 function download(name,body,type='application/json'){const a=el('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 function field(label,node){const wrap=el('label','field');wrap.append(el('span','',label),node);return wrap;}
 function input(value='',kind='text'){const n=el('input');n.type=kind;n.value=value;return n;}
@@ -37,6 +38,8 @@ function table(rows,{paginate=true,labels={}}={}){
 export async function start({echarts,GridStack,App}){
   initializeOriginal(echarts);
   const boot=window.__DASHBOARD_BOOT__||{},root=el('div','workspace');document.body.append(root);
+  // Self-hosted pages: remote.access is 'view' (read-only share) or 'edit'.
+  const remote=boot.mode==='web'?boot.remote||null:null,viewOnly=remote?.access==='view';
   const top=el('header','topbar'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
   notice.id='notice';title.className='dashboard-title';title.setAttribute('aria-label','Dashboard title');const description=el('div','dashboard-description'),context=el('div','dashboard-context'),badge=el('span','dashboard-status'),heading=el('div','dashboard-heading'),mark=el('div','document-mark');mark.append(icon('chart'));heading.append(mark,title,description,context,notice);top.append(heading,badge,toolbar);filters.setAttribute('role','region');filters.setAttribute('aria-label','筛选条件');canvas.append(gridEl);root.append(top,filters,canvas);toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Dashboard actions');
   let doc=boot.document||null,editing=false,grid=null,undo=[],redo=[],queue=Promise.resolve(),busy=0,layoutTimer=null,pendingLayout=null,dragging=false,renderQueued=false,linkage=null,app=null;
@@ -84,13 +87,17 @@ export async function start({echarts,GridStack,App}){
   }else if(boot.mode==='offline'){
     doc=boot.document;transport=async(name,args)=>{if(staticClient&&name==='dashboard_view')return staticClient.query(args);if(staticClient&&name==='runtime_report_error')return {};throw Error('此静态网页不支持该操作');};editing=false;
   }else{
-    const fragment=location.hash.slice(1);let token='';try{token=sessionStorage.getItem('charts-runtime-token')||'';}catch{}
+    // A self-hosted share link scopes its token to one project and dashboard.
+    const tokenKey=remote?`charts-share-token:${remote.project}/${remote.board}`:'charts-runtime-token';
+    const fragment=location.hash.slice(1);let token='';try{token=sessionStorage.getItem(tokenKey)||'';}catch{}
     const explicit=fragment.startsWith('token=');
     // New links identify credentials explicitly. Existing sessions keep document anchors inert.
-    if(explicit||(!token&&fragment&&!/^(fig-|report-)/.test(fragment))){token=explicit?decodeURIComponent(fragment.slice(6)):fragment;try{sessionStorage.setItem('charts-runtime-token',token);}catch{}history.replaceState(null,'',location.pathname+location.search);}
-    const authHeaders={'Content-Type':'application/json','Authorization':'Bearer '+token};
-    transport=async(name,args,options={})=>{const response=await queueRequest(()=>fetch('/api/tools/'+name,{method:'POST',headers:authHeaders,body:JSON.stringify(args),signal:options.signal}));return accept(await response.json(),deferredResult(name));};
-    const id=new URLSearchParams(location.search).get('board');
+    if(explicit||(!remote&&!token&&fragment&&!/^(fig-|report-)/.test(fragment))){token=explicit?decodeURIComponent(fragment.slice(6)):fragment;try{sessionStorage.setItem(tokenKey,token);}catch{}history.replaceState(null,'',location.pathname+location.search);}
+    const authHeaders={'Content-Type':'application/json','Authorization':'Bearer '+token},apiBase=remote?.apiBase||'/api';
+    transport=async(name,args,options={})=>{const response=await queueRequest(()=>fetch(apiBase+'/tools/'+name,{method:'POST',headers:authHeaders,body:JSON.stringify(args),signal:options.signal}));
+      let value;try{value=await response.json();}catch{throw Error(`服务器返回 ${response.status}，请稍后重试`);}
+      return accept(value,deferredResult(name));};
+    const id=remote?.board||new URLSearchParams(location.search).get('board');
     if(id)doc=accept(await transport('dashboard_get',{dashboardId:id,dataMode:'local'})).document;
     else{const boards=(await transport('dashboard_list',{})).dashboards;if(boards.length)doc=accept(await transport('dashboard_get',{dashboardId:boards[0].id,dataMode:'local'})).document;}
   }
@@ -119,7 +126,7 @@ export async function start({echarts,GridStack,App}){
       const result=await transport('dashboard_get',{dashboardId:id,dataMode:'local'});
       if(request!==switchRequest)return;
       resetPageState();doc=accept(result).document;render();
-      if(boot.mode!=='mcp'){const url=new URL(location.href);url.searchParams.set('board',id);history.replaceState(null,'',url);}
+      if(boot.mode!=='mcp'&&!remote){const url=new URL(location.href);url.searchParams.set('board',id);history.replaceState(null,'',url);}
     }finally{switching=false;renderPageSwitch();}
   }
   async function mutate(name,args,pushUndo=true,rerender=true){
@@ -138,13 +145,15 @@ export async function start({echarts,GridStack,App}){
     const request=transport('dashboard_filter_options',{dashboardId:doc.id,filterId:filter.id,search,offset}).catch(error=>{filterPagesCache.delete(key);throw error;});
     filterPagesCache.set(key,request);if(filterPagesCache.size>256)filterPagesCache.delete(filterPagesCache.keys().next().value);return request;
   }
+  // Report figures are keyed by component and occurrence; a component may appear twice.
+  function hostsFor(id){const card=cards.get(id)?.card;if(card)return [card];return [...reportHosts.values()].filter(entry=>entry.id===id).map(entry=>entry.host);}
   function ensureProgressive(){
     const key=doc.id+':'+doc.revision+':'+doc.dataVersion;
     if(progressiveKey===key)return;
     progressiveLoader?.stop();progressiveKey=key;fetched.clear();if(staticClient)for(const id of Object.keys(doc.computed?.components||{}))fetched.add(id);
     progressiveLoader=createProgressiveLoader({delay:doc.loading?.debounceMs??150,concurrency:doc.loading?.maxConcurrent??4,
       visible:id=>!dataObserver||visibleComponents.has(id),
-      loading:(id,value)=>{const card=cards.get(id)?.card||reportHosts.get(id);if(card){card.setAttribute('aria-busy',String(value));card.dataset.loading=value?'true':'false';}},
+      loading:(id,value)=>{for(const card of hostsFor(id)){card.setAttribute('aria-busy',String(value));card.dataset.loading=value?'true':'false';}},
       query:async(id,sequence)=>{
         const current=doc.id,base=requestedFilters||doc.manifest.filters,filters=linkage&&!editing?[...base.filter(f=>f.id!=='runtime-linkage'),...viewDoc().manifest.filters.filter(f=>f.id==='runtime-linkage')]:base;
         const started=performance.now();
@@ -155,11 +164,12 @@ export async function start({echarts,GridStack,App}){
         if(progressiveKey!==key||result.revision!==doc.revision)return;
         const computed={...doc.computed};for(const map of ['components','tables','grouped','filterOptions','filterPages']){computed[map]={...computed[map]};if(['components','tables','grouped'].includes(map))delete computed[map][id];Object.assign(computed[map],result.computed?.[map]);}
         doc={...doc,computed};fetched.add(id);statisticalArtifacts=updateStatisticalArtifacts(statisticalArtifacts,{statisticalArtifacts:{...statisticalArtifacts,...result.statisticalArtifacts}});
-        const card=cards.get(id)?.card||reportHosts.get(id);if(card){delete card.dataset.loadFailed;(card.shadowRoot||card).querySelector('.component-load-error')?.remove();mountComponent(card,id,false,true);}
+        // Report figures mount quietly (no grid chrome), exactly as the report renderer does.
+        const figure=!cards.get(id);for(const card of hostsFor(id)){delete card.dataset.loadFailed;(card.shadowRoot||card).querySelector('.component-load-error')?.remove();mountComponent(card,id,figure,true);}
         transport('runtime_report_error',{dashboardId:doc.id,revision:doc.revision,requestId:result.requestId||'',code:'CLIENT_DATA_APPLIED',durationMs:performance.now()-(result.clientStarted??performance.now())}).catch(()=>{});
         requestAnimationFrame(()=>requestAnimationFrame(()=>{if(progressiveKey===key&&fetched.has(id))transport('runtime_report_error',{dashboardId:doc.id,revision:doc.revision,requestId:result.requestId||'',code:'CLIENT_FRAME_READY',durationMs:performance.now()-(result.clientStarted??performance.now())}).catch(()=>{});}));
       },
-      failed:(id,error)=>{const card=cards.get(id)?.card||reportHosts.get(id);if(card){card.dataset.loadFailed='true';(card.shadowRoot||card).querySelector('.component-load-error')?.remove();const message=el('div','component-load-error',error.message);message.append(button('重试',()=>progressiveLoader.need(id)));(card.shadowRoot||card).append(message);}if(error.code==='REVISION_CONFLICT')reload().catch(showError);}
+      failed:(id,error)=>{for(const card of hostsFor(id)){card.dataset.loadFailed='true';(card.shadowRoot||card).querySelector('.component-load-error')?.remove();const message=el('div','component-load-error',error.message);message.append(button('重试',()=>progressiveLoader.need(id)));(card.shadowRoot||card).append(message);}if(error.code==='REVISION_CONFLICT')reload().catch(showError);}
     });
   }
   function refreshLocal(filters=requestedFilters||doc.manifest.filters,componentIds=null){
@@ -214,7 +224,7 @@ export async function start({echarts,GridStack,App}){
     doc={...doc,manifest:{...doc.manifest,filters:value}};render();return Promise.resolve();
   }
   function localQuery(id,changes){if(changes.tableState)viewTables={...viewTables,[id]:changes.tableState};if(changes.granularity)viewGranularities={...viewGranularities,[id]:changes.granularity};return refreshLocal(requestedFilters||doc.manifest.filters,[id]);}
-  const localExport=async(id,options)=>{if(staticClient){const result=await staticClient.query({componentIds:[id],filters:viewDoc().manifest.filters,tableStates:{[id]:{keyword:options.search,sortCol:options.sort?.[0]?.field,sortDir:options.sort?.[0]?.direction}},export:options});download(doc.manifest.components[id].title+'.csv',result.csv,'text/csv;charset=utf-8');return {export:{rowCount:result.rowCount,path:'浏览器下载',browser:true}};}return transport('dataset_export',{dashboardId:doc.id,componentId:id,filters:viewDoc().manifest.filters,...options});};
+  const localExport=async(id,options)=>{if(staticClient){const result=await staticClient.query({componentIds:[id],filters:viewDoc().manifest.filters,tableStates:{[id]:{keyword:options.search,sortCol:options.sort?.[0]?.field,sortDir:options.sort?.[0]?.direction}},export:options});download(doc.manifest.components[id].title+'.csv',result.csv,'text/csv;charset=utf-8');return {export:{rowCount:result.rowCount,path:'浏览器下载',browser:true}};}const result=await transport('dataset_export',{dashboardId:doc.id,componentId:id,filters:viewDoc().manifest.filters,...options});if(remote&&result.export?.downloadUrl){fetchDownload(result.export.downloadUrl);return {...result,export:{...result.export,path:'浏览器下载'}};}return result;};
   function clearLinkage(){linkage=null;if(doc.computed&&(boot.mode!=='offline'||staticClient))return refreshLocal().catch(showError);render();}
   const patch=(operations,rerender=true)=>mutate('dashboard_patch',()=>({operations:typeof operations==='function'?operations():operations}),true,rerender);
   // The grid already shows the dropped layout; re-rendering would tear down GridStack under the pointer.
@@ -285,7 +295,7 @@ export async function start({echarts,GridStack,App}){
     }finally{refreshing=false;const refresh=toolbar.querySelector('[aria-label="刷新报表"]');if(refresh)refresh.disabled=false;}
   }
   title.onchange=()=>patch([{op:'set_title',value:title.value}]).catch(showError);
-  function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?(boot.interactive?'独立网页 · ':'离线快照 · '):''}版本 v${doc.revision}`);}
+  function statusLine(){notice.title=doc.snapshot.updatedAt;status(`${boot.mode==='offline'?(boot.interactive?'独立网页 · ':'离线快照 · '):viewOnly?'只读预览 · ':''}版本 v${doc.revision}`);}
   function render(){
     annotations?.refresh();
     // Never rebuild GridStack mid-drag; flush an unsaved drop before replacing the grid.
@@ -309,12 +319,12 @@ export async function start({echarts,GridStack,App}){
     clearInlineEdit(description);if(editing)inlineEdit(description,{label:'页面描述',value:meta.subtitle||'',save:value=>patch([{op:'set_meta',value:{...meta,subtitle:value}}])});
     clearInlineEdit(badge);context.replaceChildren();if(editing){const setMeta=key=>value=>patch([{op:'set_meta',value:{...meta,[key]:value}}]);const org=el('span'),system=el('span');inlineEdit(org,{label:'组织',value:meta.org||'',save:setMeta('org')});inlineEdit(system,{label:'系统',value:meta.system||'',save:setMeta('system')});context.append(org,el('span','context-separator',' · '),system);context.hidden=false;inlineEdit(badge,{label:'状态标签',value:meta.statusText||'',save:setMeta('statusText')});badge.hidden=false;}else{context.textContent=[meta.org,meta.system].filter(Boolean).join(' · ');context.hidden=!context.textContent;badge.textContent=meta.statusText||'';badge.hidden=!badge.textContent;}mark.replaceChildren(icon(meta.iconKey==='plane'?'plane':'chart'));
     disposeToolbar?.();toolbar.replaceChildren();
-    const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,async()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑？'))return;if(doc.progressive){if(!editing){editBatch=await transport('dashboard_edit_begin',{dashboardId:doc.id,expectedRevision:doc.revision});}else if(editBatch){const done=await transport('dashboard_edit_finish',{dashboardId:doc.id,expectedRevision:doc.revision,batchId:editBatch.batch_id});if(!done.ok){showError(Error('检查未通过，请查看诊断'));return;}editBatch=null;}}annotations?.reset();editing=!editing;render();});edit.disabled=boot.mode==='offline';edit.classList.remove('icon-button');edit.classList.add('mode-toggle');edit.append(el('span','',editing?T.view:T.edit));toolbar.append(edit);
-    if(!editing){const annotate=iconButton('comment',annotations?.active?'退出批注':'批注',()=>annotations.toggle());annotate.classList.add('annotation-toggle');annotate.setAttribute('aria-pressed',String(Boolean(annotations?.active)));toolbar.append(annotate);}
+    const edit=iconButton(editing?'view':'edit',editing?T.view:T.edit,async()=>{if(editing&&currentDraft().dirty&&!confirm('仍有未保存的 Markdown，退出编辑？'))return;if(doc.progressive){if(!editing){editBatch=await transport('dashboard_edit_begin',{dashboardId:doc.id,expectedRevision:doc.revision});}else if(editBatch){const done=await transport('dashboard_edit_finish',{dashboardId:doc.id,expectedRevision:doc.revision,batchId:editBatch.batch_id});if(!done.ok){showError(Error('检查未通过，请查看诊断'));return;}editBatch=null;}}annotations?.reset();editing=!editing;render();});edit.disabled=boot.mode==='offline';edit.classList.remove('icon-button');edit.classList.add('mode-toggle');edit.append(el('span','',editing?T.view:T.edit));if(!viewOnly)toolbar.append(edit);
+    if(!editing&&(!viewOnly||(doc.manifest.annotations||[]).length)){const annotate=iconButton('comment',annotations?.active?'退出批注':'批注',()=>annotations.toggle());annotate.classList.add('annotation-toggle');annotate.setAttribute('aria-pressed',String(Boolean(annotations?.active)));toolbar.append(annotate);}
     if(editing){const u=iconButton('undo',T.undo,()=>restore('undo')),r=iconButton('redo',T.redo,()=>restore('redo'));u.disabled=!undo.length;r.disabled=!redo.length;toolbar.append(u,r);}
     if(boot.mode!=='offline'){
-      if(doc.progressive)toolbar.append(iconButton('history','版本历史',async()=>{const {body}=dialog('版本历史');let offset=0;const show=async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id,offset,limit:20});body.replaceChildren();for(const item of result.history){const row=el('div','field');row.append(el('span','',`v${item.revision} ${item.name||item.action}${item.published?' · 已发布':''}`),button('恢复',async()=>{await mutate('dashboard_restore',{revision:item.revision});}),button('命名／发布标记',()=>{const {d,body:form}=dialog('版本标记');const name=input(item.name||''),published=input('','checkbox');published.checked=Boolean(item.published);form.append(field('版本名称',name),field('发布版本',published),button('保存',async()=>{await transport('dashboard_version_label',{dashboardId:doc.id,expectedRevision:doc.revision,revision:item.revision,name:name.value,published:published.checked});d.close();await show();}));}),button('与当前比较',async()=>{const diff=await transport('dashboard_history_diff',{dashboardId:doc.id,fromRevision:item.revision,toRevision:doc.revision});const {body:detail}=dialog('版本差异');detail.append(el('pre','',diff.diff));}));body.append(row);}body.append(button('上一页',()=>{offset=Math.max(0,offset-20);return show();}),button('下一页',()=>{offset+=20;return show();}));};await show();}));
-      toolbar.append(iconButton('info','运行诊断',async()=>{const {body}=dialog('运行诊断');const info=await transport('runtime_info',{dashboardId:doc.id});
+      if(doc.progressive&&!viewOnly)toolbar.append(iconButton('history','版本历史',async()=>{const {body}=dialog('版本历史');let offset=0;const show=async()=>{const result=await transport('dashboard_history',{dashboardId:doc.id,offset,limit:20});body.replaceChildren();for(const item of result.history){const row=el('div','field');row.append(el('span','',`v${item.revision} ${item.name||item.action}${item.published?' · 已发布':''}`),button('恢复',async()=>{await mutate('dashboard_restore',{revision:item.revision});}),button('命名／发布标记',()=>{const {d,body:form}=dialog('版本标记');const name=input(item.name||''),published=input('','checkbox');published.checked=Boolean(item.published);form.append(field('版本名称',name),field('发布版本',published),button('保存',async()=>{await transport('dashboard_version_label',{dashboardId:doc.id,expectedRevision:doc.revision,revision:item.revision,name:name.value,published:published.checked});d.close();await show();}));}),button('与当前比较',async()=>{const diff=await transport('dashboard_history_diff',{dashboardId:doc.id,fromRevision:item.revision,toRevision:doc.revision});const {body:detail}=dialog('版本差异');detail.append(el('pre','',diff.diff));}));body.append(row);}body.append(button('上一页',()=>{offset=Math.max(0,offset-20);return show();}),button('下一页',()=>{offset+=20;return show();}));};await show();}));
+      if(!viewOnly)toolbar.append(iconButton('info','运行诊断',async()=>{const {body}=dialog('运行诊断');const info=await transport('runtime_info',{dashboardId:doc.id});
         body.append(el('p','',info.uiBuildId===boot.uiBuildId?'页面与服务版本一致':'此页面使用旧版本，请重新打开看板'),
           table([{项目:info.projectRoot||'共享存储',页面版本:boot.uiBuildId,服务版本:info.uiBuildId,工作进程:info.processId,父进程:info.parentProcessId,批注方式:annotationContext?'附到对话':'页面保存'}]));
         const report=await transport('dashboard_doctor',{dashboardId:doc.id,mode:'full'});body.append(el('p','',report.passed?'检查通过':'检查未通过'),button('复制请求编号',()=>navigator.clipboard.writeText(report.requestId)),table(report.checks));const logs=await transport('runtime_diagnostics',{dashboardId:doc.id,limit:30});body.append(table(logs.events));}));
@@ -512,7 +522,7 @@ export async function start({echarts,GridStack,App}){
           const controls=el('div','table-controls'),content=el('div','table-scroll'),search=input(''),count=el('span','muted');
           search.placeholder='搜索数据';search.setAttribute('aria-label','搜索组件数据');let offset=0,total=0,sort=[],generation=0,searchTimer;
           const prev=iconButton('prev','数据上一页',()=>{offset=Math.max(0,offset-20);return load();}),next=iconButton('next','数据下一页',()=>{offset+=20;return load();});
-          controls.append(search,count,prev,next,iconButton('export','导出完整数据 CSV',async()=>{const result=await transport('dataset_export',{dashboardId:request.dashboardId,componentId:id,filters:request.filters,sort,search:search.value});count.textContent=`已导出 ${result.export.rowCount} 条到本机：${result.export.path}`;}));dataContent.replaceChildren(controls,content);
+          controls.append(search,count,prev,next,iconButton('export','导出完整数据 CSV',async()=>{const result=await transport('dataset_export',{dashboardId:request.dashboardId,componentId:id,filters:request.filters,sort,search:search.value});if(remote&&result.export?.downloadUrl){fetchDownload(result.export.downloadUrl);count.textContent=`已导出 ${result.export.rowCount} 条，浏览器开始下载`;}else count.textContent=`已导出 ${result.export.rowCount} 条到本机：${result.export.path}`;}));dataContent.replaceChildren(controls,content);
           async function load(){const seq=++generation;prev.disabled=next.disabled=true;
             try{const result=await transport('component_data',{...request,offset,sort,search:search.value});if(!d.isConnected||seq!==generation)return;total=result.totalRows;count.textContent=`共 ${total} 条 · 第 ${Math.floor(offset/20)+1} 页 · 每页最多 20 行`;
               const keys=Object.keys(dataset?.fields||result.rows[0]||{}),t=el('table'),head=el('thead'),tr=el('tr');
@@ -551,12 +561,15 @@ export async function start({echarts,GridStack,App}){
     body.append(el('p','export-intro','选择文件格式，保存当前看板。'));
     const choices=el('div','export-choices'),feedback=el('p','export-feedback'),savedFile=el('div','export-saved');feedback.setAttribute('role','status');
     const options=[['pdf','PDF','完整图表与筛选后全部明细'],['html','HTML','离线打开，保留当前视图'],['json','JSON','看板配置与本地数据引用']];
-    if(boot.mode!=='offline')options.push(['site','网页部署包','HTML、完整数据与可重建源码']);
+    if(boot.mode!=='offline'&&!viewOnly)options.push(['site','网页部署包','HTML、完整数据与可重建源码']);
     for(const [format,label,hint]of options){
       const b=button('',async()=>{
         const buttons=choices.querySelectorAll('button');buttons.forEach(n=>n.disabled=true);savedFile.replaceChildren();feedback.textContent=`正在生成 ${label}…`;
         try{
-          if(format==='site'){const result=await transport('dashboard_export_site',{dashboardId:doc.id});savedFile.append(el('p','export-path',result.export.directory),el('p','muted','发布 dist/；完整源码见同名 ZIP。'));feedback.textContent='独立网页与源码已生成';return;}
+          if(format==='site'){const result=await transport('dashboard_export_site',{dashboardId:doc.id});
+            if(remote){for(const [url,label] of [[result.export.siteDownloadUrl,'下载 site.zip（发布目录）'],[result.export.downloadUrl,'下载完整源码 ZIP']])if(url){const link=el('a','export-file-action',label);link.href=url;link.download='';savedFile.append(link);}}
+            else savedFile.append(el('p','export-path',result.export.directory));
+            savedFile.append(el('p','muted','发布 dist/；完整源码见同名 ZIP。'));feedback.textContent='独立网页与源码已生成';return;}
           if(boot.mode==='offline'){
             if(format==='pdf'){d.close();window.print();return;}
             if(format==='json')download(doc.id+'.json',JSON.stringify(doc,null,2));
@@ -575,9 +588,12 @@ export async function start({echarts,GridStack,App}){
               try{await transport('dashboard_export_open',{dashboardId:doc.id,exportId:file.id,format,action});feedback.textContent=action==='open'?'已请求打开文件':'已在文件夹中显示';}
               catch(error){feedback.textContent=error.message||String(error);}
             },'export-file-action');
-            const actions=el('div','export-file-actions');actions.append(localAction('open','打开文件'),localAction('reveal','在文件夹中显示'));
-            savedFile.append(el('span','export-filename',file.filename),actions,el('p','export-path',file.path));
-            feedback.textContent=`${label} 已保存到本机`;
+            // Server exports carry a signed downloadUrl; desktop file actions only exist for local runtimes.
+            const actions=el('div','export-file-actions'),served=Boolean(file.downloadUrl);
+            if(served&&app)actions.append(button('在浏览器中下载',async()=>{try{await app.openLink({url:file.downloadUrl});feedback.textContent='已请求在浏览器中打开下载链接';}catch(error){feedback.textContent=error.message||String(error);}},'export-file-action'));
+            else if(!remote&&!served)actions.append(localAction('open','打开文件'),localAction('reveal','在文件夹中显示'));
+            savedFile.append(el('span','export-filename',file.filename),actions);if(file.path&&!remote&&!served)savedFile.append(el('p','export-path',file.path));
+            feedback.textContent=remote?`${label} 已生成并下载`:`${label} 已保存到本机`;
             if(app){
               try{
                 const saved=await app.downloadFile({contents:[{type:'resource',resource:{uri:'file://'+file.path,mimeType:file.mimeType,blob:file.content}}]});
@@ -611,7 +627,7 @@ export async function start({echarts,GridStack,App}){
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   };
   window.addEventListener('beforeprint',()=>{for(const run of [...pendingMounts.values()])run();});
-  annotations=createAnnotations({root,iconButton,attachContext:annotationContext?note=>annotationContext.attach({...viewDoc(),projectRoot:projectContext.projectRoot},note):null,getDocument:()=>doc,readOnly:boot.mode==='offline',save:transform=>patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]),onError:showError,onMode:active=>{const b=toolbar.querySelector('.annotation-toggle');if(b){b.setAttribute('aria-pressed',String(active));b.setAttribute('aria-label',active?'退出批注':'批注');b.title=active?'退出批注':'批注';b.dataset.tooltip=b.title;}}});
+  annotations=createAnnotations({root,iconButton,attachContext:annotationContext?note=>annotationContext.attach({...viewDoc(),projectRoot:projectContext.projectRoot},note):null,getDocument:()=>doc,readOnly:boot.mode==='offline'||viewOnly,save:transform=>patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]),onError:showError,onMode:active=>{const b=toolbar.querySelector('.annotation-toggle');if(b){b.setAttribute('aria-pressed',String(active));b.setAttribute('aria-label',active?'退出批注':'批注');b.title=active?'退出批注':'批注';b.dataset.tooltip=b.title;}}});
   lifetime.add(()=>{staticClient?.destroy();viewAbort?.abort();dataObserver?.disconnect();observer?.disconnect();annotations?.reset();disposeToolbar?.();disposeReport?.();});
   window.addEventListener('charts-error',event=>showError(event.detail));render();
 

@@ -41,5 +41,6 @@ css = '\n'.join(re.findall(r'<style>(.*?)</style>', page, re.S))
 catalog = json.loads((SKILL / 'references' / 'chart_catalog.json').read_text())
 (out / 'catalog.json').write_text(json.dumps(catalog, ensure_ascii=True))
 provenance = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in [SKILL / 'scripts/core/dashboard_template.py', SKILL / 'scripts/core/chart_builders.py', SKILL / 'scripts/core/chart_catalog.py', SKILL / 'scripts/core/explanation_dialog.py']}
-(out / 'provenance.json').write_text(json.dumps({'chartCodes': sorted(builders), 'kpiTypes': ['mc%02d'%i for i in range(1,10)], 'sourceHashes':provenance}, indent=2))
-print('Extracted original component engine:', len(builders), 'charts, 9 KPI types')
+from core.component_schemas import KPI_TYPES
+(out / 'provenance.json').write_text(json.dumps({'chartCodes': sorted(builders), 'kpiTypes': sorted(KPI_TYPES), 'sourceHashes':provenance}, indent=2))
+print('Extracted original component engine:', len(builders), 'charts,', len(KPI_TYPES), 'KPI types')

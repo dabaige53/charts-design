@@ -10,42 +10,162 @@ on:
       - 'skills/**'
       - 'docs/**'
       - 'bin/**'
+      - 'deploy/**'
+      - 'README.md'
+      - 'AGENTS.md'
       - 'package.json'
       - 'pyproject.toml'
       - '.github/workflows/dashboard-runtime.yml'
+  workflow_dispatch:
 concurrency:
   group: dashboard-runtime-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
+env:
+  PYTHONUNBUFFERED: '1'
+  FORCE_COLOR: '1'
+
+# Jobs run in parallel so one failing layer never hides the others' results.
+# Layers: static checks, dependency audit, fast unit tests (Python matrix +
+# Node), Chromium acceptance, and the deployable container image.
 jobs:
-  runtime:
+  checks:
+    name: Static checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
-      - name: Install explicit runtime test dependencies
+      - name: Lint Python (pyflakes rules)
+        run: |
+          python -m pip install 'ruff==0.16.9'
+          ruff check --output-format=github
+      - name: Syntax, skill links and documentation links/anchors
+        run: npm run check
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Audit production browser dependencies
+        run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate
+
+  unit:
+    name: Unit tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The supported floor from pyproject.toml and the newest release.
+        python: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: runtime-ui/package-lock.json
+      - name: Install test dependencies and build the shared UI bundle
+        run: |
+          python -m pip install '.[statistics,mcp,test]'
+          npm --prefix runtime-ui ci
+          npm --prefix runtime-ui run build
+      - name: Runtime, MCP protocol and server tests (no browser)
+        run: >-
+          python -m pytest tests/runtime -m "not browser" -q
+          --junitxml=reports/runtime-unit.xml
+          --cov=dashboard_runtime --cov-report=xml:reports/coverage.xml
+          --cov-report=term:skip-covered --cov-fail-under=84
+      - name: Browser engine modules (Node)
+        run: node --test tests/runtime/*.test.mjs
+      - name: Standalone chart and dashboard generators
+        run: python -m pytest tests --ignore=tests/runtime -q --junitxml=reports/standalone.xml
+      - name: Coverage summary
+        if: always()
+        run: |
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import pathlib, xml.etree.ElementTree as ET
+          path = pathlib.Path('reports/coverage.xml')
+          if path.exists():
+              root = ET.parse(path).getroot()
+              print(f"### dashboard_runtime coverage (Python ${{ matrix.python }}): {float(root.get('line-rate')) * 100:.1f}%")
+              rows = sorted(((float(c.get('line-rate')), c.get('filename')) for c in root.iter('class')))[:8]
+              print('| Lowest covered module | Lines |\n| --- | --- |')
+              for rate, name in rows:
+                  print(f'| {name} | {rate * 100:.0f}% |')
+          EOF
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: unit-reports-py${{ matrix.python }}
+          path: reports/
+          retention-days: 14
+
+  browser:
+    name: Browser acceptance (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: runtime-ui/package-lock.json
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pyproject.toml') }}
+      - name: Install dependencies, Chromium and Poppler
         run: |
           python -m pip install '.[statistics,mcp,test]'
           npm --prefix runtime-ui ci
           python -m playwright install --with-deps chromium
           sudo apt-get install -y poppler-utils
-      - name: Audit production browser dependencies
-        run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate
       - name: Build the shared browser and MCP App bundle
         run: npm --prefix runtime-ui run build
-      - name: Check shared source syntax
-        run: npm run check
-      - name: Runtime, MCP protocol and browser tests
-        run: |
-          set -o pipefail
-          python -m pytest tests/runtime -q
-          node --test tests/runtime/*.test.mjs
-      - name: Standalone chart and dashboard tests
-        run: node bin/python-runtime.js -m pytest tests --ignore=tests/runtime -q
+      - name: Real-browser acceptance (rendering, editing, previews, PDF)
+        run: python -m pytest tests/runtime -m browser -q --junitxml=reports/browser.xml
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: browser-evidence
+          path: |
+            reports/
+            component-review/
+            runtime-*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  container:
+    name: Container image smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the deployable image
+        run: docker build -f deploy/Dockerfile -t charts-design:ci .
+      - name: Run the image and exercise remote MCP, previews and downloads
+        run: python3 tests/deploy/container_smoke.py --image charts-design:ci
