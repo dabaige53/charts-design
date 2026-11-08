@@ -66,7 +66,9 @@ def test_output_readiness_loads_offscreen_charts_before_printing(tmp_path):
             page.goto(f'http://127.0.0.1:{server.server_port}/?board=retail#output-test')
             page.locator('[data-component-id=scatter] canvas').first.wait_for()
             bars = page.locator('[data-component-id=bars]')
-            assert bars.bounding_box()['y'] > page.viewport_size['height'] + 300
+            position, viewport = bars.bounding_box(), page.viewport_size
+            assert position is not None and viewport is not None
+            assert position['y'] > viewport['height'] + 300
             assert bars.locator('canvas').count() == 0
             page.evaluate('window.__chartsReady()')
             assert bars.locator('canvas').count() > 0

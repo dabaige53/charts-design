@@ -23,11 +23,12 @@ def settings(tmp_path, **extra):
     return ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'ws' / '.runtime', tokens=(TOKEN,), port=8000, **extra)
 
 
-# @wu-test type=boundary | scope=分享链接签名 | protects=篡改过期或错类型令牌被接受 | debt=D1
+# @wu-test type=boundary | scope=分享链接签名 | protects=篡改过期或错类型令牌被接受
 def test_signer_rejects_tampering_kind_and_expiry():
     signer = Signer(b'k' * 32)
     token = signer.sign({'k': 'share', 'p': 'sales', 'd': 'demo', 'exp': int(time.time()) + 60})
-    assert signer.verify(token, 'share')['d'] == 'demo'
+    verified = signer.verify(token, 'share')
+    assert verified is not None and verified['d'] == 'demo'
     assert signer.verify(token, 'file') is None
     body, mac = token.split('.')
     assert signer.verify(body + '.' + mac[:-2] + 'AA', 'share') is None
@@ -118,6 +119,7 @@ def free_port():
 def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
+    from mcp.types import TextContent
     port = free_port()
     server = start(tmp_path, port)
     with Running(create_app(server), port):
@@ -131,15 +133,21 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
                     assert {'dashboard_share', 'dashboard_share_revoke', 'dashboard_preview'} <= names
                     assert 'dashboard_export_open' not in names
                     outside = await client.call_tool('dashboard_list', {'projectRoot': '/etc'})
-                    assert outside.isError and outside.structuredContent['error']['code'] == 'PROJECT_OUTSIDE_WORKSPACE'
+                    assert outside.isError and outside.structuredContent is not None
+                    assert outside.structuredContent['error']['code'] == 'PROJECT_OUTSIDE_WORKSPACE'
                     created = await client.call_tool('dashboard_create', {'projectRoot': 'fresh', 'dashboardId': 'blank', 'title': 'Blank'})
-                    assert not created.isError and created.structuredContent['projectRoot'] == 'fresh'
+                    assert not created.isError and created.structuredContent is not None
+                    assert created.structuredContent['projectRoot'] == 'fresh'
                     preview = await client.call_tool('dashboard_preview', {'projectRoot': 'sales', 'dashboardId': 'exec'})
                     assert not preview.isError
                     data = preview.structuredContent
+                    assert data is not None
                     assert data['previewUrl'].startswith(base + '/view/sales/exec#token=')
-                    assert json.loads(preview.content[0].text)['previewUrl'] == data['previewUrl']
+                    text = preview.content[0]
+                    assert isinstance(text, TextContent)
+                    assert json.loads(text.text)['previewUrl'] == data['previewUrl']
                     export = await client.call_tool('dashboard_export', {'projectRoot': 'sales', 'dashboardId': 'exec', 'format': 'json'})
+                    assert not export.isError and export.structuredContent is not None
                     return data['previewUrl'], export.structuredContent
 
         preview_url, export = asyncio.run(session())
