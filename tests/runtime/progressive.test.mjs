@@ -17,8 +17,27 @@ test('loadAll fetches offscreen components and resolves once nothing is pending'
   const applied=[];
   const loader=createProgressiveLoader({query:async id=>id,apply:id=>applied.push(id),failed(){},visible:()=>false,loading(){},delay:0,concurrency:2});
   ['a','b','c'].forEach(id=>loader.need(id));
-  await loader.loadAll();
+  await Promise.all([loader.loadAll(),loader.loadAll()]);
   assert.deepEqual(applied.sort(),['a','b','c']);
   await loader.loadAll();
   loader.stop();
+});
+
+// @wu-test type=boundary | scope=progressive loader.loadAll | protects=组件请求失败后仍允许输出缺图页面或重试后无法输出
+test('loadAll rejects failed components and allows an explicit retry',async()=>{
+  const failure=Error('source unavailable'),reported=[];let broken=true;
+  const loader=createProgressiveLoader({query:async()=>{if(broken)throw failure;return 'ready';},apply(){},failed:(id,error)=>reported.push([id,error]),visible:()=>false,loading(){},delay:0});
+  loader.need('chart');
+  await assert.rejects(loader.loadAll(),error=>error instanceof AggregateError&&error.errors[0]===failure&&error.message.includes('chart'));
+  assert.deepEqual(reported,[['chart',failure]]);
+  await assert.rejects(loader.loadAll(),AggregateError);
+  broken=false;loader.need('chart');await loader.loadAll();loader.stop();
+});
+
+// @wu-test type=boundary | scope=progressive loader.stop | protects=切换页面后旧输出请求仍报告准备完成
+test('stopping the loader rejects a pending output request',async()=>{
+  const loader=createProgressiveLoader({query:()=>new Promise(()=>{}),apply(){},failed(){},visible:()=>false,loading(){},delay:0});
+  loader.need('chart');
+  const pending=assert.rejects(loader.loadAll(),/已取消加载/);
+  loader.stop();await pending;
 });

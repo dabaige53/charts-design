@@ -39,15 +39,23 @@ def test_malformed_shapes_are_rejected(code, change):
         put(executive_document('kpi'), 'card', {**kpi_example(code), **change})
 
 
-# @wu-test type=behavior | scope=KPI发现 | protects=按类型选择却拿到通用示例或错误绑定说明 | debt=D3
-def test_discovery_explains_each_shape_instead_of_one_generic_example():
-    summary = declaration_contract(summary=True)
-    guide = {item['code']: item for item in summary['kpiGuide']}
-    assert len(guide) == 16 and guide['mc13']['bindable'] and not guide['mc10']['bindable']
+# @wu-test type=integration | scope=KPI发现与绑定 | protects=选型返回的比较卡示例无法创建或按筛选重算
+def test_discovery_example_creates_a_comparison_card_and_recomputes(tmp_path):
     selected = declaration_contract(legacy_code='mc14')['legacy']['kpiTypes']['mc14']
-    assert {'currentValue', 'priorValue'} <= set(selected['required'])
-    assert {'currentValue', 'priorValue'} <= set(selected['bindableTargets'])
-    assert selected['exampleConfig']['type'] == 'mc14' and 'thresholdLabel' not in selected['exampleConfig']
+    config = selected['exampleConfig']
+    doc = put(executive_document('kpi'), 'comparison', config,
+              {'datasetId': 'sales', 'measures': {'value': 'revenue', 'currentValue': 'revenue', 'priorValue': 'baseline-revenue'}})
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    service.call('dashboard_create', {'dashboardId': 'kpi', 'document': doc})
+    before = service.call('dashboard_view', {'dashboardId': 'kpi', 'componentIds': ['comparison']})['document']['computed']['components']['comparison']
+    filters = copy.deepcopy(doc['manifest']['filters'])
+    region = next(item for item in filters if item['id'] == 'region')
+    region['values'] = ['华东基地']
+    region['componentIds'].append('comparison')
+    after = service.call('dashboard_view', {'dashboardId': 'kpi', 'componentIds': ['comparison'], 'filters': filters})['document']['computed']['components']['comparison']
+    assert before['type'] == after['type'] == 'mc14'
+    assert (before['currentValue'], before['priorValue']) == (484, 390)
+    assert (after['currentValue'], after['priorValue']) == (278, 225)
 
 
 # @wu-test type=boundary | scope=KPI绑定 | protects=仅快照类型被错误绑定数据

@@ -571,7 +571,7 @@ export async function start({echarts,GridStack,App}){
             else savedFile.append(el('p','export-path',result.export.directory));
             savedFile.append(el('p','muted','发布 dist/；完整源码见同名 ZIP。'));feedback.textContent='独立网页与源码已生成';return;}
           if(boot.mode==='offline'){
-            if(format==='pdf'){d.close();window.print();return;}
+            if(format==='pdf'){await window.__chartsReady();d.close();window.print();return;}
             if(format==='json')download(doc.id+'.json',JSON.stringify(doc,null,2));
             else {
               const shell=document.documentElement.cloneNode(true);shell.querySelectorAll('.workspace,dialog,.ui-tooltip').forEach(n=>n.remove());
@@ -618,7 +618,9 @@ export async function start({echarts,GridStack,App}){
   if(boot.mode!=='offline')lifetime.add(whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3)));
   window.addEventListener('beforeunload',event=>{if([...reportDrafts.values()].some(draft=>draft.dirty)){event.preventDefault();event.returnValue='';}});
   window.__chartsReady=async()=>{
-    for(const run of [...pendingMounts.values()])run();await document.fonts.ready;
+    if(loadStatic)await Promise.all([...new Set(Object.entries(doc.manifest.components).filter(([id])=>hostsFor(id).length).map(([,c])=>c.datasetId).filter(Boolean))].map(loadStatic));
+    for(const run of [...pendingMounts.values()])run();
+    await progressiveLoader?.loadAll();await document.fonts.ready;
     const images=[...document.querySelectorAll('img')];await Promise.all(images.map(img=>img.decode?.().catch(()=>{})));
     await Promise.all(originalInstances.flatMap(item=>Object.values(item.app.state.chartInstances)).map(chart=>new Promise(resolve=>{
       if(chart.isDisposed()){resolve();return;}const zr=chart.getZr();if(zr.animation.isFinished()){chart.resize();requestAnimationFrame(()=>resolve());return;}

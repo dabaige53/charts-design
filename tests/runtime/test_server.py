@@ -13,7 +13,7 @@ pytest.importorskip('mcp', reason='Install the optional official MCP SDK for ser
 pytest.importorskip('uvicorn', reason='uvicorn ships with the MCP SDK')
 
 from dashboard_runtime.model import DashboardError
-from dashboard_runtime.server import (EDIT_TOOLS, VIEW_TOOLS, RemoteServer, ServerSettings, Signer,
+from dashboard_runtime.server import (RemoteServer, ServerSettings, Signer,
                                       WorkspaceProjects, create_app)
 
 TOKEN = 'server-test-token-0123456789'
@@ -65,12 +65,6 @@ def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     assert oct((tmp_path / 'rt' / 'server-secret').stat().st_mode & 0o777) == '0o600'
 
 
-# @wu-test type=boundary | scope=分享链接权限 | protects=只读或编辑链接可调用越权工具 | debt=D1,D3
-def test_view_links_cannot_write():
-    assert 'dashboard_patch' not in VIEW_TOOLS and 'dashboard_patch' in EDIT_TOOLS
-    assert not {'dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open'} & EDIT_TOOLS
-
-
 class Running:
     """uvicorn in a background thread."""
 
@@ -119,7 +113,7 @@ def free_port():
         return probe.getsockname()[1]
 
 
-# @wu-test type=integration | scope=远程MCP与分享链接 | protects=跨项目读写或只读链接写入或撤销后链接仍可用 | debt=D1
+# @wu-test type=integration | scope=远程MCP与分享链接 | protects=跨项目读写或分享链接越权调用或撤销后链接仍可用
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
 def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
     from mcp import ClientSession
@@ -172,6 +166,9 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
         assert status == 200 and '/edit/sales/exec#token=' in edit['url']
         edit_token = edit['url'].split('#token=')[1]
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Edited by link'}]}, edit_token)[0] == 200
+        for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open'):
+            status, denied = post(api + tool, {'dashboardId': 'exec'}, edit_token)
+            assert status == 403 and denied['error']['code'] == 'FORBIDDEN', (tool, denied)
         server.state.revoke('sales', 'exec')
         assert post(api + 'dashboard_get', {'dashboardId': 'exec'}, token)[0] == 401
         assert post(api + 'dashboard_get', {'dashboardId': 'exec'}, edit_token)[0] == 401
