@@ -11,3 +11,14 @@ test('visible requests only; stale filter response cannot apply',async()=>{
   jobs[1].resolve('new');await tick();assert.deepEqual(applied,['new']);
   visible.add('b');loader.visible();await tick();assert.equal(jobs[2].id,'b');jobs[2].resolve('b');await tick();loader.stop();
 });
+
+// @wu-test type=behavior | scope=progressive loader.loadAll | protects=屏幕外组件未加载完就报告加载完成
+test('loadAll fetches offscreen components and resolves once nothing is pending',async()=>{
+  const applied=[];
+  const loader=createProgressiveLoader({query:async id=>id,apply:id=>applied.push(id),failed(){},visible:()=>false,loading(){},delay:0,concurrency:2});
+  ['a','b','c'].forEach(id=>loader.need(id));
+  await loader.loadAll();
+  assert.deepEqual(applied.sort(),['a','b','c']);
+  await loader.loadAll();
+  loader.stop();
+});
