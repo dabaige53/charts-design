@@ -1,6 +1,5 @@
 # 独立网页部署包
 
-在 MCP 页面选择「导出 → 网页部署包」，或调用 `dashboard_export_site`，参数为 `dashboardId`。工具在项目 `deployments/` 下生成目录和 ZIP，返回路径，不将全量业务数据通过 MCP 消息传输，也不自动上传网站。
 
 交付物：
 

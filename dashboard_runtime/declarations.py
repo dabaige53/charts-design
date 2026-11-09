@@ -303,7 +303,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
         },
     }
     result['dynamicEncoding'] = {
-        'codes': ['r02', 'c03'],
+        'codes': ['r02', 'c03', 'r03', 'k01', 'f02'],
         'enable': 'config.encoding; requires explicit binding; config.data={} and presentation={} are allowed',
         'scatter': {'binding': {'categoryField': 'od', 'measures': {'x': 'market-metric', 'y': 'ho-metric', 'share': 'ratio-metric'}, 'attributes': {'grade': {'field': 'grade', 'aggregation': 'unique', 'label': '评级'}}}, 'encoding': {'symbolSize': 18, 'colorBy': 'grade', 'tooltip': ['x', 'y', 'share', 'grade'], 'colors': {}}},
         'bars': {'binding': {'categoryField': 'category', 'seriesField': 'series', 'measures': {'value': 'metric'}, 'orderBy': {'target': 'value', 'direction': 'desc'}}, 'encoding': {'orientation': 'horizontal', 'stacked': True, 'colors': {}, 'topSeries': 4, 'pinnedSeries': [], 'visibleCount': 10, 'barWidth': 14, 'adjustableBarWidth': True, 'emptyText': '当前筛选范围暂无数据'}},

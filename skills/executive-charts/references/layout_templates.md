@@ -1,6 +1,6 @@
 # 看板布局模板与选型规范 (Layout Templates)
 
-布局按内容选择，不把每个看板都排成“四卡一行 + 双列图表 + 通栏表格”。MCP 运行时提供 7 个命名模板，用一条 `apply_layout_template` 操作同时计算桌面 12 列、平板 8 列、手机 4 列网格；模板只排列和设定尺寸，不改动组件内容。`layout_templates` 工具与 `charts://layouts` 资源返回同一份清单。标题排版与卡片宽度遵循 [设计规范](design_standards.md)，指标卡选型见 [指标卡选型指南](kpi-cards.md)。
+布局按内容选择。MCP 运行时提供 7 个命名模板，用一条 `apply_layout_template` 操作同时计算桌面 12 列、平板 8 列、手机 4 列网格；模板只排列和设定尺寸，不改动组件内容。`layout_templates` 工具与 `charts://layouts` 资源返回同一份清单。标题排版与卡片宽度遵循 [设计规范](design_standards.md)，指标卡选型见 [指标卡选型指南](kpi-cards.md)。
 
 ## 模板一览
 

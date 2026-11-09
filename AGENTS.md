@@ -27,7 +27,6 @@
 - 修改组件视觉时读 [设计规范](skills/executive-charts/references/design_standards.md)：配色、排版、几何和表格要求；Runtime 操作区按标题区与绑定文档执行。
 - 选择或修改指标卡与布局构图时读 [指标卡选型](skills/executive-charts/references/kpi-cards.md) 与 [布局模板](skills/executive-charts/references/layout_templates.md)：按问题选卡、七种构图与避免同质化的规则。
 - 编写指标说明时读 [指标定义](skills/executive-charts/references/metric-definitions.md)：统计对象、范围、单位与计算语义。
-- 追溯早期缺陷时读 [历史问题清单](docs/ISSUES.md)：当时的问题，不代表当前待办状态。
 - 追溯早期架构治理时读 [历史治理复盘](docs/ISSUES_AND_POSTMORTEM.md)：当时的原因、方案和版本结果。
 - 复查动态编码验收时读 [验收记录](docs/dynamic-encoding-validation.md)：2026-10-28 的对象、结果和宿主限制。
 - 追溯 MCP 改进原因时读 [迭代复盘](docs/retro-20261028.md)：当时的待办、性能证据与后续记录。
@@ -35,5 +34,3 @@
 - 复查自托管、构图与指标卡改动时读 [验收记录](docs/records/2026-11-07-server-layout-kpi.md)：2026-11-07 的性能对比、验证范围与未验证项。
 
 ## 修改与检查
-
-检查入口以 `package.json` 和 `.github/workflows/dashboard-runtime.yml` 为准，分层与命令见 [测试与 CI](docs/testing.md)。文档修改检查本地链接、章节锚点与旧路径引用；Skill 入口修改运行 `npm run check:skills`。修改运行代码时，按影响选择现有测试；历史记录中的通过结果不代表当前源码已经验证。

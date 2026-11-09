@@ -45,3 +45,14 @@ def test_dynamic_declaration_validation():
     operations[-1]['value']['binding']['seriesField'] = 'unknown'
     with pytest.raises(DashboardError):
         apply_operations(doc, operations)
+
+# @wu-test type=integration | scope=matrix and flow native grouping | protects=MCP丢失矩阵列和流程指标维度
+def test_matrix_and_flow_keep_series(tmp_path):
+    data = LocalData(tmp_path)
+    fields = {'stage': {'type':'string'}, 'metric': {'type':'string'}, 'n': {'type':'number'}}
+    ref = data.import_rows(iter([{'stage':'A','metric':'X','n':1},{'stage':'A','metric':'Y','n':2}]), fields)
+    m = {'metrics': {'count': {'aggregation':'sum','field':'n'}}}
+    for code in ('r03','f02'):
+        c = {'config': {'code':code}, 'binding': {'categoryField':'stage','seriesField':'metric','measures':{'value':'count'}}}
+        rows = resolve_encoding(LocalView(data),ref,m,c,[])
+        assert [(r['series'],r['values']['value']) for r in rows] == [('X',1),('Y',2)]

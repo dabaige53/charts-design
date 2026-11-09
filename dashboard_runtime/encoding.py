@@ -5,8 +5,11 @@ from .model import require, field
 def validate_encoding(component):
     e = component['config']['encoding']
     require(isinstance(e, dict), 'encoding must be an object')
-    require(set(e) <= {'orientation', 'stacked', 'symbolSize', 'colors', 'tooltip', 'colorBy', 'sizeBy', 'showLabels', 'topSeries', 'pinnedSeries', 'visibleCount', 'barWidth', 'adjustableBarWidth', 'emptyText', 'otherSeriesLabel', 'seriesRanking'}, 'Unknown encoding option; consult chart_declarations')
-    require(component['config'].get('code') in ('r02', 'c03'), 'encoding supports r02 and c03')
+    require(set(e) <= {'orientation', 'stacked', 'symbolSize', 'colors', 'tooltip', 'colorBy', 'sizeBy', 'showLabels', 'topSeries', 'pinnedSeries', 'visibleCount', 'barWidth', 'adjustableBarWidth', 'emptyText', 'otherSeriesLabel', 'seriesRanking', 'categoryOrder', 'seriesOrder'}, 'Unknown encoding option; consult chart_declarations')
+    require(component['config'].get('code') in ('r02', 'c03', 'r03', 'k01', 'f02'), 'Unsupported dynamic encoding code')
+    for key in ('categoryOrder', 'seriesOrder'):
+        values = e.get(key, [])
+        require(isinstance(values, list) and all(isinstance(v, str) for v in values) and len(values) == len(set(values)), f'{key} must contain unique strings')
     require(component.get('binding'), 'encoding requires a dataset binding')
     require(e.get('orientation', 'vertical') in ('horizontal', 'vertical'), 'Invalid orientation')
     require(type(e.get('stacked', False)) is bool, 'stacked must be boolean')
@@ -30,7 +33,7 @@ def validate_encoding_binding(doc, c):
     field(meta, b.get('categoryField'))
     expected = {'x', 'y'} if c['config']['code'] == 'r02' else {'value'}
     require(expected <= set(b['measures']), 'encoding requires measures: ' + ', '.join(sorted(expected)))
-    if c['config']['code'] == 'c03':
+    if c['config']['code'] in ('c03', 'r03', 'f02'):
         field(meta, b.get('seriesField'))
         require(b['categoryField'] != b['seriesField'], 'Category and series must be different fields')
         require(not e.get('colorBy') and not e.get('sizeBy'), 'c03 uses series colors and does not support sizeBy')
@@ -56,7 +59,7 @@ def resolve_encoding(view, ref, manifest, component, active):
     b = component['binding']
     definitions = {key: manifest['metrics'][mid] for key, mid in b['measures'].items()}
     definitions.update(b.get('attributes', {}))
-    groups = [b['categoryField']] + ([b['seriesField']] if component['config']['code'] == 'c03' else [])
+    groups = [b['categoryField']] + ([b['seriesField']] if b.get('seriesField') else [])
     rows, _ = view.aggregate(ref, definitions, active, groups)
     return [{'category': r[groups[0]], 'series': r[groups[1]] if len(groups) > 1 else None,
              'values': {key: r[key] for key in definitions}} for r in rows]

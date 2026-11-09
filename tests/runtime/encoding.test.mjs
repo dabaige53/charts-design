@@ -43,3 +43,28 @@ test('each category selects its own top five and merges the remainder',()=>{
  assert.deepEqual(o.series.find(s=>s.name==='其他航司').data.map(x=>x.value),[3,3]);
  assert.deepEqual([0,1].map(i=>o.series.reduce((sum,s)=>sum+(s.data[i].value??0),0)),[28,28]);
 });
+
+// @wu-test type=behavior | scope=ratio tooltip | protects=比例或均值被相加并显示虚假份额
+test('non-additive bars show values without totals or shares',()=>{
+ const d=fixture(),c=d.manifest.components.plot;c.config={code:'c03',encoding:{orientation:'horizontal'}};c.binding={categoryField:'od',seriesField:'carrier',measures:{value:'share'}};
+ d.snapshot.datasets.d=[{od:'A',carrier:'HO',ho:1,market:2},{od:'A',carrier:'MU',ho:2,market:8}];
+ const o=encodingOption(d,'plot',encodingRecords(d,'plot')),text=o.tooltip.formatter(o.series.map(s=>({data:s.data[0]})));
+ assert.ok(!text.includes('合计'));assert.ok(!text.includes('占当前范围'));assert.ok(!text.includes('（'));assert.equal(o.series[0].barWidth,undefined);
+});
+// @wu-test type=behavior | scope=matrix encoding | protects=矩阵变为条形或缺失组合伪造零比例
+test('matrix retains four columns and distinguishes zero from no record',()=>{
+ const d=fixture(),c=d.manifest.components.plot;c.config={code:'r03',encoding:{seriesOrder:['D-D','D-I','I-D','I-I']}};c.binding={categoryField:'od',seriesField:'carrier',measures:{value:'share',numerator:'ho',denominator:'market'}};
+ d.snapshot.datasets.d=[{od:'A',carrier:'D-D',ho:0,market:10}];const o=encodingOption(d,'plot',encodingRecords(d,'plot'));
+ assert.equal(o.series[0].type,'heatmap');assert.equal(o.xAxis.data.length,4);assert.match(o.series[0].data[0].label.formatter,/0/);assert.match(o.series[0].data[1].label.formatter,/无记录/);assert.notEqual(o.series[0].data[0].itemStyle.color,o.series[0].data[1].itemStyle.color);
+});
+// @wu-test type=behavior | scope=ordered flow encoding | protects=流程阶段顺序被数量排序或无记录变成零达标
+test('flow preserves every ordered stage and arrow without inventing conversion counts',()=>{
+ const d=fixture(),c=d.manifest.components.plot;c.config={code:'f02',encoding:{categoryOrder:['识别','始发准备','航中联动']}};c.binding={categoryField:'od',seriesField:'carrier',measures:{value:'ho',denominator:'market'}};
+ d.snapshot.datasets.d=[{od:'始发准备',carrier:'排座达标率',ho:2,market:8},{od:'识别',carrier:'识别覆盖率',ho:1,market:10}];const o=encodingOption(d,'plot',encodingRecords(d,'plot'));
+ assert.equal(o.series[0].type,'graph');assert.deepEqual(o.series[0].data.map(n=>n.name),['识别','始发准备','航中联动']);assert.equal(o.series[0].links.length,2);assert.ok(o.series[0].data[2].label.formatter.endsWith('—'));assert.ok(o.series[0].links.every(l=>!('value'in l)));
+});
+// @wu-test type=behavior | scope=ring encoding | protects=风险分层在原生预览中退化为条形图
+test('ring uses current filtered categories and values',()=>{
+ const d=fixture(),c=d.manifest.components.plot;c.config={code:'k01',encoding:{}};c.binding={categoryField:'od',measures:{value:'market'}};
+ const o=encodingOption(d,'plot',encodingRecords(d,'plot'));assert.equal(o.series[0].type,'pie');assert.equal(o.series[0].data[0].value,1000);
+});

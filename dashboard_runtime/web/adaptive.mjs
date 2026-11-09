@@ -26,6 +26,12 @@ export function widthBucket(width){return width<400?'xs':width<560?'sm':width<76
 export function adaptOption(option,width){
   if(!option||typeof option!=='object'||!(width>0))return option;
   const grids=list(option.grid),xAxes=list(option.xAxis);
+  // Ordered flow nodes wrap into a readable snake on narrower cards.
+  for(const series of list(option.series))if(series?.type==='graph'&&series.layout==='none'&&series.data?.length){
+    const columns=Math.max(1,Math.min(series.data.length,Math.floor(width/190))),rows=Math.ceil(series.data.length/columns);
+    for(const [i,item]of series.data.entries()){const row=Math.floor(i/columns),col=i%columns;item.x=(row%2?columns-1-col:col)*210;item.y=row*160;item.symbolSize=[Math.min(150,width-36),100];}
+    Object.assign(series,{left:columns===1?'50%':82,right:columns===1?'50%':82,top:rows===1?'45%':65,bottom:rows===1?'45%':65});
+  }
   // 1. Legacy containLabel contains tick labels but not axis names: an x-axis
   //    name at the end is clipped by the canvas unless the right margin fits it.
   for(const axis of xAxes){

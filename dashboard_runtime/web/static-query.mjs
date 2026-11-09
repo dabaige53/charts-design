@@ -1,5 +1,5 @@
 import {resolveOriginal} from './bindings.mjs';
-import {visibleRows,csv} from './engine.mjs';
+import {visibleRows,csv,calculateTableRows} from './engine.mjs';
 import {createRequestQueue} from './request-queue.mjs';
 // The static site and the build-time seed use exactly the same query implementation.
 export function createStaticQuery(document,read){
@@ -23,7 +23,7 @@ export function createStaticQuery(document,read){
   function tableRows(doc,id){
     const c=doc.manifest.components[id],p=c.presentation||{};let rows=visibleRows(doc,id);
     if(p.groupBy){const groups=new Map();for(const row of rows){const key=JSON.stringify(p.groupBy.map(k=>row[k]??null));if(!groups.has(key))groups.set(key,Object.fromEntries([...p.groupBy.map(k=>[k,row[k]]),...(p.sumFields||[]).map(k=>[k,null])]));const target=groups.get(key);for(const k of p.sumFields||[])if(row[k]!=null)target[k]=(target[k]??0)+row[k];}rows=[...groups.values()];}
-    return rows;
+    return calculateTableRows(rows,p);
   }
   const groupedCache=new Map();
   async function query(args){

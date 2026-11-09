@@ -287,7 +287,7 @@ class Service:
             columns = args.get('columns')
             if presentation.get('groupBy') and columns is None:
                 columns = [col['key'] for col in presentation['columns']]
-            return {'export': self.store.data.export_csv(ref, path, active, columns, args.get('sort'), search=args.get('search', ''), group_by=presentation.get('groupBy'), sum_fields=presentation.get('sumFields'))}
+            return {'export': self.store.data.export_csv(ref, path, active, columns, args.get('sort'), search=args.get('search', ''), group_by=presentation.get('groupBy'), sum_fields=presentation.get('sumFields'), calculated=presentation.get('calculatedColumns'))}
         if tool == 'dashboard_create':
             if args.get('document'):
                 require(not any(c.get('kind') == 'chart' for c in args['document'].get('manifest', {}).get('components', {}).values()), 'New charts must use the original 40 codes (kind=legacy, family=chart)', 'UNSUPPORTED_CHART_FAMILY')

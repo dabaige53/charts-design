@@ -1,6 +1,6 @@
 # 动态图表声明
 
-`chart_declarations` 返回 `dynamicEncoding`。在原有 `r02` 或 `c03` 的 `config.encoding` 中启用；组件仍使用稳定 ID，原有编辑、批注和历史记录继续保留。旧声明不需要迁移。
+`chart_declarations` 返回 `dynamicEncoding`。在原有 `r02`、`c03`、`r03`、`k01` 或 `f02` 的 `config.encoding` 中启用；组件仍使用稳定 ID，原有编辑、批注和历史记录继续保留。旧声明不需要迁移。
 
 ```json
 {
@@ -23,7 +23,6 @@
 
 描述字段放在 `binding.attributes`：例如 `minutes: {field: "minutes", aggregation: "min", label: "最短时间", unit: "分钟"}`。`min/max` 仅用于数值并忽略 null；`unique` 仅在组内每行非空且值一致时返回该值，否则返回 null。分类缺失显示“缺失”。缺少 x 或 y 的观测不生成散点；空结果显示“当前筛选无数据”。
 
-比例使用既有 `ratio` 指标：先对筛选后分子、分母分别求和，再相除；分母为零或全空返回 null。不要把行百分比再求平均。动态编码不接受 binding.scale，单位与格式在指标中声明。
 
 跨数据集下钻需要组件明确配置相同 `linkGroup`，目标还必须有同名字段。单击散点按分类字段联动，再次单击或清除联动恢复。只有业务含义一致的字段才应放入同一联动组。
 
@@ -61,3 +60,13 @@
 ## KPI 同比与环比
 
 KPI `binding.comparisons` 可以将 `yoy`/`mom` 声明为绑定值之间的相对变化：`{"mom":{"current":"value","baseline":"mom","mode":"relative"}}`。`binding.measures.mom` 指向基期原值指标，先在当前筛选范围聚合本期和基期，再计算 `(本期-基期)/基期`；基期缺失或为零显示破折号。份额指标先分别汇总分子分母，禁止平均行级份额变化。业务口径需写明基期、固定范围和百分比与百分点区别。
+
+## 矩阵、环形和顺序流程
+
+`r03` 以 `categoryField` 为行、`seriesField` 为列，`value` 为每格指标；可绑定 `numerator`、`denominator` 展示依据。`seriesOrder` 固定列顺序，缺失组合显示无记录，零比例仍显示零。`visibleCount` 控制可见行数，其他行可滚动查看。
+
+`k01` 按分类与 `value` 绘制环形分布。`f02` 在动态编码下绘制等大节点和箭头，按 `categoryOrder` 展示业务流程；节点显示原指标及记录数，连线只表达顺序，不表达数量或转化。窄画布自动折行。节点数量不作为漏斗转化量。
+
+比例和均值条形图的提示框只显示各项指标值，不相加或计算份额。加总指标保持合计与份额。分组条形按分类槽位自动缩小，避免固定宽度造成重叠。
+
+聚合表可声明 `presentation.calculatedColumns`，例如 `{"rate":{"numerator":"numerator","denominator":"denominator","unitField":"unit","decimals":1}}`。分子、分母及目标列须为 `sumFields` 中的数值列，单位须为 `groupBy` 中的文字列。先筛选、汇总，再计算分子除以分母；单位 `%` 显示百分比，其他单位显示数值加单位；零分母或缺失分子显示 `—`。MCP 分页、排序、导出与独立网页均使用此计算；CSV 保留数值及独立单位列。

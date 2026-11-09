@@ -9,7 +9,7 @@ import DOMPurify from 'dompurify';
 import {createOriginalComponents} from '../../runtime-ui/generated/original-engine.mjs';
 import originalStyle from '../../runtime-ui/generated/original-style.mjs';
 import catalog from '../../runtime-ui/generated/catalog.json';
-import {aggregate,visibleRows,format,optionFor,chartTable,csv} from './engine.mjs';
+import {aggregate,visibleRows,format,optionFor,chartTable,csv,calculateTableRows} from './engine.mjs';
 
 export {catalog};
 const methods=new Set(['onColumnVisibilityChange','onTablePageSizeChange','resetDefaultColumns','sortTable','toggleColumnDrawer','prevTablePage','nextTablePage','copyCell','exportTableToCSV','onTableRowHover','onTableRowLeave','onSearchInput','onSearchKeyDown','showSearchSuggestions','applySearchKeyword','clearSearchKeyword']);
@@ -94,6 +94,7 @@ function originalConfig(doc,id){
   }else if(family==='table'){
     rows=doc.computed?.components?.[id]?.rows??(c.kind==='legacy'?raw.rows:visibleRows(doc,id));
     if(!doc.computed?.components?.[id]&&c.presentation?.groupBy){const groups=new Map(),keys=c.presentation.groupBy,sums=c.presentation.sumFields||[];for(const row of rows){const key=JSON.stringify(keys.map(k=>row[k]??null));if(!groups.has(key))groups.set(key,Object.fromEntries([...keys.map(k=>[k,row[k]]),...sums.map(k=>[k,null])]));const target=groups.get(key);for(const k of sums)if(row[k]!=null)target[k]=(target[k]??0)+row[k];}rows=[...groups.values()];}
+    if(!doc.computed?.components?.[id])rows=calculateTableRows(rows,c.presentation);
     cfg.table={...(raw||c.presentation||{}),id:key,title:c.title,rows,columns:raw?.columns||c.presentation?.columns||Object.entries(doc.manifest.datasets[c.datasetId].fields).map(([key,meta])=>({key,title:meta.label||key,align:meta.type==='number'?'right':'left'}))};
     cfg.table.columns=cfg.table.columns.map(col=>({...col,title:col.title??col.label??col.key}));
     if(doc.computed?.tables?.[id])cfg.table.remotePage=doc.computed.tables[id];
@@ -111,6 +112,14 @@ export function mountOriginal(host,{doc,id,onInspect,onType,onPresentation,onTex
   const overlay=node('dialog','explanation-dialog');overlay.id='app-explain-dialog';shadow.append(overlay);
   const feedback=node('div');feedback.id='app-toast-container';shadow.append(feedback);
   const app=new api.DashboardApp(cfg,shadow);
+  if(family==='table'){
+    const cell=app.formatTableCell.bind(app);
+    app.formatTableCell=(raw,col)=>{const text=cell(raw,col);if(col.display!=='progress'||typeof raw!=='string'||!raw.endsWith('%'))return text;
+      const value=Number(raw.slice(0,-1));if(!Number.isFinite(value))return text;
+      return `<span class="table-rate" style="display:inline-flex;align-items:center;gap:10px"><span aria-hidden="true" style="display:inline-block;width:90px;height:5px;background:#f1f2f4;border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(0,Math.min(100,value))}%;background:#71717a;border-radius:5px"></span></span><strong>${value.toFixed(1)}%</strong></span>`;
+    };
+  }
+
   const setChartOption=app.setChartOption.bind(app);app.setChartOption=(instance,option)=>{if(app._barWidth&&c.config?.encoding?.adjustableBarWidth)for(const series of option.series||[])if(series.type==='bar')series.barWidth=app._barWidth;return setChartOption(instance,option);};
   const controller=new AbortController();
   for(const event of ['click','change','input','keydown','focus','mouseenter','mouseleave'])shadow.addEventListener(event,e=>{

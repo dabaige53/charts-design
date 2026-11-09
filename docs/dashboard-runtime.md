@@ -273,7 +273,6 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 批次完成后，调用当前构建的预览工具，提供 `projectRoot` 和已保存的 `dashboardId`。具体出现为对话卡片还是面板由宿主决定。创建与修改返回保存结果；已有页面可按版本检测更新。普通客户端仍获得结构化结果，HTML 导出用于离线快照。
 
-`test_mcp_app_browser.py` 使用真实 MCP 服务、官方 `AppBridge` 和 Chromium 检查内嵌图表、MCP 更新、重新打开、全屏切换及旧结果保护。这是兼容宿主验收，不代表 Codex 桌面客户端已验收。若当前聊天尚未出现项目工具，需要重新加载项目 MCP；实际 Codex 展示须在加载后的聊天中检查。
 
 页面说明使用 `manifest.meta`：可选字段 `subtitle`、`org`、`system`、`statusText`，均为最多 1000 字符的文本。`set_meta` 整体替换这些字段；传入 `{}` 清空页面说明。未设置 `meta` 的旧导入项目继续读取 `originalWorkspace.meta`。标题仍使用 `manifest.title` / `set_title`。通过 MCP 的 `set_meta` 修改这些字段。
 
@@ -323,7 +322,7 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 `component_data` 接受 `sort: [{field, direction}]` 与 `search`，沿用表格的排序和子串搜索规则。点击图表右上角说明图标打开的“指标定义与语义”弹窗，其数据区默认每页最多 20 行。图表的“切换为数据表”视图保留完整滚动浏览：超过 100 行时只创建可见行及上下缓冲行，按实际行高处理换行，滚动时保持列宽；切回图表、移除组件和更新数据时清理对应监听器。主表默认 10 行，已有明确设置保留。CSV、PDF 导出不受展示行数限制。
 
-前端按组件 ID 更新，屏幕外只延迟 ECharts 初始化，标题和操作控件立即出现；报告以组件 ID 和出现序号复用引用。兼容数据变化保留图表、表格焦点和布局实例。`window.__chartsReady()` 会加载当前页面中屏幕外组件的数据、初始化待显示的图表，并等待字体、图片和图表动画完成，供导出和截图验证使用；静态部署页也会等待所用数据分片。组件加载失败或准备期间切换页面时返回错误，不把缺图页面当作准备完成。页面“打印”、Ctrl/Cmd+P 与离线 PDF 入口均等待准备完成后再打开打印窗口。浏览器菜单的 `beforeprint` 不支持异步等待；若仍有数据未完成，会隐藏不完整页面并在打印预览中提示关闭窗口、改用页面打印入口，同时开始补充加载。独立 HTML 的 `DashboardRuntime.update(config)` 在同一 root 中保留 app。
+前端按组件 ID 更新，屏幕外只延迟 ECharts 初始化，标题和操作控件立即出现；报告以组件 ID 和出现序号复用引用。兼容数据变化保留图表、表格焦点和布局实例。`window.__chartsReady()` 会加载当前页面中屏幕外组件的数据、初始化待显示的图表，并等待字体、图片和图表动画完成，供导出和截图验证使用；静态部署页也会等待所用数据分片。组件加载失败或准备期间切换页面时返回错误。页面“打印”、Ctrl/Cmd+P 与离线 PDF 入口均等待准备完成后再打开打印窗口。浏览器菜单的 `beforeprint` 不支持异步等待；若仍有数据未完成，会隐藏不完整页面并在打印预览中提示关闭窗口、改用页面打印入口，同时开始补充加载。独立 HTML 的 `DashboardRuntime.update(config)` 在同一 root 中保留 app。
 
 百万行、40 个共享数据图表的独立合成压力测试：
 
@@ -331,7 +330,7 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 node bin/python-runtime.js tests/runtime/benchmark_incremental.py --output /tmp/charts-performance.json
 ```
 
-该命令创建独立临时数据，记录首次可见图表耗时、100 次翻页的中位数/P95、响应后绘制时间、实例保留数及 GC 后内存和监听器数量。不会读取或修改现有业务看板。首次全字段子串搜索仍需扫描完整数据；自然字符串排序、多列排序及随机深页保留 OFFSET 路径。缓存绑定不可变数据版本，不使用过期数据换取速度。
+该命令创建独立临时数据，记录首次可见图表耗时、100 次翻页的中位数/P95、响应后绘制时间、实例保留数及 GC 后内存和监听器数量。不会读取或修改现有业务看板。首次全字段子串搜索仍需扫描完整数据；自然字符串排序、多列排序及随机深页保留 OFFSET 路径。缓存绑定不可变数据版本。
 
 
 ### 位置批注

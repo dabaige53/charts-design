@@ -344,6 +344,18 @@ def validate(doc):
         require(isinstance(c.get('subtitle', ''), str) and len(c.get('subtitle', '')) <= 1000, f'{key}: subtitle must contain 0-1000 characters')
         presentation = c.get('config', {}) if c['kind'] == 'legacy' else c.get('presentation', {})
         require(isinstance(presentation, dict), 'Presentation must be an object')
+        calculations = presentation.get('calculatedColumns', {})
+        require(isinstance(calculations, dict), 'calculatedColumns must be an object')
+        if calculations:
+            fields = m['datasets'].get(c.get('datasetId'), {}).get('fields', {})
+            sums, groups = presentation.get('sumFields', []), presentation.get('groupBy', [])
+            require(bool(groups), 'Calculated columns require grouped rows')
+            for target, spec in calculations.items():
+                require(isinstance(spec, dict) and set(spec) <= {'numerator', 'denominator', 'unitField', 'decimals'}, 'Invalid calculated column')
+                require(target in sums and fields.get(target, {}).get('type') == 'number', 'Calculated target must be a numeric sum field')
+                require(all(spec.get(k) in sums and fields.get(spec.get(k), {}).get('type') == 'number' for k in ('numerator', 'denominator')), 'Calculated operands must be numeric sum fields')
+                require(spec.get('unitField') in groups and fields.get(spec.get('unitField'), {}).get('type') == 'string', 'Calculated unit must be a grouped string field')
+                require(type(spec.get('decimals', 1)) is int and 0 <= spec.get('decimals', 1) <= 6, 'Calculated decimals must be 0–6')
         state = presentation.get('tableState')
         if state is not None:
             require(isinstance(state, dict), 'Table state must be an object')

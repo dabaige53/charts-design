@@ -1,6 +1,5 @@
 # 本地 MCP 安装更新
 
-源码、安装包、连接中的工作进程和已打开页面分别检查。修改仓库源码不会自动更新其他安装目录；工具响应成功也不代表宿主已显示新版。
 
 ## 完整打包并更新 analyst-workspace
 
@@ -14,7 +13,6 @@ node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/ana
 
 - 更新脚本读取 Codex 的 TOML 配置，需要 Python 3.11 及以上（标准库 `tomllib`）；Runtime 本身支持 Python 3.10。
 - 保留原 Node 命令、其余启动参数、启用状态和看板数据目录。
-- 不提交或推送 Git，不修改看板数据，不创建配置备份。
 - 构建或启动检查失败时不切换配置；配置在构建期间变化时停止。
 - 配置采用临时文件原子替换，完成后不保留临时配置。
 - 已运行的宿主会话需重新连接 MCP 并重新打开预览；脚本不强行重启宿主。

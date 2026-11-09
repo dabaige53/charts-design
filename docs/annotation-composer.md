@@ -4,7 +4,7 @@
 
 ## 附到宿主对话
 
-MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModelContext.text` 时，位置批注提供正文输入框和“提交”按钮。用户选中元素或拖选区域，填写批注后提交，位置和正文附到宿主输入框；用户之后自行发送对话。页面不调用消息发送接口，也不把新引用保存为看板批注。
+MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModelContext.text` 时，位置批注提供正文输入框和“提交”按钮。用户选中元素或拖选区域，填写批注后提交，位置和正文附到宿主输入框；用户之后自行发送对话。
 
 每个引用包含项目路径、看板 ID、版本、组件 ID、选区、选中文本、筛选条件，以及已有批注的正文。连续附加保留之前的引用。客户端通过 `openai/modelContext` 通知移除时，同步当前附件。已有批注仍可打开并附到对话。
 
@@ -12,7 +12,6 @@ MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModel
 
 `runtime-ui/host-app.mjs` 对 SDK 1.1.2 的初始化结果保留厂商 experimental 字段，保留标准能力校验；只有宿主明确声明能力时才显示“提交”。SDK 依赖版本以 `runtime-ui/package.json` 及锁文件为准。
 
-只有用户确认宿主输入框的附加、编辑、移除、发送流程可用后，才决定是否撤掉其余页面批注管理功能。自动检查不能替代这项宿主验收。
 
 协议定义见 [MCP 扩展规范](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md#uiupdate-model-context-extensions)。
 
@@ -42,7 +41,6 @@ MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModel
 
 ## 页面生命周期与检查
 
-页面由宿主创建和销毁，收到 `ui/resource-teardown` 时释放刷新、保活和观察器。服务连接及工作进程独立于页面，关闭一个页面不终止其他会话的进程。看板使用同版本的 UI 资源，URI 含构建标识；是否复用页面由宿主决定，项目不承诺跨工具调用的页面单例。
 
 `runtime_info` 提供进程、项目、运行目录和前后端构建标识；“运行诊断”显示页面与服务版本及实际批注模式。安装更新和重连步骤统一见 [本地 MCP 更新](local-mcp-update.md)。
 

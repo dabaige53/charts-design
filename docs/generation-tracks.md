@@ -17,11 +17,9 @@
 2. `chart_recommend {"intent":"trend","measures":1}` 按问题与数据形态排列候选图表；`chart_declarations {}` 发现类型索引与指标卡选型 `kpiGuide`，`chart_declarations {"code":"c01"}` 阅读所选声明要求与工作示例；`layout_templates {}` 选择构图；`charts://contract` 阅读操作合同。相应资源为 `charts://declarations`、`charts://catalog`、`charts://layouts`。
 3. `dashboard_create {"dashboardId":"my-report","title":"我的分析报告"}` 建立空白文档，取得 revision。
 4. 用当前 `expectedRevision` 调用 `dashboard_edit_begin` 开始或恢复编辑批次，保存返回的批次 ID。调用方根据自己的数据和问题编写内容，并通过一次或多次 `dashboard_patch` 提交 `put_source`、`put_dataset`、`put_metric`、`put_component`、`set_report_markdown`、`set_view_mode=report`。传入当前 `expectedRevision`。组件与 Markdown 引用在整批操作结束后统一校验，创建与嵌入可以在同一批完成。
-5. 用最新 `expectedRevision` 和批次 ID 调用 `dashboard_edit_finish`；完整 Doctor 检查通过后生成一个检查点。检查失败时保留草稿、修正问题再完成批次。`dashboard_validate` 可用于中途结构检查，不能替代批次完成。
 6. 完成后预览一次，优先使用当前工具列表中的 `dashboard_preview_<uiBuildId>`；固定名称 `dashboard_preview` 保留兼容。只有预览工具声明界面资源。没有 UI 的宿主可通过本地 CLI serve/export 检查实际页面。
 7. 核对数值与单位、图号、图文顺序、指标定义、来源、局限及保存/重载。发生冲突时先读取新版本，不盲目覆盖。
 
-MCP 负责发现、验证、保存和渲染声明；调用它的模型或程序负责撰写分析文字。工具不会自动编造推断，也不会在筛选后悄悄改写文字。
 
 ## 内容合同
 
@@ -57,7 +55,6 @@ MCP 负责发现、验证、保存和渲染声明；调用它的模型或程序�
 
 ## 完整经营看板案例与能力边界
 
-`executive-dashboard` 使用独立编写的 `executive_document`，不从 HTML 提取配置作为生产输入。视觉母稿是 `skills/executive-charts/examples/sample_executive_monthly.html`：桌面首行保留 mc01 收入、mc02 客座率、mc03 旅客量趋势、mc04 预算推进四卡。页面说明通过 `set_meta` 保存 subtitle、org、system、statusText、iconKey（chart 或 plane）；组件说明使用 `subtitle`。来源明确是 fixture，状态文字不表示真实、实时或已认证的数据。
 
 所有四卡及 t06 都声明数据集和指标 binding。收入与旅客量求和；客座率、预算达成率、收益变动率用分子总和除以分母总和。mc03 趋势来自 timeField，mc04 进度 percent 从达成率乘 100；案例不填没有基期证据的同比或环比。t06 同时提供合法的 month/quarter 合成快照，再通过日期字段绑定按月与季度重算。区域、日期范围及区域文本搜索筛选均明确列出 componentIds；空 values 表示不筛选。文本搜索可用 `contains`，指定一个文本 values、明确 field 与 componentIds，不执行隐式跨字段搜索。
 

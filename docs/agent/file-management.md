@@ -15,7 +15,7 @@
 | `skills/analytical-reports/` | 分析报告 Skill 与随包参考材料 | 保留相对引用和随包可用性 |
 | `dashboard_runtime/`、`runtime-ui/`、`bin/` | 后端、前端构建与启动更新脚本 | 修改对应维护源码后重新构建 |
 | `deploy/` | 自托管服务器的 Dockerfile、compose、systemd 与 nginx 示例 | 服务器参数或运行方式变化时同步 `docs/self-hosted-server.md`；不存放令牌、密钥或 `charts.env` |
-| `examples/`、`skills/executive-charts/examples/` | 人工浏览与视觉比较案例 | 作为展示材料，不把案例数据当真实业务输入 |
+| `examples/`、`skills/executive-charts/examples/` | 人工浏览与视觉比较案例 | 作为展示材料 |
 | `dashboard_runtime/examples/academic-report.md` | 分析报告案例的唯一 Markdown 母稿 | CLI 与 MCP 案例共同读取，避免独立副本 |
 | `tests/`、`.github/workflows/` | 自动检查与 CI；`tests/deploy/` 为部署镜像冒烟检查 | 以已有命令及 CI 配置确定检查入口，分层见 `docs/testing.md` |
 
@@ -27,7 +27,6 @@ Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原
 
 - `runtime-ui/generated/`：在仓库执行 `npm --prefix runtime-ui run build` 生成。
 - `dashboard_runtime/web/dist/`：由同一次前端构建生成，供预览和安装包使用。
-- `.runtime-installs/project-20261028/package/runtime-ui/generated/`：既有本机安装包的构建中间文件，由该安装包的 `runtime-ui` 构建生成；维护源码仍在仓库对应目录。此路径是已有安装记录，不保证当前安装正在使用它。
 
 清理生成文件前检查其维护源码和重建入口。重建源码目录不会自动更新其他安装目录或已经打开的宿主页面；安装更新按本地 MCP 更新说明执行。
 

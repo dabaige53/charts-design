@@ -135,3 +135,12 @@ export function csv(rows) {
   const cell=v=>{let s=String(v??''); if (/^[=+\-@\t\r]/.test(s) && typeof v!=='number') s="'"+s; return '"'+s.replaceAll('"','""')+'"';};
   return '\ufeff'+[keys,...rows.map(r=>keys.map(k=>r[k]))].map(r=>r.map(cell).join(',')).join('\r\n');
 }
+
+// Ratios are calculated from grouped totals; missing/zero denominators stay missing.
+export function calculateTableRows(rows,presentation){
+  const specs=presentation?.calculatedColumns;if(!specs)return rows;
+  return rows.map(source=>{const row={...source};for(const [target,spec]of Object.entries(specs)){
+    const n=row[spec.numerator],d=row[spec.denominator],unit=row[spec.unitField],digits=spec.decimals??1;
+    row[target]=n==null||!(d>0)?'—':unit==='%'?`${(100*n/d).toFixed(digits)}%`:`${(n/d).toFixed(digits)} ${unit}`.trimEnd();
+  }return row;});
+}
