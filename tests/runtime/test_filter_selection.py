@@ -7,6 +7,7 @@ from dashboard_runtime.demo import document
 from dashboard_runtime.model import DashboardError, apply_operations
 
 
+# @wu-test type=boundary | scope=单选筛选 | protects=单选保存多值或无法清空
 def test_single_filter_rejects_multiple_values_and_can_clear():
     doc = document()
     filters = copy.deepcopy(doc['manifest']['filters'])

@@ -59,3 +59,5 @@
 @container (max-width:260px){#app-kpis .text-4xl{font-size:1.75rem!important;line-height:2rem!important}#app-kpis .text-2xl{font-size:1.25rem!important;line-height:1.75rem!important}#app-kpis .text-xl{font-size:1.125rem!important;line-height:1.5rem!important}}
 @container (max-width:200px){#app-kpis .text-4xl{font-size:1.5rem!important}#app-kpis .text-2xl{font-size:1.125rem!important}}
 @container (max-width:200px){#app-kpis [id^="kpi-ring-"]{width:3rem!important;height:3rem!important}}
+
+@media print{.section-card{overflow:hidden!important}.section-card div:has(>canvas){width:100%!important;height:100%!important}.section-card canvas{width:100%!important;height:100%!important;object-fit:contain}}

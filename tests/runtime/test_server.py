@@ -13,8 +13,8 @@ pytest.importorskip('mcp', reason='Install the optional official MCP SDK for ser
 pytest.importorskip('uvicorn', reason='uvicorn ships with the MCP SDK')
 
 from dashboard_runtime.model import DashboardError
-from dashboard_runtime.server import (EDIT_TOOLS, VIEW_TOOLS, RemoteServer, ServerSettings, Signer,
-                                      WorkspaceProjects, create_app)
+from dashboard_runtime.server import (RemoteServer, ServerSettings, Signer,
+                                      WorkspaceProjects, create_app, load_secret)
 
 TOKEN = 'server-test-token-0123456789'
 
@@ -23,10 +23,12 @@ def settings(tmp_path, **extra):
     return ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'ws' / '.runtime', tokens=(TOKEN,), port=8000, **extra)
 
 
+# @wu-test type=boundary | scope=分享链接签名 | protects=篡改过期或错类型令牌被接受
 def test_signer_rejects_tampering_kind_and_expiry():
     signer = Signer(b'k' * 32)
     token = signer.sign({'k': 'share', 'p': 'sales', 'd': 'demo', 'exp': int(time.time()) + 60})
-    assert signer.verify(token, 'share')['d'] == 'demo'
+    verified = signer.verify(token, 'share')
+    assert verified is not None and verified['d'] == 'demo'
     assert signer.verify(token, 'file') is None
     body, mac = token.split('.')
     assert signer.verify(body + '.' + mac[:-2] + 'AA', 'share') is None
@@ -35,6 +37,7 @@ def test_signer_rejects_tampering_kind_and_expiry():
     assert signer.verify('not-a-token', 'share') is None
 
 
+# @wu-test type=boundary | scope=远程项目路径 | protects=项目参数逃逸工作区或非法名称被接受 | debt=D1
 def test_projects_stay_inside_the_workspace(tmp_path):
     projects = WorkspaceProjects(settings(tmp_path))
     assert projects.name(None) == 'default'
@@ -49,6 +52,7 @@ def test_projects_stay_inside_the_workspace(tmp_path):
             projects.name(value)
 
 
+# @wu-test type=boundary | scope=服务器配置 | protects=无令牌或非回环地址免认证启动及签名密钥权限过宽 | debt=D1
 def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     with pytest.raises(DashboardError, match='bearer token'):
         RemoteServer(ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'rt'))
@@ -62,9 +66,30 @@ def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     assert oct((tmp_path / 'rt' / 'server-secret').stat().st_mode & 0o777) == '0o600'
 
 
-def test_view_links_cannot_write():
-    assert 'dashboard_patch' not in VIEW_TOOLS and 'dashboard_patch' in EDIT_TOOLS
-    assert not {'dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open'} & EDIT_TOOLS
+# @wu-test type=boundary | scope=签名密钥并发初始化 | protects=多个副本首次启动失败或读取不同和未写完的密钥
+def test_concurrent_startup_uses_one_complete_signing_key(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from pathlib import Path
+
+    path = tmp_path / 'runtime' / 'server-secret'
+    readers = threading.Barrier(8, timeout=10)
+    read_bytes = Path.read_bytes
+
+    def simultaneous_first_read(target):
+        try:
+            return read_bytes(target)
+        except FileNotFoundError:
+            if target == path:
+                readers.wait()
+            raise
+
+    monkeypatch.setattr(Path, 'read_bytes', simultaneous_first_read)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        keys = list(pool.map(lambda _: load_secret(path), range(8)))
+    assert len(keys[0]) == 32
+    assert all(value == keys[0] for value in keys)
+    assert read_bytes(path) == keys[0]
+    assert list(path.parent.iterdir()) == [path]
 
 
 class Running:
@@ -115,10 +140,12 @@ def free_port():
         return probe.getsockname()[1]
 
 
+# @wu-test type=integration | scope=远程MCP与分享链接 | protects=跨项目读写或分享链接越权调用或撤销后链接仍可用
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
 def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
+    from mcp.types import TextContent
     port = free_port()
     server = start(tmp_path, port)
     with Running(create_app(server), port):
@@ -132,15 +159,21 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
                     assert {'dashboard_share', 'dashboard_share_revoke', 'dashboard_preview'} <= names
                     assert 'dashboard_export_open' not in names
                     outside = await client.call_tool('dashboard_list', {'projectRoot': '/etc'})
-                    assert outside.isError and outside.structuredContent['error']['code'] == 'PROJECT_OUTSIDE_WORKSPACE'
+                    assert outside.isError and outside.structuredContent is not None
+                    assert outside.structuredContent['error']['code'] == 'PROJECT_OUTSIDE_WORKSPACE'
                     created = await client.call_tool('dashboard_create', {'projectRoot': 'fresh', 'dashboardId': 'blank', 'title': 'Blank'})
-                    assert not created.isError and created.structuredContent['projectRoot'] == 'fresh'
+                    assert not created.isError and created.structuredContent is not None
+                    assert created.structuredContent['projectRoot'] == 'fresh'
                     preview = await client.call_tool('dashboard_preview', {'projectRoot': 'sales', 'dashboardId': 'exec'})
                     assert not preview.isError
                     data = preview.structuredContent
+                    assert data is not None
                     assert data['previewUrl'].startswith(base + '/view/sales/exec#token=')
-                    assert json.loads(preview.content[0].text)['previewUrl'] == data['previewUrl']
+                    text = preview.content[0]
+                    assert isinstance(text, TextContent)
+                    assert json.loads(text.text)['previewUrl'] == data['previewUrl']
                     export = await client.call_tool('dashboard_export', {'projectRoot': 'sales', 'dashboardId': 'exec', 'format': 'json'})
+                    assert not export.isError and export.structuredContent is not None
                     return data['previewUrl'], export.structuredContent
 
         preview_url, export = asyncio.run(session())
@@ -167,6 +200,9 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
         assert status == 200 and '/edit/sales/exec#token=' in edit['url']
         edit_token = edit['url'].split('#token=')[1]
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Edited by link'}]}, edit_token)[0] == 200
+        for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open'):
+            status, denied = post(api + tool, {'dashboardId': 'exec'}, edit_token)
+            assert status == 403 and denied['error']['code'] == 'FORBIDDEN', (tool, denied)
         server.state.revoke('sales', 'exec')
         assert post(api + 'dashboard_get', {'dashboardId': 'exec'}, token)[0] == 401
         assert post(api + 'dashboard_get', {'dashboardId': 'exec'}, edit_token)[0] == 401
@@ -175,6 +211,7 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
         assert page.headers['Referrer-Policy'] == 'no-referrer'
 
 
+# @wu-test type=integration | scope=分享页面 | protects=只读页出现编辑入口或令牌留在地址栏或图表不渲染 | debt=D1
 def test_share_pages_render_dashboard_and_report_read_only(tmp_path):
     from dashboard_runtime.assets import DIST
     if not (DIST / 'app.js').exists():
@@ -205,6 +242,7 @@ def test_share_pages_render_dashboard_and_report_read_only(tmp_path):
             browser.close()
 
 
+# @wu-test type=boundary | scope=查看接口 | protects=超大请求体被读取或分块接口对链接开放 | debt=D1
 def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
     import http.client
     port = free_port()

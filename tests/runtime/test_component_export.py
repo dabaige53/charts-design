@@ -8,6 +8,7 @@ from dashboard_runtime.service import Service
 spec=importlib.util.spec_from_file_location('fixture',Path(__file__).with_name('fidelity_fixture.py'))
 fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
 
+# @wu-test type=integration | scope=单组件导出 | protects=导出带入其他组件或依赖外部框架 | debt=D1
 @pytest.mark.skipif(not (DIST/'app.js').exists(),reason='Build the shared frontend first')
 def test_mcp_original_export_uses_shared_ui_and_only_requested_component(tmp_path):
     doc=fixture.document();service=Service(tmp_path/'state');service.store.create('original-review','Review',doc)

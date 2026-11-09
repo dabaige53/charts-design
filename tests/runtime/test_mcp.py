@@ -10,6 +10,7 @@ from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
+# @wu-test type=integration | scope=MCP stdio | protects=协议修改报告大响应丢失 | debt=D1
 def test_real_stdio_protocol(tmp_path):
     from dashboard_runtime.store import Store
     Store(tmp_path/'mcp').create('mcp-test', 'MCP')
@@ -118,6 +119,7 @@ def test_real_stdio_protocol(tmp_path):
     asyncio.run(check())
 
 
+# @wu-test type=integration | scope=MCP批注 | protects=批注目标更新删除后丢批注 | debt=D1
 def test_read_annotations_and_edit_target_over_stdio(tmp_path):
     from dashboard_runtime.store import Store
     Store(tmp_path/'annotations').create('review', 'Review')

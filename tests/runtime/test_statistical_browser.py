@@ -11,6 +11,7 @@ from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.assets import export_document
 
 
+# @wu-test type=integration | scope=统计图报告离线导出 | protects=统计图片无法解码图注丢失或离线展示失败 | debt=D1
 def test_statistical_report_browser(tmp_path):
     doc=runpy.run_path(str(Path(__file__).with_name('test_statistical.py')))['statistical_document']()
     service=Service(tmp_path/'state');service.store.create('statistics','Statistics',doc)

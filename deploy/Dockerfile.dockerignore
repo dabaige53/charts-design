@@ -1,14 +1,31 @@
-# BuildKit reads this file for `docker build -f deploy/Dockerfile .`
-.git
+# BuildKit reads this file for `docker build -f deploy/Dockerfile .`.
+# Only maintained runtime and build inputs enter either image stage.
+**
+!runtime-ui/
+!runtime-ui/**
+!dashboard_runtime/
+!dashboard_runtime/**
+!skills/
+!skills/executive-charts/
+!skills/executive-charts/**
+!skills/analytical-reports/
+!skills/analytical-reports/**
+!bin/
+!bin/**
+!docs/
+!docs/**
+!package.json
+!pyproject.toml
+!README.md
 **/node_modules
 **/__pycache__
-.mcp-test-deps
-.runtime-cache
-.browser-cache
-.charts-runtime
-boards
-dist/local-data-acceptance
+**/.env
+**/.env.*
+**/*.env
+**/*.env.*
+**/*.key
+**/*.pem
+**/*.pfx
+**/server-secret
 dashboard_runtime/web/dist
 runtime-ui/generated
-component-review
-tests/test_output

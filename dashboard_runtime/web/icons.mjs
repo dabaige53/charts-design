@@ -3,9 +3,9 @@ import {createElement, MessageSquare, Plane, Pencil, Eye, Plus, Upload, Undo2, R
   Database, BookOpen, Settings2, Copy, Trash2, X, Check, Sun, Moon, GripVertical,
   ChartNoAxesCombined, Table2, CalendarDays, Columns3, Search, Maximize2,
   Minimize2, Image, Info, Ellipsis, ChevronLeft, ChevronRight, ChevronDown, ListFilter,
-  LayoutGrid, FileJson, FileText, FileCode2, History, Link2, SlidersHorizontal, ArrowUp, ArrowDown} from 'lucide';
+  LayoutGrid, FileJson, FileText, FileCode2, History, Link2, SlidersHorizontal, ArrowUp, ArrowDown, Printer} from 'lucide';
 const nodes={comment:MessageSquare,plane:Plane,edit:Pencil,view:Eye,add:Plus,import:Upload,undo:Undo2,redo:Redo2,
-  refresh:RefreshCw,export:Download,sql:Database,semantic:BookOpen,settings:Settings2,
+  refresh:RefreshCw,export:Download,print:Printer,sql:Database,semantic:BookOpen,settings:Settings2,
   copy:Copy,remove:Trash2,close:X,save:Check,light:Sun,dark:Moon,drag:GripVertical,
   chart:ChartNoAxesCombined,table:Table2,calendar:CalendarDays,columns:Columns3,
   search:Search,maximize:Maximize2,minimize:Minimize2,image:Image,info:Info,

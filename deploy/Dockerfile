@@ -8,7 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -
 WORKDIR /app
 COPY runtime-ui/package.json runtime-ui/package-lock.json runtime-ui/
 RUN npm --prefix runtime-ui ci --no-audit --no-fund
-COPY . .
+COPY runtime-ui/ runtime-ui/
+COPY dashboard_runtime/ dashboard_runtime/
+COPY skills/executive-charts/ skills/executive-charts/
+COPY skills/analytical-reports/ skills/analytical-reports/
+COPY bin/ bin/
+COPY docs/ docs/
+COPY package.json pyproject.toml README.md ./
 RUN PYTHON=python3 npm --prefix runtime-ui run build && rm -rf runtime-ui/node_modules
 
 FROM python:3.11-slim

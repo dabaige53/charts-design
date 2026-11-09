@@ -9,7 +9,7 @@ from . import __version__
 from .assets import render_html, ui_build_id
 from .model import DashboardError, MAX_BYTES
 from .service import READ_ONLY, TOOLS
-from .project_routing import ProjectServices, project_result, project_schema
+from .project_routing import ProjectResolver, ProjectServices, project_result, project_schema
 
 LEGACY_URI = f'ui://charts-design/dashboard-v{__version__}.html'
 def current_ui_uri():
@@ -47,7 +47,7 @@ class McpProfile:
     hidden_tools = frozenset()
     extra_tools: dict = {}
 
-    def projects(self, service):
+    def projects(self, service) -> ProjectResolver:
         return ProjectServices(service)
 
     def describe(self, name, description):
@@ -56,7 +56,7 @@ class McpProfile:
     def schema(self, name, schema):
         return project_schema(schema)
 
-    def call(self, name, request, selected):
+    def call(self, name, request, selected) -> dict | None:
         """Handle a profile-owned tool, or return None to use the shared service."""
         return None
 

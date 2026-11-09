@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
+// @wu-test type=integration | scope=MCP runtime reload | protects=更新时丢失在途请求或未初始化即处理新请求 | debt=D5,D6
 test('update drains in-flight request and replays initialization before queued request',()=>{
  let generation='old';const input=new EventEmitter(),workers=[],results=[];
  const process=new EventEmitter();process.stdin={};process.stdout={write:s=>results.push(JSON.parse(s))};

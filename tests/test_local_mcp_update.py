@@ -12,6 +12,7 @@ updater = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(updater)
 
 
+# @wu-test type=behavior | scope=MCP配置更新 | protects=目标路径未更新或其他配置被改动 | debt=D1,D7
 @pytest.mark.parametrize('multiline', [False, True])
 def test_only_chart_entry_changes(multiline):
     text = '''# Preserve comments and other servers
@@ -33,6 +34,7 @@ command = "keep-me"
     assert '/data/看板' in result
 
 
+# @wu-test type=boundary | scope=MCP配置更新 | protects=未识别入口被覆盖 | debt=D1
 def test_unknown_entry_is_rejected():
     with pytest.raises(ValueError):
         updater.replace_entry('[mcp_servers.charts-design]\nargs=["other.js"]\n', Path('/new/bin/dashboard-runtime.js'))

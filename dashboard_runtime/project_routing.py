@@ -4,9 +4,14 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 from threading import Lock
+from typing import Protocol
 
 from .model import require
 from .service import Service
+
+
+class ProjectResolver(Protocol):
+    def resolve(self, arguments: dict) -> tuple[Service, dict]: ...
 
 
 class ProjectServices:

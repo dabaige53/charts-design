@@ -95,6 +95,7 @@ def _resolved(code: str) -> dict:
     }
 
 
+# @wu-test type=integration | scope=图表声明与校验 | protects=已支持图表无法通过严格生成校验
 def test_every_registered_chart_has_a_complete_strict_generation_contract() -> None:
     assert set(CHARTS_MAP) == set(CHART_PRESENTATION_CONTRACTS) == set(CHART_TABLE_HEADER_COUNTS)
     for code in CHARTS_MAP:
@@ -102,6 +103,7 @@ def test_every_registered_chart_has_a_complete_strict_generation_contract() -> N
         assert errors == [], (code, errors)
 
 
+# @wu-test type=boundary | scope=图表数据校验 | protects=缺主数据字段的图表通过校验
 def test_every_registered_chart_rejects_a_missing_primary_data_field() -> None:
     for code in CHARTS_MAP:
         resolved = _resolved(code)
@@ -116,6 +118,7 @@ def test_every_registered_chart_rejects_a_missing_primary_data_field() -> None:
         assert any(error["code"] == "CHART_DATA_FIELD_MISSING" for error in errors), (code, errors)
 
 
+# @wu-test type=integration | scope=图表渲染与表格 | protects=业务标签表头丢失或行列数不一致
 def test_every_registered_renderer_consumes_explicit_headers_and_builds_consistent_tables() -> None:
     configs = {code: _resolved(code)["charts"][0] for code in CHARTS_MAP}
     definitions = ",\n".join(
@@ -154,6 +157,7 @@ def test_every_registered_renderer_consumes_explicit_headers_and_builds_consiste
             assert label in option_text, (code, label)
 
 
+# @wu-test type=integration | scope=独立图表生成 | protects=业务标题数据或表头未进入页面
 def test_standalone_generator_accepts_a_strict_business_component_config(tmp_path: Path) -> None:
     component = _resolved("c01")["charts"][0]
     target = tmp_path / "chart-c01.html"
@@ -168,6 +172,7 @@ def test_standalone_generator_accepts_a_strict_business_component_config(tmp_pat
     assert '<polyline points="15 3 21 3 21 9"' in html
 
 
+# @wu-test type=integration | scope=图表提示信息 | protects=提示信息遗漏业务指标名称
 def test_structured_chart_tooltips_keep_shape_specific_business_labels() -> None:
     codes = ("d02", "r02", "r03", "d04", "f02", "f03", "r04")
     configs = {code: _resolved(code)["charts"][0] for code in codes}

@@ -96,11 +96,13 @@ def _errors(code: str) -> list[dict[str, str]]:
     return validate_resolved(_resolved(code), strict=True)[0]
 
 
+# @wu-test type=boundary | scope=专用图表校验 | protects=可渲染有效配置被拒绝
 def test_strict_mode_accepts_renderer_ready_specialized_chart_schemas() -> None:
     for code in DATA:
         assert _errors(code) == [], code
 
 
+# @wu-test type=boundary | scope=专用图表校验 | protects=缺渲染所需字段仍通过校验
 def test_strict_mode_rejects_missing_renderer_private_data_fields() -> None:
     private_fields = {
         "t06": ("month", "yieldGrowth"), "c02": (None, "categories"),
@@ -116,6 +118,7 @@ def test_strict_mode_rejects_missing_renderer_private_data_fields() -> None:
         assert any(error["code"] == "CHART_DATA_FIELD_MISSING" for error in errors), code
 
 
+# @wu-test type=boundary | scope=专用图表校验 | protects=数据长度不一致导致错误渲染
 def test_strict_mode_rejects_specialized_chart_length_mismatches() -> None:
     mutations = {
         "t06": lambda data: data["month"]["revenue"].pop(),
@@ -131,6 +134,7 @@ def test_strict_mode_rejects_specialized_chart_length_mismatches() -> None:
         assert any(error["code"] == "CHART_DATA_LENGTH_MISMATCH" for error in errors), code
 
 
+# @wu-test type=boundary | scope=专用图表校验 | protects=错误类型进入渲染器
 def test_strict_mode_rejects_specialized_chart_wrong_value_types() -> None:
     mutations = {
         "t06": lambda data: data["month"]["revenue"].__setitem__(0, "1"),
@@ -148,6 +152,7 @@ def test_strict_mode_rejects_specialized_chart_wrong_value_types() -> None:
         assert any(error["code"] == "CHART_DATA_TYPE_INVALID" for error in errors), code
 
 
+# @wu-test type=boundary | scope=图表展示配置 | protects=缺展示配置或系列标签数量错误
 def test_strict_mode_rejects_missing_or_misaligned_presentation() -> None:
     for code in DATA:
         missing = _resolved(code)
@@ -161,6 +166,7 @@ def test_strict_mode_rejects_missing_or_misaligned_presentation() -> None:
     assert any(error["code"] == "CHART_PRESENTATION_LENGTH_MISMATCH" for error in errors)
 
 
+# @wu-test type=boundary | scope=旧配置兼容 | protects=非严格模式拒绝旧配置或严格模式漏报
 def test_non_strict_mode_keeps_legacy_compatibility() -> None:
     compatible = _resolved("c02")
     del compatible["charts"][0]["presentation"]
@@ -197,6 +203,7 @@ def _render_specialized_contract(code: str) -> dict:
     return json.loads(completed.stdout)
 
 
+# @wu-test type=integration | scope=专用图表渲染 | protects=业务轴系列提示标签被示例标签替代
 def test_specialized_renderers_consume_business_presentation_instead_of_catalog_labels() -> None:
     rendered = {code: _render_specialized_contract(code) for code in DATA}
 

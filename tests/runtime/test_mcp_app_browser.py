@@ -18,6 +18,7 @@ from dashboard_runtime.demo import executive_document as document
 from dashboard_runtime.mcp_server import URI
 
 
+# @wu-test type=integration | scope=MCP App编辑导出重开 | protects=桥接后筛选导出或保存结果丢失 | debt=D6
 def test_embedded_app_edits_persists_and_reopens(tmp_path):
     root = Path(__file__).resolve().parents[2]
     bundle = tmp_path / 'host.js'

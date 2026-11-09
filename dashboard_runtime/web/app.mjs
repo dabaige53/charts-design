@@ -38,6 +38,9 @@ function table(rows,{paginate=true,labels={}}={}){
 export async function start({echarts,GridStack,App}){
   initializeOriginal(echarts);
   const boot=window.__DASHBOARD_BOOT__||{},root=el('div','workspace');document.body.append(root);
+  const printNotice=el('p','print-preparation','图表数据尚未准备完成。请关闭打印窗口，使用页面“打印”按钮，或按 Ctrl/Cmd+P，等待加载完成后打印。');
+  document.body.append(printNotice);
+  let printPreparation=null,preparedPrint=false;
   // Self-hosted pages: remote.access is 'view' (read-only share) or 'edit'.
   const remote=boot.mode==='web'?boot.remote||null:null,viewOnly=remote?.access==='view';
   const top=el('header','topbar'),title=input('Dashboard'),toolbar=el('div','toolbar'),notice=el('div','notice'),filters=el('div','filters'),canvas=el('main','canvas'),gridEl=el('div','grid-stack');
@@ -335,7 +338,9 @@ export async function start({echarts,GridStack,App}){
 
     if(app){const context=app.getHostContext(),full=context?.displayMode==='fullscreen',mode=full?'inline':'fullscreen';
       if(!editing&&context?.availableDisplayModes?.includes(mode))toolbar.append(iconButton(full?'minimize':'maximize',full?'返回对话':'全屏查看',async()=>{await app.requestDisplayMode({mode});render();}));}
-    if(!editing)toolbar.append(iconButton('export',T.export,exportDialog));disposeToolbar=adaptiveActions(top,toolbar);if(boot.mode==='offline'){toolbar.replaceChildren();toolbar.hidden=true;badge.hidden=true;}statusLine();
+    if(!editing)toolbar.append(iconButton('print','打印',()=>printPage()),iconButton('export',T.export,exportDialog));
+    if(boot.mode==='offline'){toolbar.replaceChildren(iconButton('print','打印',()=>printPage()));badge.hidden=true;}
+    toolbar.hidden=false;disposeToolbar=adaptiveActions(top,toolbar);statusLine();
     // The version sits inline beside the edit toggle; long error messages keep their own line under the heading.
     if(editing&&!notice.classList.contains('error'))toolbar.prepend(notice);else heading.append(notice);
     filters.replaceChildren();filters.hidden=doc.manifest.viewMode==='report'||(!doc.manifest.filters.length&&!linkage&&!editing);
@@ -571,7 +576,7 @@ export async function start({echarts,GridStack,App}){
             else savedFile.append(el('p','export-path',result.export.directory));
             savedFile.append(el('p','muted','发布 dist/；完整源码见同名 ZIP。'));feedback.textContent='独立网页与源码已生成';return;}
           if(boot.mode==='offline'){
-            if(format==='pdf'){d.close();window.print();return;}
+            if(format==='pdf'){await printPage(()=>d.close());return;}
             if(format==='json')download(doc.id+'.json',JSON.stringify(doc,null,2));
             else {
               const shell=document.documentElement.cloneNode(true);shell.querySelectorAll('.workspace,dialog,.ui-tooltip').forEach(n=>n.remove());
@@ -618,7 +623,9 @@ export async function start({echarts,GridStack,App}){
   if(boot.mode!=='offline')lifetime.add(whileVisible(async()=>{try{await transport('runtime_keepalive',{});}catch(e){showError(e);}},Math.min(20000,(boot.idleTimeout||60)*1000/3)));
   window.addEventListener('beforeunload',event=>{if([...reportDrafts.values()].some(draft=>draft.dirty)){event.preventDefault();event.returnValue='';}});
   window.__chartsReady=async()=>{
-    for(const run of [...pendingMounts.values()])run();await document.fonts.ready;
+    if(loadStatic)await Promise.all([...new Set(Object.entries(doc.manifest.components).filter(([id])=>hostsFor(id).length).map(([,c])=>c.datasetId).filter(Boolean))].map(loadStatic));
+    for(const run of [...pendingMounts.values()])run();
+    await progressiveLoader?.loadAll();await document.fonts.ready;
     const images=[...document.querySelectorAll('img')];await Promise.all(images.map(img=>img.decode?.().catch(()=>{})));
     await Promise.all(originalInstances.flatMap(item=>Object.values(item.app.state.chartInstances)).map(chart=>new Promise(resolve=>{
       if(chart.isDisposed()){resolve();return;}const zr=chart.getZr();if(zr.animation.isFinished()){chart.resize();requestAnimationFrame(()=>resolve());return;}
@@ -626,7 +633,29 @@ export async function start({echarts,GridStack,App}){
     })));
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   };
-  window.addEventListener('beforeprint',()=>{for(const run of [...pendingMounts.values()])run();});
+  function printPage(onReady=()=>{}){
+    if(printPreparation)return printPreparation;
+    const id=doc.id,revision=doc.revision;
+    printPreparation=window.__chartsReady().then(()=>{
+      if(doc.id!==id||doc.revision!==revision)throw Error('页面已更新，请重新打印。');
+      onReady();preparedPrint=true;
+      try{window.print();}finally{preparedPrint=false;}
+    }).finally(()=>{printPreparation=null;});
+    return printPreparation;
+  }
+  window.addEventListener('keydown',event=>{
+    if(doc&&(event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='p'){
+      event.preventDefault();printPage().catch(showError);
+    }
+  });
+  window.addEventListener('beforeprint',()=>{
+    for(const run of [...pendingMounts.values()])run();
+    const missingStatic=loadStatic&&Object.entries(doc.manifest.components).some(([id,c])=>hostsFor(id).length&&c.datasetId&&!Object.hasOwn(doc.snapshot.datasets,c.datasetId));
+    const ready=preparedPrint||(!missingStatic&&(!progressiveLoader||progressiveLoader.isReady()));
+    document.body.classList.toggle('print-blocked',!ready);
+    if(!ready)window.__chartsReady().catch(showError);
+  });
+  window.addEventListener('afterprint',()=>document.body.classList.remove('print-blocked'));
   annotations=createAnnotations({root,iconButton,attachContext:annotationContext?note=>annotationContext.attach({...viewDoc(),projectRoot:projectContext.projectRoot},note):null,getDocument:()=>doc,readOnly:boot.mode==='offline'||viewOnly,save:transform=>patch(()=>[{op:'set_annotations',value:transform(doc.manifest.annotations||[])}]),onError:showError,onMode:active=>{const b=toolbar.querySelector('.annotation-toggle');if(b){b.setAttribute('aria-pressed',String(active));b.setAttribute('aria-label',active?'退出批注':'批注');b.title=active?'退出批注':'批注';b.dataset.tooltip=b.title;}}});
   lifetime.add(()=>{staticClient?.destroy();viewAbort?.abort();dataObserver?.disconnect();observer?.disconnect();annotations?.reset();disposeToolbar?.();disposeReport?.();});
   window.addEventListener('charts-error',event=>showError(event.detail));render();

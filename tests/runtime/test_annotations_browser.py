@@ -9,6 +9,7 @@ from playwright.sync_api import sync_playwright
 EVIDENCE = Path('component-review')
 
 
+# @wu-test type=integration | scope=组件位置批注 | protects=点击组件内部元素时批注绑定错误组件
 def test_new_annotation_targets_outer_component(tmp_path):
     root = Path(__file__).resolve().parents[2]
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(root)))
@@ -53,6 +54,7 @@ def test_new_annotation_targets_outer_component(tmp_path):
         thread.join()
 
 
+# @wu-test type=integration | scope=报告位置批注 | protects=刷新后批注丢失或原文删除后批注消失
 def test_report_annotations_persist_and_report_missing_text(tmp_path):
     from dashboard_runtime.demo import report_document
     from dashboard_runtime.http_server import RuntimeHTTPServer
@@ -124,6 +126,7 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
         thread.join()
 
 
+# @wu-test type=behavior | scope=连续位置引用 | protects=提交第一条后无法选择第二处 | debt=D6
 def test_composer_submission_keeps_selection_mode(tmp_path):
     root = Path(__file__).resolve().parents[2]
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(root)))

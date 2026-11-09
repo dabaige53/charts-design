@@ -37,6 +37,7 @@ async def call(session, name, project=None, **args):
     return value
 
 
+# @wu-test type=integration | scope=MCP多项目 | protects=同ID看板批注分块跨项目串数据 | debt=D1
 def test_one_connection_handles_two_projects_and_restart(tmp_path):
     first, second = tmp_path / 'first', tmp_path / 'second'
 
@@ -132,6 +133,7 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
     asyncio.run(check())
 
 
+# @wu-test type=integration | scope=MCP默认项目 | protects=默认项目或旧存储切换后读错 | debt=D1
 def test_startup_project_and_legacy_store_remain_defaults(tmp_path):
     default, other = tmp_path / 'default', tmp_path / 'other'
     Service(tmp_path / 'runtime', project_root=default).call('dashboard_create', {'dashboardId': 'same', 'title': 'Existing'})

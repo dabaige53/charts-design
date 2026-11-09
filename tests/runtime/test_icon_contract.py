@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import threading
 import pytest
-from dashboard_runtime.model import validate
+from dashboard_runtime.kpi_cards import GUIDE
 from dashboard_runtime.assets import DIST
 from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.service import Service
@@ -18,13 +18,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
-def test_all_original_contracts_are_explicit():
-    doc = fixture.document()
-    validate(doc)
-    assert len(doc["manifest"]["components"]) == 56
-    assert doc["snapshot"]["status"] == "fixture"
-
-
+# @wu-test type=integration | scope=组件目录覆盖与原组件标题区 | protects=新增组件漏验或图表控件和移动布局不可用 | debt=flaky
 @pytest.mark.skipif(
     not (DIST / "app.js").exists(), reason="Build the shared frontend first"
 )
@@ -33,6 +27,8 @@ def test_every_original_visual_and_icon_header(tmp_path):
 
     service = Service(tmp_path / "state")
     service.store.create("all-components", "Review", fixture.document())
+    components = service.store.get("all-components")["manifest"]["components"]
+    assert set(components) == set(fixture.CHARTS_MAP) | set(GUIDE)
     server = RuntimeHTTPServer(service, 0, "icons-test")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -53,9 +49,7 @@ def test_every_original_visual_and_icon_header(tmp_path):
             page.wait_for_selector("[data-component-id=c01] canvas")
             page.wait_for_timeout(900)
             report = []
-            for key, c in service.store.get("all-components")["manifest"][
-                "components"
-            ].items():
+            for key, c in components.items():
                 card = page.locator(f'.grid-stack-item[data-component-id="{key}"]')
                 card.scroll_into_view_if_needed()
                 if c["family"] == "chart":

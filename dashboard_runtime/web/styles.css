@@ -147,3 +147,5 @@
 /* Keep selected markup whitespace out of the annotation editor layout. */
 .annotation-panel .annotation-context,.annotation-panel>p.muted{white-space:normal;max-height:4.8em;overflow:auto;margin:0 0 12px;line-height:1.6;text-align:left}
 .annotation-panel .annotation-error:empty{display:none}
+.print-preparation{display:none}
+@media print{body.print-blocked>.workspace{display:none!important}body.print-blocked>.print-preparation{display:block!important;margin:24mm;font:16px/1.8 sans-serif;color:#17212b}}

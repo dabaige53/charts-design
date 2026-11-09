@@ -13,6 +13,7 @@ from dashboard_runtime.model import DashboardError, validate
 from dashboard_runtime.service import Service
 
 
+# @wu-test type=boundary | scope=搜索筛选 | protects=非字符串多值或数值字段搜索被接受
 def test_search_contract_rejects_wrong_values_and_fields():
     for field, values in [("region", [2]), ("region", ["a", "b"]), ("revenue", ["8"])]:
         doc = document()
@@ -29,6 +30,7 @@ def test_search_contract_rejects_wrong_values_and_fields():
             validate(doc)
 
 
+# @wu-test type=integration | scope=看板筛选导出 | protects=页面筛选KPI导出数据不一致
 def test_visible_filters_union_search_kpi_and_table_export(tmp_path):
     from playwright.sync_api import sync_playwright
 
@@ -134,6 +136,7 @@ def test_visible_filters_union_search_kpi_and_table_export(tmp_path):
         thread.join()
 
 
+# @wu-test type=integration | scope=看板控件 | protects=时间切换语义查看导出不可用
 def test_complete_executive_case_has_visible_month_quarter_controls(tmp_path):
     from playwright.sync_api import sync_playwright
     from dashboard_runtime.demo import executive_document

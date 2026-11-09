@@ -165,6 +165,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+      - name: Add fake environment files to detect image leaks
+        run: |
+          python3 - <<'EOF'
+          from pathlib import Path
+          for name in ('deploy/charts.env', '.env', 'dashboard_runtime/.env', 'runtime-ui/local.env'):
+              Path(name).write_text('CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n')
+          EOF
       - name: Build the deployable image
         run: docker build -f deploy/Dockerfile -t charts-design:ci .
       - name: Run the image and exercise remote MCP, previews and downloads

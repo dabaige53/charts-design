@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createProjectContext} from '../../dashboard_runtime/web/project-context.mjs';
 import {resolveToolResult} from '../../dashboard_runtime/web/tool-result.mjs';
 
+// @wu-test type=boundary | scope=project context | protects=同ID看板跨项目请求或接受其他项目结果
 test('two previews retain their projects for background, view, edit and annotation calls',async()=>{
   const calls=[];
   const send=async(name,args)=>{calls.push({name,args});return {};};
@@ -23,6 +24,7 @@ test('two previews retain their projects for background, view, edit and annotati
   assert.equal(calls.at(-1).args.projectRoot,'/project/first');
 });
 
+// @wu-test type=integration | scope=project chunk transport | protects=首个分块请求发往错误项目
 test('initial chunked result binds context before requesting chunks',async()=>{
   const value={projectRoot:'/project/chunked',document:{id:'same'}};
   const bytes=Buffer.from(JSON.stringify(value)),calls=[];
@@ -38,6 +40,7 @@ test('initial chunked result binds context before requesting chunks',async()=>{
   assert.deepEqual(decoded,value);assert.equal(calls[0].name,'runtime_result_chunk');
 });
 
+// @wu-test type=behavior | scope=project context compatibility | protects=旧宿主请求形状变化或启动项目丢失
 test('legacy hosts and startup project defaults retain their request shape',async()=>{
   const calls=[],legacy=createProjectContext(async(name,args)=>calls.push({name,args}));
   legacy.accept({content:[{type:'text',text:'{"document":{"id":"legacy"}}'}]});

@@ -11,6 +11,7 @@ def component():
     c['binding']={'datasetId':'sales','categoryField':'region','categoryTarget':'categories','measures':{'values':'revenue'}}
     return c
 
+# @wu-test type=behavior | scope=组件绑定 | protects=添加绑定丢失原配置或筛选关联
 def test_binding_roundtrip_preserves_original_config():
     doc=document();c=component();ds=doc['manifest']['metrics']['revenue']['datasetId'];c['binding']['datasetId']=ds
     actual=apply_operations(doc,[{'op':'put_component','id':'bound','value':c}])
@@ -19,6 +20,7 @@ def test_binding_roundtrip_preserves_original_config():
     f=copy.deepcopy(actual['manifest']['filters']);f[0]['componentIds'].append('bound')
     assert apply_operations(actual,[{'op':'set_filters','value':f}])['manifest']['filters']==f
 
+# @wu-test type=boundary | scope=组件绑定 | protects=缺字段或不安全目标进入配置
 @pytest.mark.parametrize('change',[{'datasetId':'missing'},{'categoryField':'missing'},{'categoryTarget':'__proto__'},{'measures':{}},{'measures':{'values':'missing'}},{'scale':{'values':-1}}])
 def test_incomplete_or_unsafe_bindings_fail(change):
     doc=document();c=component();c['binding']['datasetId']=doc['manifest']['metrics']['revenue']['datasetId'];c['binding'].update(change)

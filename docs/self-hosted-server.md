@@ -41,6 +41,8 @@ python3 -m dashboard_runtime server --workspace /data/projects --host 127.0.0.1 
 - `deploy/charts-design.service`：systemd 单元，假设代码位于 `/opt/charts-design` 并使用其中的虚拟环境。
 - `deploy/nginx.conf`：TLS 反向代理示例；`/mcp` 关闭缓冲以支持 SSE，`/mcp` 与 `/files/` 关闭访问日志，避免令牌进入日志。
 
+`charts.env` 只用于容器启动时注入配置。Docker 构建采用源码白名单，并排除各层目录中的 `.env`、`*.env`、私钥及 `server-secret`；运行配置、本机工作区和业务数据不进入构建镜像。CI 放入不含真实凭据的环境文件，再检查实际运行镜像未包含这些文件，同时检查网页部署包仍可完整导出。
+
 ## 配置
 
 命令行参数优先，其次是环境变量。
@@ -87,6 +89,8 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 远程模式隐藏 `dashboard_export_open`（它会在服务器桌面上打开文件）；导出结果改为附带 `downloadUrl`，网页部署包另带 `siteDownloadUrl`。其余工具、操作合同、编辑批次与 Doctor 规则与本地相同，见 [Runtime 说明](dashboard-runtime.md) 与 [项目资产与加载](project-runtime.md)。
 
+自动签名密钥先在运行目录内写完临时文件，再以原子硬链接发布为 `server-secret`，权限为 600。多个副本同时首次启动时使用同一个已写完的密钥，不读取半成品，也不覆盖先完成的副本。共享运行目录需要支持原子硬链接；也可为全部副本统一设置 `CHARTS_SERVER_SECRET`。
+
 ## 网页预览与分享
 
 - `dashboard_preview`：除 MCP App 所需文档外，结果附带 `previewUrl` 与 `previewExpiresAt`。不能显示 MCP Apps 的宿主（例如终端中的 Claude Code）把链接交给用户即可。仍按“批次完成后预览一次”的流程调用。
@@ -115,4 +119,12 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 ## 本次验收
 
-2026-11-07 在 Linux 容器中验证：官方 MCP Python 客户端经 Streamable HTTP 完成工具列表、创建、越界路径拒绝、预览链接、导出下载与令牌鉴权；Chromium 打开只读与编辑链接，看板与报告图表正常渲染、无脚本或 CSP 错误，伪造令牌显示失效提示，手机宽度无横向溢出。自动测试见 `tests/runtime/test_server.py`。未验证：Docker 镜像构建、nginx 代理、claude.ai 或 Codex 等真实宿主连接。
+2026-11-07 在 Linux 容器中验证：官方 MCP Python 客户端经 Streamable HTTP 完成工具列表、创建、越界路径拒绝、预览链接、导出下载与令牌鉴权；Chromium 打开只读与编辑链接，看板与报告图表正常渲染、无脚本或 CSP 错误，伪造令牌显示失效提示，手机宽度无横向溢出。自动测试见 `tests/runtime/test_server.py`。
+
+2026-11-08，`main` 提交 `ae77261` 的 GitHub Actions 运行 40 六个作业全部通过，包含完整 Docker 多阶段构建、以非 root 用户运行镜像、远程 MCP、预览与下载冒烟检查。详细历史见[验收记录](records/2026-11-07-server-layout-kpi.md)。
+
+## 实际部署与客户端验收待办
+
+CI 和本地协议客户端通过不代表已经完成线上或真实宿主验收。上线还需要确定服务器、持久化卷、对外 HTTPS 域名与证书，设置运行时令牌、签名密钥和 `CHARTS_PUBLIC_URL`，并检查代理后的健康、MCP 长连接、分享撤销、下载、重启和备份恢复。nginx 代理及多副本负载下的并发压测尚未完成。
+
+真实客户端需提供可访问上述 HTTPS 地址的目标环境，以及对应客户端的远程 MCP 配置入口。按每个目标客户端实际支持的请求头令牌或 URL 令牌方式连接，完成初始化、工具发现、在隔离项目中创建和修改合成看板、打开预览、下载导出、撤销链接与重新连接。Codex、Claude Desktop、Claude Code、claude.ai 的兼容性分别记录，不用官方 Python SDK 的通过结果代替。未实现 OAuth，必须先确认目标客户端支持当前令牌接入方式；只支持 OAuth 的入口不在现有能力内。

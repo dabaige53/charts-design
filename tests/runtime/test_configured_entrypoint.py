@@ -11,6 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
+# @wu-test type=integration | scope=MCP配置入口 | protects=重连丢失保存修改 | debt=D1
 def test_project_mcp_command_and_reconnect(tmp_path):
     root = Path(__file__).resolve().parents[2]
     config = json.loads(root.joinpath('mcp.json').read_text())['mcpServers']['charts-design']
@@ -39,6 +40,7 @@ def test_project_mcp_command_and_reconnect(tmp_path):
     asyncio.run(check())
 
 
+# @wu-test type=integration | scope=MCP空闲恢复 | protects=worker退出后同会话无法读数据 | debt=D1,D9
 def test_same_host_session_survives_worker_idle_shutdown(tmp_path):
     root = Path(__file__).resolve().parents[2]
     worker_log = tmp_path / 'worker.log'

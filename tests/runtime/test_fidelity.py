@@ -17,6 +17,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
+# @wu-test type=integration | scope=原工作区导入 | protects=导入丢失组件配置筛选信息
 def test_original_workspace_import_is_lossless(tmp_path):
     doc = fixture.document()
     components = doc["manifest"]["components"]
@@ -52,6 +53,7 @@ def test_original_workspace_import_is_lossless(tmp_path):
     assert result["manifest"]["components"]["chart-c01"]["config"]["code"] == "c01"
 
 
+# @wu-test type=integration | scope=原组件页面 | protects=工具栏表格或离线页面不可用 | debt=D1,D9
 @pytest.mark.skipif(
     not (DIST / "app.js").exists(), reason="Build the shared frontend first"
 )

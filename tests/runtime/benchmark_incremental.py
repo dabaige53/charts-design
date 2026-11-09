@@ -22,6 +22,7 @@ Service = importlib.import_module('dashboard_runtime.service').Service
 sync_playwright = importlib.import_module('playwright.sync_api').sync_playwright
 
 
+# @wu-test type=integration | scope=百万行40图表浏览器更新 | protects=连续翻页后图表失效或资源持续增长 | debt=D6,D9
 def run(output: Path, existing_root: Path | None = None):
     fixture = runpy.run_path(str(Path(__file__).with_name('benchmark_local.py')))
     if existing_root:

@@ -29,6 +29,7 @@ import re
 import secrets
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -139,18 +140,23 @@ class ServerSettings:
 
 
 def load_secret(path: Path) -> bytes:
-    """Persist one random signing key so links survive restarts."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """Publish a complete key once, including during concurrent startup."""
     try:
-        return path.read_bytes()
-    except FileNotFoundError:
-        value = secrets.token_bytes(32)
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(descriptor, 'wb') as handle:
-            handle.write(value)
-        return value
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            return path.read_bytes()
+        except FileNotFoundError:
+            with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.server-secret-') as handle:
+                handle.write(secrets.token_bytes(32))
+                handle.flush()
+                os.fsync(handle.fileno())
+                try:
+                    os.link(handle.name, path)
+                except FileExistsError:
+                    pass  # Another process published its complete key first.
+            return path.read_bytes()
     except OSError as exc:
-        raise DashboardError('INVALID_CONFIG', f'Cannot read signing secret: {exc}') from exc
+        raise DashboardError('INVALID_CONFIG', f'Cannot initialize signing secret: {exc}') from exc
 
 
 class Signer:
@@ -246,7 +252,7 @@ class WorkspaceProjects:
                 self._services[name] = service
         return service
 
-    def resolve(self, arguments: dict):
+    def resolve(self, arguments: dict) -> tuple[Service, dict]:
         request = dict(arguments)
         return self.service(self.name(request.pop('projectRoot', None))), request
 
@@ -302,8 +308,8 @@ class ServerProfile(McpProfile):
             return description + '. On this server the export also contains downloadUrl, an expiring signed link.'
         return description
 
-    def schema(self, name, value):
-        return {**value, 'properties': {**value.get('properties', {}), 'projectRoot': {
+    def schema(self, name, schema):
+        return {**schema, 'properties': {**schema.get('properties', {}), 'projectRoot': {
             'type': 'string', 'description': 'Project name on this server, for example "sales". Pass it on every call; '
             'a new name creates the project. Omit only to use the server default project.'}}}
 
@@ -404,9 +410,10 @@ class RemoteServer:
         result = self.profile.decorate(name, args, service.call(name, args), service)
         if name == 'runtime_info' and not principal.admin:
             result = {key: result[key] for key in SANITIZED_INFO if key in result} | {'projectRoot': project}
-        if not principal.admin and isinstance(result.get('export'), dict):
+        export = result.get('export')
+        if not principal.admin and isinstance(export, dict):
             # Readers receive download links, not server filesystem paths.
-            result['export'] = {key: value for key, value in result['export'].items()
+            result['export'] = {key: value for key, value in export.items()
                                 if key not in ('path', 'directory', 'siteArchive', 'publishDirectory')}
         return result
 
@@ -696,7 +703,8 @@ def settings_from_args(args) -> ServerSettings:
     if token_file:
         tokens += [line.strip() for line in Path(token_file).expanduser().read_text().splitlines() if line.strip() and not line.startswith('#')]
     workspace = args.workspace or env('CHARTS_WORKSPACE')
-    require(bool(workspace), 'Choose the server workspace with --workspace or CHARTS_WORKSPACE', 'INVALID_CONFIG')
+    if not workspace:
+        raise DashboardError('INVALID_CONFIG', 'Choose the server workspace with --workspace or CHARTS_WORKSPACE')
     runtime = args.runtime_root or env('CHARTS_RUNTIME_ROOT') or str(Path(workspace).expanduser() / '.runtime')
     secret = env('CHARTS_SERVER_SECRET')
     return ServerSettings(

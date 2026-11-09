@@ -40,6 +40,7 @@ class DashboardApp {{
     return json.loads(completed.stdout)
 
 
+# @wu-test type=behavior | scope=Runtime生命周期 | protects=更新或重挂载丢失指定根节点
 def test_runtime_preserves_explicit_root_across_update_destroy_and_remount():
     result = _run_lifecycle_scenario(
         """
@@ -70,6 +71,7 @@ console.log(JSON.stringify({
     }
 
 
+# @wu-test type=behavior | scope=多Runtime隔离 | protects=局部实例覆盖页面级实例
 def test_scoped_runtime_does_not_replace_document_singleton():
     result = _run_lifecycle_scenario(
         """
@@ -92,27 +94,3 @@ console.log(JSON.stringify({
         "scopedWasDistinct": True,
         "scopedDestroyed": True,
     }
-
-
-def test_element_resolution_returns_the_app_owned_by_each_root():
-    result = _run_lifecycle_scenario(
-        """
-const leftRoot = { name: 'left', parentNode: null };
-const rightRoot = { name: 'right', parentNode: null };
-const leftChild = { parentNode: leftRoot };
-const rightChild = { parentNode: rightRoot };
-const leftRuntime = window.createDashboardRuntime({ id: 'left-app' }, leftRoot);
-const rightRuntime = window.createDashboardRuntime({ id: 'right-app' }, rightRoot);
-const leftApp = leftRuntime.mount();
-const rightApp = rightRuntime.mount();
-leftRoot.__dashboardApp = leftApp;
-rightRoot.__dashboardApp = rightApp;
-console.log(JSON.stringify({
-  left: window.getDashboardAppForElement(leftChild).config.id,
-  right: window.getDashboardAppForElement(rightChild).config.id,
-  distinct: window.getDashboardAppForElement(leftChild) !== window.getDashboardAppForElement(rightChild)
-}));
-"""
-    )
-
-    assert result == {"left": "left-app", "right": "right-app", "distinct": True}

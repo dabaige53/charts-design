@@ -25,6 +25,7 @@ def write_html(path: Path, body: str, head: str = "") -> None:
     )
 
 
+# @wu-test type=boundary | scope=HTML检查 | protects=缺失引用和本地资源未报错
 def test_inspect_html_reports_broken_dom_references_and_local_assets(tmp_path: Path) -> None:
     html = tmp_path / "board.html"
     write_html(html, '<label for="missing">Metric</label><a href="#missing">Open</a>', '<script src="missing.js"></script>')
@@ -38,6 +39,7 @@ def test_inspect_html_reports_broken_dom_references_and_local_assets(tmp_path: P
     assert {issue["code"] for issue in payload["errors"]} == {"ASSET_NOT_FOUND", "DOM_REFERENCE_MISSING"}
 
 
+# @wu-test type=boundary | scope=保留清单 | protects=必需内容丢失或禁止内容出现未报错
 def test_inspect_html_enforces_preservation_manifest(tmp_path: Path) -> None:
     html = tmp_path / "board.html"
     manifest = tmp_path / "preservation.json"
@@ -59,6 +61,7 @@ def test_inspect_html_enforces_preservation_manifest(tmp_path: Path) -> None:
     assert payload["evidence"]["manifest"] == str(manifest.resolve())
 
 
+# @wu-test type=integration | scope=HTML对比 | protects=修改后正文丢失未被发现
 def test_compare_html_reports_preservation_regressions(tmp_path: Path) -> None:
     before = tmp_path / "before.html"
     after = tmp_path / "after.html"
@@ -73,6 +76,7 @@ def test_compare_html_reports_preservation_regressions(tmp_path: Path) -> None:
     assert any(issue["code"] == "PRESERVED_TEXT_MISSING" and issue["path"] == "text:Board approved" for issue in payload["errors"])
 
 
+# @wu-test type=boundary | scope=HTML对比 | protects=新页面重复ID或失效引用未被发现
 def test_compare_html_also_rejects_new_candidate_contract_breakage(tmp_path: Path) -> None:
     before = tmp_path / "before.html"
     after = tmp_path / "after.html"
@@ -86,6 +90,7 @@ def test_compare_html_also_rejects_new_candidate_contract_breakage(tmp_path: Pat
     assert {"DOM_ID_DUPLICATE", "DOM_REFERENCE_MISSING"} <= codes
 
 
+# @wu-test type=behavior | scope=HTML清单 | protects=提取的ID文本或资源遗漏
 def test_inventory_html_creates_editable_preservation_manifest(tmp_path: Path) -> None:
     html = tmp_path / "before.html"
     manifest = tmp_path / "preservation.json"
@@ -106,6 +111,7 @@ def test_inventory_html_creates_editable_preservation_manifest(tmp_path: Path) -
     }
 
 
+# @wu-test type=boundary | scope=Workspace校验 | protects=未知KPI或图表长度不匹配被接受
 def test_validate_rejects_unknown_kpi_type_and_mismatched_chart_vectors(tmp_path: Path) -> None:
     workspace = tmp_path / "board"
     (workspace / "kpis").mkdir(parents=True)
@@ -126,6 +132,7 @@ def test_validate_rejects_unknown_kpi_type_and_mismatched_chart_vectors(tmp_path
     assert {error["code"] for error in payload["errors"]} >= {"KPI_TYPE_INVALID", "CHART_DATA_LENGTH_MISMATCH"}
 
 
+# @wu-test type=boundary | scope=图表数据校验 | protects=对象被误当成数组接受
 def test_validate_rejects_invalid_chart_data_collection_shapes(tmp_path: Path) -> None:
     workspace = tmp_path / "board"
     (workspace / "charts").mkdir(parents=True)
@@ -144,6 +151,7 @@ def test_validate_rejects_invalid_chart_data_collection_shapes(tmp_path: Path) -
     assert [error["code"] for error in payload["errors"]].count("CHART_DATA_ARRAY_REQUIRED") == 2
 
 
+# @wu-test type=boundary | scope=图表数据校验 | protects=空图表数据通过严格校验
 def test_strict_validation_rejects_empty_chart_data(tmp_path: Path) -> None:
     workspace = tmp_path / "board"
     (workspace / "charts").mkdir(parents=True)
@@ -161,6 +169,7 @@ def test_strict_validation_rejects_empty_chart_data(tmp_path: Path) -> None:
     assert any(error["code"] == "CHART_DATA_EMPTY" for error in json.loads(result.stdout)["errors"])
 
 
+# @wu-test type=integration | scope=构建保留检查 | protects=缺少必需文本时构建仍报告成功
 def test_build_inspect_html_is_a_failing_gate(tmp_path: Path) -> None:
     workspace = tmp_path / "board"
     output = tmp_path / "board.html"
@@ -179,6 +188,7 @@ def test_build_inspect_html_is_a_failing_gate(tmp_path: Path) -> None:
     assert payload["errors"][0]["code"] == "PRESERVED_TEXT_MISSING"
 
 
+# @wu-test type=integration | scope=构建检查 | protects=普通构建遗漏静态检查
 def test_build_always_runs_static_html_inspection(tmp_path: Path) -> None:
     workspace = tmp_path / "board"
     output = tmp_path / "board.html"

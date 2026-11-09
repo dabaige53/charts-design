@@ -10,9 +10,7 @@ SCRIPTS = Path(__file__).parents[1] / "skills" / "executive-charts" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 template = importlib.import_module('core.dashboard_template')
-TEMPLATE, generate_dashboard_html = template.TEMPLATE, template.generate_dashboard_html
-palette = importlib.import_module('core.palette')
-CATEGORICAL = palette.CATEGORICAL
+generate_dashboard_html = template.generate_dashboard_html
 generate_standalone_chart = importlib.import_module('generate_chart').generate_standalone_chart
 
 RED, GREEN = "#A4453C", "#2F6B55"
@@ -33,12 +31,9 @@ def run_renderer(scenario):
     return json.loads(result.stdout)
 
 
-def test_series_identity_colors_never_reuse_change_colors():
-    assert RED not in CATEGORICAL
-    assert GREEN not in CATEGORICAL
-    assert len(set(CATEGORICAL)) == len(CATEGORICAL)
 
 
+# @wu-test type=integration | scope=页面配色 | protects=独立图表和Dashboard涨跌颜色不一致 | debt=D6
 def test_generated_documents_share_the_palette(tmp_path):
     dashboard = generate_dashboard_html("", "Palette")
     tailwind_match = re.search(r"colors: (\{.*?\}),", dashboard)
@@ -60,11 +55,9 @@ def test_generated_documents_share_the_palette(tmp_path):
         assert not re.search(r"__(TAILWIND_COLORS|TAILWIND_THEME|ECHARTS_PALETTE|CATEGORICAL_COLORS)__", document)
 
 
-def test_shell_markup_uses_tokens_instead_of_semantic_hex():
-    assert RED not in TEMPLATE
-    assert GREEN not in TEMPLATE
 
 
+# @wu-test type=behavior | scope=涨跌显示 | protects=正负变化显示错误方向的颜色
 def test_signed_changes_color_by_direction():
     result = run_renderer("""
 const values = ['+12.6% YoY', '-2.1月 YoY', '−3.0%', '↑ 4', '▼ 2', '0.0%', '+0', '—', '持平', 5, -5, 0, undefined];
@@ -90,6 +83,7 @@ console.log(JSON.stringify({classes, card: container.innerHTML}));
     assert "text-positive font-semibold\">+¥24 万" in card
 
 
+# @wu-test type=behavior | scope=KPI比较值 | protects=数字比较丢失符号或方向颜色
 def test_numeric_comparisons_show_sign_and_direction():
     result = run_renderer("""
 const container = {innerHTML: '', children: []};

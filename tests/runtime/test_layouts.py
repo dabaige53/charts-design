@@ -34,6 +34,7 @@ def assert_valid(layout, components):
             assert not any(overlaps(item, other) for other in placements[:index])
 
 
+# @wu-test type=behavior | scope=布局模板 | protects=模板在某断点越界重叠或漏组件
 @pytest.mark.parametrize('template', sorted(TEMPLATES))
 def test_every_template_is_valid_on_every_breakpoint(template):
     doc, order = rich_document()
@@ -43,6 +44,7 @@ def test_every_template_is_valid_on_every_breakpoint(template):
     assert validate(result) is result
 
 
+# @wu-test type=behavior | scope=布局构图 | protects=不同模板退化成相同构图或比例错误
 def test_templates_produce_distinct_desktop_compositions():
     doc, order = rich_document()
     signatures = set()
@@ -61,6 +63,7 @@ def test_templates_produce_distinct_desktop_compositions():
     assert {p['w'] for p in scorecard['mobile'] if p['id'] in order[:6]} == {2}
 
 
+# @wu-test type=behavior | scope=编辑批次布局 | protects=同批次后创建的组件未进入模板布局
 def test_template_is_applied_after_components_created_in_the_same_batch():
     doc = executive_document('batch')
     chart = copy.deepcopy(doc['manifest']['components']['regions'])
@@ -72,6 +75,7 @@ def test_template_is_applied_after_components_created_in_the_same_batch():
     assert_valid(result['manifest']['layout'], result['manifest']['components'])
 
 
+# @wu-test type=behavior | scope=模板重排 | protects=增删组件不重排或手动布局被模板覆盖
 def test_saved_template_reflows_and_manual_layout_replaces_it():
     doc, order = rich_document()
     chart = copy.deepcopy(doc['manifest']['components']['regions'])
@@ -87,6 +91,7 @@ def test_saved_template_reflows_and_manual_layout_replaces_it():
     assert [p for p in again['manifest']['layout']['desktop'] if p['id'] != 'late'] == desktop
 
 
+# @wu-test type=behavior | scope=新组件排布 | protects=新增KPI和图表堆成整行或挤到高图旁
 def test_new_components_pack_by_role_instead_of_stacking_full_width():
     doc = executive_document('auto')
     m = doc['manifest']
@@ -109,6 +114,7 @@ def test_new_components_pack_by_role_instead_of_stacking_full_width():
     assert_valid(grown['manifest']['layout'], grown['manifest']['components'])
 
 
+# @wu-test type=boundary | scope=布局模板校验 | protects=未知模板或缺失组件顺序被接受
 def test_invalid_templates_and_orders_are_rejected():
     doc = executive_document('bad')
     with pytest.raises(DashboardError) as error:

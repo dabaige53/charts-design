@@ -17,6 +17,7 @@ def dataset(data):
     ]), FIELDS)
 
 
+# @wu-test type=behavior | scope=本地聚合 | protects=空值空集合比例聚合结果错误
 def test_aggregate_null_and_ratio_recomputed(tmp_path):
     data = LocalData(tmp_path)
     ref = dataset(data)
@@ -30,6 +31,7 @@ def test_aggregate_null_and_ratio_recomputed(tmp_path):
     assert grouped == [{'date': '2026 Q1', 'sum': 12}, {'date': '2026 Q2', 'sum': None}]
 
 
+# @wu-test type=integration | scope=本地表格CSV | protects=筛选排序分页完整导出丢行
 def test_filter_sort_pagination_and_complete_export(tmp_path):
     data = LocalData(tmp_path)
     ref = dataset(data)
@@ -47,6 +49,7 @@ def test_filter_sort_pagination_and_complete_export(tmp_path):
         data.rows(ref, limit=100001)
 
 
+# @wu-test type=behavior | scope=数据版本 | protects=流式导入版本读取丢数据 | debt=D6
 def test_versions_streaming_and_metadata_verification(tmp_path):
     data = LocalData(tmp_path)
     ref = dataset(data)
@@ -63,6 +66,7 @@ def test_versions_streaming_and_metadata_verification(tmp_path):
         data.describe('../data.sqlite3')
 
 
+# @wu-test type=boundary | scope=SQLite导入 | protects=恶意表名字段名改变查询
 def test_injection_and_readonly_import(tmp_path):
     source = tmp_path / 'source.sqlite3'
     table = 'odd"; DROP TABLE source;--'
@@ -82,6 +86,7 @@ def test_injection_and_readonly_import(tmp_path):
     assert data.describe(ref['version'])['rowCount'] == 1
 
 
+# @wu-test type=boundary | scope=本地数据限制 | protects=超限非法值被接受并阻断后续导入
 def test_result_bounds_raise_and_invalid_import_rolls_back(tmp_path, monkeypatch):
     import dashboard_runtime.local_data as module
     data = LocalData(tmp_path)
@@ -96,6 +101,7 @@ def test_result_bounds_raise_and_invalid_import_rolls_back(tmp_path, monkeypatch
     assert data.import_rows([{'x': 2}], {'x': {'type': 'number'}})['rowCount'] == 1
 
 
+# @wu-test type=behavior | scope=缺失字段 | protects=缺字段被转成显式null | debt=D6
 def test_missing_values_roundtrip_and_lazy_index_reuse(tmp_path):
     data = LocalData(tmp_path)
     fields = {'x': {'type': 'number'}, 'name': {'type': 'string'}}
@@ -118,6 +124,7 @@ def test_missing_values_roundtrip_and_lazy_index_reuse(tmp_path):
     assert len(first) == 2
 
 
+# @wu-test type=behavior | scope=SQLite布尔字段 | protects=0和1及null导入语义错误
 def test_sqlite_declared_boolean_conversion(tmp_path):
     source = tmp_path / 'booleans.sqlite3'
     with sqlite3.connect(source) as db:
@@ -129,6 +136,7 @@ def test_sqlite_declared_boolean_conversion(tmp_path):
     assert data.rows(ref, [{'field': 'enabled', 'op': 'contains', 'values': ['TRUE']}])['totalRows'] == 1
 
 
+# @wu-test type=boundary | scope=表格搜索 | protects=隐藏字段泄露Unicode失败或导出漏行
 def test_search_matches_visible_fields_null_unicode_and_full_export(tmp_path):
     data = LocalData(tmp_path)
     fields = {'label': {'type': 'string'}, 'amount': {'type': 'number'},
@@ -152,6 +160,7 @@ def test_search_matches_visible_fields_null_unicode_and_full_export(tmp_path):
     assert data.rows(ref, search="%' OR 1=1 --")['totalRows'] == 0
 
 
+# @wu-test type=behavior | scope=表格排序 | protects=格式化数值或原字段排序错误
 def test_table_sort_numeric_display_and_raw_override(tmp_path):
     data = LocalData(tmp_path)
     fields = {'label': {'type': 'string'}, 'rate': {'type': 'string'},
@@ -169,6 +178,7 @@ def test_table_sort_numeric_display_and_raw_override(tmp_path):
         assert list(csv.reader(handle)) == [['rawRate'], ['20'], ['3'], ['1']]
 
 
+# @wu-test type=behavior | scope=null筛选 | protects=缺字段误判显式null
 def test_explicit_null_filter_and_search_exclude_missing_fields(tmp_path):
     data = LocalData(tmp_path)
     # A second visible field must remain searchable even when name is missing.
@@ -185,6 +195,7 @@ def test_explicit_null_filter_and_search_exclude_missing_fields(tmp_path):
     assert searched['rowCount'] == 3
 
 
+# @wu-test type=integration | scope=字段顺序 | protects=重开字段顺序变化CSV列错位
 def test_original_field_order_survives_versions_reopen_and_default_csv(tmp_path):
     fields = {'zulu': {'type': 'number'}, 'alpha': {'type': 'string'}, 'middle': {'type': 'boolean'}}
     rows = [{'zulu': 7, 'alpha': 'visible', 'middle': True}]
@@ -208,6 +219,7 @@ def test_original_field_order_survives_versions_reopen_and_default_csv(tmp_path)
     assert first['version'] != second['version']
 
 
+# @wu-test type=integration | scope=旧数据兼容 | protects=旧元数据字段映射错位
 def test_older_metadata_without_field_order_still_maps_original_columns(tmp_path):
     data = LocalData(tmp_path)
     fields = {'alpha': {'type': 'number'}, 'zulu': {'type': 'string'}}

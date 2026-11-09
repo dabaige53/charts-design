@@ -8,6 +8,7 @@ Reflect.deleteProperty(globalThis,'window');
 const cell=api.DashboardApp.prototype.formatTableCell;
 const percent={format:'percent',scale:'percent',decimals:1};
 
+// @wu-test type=behavior | scope=table cell formatting | protects=百分点被重复乘100
 test('percent points keep one decimal and are never multiplied twice',()=>{
   assert.equal(cell(8.333333333333334,percent),'8.3%');
   assert.equal(cell(5.555555555555555,percent),'5.6%');
@@ -16,6 +17,7 @@ test('percent points keep one decimal and are never multiplied twice',()=>{
   assert.equal(cell(0.5,{...percent,scale:'fraction'}),'50.0%');
 });
 
+// @wu-test type=behavior | scope=table cell formatting | protects=缺失值正负号和数字精度显示错误
 test('missing values, comparisons, money and counts retain their own meaning',()=>{
   for(const value of [null,undefined,''])assert.equal(cell(value,percent),'—');
   assert.equal(cell(5.55,{...percent,signed:true}),'+5.6%');
@@ -27,6 +29,7 @@ test('missing values, comparisons, money and counts retain their own meaning',()
   assert.equal(cell('2026-09',{}),'2026-09');
 });
 
+// @wu-test type=integration | scope=table rendering | protects=列精度未显示或源数据被修改 | debt=D5
 test('table rendering uses column precision while preserving source values',()=>{
   const row={share:8.333333333333334,revenue:0.5409};
   const nodes=new Map();
