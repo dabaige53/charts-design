@@ -4,13 +4,13 @@
 
 ## 附到宿主对话
 
-MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModelContext.text` 时，位置批注提供正文输入框和“提交”按钮。用户选中元素或拖选区域，填写批注后提交，位置和正文附到宿主输入框；用户之后自行发送对话。
+MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModelContext.text` 时，位置批注提供正文输入框和“附到对话”按钮。用户选中元素或拖选区域，填写批注后点击“附到对话”，位置和正文附到宿主输入框；用户之后自行发送对话。
 
 每个引用包含项目路径、看板 ID、版本、组件 ID、选区、选中文本、筛选条件，以及已有批注的正文。连续附加保留之前的引用。客户端通过 `openai/modelContext` 通知移除时，同步当前附件。已有批注仍可打开并附到对话。
 
 提交成功后关闭输入面板、清除当前选区，并保持批注模式，用户可继续选择下一个位置。提交失败保留正文与选区供重试。Esc 或“退出批注”退出模式。批注期间暂停页面报表自动刷新，避免打断输入；退出后恢复图表交互。独立的界面版本检查只显示更新提示。
 
-`runtime-ui/host-app.mjs` 对 SDK 1.1.2 的初始化结果保留厂商 experimental 字段，保留标准能力校验；只有宿主明确声明能力时才显示“提交”。SDK 依赖版本以 `runtime-ui/package.json` 及锁文件为准。
+`runtime-ui/host-app.mjs` 对 SDK 1.1.2 的初始化结果保留厂商 experimental 字段，保留标准能力校验；只有宿主明确声明能力时才显示“附到对话”。SDK 依赖版本以 `runtime-ui/package.json` 及锁文件为准。
 
 
 协议定义见 [MCP 扩展规范](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md#uiupdate-model-context-extensions)。
@@ -18,6 +18,10 @@ MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModel
 ## 页面批注与存储
 
 不支持上述扩展的客户端和独立网页使用页面保存：在查看模式点击“批注”，选择元素或区域，输入并保存，支持 Cmd/Ctrl+Enter。编号标记打开已有批注，列表支持跳转、修改与删除。离线 HTML 只能查看已有批注，不保存修改。批注不提供样式调整。
+
+列表按未解决、已解决和全部筛选，显示各状态数量、关联位置、正文摘要与回复数。“选择位置批注”收起面板，保留选点状态；底部提示可退出批注。打开已有批注先显示正文和回复，点击“修改批注”再进入编辑；取消不改写原文。回复固定在面板底部，正文编辑的保存与取消按钮也保持可见。桌面使用侧栏为原页面留出空间，小于 1000px 的窗口使用底部面板；面板打开时不显示遮挡图表的选点提示。
+
+批注可标记已解决或重新打开；已解决批注不能继续回复。删除与 Agent 请求放在“更多操作”中。Agent 请求只记录待处理状态，用户仍需在对话中要求 Agent 读取并处理。保存期间显示进度并暂停重复操作；失败保留输入，页面重新挂载后可恢复未保存的正文或回复草稿。
 
 保存的批注在文档中表示为 `manifest.annotations`，每项包含 `id`、`componentId`（页面批注为 `null`）、`text` 和 `createdAt`。`set_annotations` 整体替换列表，最多 100 条，每条正文最多 4000 字；修改受版本检查约束。
 

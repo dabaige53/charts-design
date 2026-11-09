@@ -73,7 +73,7 @@ def add_note(page, text='Check the denominator'):
     page.get_by_role('textbox', name='\u65b0\u589e\u4f4d\u7f6e\u6279\u6ce8').fill(text)
     click_text(page, '\u4fdd\u5b58\u6279\u6ce8')
     page.wait_for_function('fixture.doc.manifest.annotations.length===1')
-    page.get_by_role('textbox', name='\u4f4d\u7f6e\u6279\u6ce8\u5185\u5bb9').wait_for()
+    page.locator('.annotation-body-text').wait_for()
 
 
 # @wu-test type=behavior | scope=test_review_browser | protects=create reply edit resolve reopen and recreate view
@@ -86,6 +86,7 @@ def test_create_reply_edit_resolve_reopen_and_recreate_view(page):
     page.wait_for_function("fixture.doc.manifest.annotations[0].status==='resolved'")
     click_text(page, '\u91cd\u65b0\u6253\u5f00')
     page.wait_for_function("fixture.doc.manifest.annotations[0].status==='open'")
+    page.locator('.annotation-more summary').click()
     click_text(page, '\u8bf7\u6c42 Agent \u5904\u7406')
     page.wait_for_function("fixture.doc.manifest.annotations[0].agentRequest?.status==='requested'")
     assert page.evaluate('fixture.attached.length') == 0
@@ -111,7 +112,8 @@ def test_save_failure_keeps_draft_and_can_retry(page):
 def test_readonly_has_no_mutations(page):
     add_note(page,'Read only');open_fixture(page, '?readonly', saved=page.evaluate('fixture.doc'))
     click_text(page,'Review');page.locator('.annotation-list-entry').first.click()
-    assert page.get_by_role('textbox',name='\u4f4d\u7f6e\u6279\u6ce8\u5185\u5bb9').is_disabled()
+    assert page.locator('.annotation-body-text').inner_text() == 'Read only'
+    assert page.locator('.annotation-panel textarea').count() == 0
     for label in ['\u4fdd\u5b58\u6279\u6ce8','\u56de\u590d','\u6807\u8bb0\u5df2\u89e3\u51b3','\u5220\u9664\u6279\u6ce8']:
         assert page.get_by_role('button',name=label,exact=True).count()==0
     assert page.evaluate('fixture.saves') == 0
@@ -156,24 +158,67 @@ def test_reply_edit_and_delete(page):
     page.locator('.annotation-message').get_by_role('button',name='\u4fdd\u5b58\u6279\u6ce8').click()
     page.wait_for_function("fixture.doc.manifest.annotations[0].replies[0].text==='Corrected reply'")
     click_text(page,'\u5220\u9664');page.wait_for_function('fixture.doc.manifest.annotations[0].replies.length===0')
+    page.locator('.annotation-more summary').click()
     click_text(page,'\u5220\u9664\u6279\u6ce8');page.wait_for_function('fixture.doc.manifest.annotations.length===0')
 
 
 # @wu-test type=behavior | scope=test_review_browser | protects=panel stays in viewport and never overflows document
-@pytest.mark.parametrize('width',[390,768,1600])
+@pytest.mark.parametrize('width',[390,768,1100,1600])
 def test_panel_stays_in_viewport_and_never_overflows_document(page,width):
     page.set_viewport_size({'width':width,'height':900});add_note(page)
     box=page.locator('.annotation-panel').bounding_box()
     assert box['x']>=0 and box['x']+box['width']<=width+1
     assert box['y']>=0 and box['y']+box['height']<=901
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-    if width>1400:
+    if width>=1000:
         right=page.locator('.fixture-cards').bounding_box()
         assert right['x']+right['width']<=box['x']
     evidence=os.getenv('CHARTS_TEST_EVIDENCE')
     if evidence:
         Path(evidence).mkdir(parents=True,exist_ok=True)
         page.screenshot(path=str(Path(evidence)/f'review-{width}.png'))
+
+
+# @wu-test type=behavior | scope=批注阅读与编辑 | protects=打开批注直接进入修改或取消时覆盖已保存正文
+def test_read_before_edit_and_cancel_preserves_saved_content(page):
+    add_note(page, 'Saved context')
+    assert page.locator('.annotation-body-text').inner_text() == 'Saved context'
+    assert page.get_by_role('button', name='保存批注', exact=True).count() == 0
+    assert page.get_by_role('button', name='回复', exact=True).is_disabled()
+    click_text(page, '修改批注')
+    area = page.get_by_role('textbox', name='位置批注内容')
+    assert page.get_by_role('button', name='保存批注', exact=True).is_disabled()
+    area.fill('Unsaved replacement')
+    click_text(page, '取消')
+    assert page.locator('.annotation-body-text').inner_text() == 'Saved context'
+    assert page.evaluate('fixture.saves') == 1
+
+
+# @wu-test type=behavior | scope=批注回复草稿 | protects=页面重建后丢失未发送回复或错误打开正文编辑器
+def test_reply_draft_recovers_into_thread(page):
+    add_note(page)
+    page.get_by_role('textbox', name='回复', exact=True).fill('Keep this reply')
+    page.evaluate('fixture.manager.reset();fixture.manager.refresh()')
+    click_text(page, 'Review')
+    click_text(page, '恢复未保存草稿')
+    assert page.get_by_role('textbox', name='回复', exact=True).input_value() == 'Keep this reply'
+    assert page.locator('.annotation-body-text').is_visible()
+    assert page.evaluate('fixture.saves') == 1
+
+
+# @wu-test type=behavior | scope=手机批注编辑面板 | protects=长正文滚动后保存和取消按钮离开可见区域
+def test_mobile_editor_keeps_actions_visible_while_scrolling(page):
+    page.set_viewport_size({'width': 390, 'height': 844})
+    click_text(page, 'Review')
+    page.locator('#revenue-title').click()
+    page.get_by_role('textbox', name='新增位置批注').fill('Long draft\n' * 120)
+    page.locator('.annotation-panel-body').evaluate('(body)=>body.scrollTop=body.scrollHeight')
+    for label in ['取消', '保存批注']:
+        button = page.get_by_role('button', name=label, exact=True)
+        assert button.is_visible()
+        box = button.bounding_box()
+        assert box['y'] >= 0 and box['y'] + box['height'] <= 844
+    assert page.locator('.annotation-hint').is_hidden()
 
 
 # @wu-test type=behavior | scope=test_review_browser | protects=nearby annotations cluster and deleted targets remain listed
@@ -232,7 +277,7 @@ def test_recover_draft_after_view_lifecycle_reset(page):
 # @wu-test type=behavior | scope=test_review_browser | protects=shortcut does not interrupt typing and print hides review ui
 def test_shortcut_does_not_interrupt_typing_and_print_hides_review_ui(page):
     add_note(page)
-    area=page.get_by_role('textbox',name='\u4f4d\u7f6e\u6279\u6ce8\u5185\u5bb9')
+    area=page.get_by_role('textbox',name='\u56de\u590d',exact=True)
     area.focus();page.keyboard.type('c');assert page.locator('.annotation-layer').is_visible()
     page.emulate_media(media='print');assert page.locator('.annotation-layer').is_hidden()
     assert page.evaluate('getComputedStyle(document.querySelector(".workspace")).paddingRight')=='0px'
@@ -241,6 +286,7 @@ def test_shortcut_does_not_interrupt_typing_and_print_hides_review_ui(page):
 # @wu-test type=behavior | scope=test_review_browser | protects=concurrent root edit keeps local draft
 def test_concurrent_root_edit_keeps_local_draft(page):
     add_note(page)
+    click_text(page, '修改批注')
     area=page.get_by_role('textbox',name='\u4f4d\u7f6e\u6279\u6ce8\u5185\u5bb9')
     area.fill('My local change')
     page.evaluate("fixture.doc.manifest.annotations[0].text='Remote edit'")

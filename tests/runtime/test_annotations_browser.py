@@ -56,13 +56,19 @@ def test_new_annotation_targets_outer_component(tmp_path):
 
 # @wu-test type=integration | scope=报告位置批注 | protects=刷新后批注丢失或原文删除后批注消失
 def test_report_annotations_persist_and_report_missing_text(tmp_path):
-    from dashboard_runtime.demo import report_document
+    from dashboard_runtime.demo import document
     from dashboard_runtime.http_server import RuntimeHTTPServer
+    from dashboard_runtime.model import apply_operations
     from dashboard_runtime.service import Service
     from playwright.sync_api import expect
 
     service = Service(tmp_path / 'state')
-    service.store.create('report-demo', 'Report', report_document('report-demo'))
+    # This checks annotation persistence, independently of the authored sample report.
+    report = apply_operations(document('report-demo'), [
+        {'op': 'set_report_markdown', 'value': '# 批注验收报告\n\n这是一段用于检查位置批注的合成数据说明。\n\n```chart\n{"componentId":"trend"}\n```'},
+        {'op': 'set_view_mode', 'value': 'report'},
+    ])
+    service.store.create('report-demo', 'Report', report)
     server = RuntimeHTTPServer(service, 0, 'annotation-test')
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -85,7 +91,7 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
             expect(page.locator('.annotation-outline')).to_be_visible()
             panel.locator('textarea').fill('检查图表')
             panel.get_by_role('button', name='保存批注').click()
-            expect(panel).to_contain_text('1. 检查图表')
+            expect(panel.locator('.annotation-body-text')).to_have_text('检查图表')
             assert service.store.get('report-demo')['manifest']['annotations'][0]['componentId'] == component_id
             paragraph = page.locator('.markdown-preview p').first
             paragraph_text = paragraph.text_content()
@@ -95,14 +101,14 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
             expect(panel).not_to_contain_text('原位置已失效')
             panel.locator('textarea').fill('检查段落')
             panel.get_by_role('button', name='保存批注').click()
-            expect(panel).to_contain_text('2. 检查段落')
+            expect(panel.locator('.annotation-body-text')).to_have_text('检查段落')
             page.reload()
             page.locator('.markdown-chart canvas').first.wait_for()
             page.get_by_role('button', name='批注', exact=True).click()
             expect(panel).to_contain_text('批注（2）')
             expect(panel).not_to_contain_text('原位置已失效')
             panel.get_by_role('button', name='1. 检查图表', exact=True).click()
-            expect(panel.locator('textarea')).to_have_value('检查图表')
+            expect(panel.locator('.annotation-body-text')).to_have_text('检查图表')
             expect(page.locator('.annotation-outline')).to_be_visible()
             page.screenshot(path=str(EVIDENCE / 'annotations-chart-verified.png'))
             panel.get_by_role('button', name='返回列表').click()
@@ -116,7 +122,7 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
             page.get_by_role('button', name='批注', exact=True).click()
             panel.get_by_role('button', name='2. 检查段落').click()
             expect(panel).to_contain_text('原位置已失效，批注已保留')
-            expect(panel.locator('textarea')).to_have_value('检查段落')
+            expect(panel.locator('.annotation-body-text')).to_have_text('检查段落')
             page.screenshot(path=str(EVIDENCE / 'annotations-missing-verified.png'))
             assert not errors, errors
             browser.close()
@@ -126,7 +132,7 @@ def test_report_annotations_persist_and_report_missing_text(tmp_path):
         thread.join()
 
 
-# @wu-test type=behavior | scope=连续位置引用 | protects=提交第一条后无法选择第二处 | debt=D6
+# @wu-test type=integration | scope=连续位置引用 | protects=附到对话后退出批注模式而无法连续选择位置
 def test_composer_submission_keeps_selection_mode(tmp_path):
     root = Path(__file__).resolve().parents[2]
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(root)))
@@ -153,7 +159,7 @@ def test_composer_submission_keeps_selection_mode(tmp_path):
             for location, comment in [('First location', 'First note'), ('Second location', 'Second note')]:
                 page.locator('main p', has_text=location).click()
                 page.get_by_role('textbox', name='新增位置批注').fill(comment)
-                page.get_by_role('button', name='提交', exact=True).click()
+                page.get_by_role('button', name='附到对话', exact=True).click()
                 page.wait_for_function('document.querySelector(".annotation-panel").hidden')
                 assert page.evaluate('window.annotations.active')
             assert page.evaluate('window.submitted.map(n=>n.text)') == ['First note', 'Second note']
