@@ -23,6 +23,7 @@ export function createProgressiveLoader({query,apply,failed,visible,loading,dela
     visible:drain,
     /* Export and print need every component, including the ones never scrolled into view. */
     loadAll(){clearTimeout(timer);return new Promise((resolve,reject)=>{waiters.push({resolve,reject});forced=true;drain();});},
+    isReady(){return !stopped&&!dirty.size&&!active.size&&!errors.size;},
     stop(){stopped=true;clearTimeout(timer);settle();},
   };
 }

@@ -1,4 +1,5 @@
 import threading
+import pytest
 from dashboard_runtime.service import Service
 from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.model import apply_operations
@@ -42,8 +43,9 @@ def test_project_progressive_browser(tmp_path):
         server.shutdown();server.server_close();thread.join()
 
 
-# @wu-test type=integration | scope=渐进加载输出准备与打印 | protects=未滚动到的图表缺数据或打印画布超出卡片
-def test_output_readiness_loads_offscreen_charts_before_printing(tmp_path):
+# @wu-test type=integration | scope=页面与原生打印入口 | protects=按钮和快捷键未等待屏幕外图表或原生菜单静默打印缺图页面
+@pytest.mark.parametrize('trigger', ['button', 'Control+p', 'Meta+p', 'menu-then-button'])
+def test_output_readiness_loads_offscreen_charts_before_printing(tmp_path, trigger):
     from playwright.sync_api import sync_playwright
     document = apply_operations(retail_document(), [{
         'op': 'set_layout', 'breakpoint': 'desktop', 'value': [
@@ -61,6 +63,12 @@ def test_output_readiness_loads_offscreen_charts_before_printing(tmp_path):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={'width': 1600, 'height': 300})
+            page.add_init_script("""window.__printCalls=0;window.print=()=>{
+                window.dispatchEvent(new Event('beforeprint'));
+                window.__blockedAtPrint=document.body.classList.contains('print-blocked');
+                window.__printCalls++;
+                window.dispatchEvent(new Event('afterprint'));
+            };""")
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/?board=retail#output-test')
@@ -70,7 +78,20 @@ def test_output_readiness_loads_offscreen_charts_before_printing(tmp_path):
             assert position is not None and viewport is not None
             assert position['y'] > viewport['height'] + 300
             assert bars.locator('canvas').count() == 0
-            page.evaluate('window.__chartsReady()')
+            if trigger == 'menu-then-button':
+                page.evaluate("window.dispatchEvent(new Event('beforeprint'))")
+                assert page.locator('body').evaluate("body=>body.classList.contains('print-blocked')")
+                page.emulate_media(media='print')
+                assert page.locator('.print-preparation').is_visible()
+                assert not page.locator('.workspace').is_visible()
+                page.evaluate("window.dispatchEvent(new Event('afterprint'))")
+                page.emulate_media(media='screen')
+            if trigger in ('button', 'menu-then-button'):
+                page.get_by_role('button', name='打印', exact=True).click()
+            else:
+                page.keyboard.press(trigger)
+            page.wait_for_function('window.__printCalls===1')
+            assert page.evaluate('window.__blockedAtPrint') is False
             assert bars.locator('canvas').count() > 0
             assert bars.locator('.card').get_attribute('aria-busy') == 'false'
             assert page.evaluate('window.scrollY') == 0

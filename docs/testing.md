@@ -10,6 +10,8 @@
 | 浏览器验收 | `npm run test:browser` | Browser acceptance (Chromium) | Playwright 驱动真实 Chromium：全部组件渲染、编辑与拖动、报告、MCP App 宿主、分享预览页、PDF 导出 |
 | 部署镜像 | `npm run test:container` | Container image smoke test | 按 `deploy/Dockerfile` 构建镜像并运行，经 HTTP 完成 MCP 初始化、编辑批次建看板、预览页与缓存资源、分享链接权限和签名下载，并确认以非 root 用户运行 |
 
+部署镜像 CI 在构建前放入合成的环境配置文件，运行后检查这些文件、本机工具目录与业务工作区均未进入镜像，并实际导出网页部署包以保护源码白名单的完整性。服务器测试强制多个首次读取同时遇到空运行目录，检查各调用获得同一个完整签名密钥。打印浏览器验收从按钮、Ctrl+P、Cmd+P 和原生打印事件进入，检查屏幕外组件和未准备页面的打印提示；不会只调用准备函数来代替用户入口。
+
 ## 浏览器测试的划分
 
 `tests/runtime/conftest.py` 为以下测试自动加上 `browser` 标记：模块名为 `*_browser.py`；测试函数体使用 Playwright；测试函数体请求 PDF 导出（Runtime 用 Chromium 渲染、用 poppler 合并）。快速层用 `-m "not browser"` 运行，不需要浏览器，约 30 秒。新增浏览器测试时沿用上述约定，或在模块名中使用 `_browser` 后缀。

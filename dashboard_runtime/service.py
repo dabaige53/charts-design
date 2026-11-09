@@ -13,6 +13,8 @@ from .local_view import LocalView
 from .build import BACKEND_BUILD_ID, MODULE_ROOT
 
 class Service:
+    project_name: str
+
     def __init__(self, root, sources_file=None, project_root=None):
         from .project import ProjectStore
         self.store: Any = ProjectStore(project_root, root) if project_root else Store(root)

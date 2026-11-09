@@ -14,7 +14,7 @@ pytest.importorskip('uvicorn', reason='uvicorn ships with the MCP SDK')
 
 from dashboard_runtime.model import DashboardError
 from dashboard_runtime.server import (RemoteServer, ServerSettings, Signer,
-                                      WorkspaceProjects, create_app)
+                                      WorkspaceProjects, create_app, load_secret)
 
 TOKEN = 'server-test-token-0123456789'
 
@@ -64,6 +64,32 @@ def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     second = ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'rt', tokens=(TOKEN,))
     assert first.secret == second.secret and len(first.secret) == 32
     assert oct((tmp_path / 'rt' / 'server-secret').stat().st_mode & 0o777) == '0o600'
+
+
+# @wu-test type=boundary | scope=签名密钥并发初始化 | protects=多个副本首次启动失败或读取不同和未写完的密钥
+def test_concurrent_startup_uses_one_complete_signing_key(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from pathlib import Path
+
+    path = tmp_path / 'runtime' / 'server-secret'
+    readers = threading.Barrier(8, timeout=10)
+    read_bytes = Path.read_bytes
+
+    def simultaneous_first_read(target):
+        try:
+            return read_bytes(target)
+        except FileNotFoundError:
+            if target == path:
+                readers.wait()
+            raise
+
+    monkeypatch.setattr(Path, 'read_bytes', simultaneous_first_read)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        keys = list(pool.map(lambda _: load_secret(path), range(8)))
+    assert len(keys[0]) == 32
+    assert all(value == keys[0] for value in keys)
+    assert read_bytes(path) == keys[0]
+    assert list(path.parent.iterdir()) == [path]
 
 
 class Running:

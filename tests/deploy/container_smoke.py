@@ -103,7 +103,7 @@ def wait_healthy(base, seconds=90):
     raise AssertionError(f'{base}/health did not become healthy within {seconds}s')
 
 
-# @wu-test type=integration | scope=部署镜像 | protects=部署后鉴权失效或编辑批次失败或只读链接可写
+# @wu-test type=integration | scope=部署镜像 | protects=部署后鉴权失效或编辑批次失败或只读链接可写或部署包缺源码
 def run_checks(base, token):
     wait_healthy(base)
     status, _, _ = http('POST', base + '/mcp', {}, {'Content-Type': 'application/json'})
@@ -154,6 +154,22 @@ def run_checks(base, token):
     status, _, raw = http('GET', export['downloadUrl'].replace(urlparse(export['downloadUrl']).netloc, urlparse(base).netloc))
     check(status == 200 and json.loads(raw)['id'] == BOARD, f'signed download returned {status}')
     print('ok  scoped viewer API and signed download')
+    site = client.tool('dashboard_export_site', {'dashboardId': BOARD})['export']
+    status, _, raw = http('GET', site['siteDownloadUrl'])
+    check(status == 200 and raw.startswith(b'PK'), 'standalone site export is missing runtime build inputs')
+    print('ok  standalone site export')
+
+
+# @wu-test type=boundary | scope=Docker镜像内容 | protects=构建上下文中的令牌配置或业务目录被带入运行镜像
+def check_image_files(container):
+    forbidden = ('deploy/charts.env', '.env', 'dashboard_runtime/.env', 'runtime-ui/local.env', '.git', '.codex', '.aws', 'boards')
+    probe = subprocess.run(
+        ['docker', 'exec', container, 'python', '-c',
+         'import json,pathlib,sys; print(json.dumps([p for p in sys.argv[1:] if (pathlib.Path("/app")/p).exists()]))',
+         *forbidden], check=True, capture_output=True, text=True,
+    )
+    check(json.loads(probe.stdout) == [], 'runtime image contains private build inputs: ' + probe.stdout.strip())
+    print('ok  image excludes environment files and local workspaces')
 
 
 def free_port():
@@ -163,7 +179,7 @@ def free_port():
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description='Smoke-test the self-hosted server as deployed: a built image or a running URL.')
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument('--image', help='Docker image to run and test')
     target.add_argument('--url', help='Base URL of a running server')
@@ -178,6 +194,7 @@ def main():
     container = subprocess.run(['docker', 'run', '-d', '-p', f'127.0.0.1:{port}:8000', '-e', 'CHARTS_SERVER_TOKENS=' + token,
                                 '-e', 'CHARTS_PUBLIC_URL=' + base, args.image], check=True, capture_output=True, text=True).stdout.strip()
     try:
+        check_image_files(container)
         user = subprocess.run(['docker', 'exec', container, 'id', '-u'], check=True, capture_output=True, text=True).stdout.strip()
         check(user != '0', 'container runs as root')
         run_checks(base, token)

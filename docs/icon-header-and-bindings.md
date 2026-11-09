@@ -4,6 +4,8 @@
 
 本文约定 Runtime 网页、MCP App、Runtime CLI HTML 导出和独立网页部署包中的组件交互；这些入口复用 Runtime 构建。`generate_chart.py`、`generate_dashboard.py` 与 workspace build 使用独立 HTML 生成器，其卡片结构与默认分页保持该生成器的合同，不直接套用 Runtime 操作区。
 
+页面阅读工具栏提供 Lucide“打印”入口；离线 HTML 与静态部署页保留这一入口。打印按钮和 Ctrl/Cmd+P 等待屏幕外数据及图表准备完成；原生浏览器菜单遇到未完成数据时只打印明确提示，避免缺图输出。完整流程见 [Runtime 说明](dashboard-runtime.md#局部更新与性能验证)。
+
 Runtime 看板、图表、KPI 和表格的标题与描述在左上角，操作位于右上角。图标使用 Lucide SVG，不使用字符、Emoji 或 icon font 冒充图标；图标按钮保留 aria-label、悬停提示和键盘焦点。菜单、表单及数据保留正常文字。SVG 为 16px、1.65 描边，图标点击区为 28px。
 
 Runtime 图表标题不显示 C01 等代码标签；独立 HTML 生成器保留图表代码标签。注册代码仍用于组件选型与渲染，不代替组件稳定 ID。
