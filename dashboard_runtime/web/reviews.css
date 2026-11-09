@@ -1,0 +1,33 @@
+/* Review chrome is outside exported chart content; reserve a reading lane. */
+.annotation-layer{--review-width:360px}
+.workspace.review-panel-open{padding-right:380px}
+.annotation-panel{top:20px;bottom:20px;right:16px;width:var(--review-width);max-height:calc(100dvh - 40px);border-radius:10px;overscroll-behavior:contain;scrollbar-gutter:stable}
+.annotation-panel header{position:sticky;top:-16px;z-index:1;padding:10px 0;background:var(--surface)}
+.annotation-panel textarea{font:inherit;line-height:1.7;min-height:100px;overflow-wrap:anywhere}
+.annotation-panel select{width:100%;margin:4px 0 10px}
+.annotation-panel button:focus-visible,.annotation-panel textarea:focus-visible,.annotation-panel select:focus-visible,.annotation-pin:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.annotation-filters,.annotation-meta,.annotation-message-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.annotation-filters{margin-bottom:16px}
+.annotation-filters button[aria-pressed=true]{border-color:var(--accent);font-weight:650}
+.annotation-source,.annotation-label{font-size:11px;color:var(--muted);line-height:1.5}
+.annotation-meta{margin-bottom:8px}
+.annotation-meta time{font-size:10px;overflow-wrap:anywhere}
+.annotation-thread{display:grid;gap:12px;margin:20px 0}
+.annotation-message{border-left:2px solid var(--line);padding:2px 0 2px 12px}
+.annotation-message p{margin:4px 0 8px;white-space:pre-wrap}
+.annotation-message-actions button{padding:3px 8px;font-size:11px}
+.annotation-panel-actions{border-top:1px solid var(--line);padding-top:12px}
+.annotation-location-warning{color:var(--text);font-size:11px;border-left:2px solid var(--muted);padding-left:8px;margin-top:6px}
+.annotation-pin[data-cluster=true]{border-style:double;border-width:4px;width:32px;height:32px}
+.annotation-pin[data-status=resolved]{background:var(--muted)}
+.annotation-agent-help,.annotation-source-notice{font-size:11px!important;line-height:1.7!important}
+.annotation-hint{left:calc((100% - 380px)/2);font-size:12px}
+.is-annotating{touch-action:pan-y}
+/* A bottom sheet on compact screens: no narrow sliver behind a side panel. */
+@media(max-width:1400px){
+ .workspace.review-panel-open{padding-right:0;padding-bottom:54dvh}
+ .annotation-panel{top:auto;bottom:0;right:0;width:100%;max-height:48dvh;border-radius:14px 14px 0 0;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+ .annotation-hint{left:50%;bottom:calc(48dvh + 8px);max-width:94vw;padding:6px 12px}
+ .is-annotating [data-component-id]{scroll-margin-bottom:52dvh;scroll-margin-top:20px}
+}
+@media print{.workspace.review-panel-open{padding:0!important}.annotation-layer{display:none!important}}

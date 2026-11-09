@@ -28,7 +28,8 @@ const config={safelist:['text-left','text-right','text-center'],content:[path.jo
 const utilities=(await postcss([tailwind(config)]).process('@tailwind base;\n@tailwind components;\n@tailwind utilities;',{from:undefined})).css;
 const base=await fs.readFile(path.join(root,'generated/original-base.css'),'utf8');
 const adapt=await fs.readFile(path.join(root,'../dashboard_runtime/web/original-adapter.css'),'utf8');
-await fs.writeFile(path.join(root,'generated/original-style.mjs'),'export default '+JSON.stringify(utilities+'\n'+base+'\n'+(await fs.readFile(path.join(root,'../dashboard_runtime/web/icons.css'),'utf8'))+'\n'+adapt)+';\n');
+const kpiLayout=await fs.readFile(path.join(root,'../dashboard_runtime/web/kpi-layout.css'),'utf8');
+await fs.writeFile(path.join(root,'generated/original-style.mjs'),'export default '+JSON.stringify(utilities+'\n'+base+'\n'+(await fs.readFile(path.join(root,'../dashboard_runtime/web/icons.css'),'utf8'))+'\n'+adapt+'\n'+kpiLayout)+';\n');
 await build({entryPoints:[path.join(root,'entry.mjs')],bundle:true,format:'iife',target:['es2022'],
   outfile:path.join(root,'../dashboard_runtime/web/dist/app.js'),minify:true,legalComments:'eof',
   nodePaths:[path.join(root,'node_modules')],loader:{'.woff2':'dataurl','.woff':'dataurl'}});

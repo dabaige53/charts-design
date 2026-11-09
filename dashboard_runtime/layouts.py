@@ -1,61 +1,51 @@
-"""Named, role-aware dashboard layouts computed for every breakpoint.
+"""Role-aware layouts on the existing 12/8/4-column document grids.
 
-Agents used to add components one at a time; each new card was stacked full
-width, so most generated dashboards looked the same unless every coordinate
-was written by hand. Templates arrange the same components into distinct
-compositions (hero focus, bento mosaic, sidebar metrics, small multiples,
-commentary beside charts, KPI walls) and stay consistent on tablet and phone.
-
-Placement is plain data: x/y/w/h integers on the 12/8/4-column grids. A
-template only orders and sizes existing components; it never changes content.
+KPI packing is ordered and balanced by content weight, not a template for
+individual KPI counts. Explicit/manual layouts are never reflowed here.
 """
 from __future__ import annotations
 
 COLS = {'desktop': 12, 'tablet': 8, 'mobile': 4}
-# GridStack rows are 48 px. Charts need ~8 rows (~380 px) to keep their axes legible.
 HEIGHT = {'kpi': 4, 'chart': 8, 'table': 8, 'text': 5}
-# KPI shapes that carry two values or a wide bar read better with more width.
-WIDE_KPIS = {'mc06', 'mc09'}
-# On phones these shapes take the full row even in a 2-up KPI grid.
-MOBILE_FULL_KPIS = WIDE_KPIS | {'mc10', 'mc11', 'mc13', 'mc14', 'mc15', 'mc16'}
-# List and hero-with-takeaway cards need one more row; a KPI row takes its tallest card's height.
+WIDE_KPIS = {'mc06', 'mc09', 'mc14'}
+MOBILE_FULL_KPIS = WIDE_KPIS | {'mc10', 'mc11', 'mc13', 'mc15', 'mc16'}
 TALL_KPIS = {'mc15', 'mc16'}
 
 TEMPLATES = {
     'executive': {
-        'name': '经典三段式', 'nameEn': 'Executive three-tier',
+        'name': '\u7ecf\u5178\u4e09\u6bb5\u5f0f', 'nameEn': 'Executive three-tier',
         'description': 'KPI row(s), charts in two balanced columns, detail tables full width.',
         'bestFor': 'Monthly reviews with 3-4 headline metrics and 2-6 evidence charts.',
     },
     'focus': {
-        'name': '主图聚焦', 'nameEn': 'Hero focus',
+        'name': '\u4e3b\u56fe\u805a\u7126', 'nameEn': 'Hero focus',
         'description': 'KPI strip, then the first chart full width and tall as the hero; supporting charts in three columns.',
         'bestFor': 'One decisive trend or comparison with several supporting views.',
     },
     'bento': {
-        'name': '便当格拼贴', 'nameEn': 'Bento mosaic',
+        'name': '\u4fbf\u5f53\u683c\u62fc\u8d34', 'nameEn': 'Bento mosaic',
         'description': 'Charts alternate wide/narrow rows (8+4, 4+8, 6+6, 4+4+4) for a varied, magazine-like rhythm.',
         'bestFor': 'Mixed evidence of different importance; 4-9 charts.',
     },
     'sidebar': {
-        'name': '侧栏指标', 'nameEn': 'Sidebar metrics',
+        'name': '\u4fa7\u680f\u6307\u6807', 'nameEn': 'Sidebar metrics',
         'description': 'KPIs stacked in a left column beside a wide chart column; tables full width below.',
         'bestFor': 'Monitoring pages where metrics stay visible next to long charts.',
     },
     'grid3': {
-        'name': '三列小多图', 'nameEn': 'Small multiples',
+        'name': '\u4e09\u5217\u5c0f\u591a\u56fe', 'nameEn': 'Small multiples',
         'description': 'Compact charts three per row for side-by-side comparison of the same measure across segments.',
         'bestFor': 'Regional/product splits of one measure; 3, 6 or 9 similar charts.',
     },
     'narrative': {
-        'name': '图文叙事', 'nameEn': 'Narrative briefing',
+        'name': '\u56fe\u6587\u53d9\u4e8b', 'nameEn': 'Narrative briefing',
         'description': 'Reading order top to bottom; a text component that follows a chart sits beside it as commentary (8+4).',
         'bestFor': 'Briefings where each chart carries a written takeaway.',
     },
     'scorecard': {
-        'name': '指标墙', 'nameEn': 'KPI wall',
-        'description': 'Dense KPI grid (up to 6 per row on desktop, 2 per row on phones), then compact charts.',
-        'bestFor': 'Operations scorecards with 6-12 metrics and few charts.',
+        'name': '\u6307\u6807\u5899', 'nameEn': 'KPI wall',
+        'description': 'Readable KPI grid (up to 4 per row on desktop, 2 on tablet, 1 on phones), then compact charts.',
+        'bestFor': 'Operations scorecards with 6-20 or more metrics and few charts.',
     },
 }
 
@@ -66,12 +56,21 @@ def role(component: dict) -> str:
         return {'kpi': 'kpi', 'table': 'table'}.get(component.get('family', 'chart'), 'chart')
     if kind in ('kpi', 'table', 'text'):
         return kind
-    return 'chart'  # chart and statistical
+    return 'chart'
+
+
+def kpi_config(component: dict) -> dict:
+    config = component.get('config', {}) if component.get('kind') == 'legacy' else component.get('presentation', {})
+    return config if isinstance(config, dict) else {}
 
 
 def kpi_type(component: dict) -> str:
-    config = component.get('config', {}) if component.get('kind') == 'legacy' else component.get('presentation', {})
-    return config.get('type', 'mc01') if isinstance(config, dict) else 'mc01'
+    return kpi_config(component).get('type', 'mc01')
+
+
+def kpi_primary(component: dict) -> bool:
+    # An additive presentation hint; metric values are never used to infer importance.
+    return component.get('layoutPriority') == 'primary'
 
 
 def split(cols: int, count: int) -> list[int]:
@@ -81,7 +80,6 @@ def split(cols: int, count: int) -> list[int]:
 
 
 def balanced(items: list, per_row: int) -> list[list]:
-    """Rows of at most per_row items with sizes differing by at most one."""
     if not items:
         return []
     rows = -(-len(items) // per_row)
@@ -91,6 +89,34 @@ def balanced(items: list, per_row: int) -> list[list]:
         result.append(items[start:start + size])
         start += size
     return result
+
+
+def weighted_rows(keys: list, weights: dict, capacity: int) -> list[list]:
+    """Ordered packing: fewest rows, then smallest variance of row weights.
+
+    Dynamic programming avoids a wide card forcing an unnecessary lonely last
+    row. O(n * capacity), bounded by the document's 100-component limit.
+    """
+    size = len(keys)
+    best = [(float('inf'), float('inf'))] * (size + 1)
+    end_at = [size] * size
+    best[size] = (0, 0)
+    for start in range(size - 1, -1, -1):
+        used = 0
+        for end in range(start, size):
+            used += min(capacity, max(1, weights[keys[end]]))
+            if used > capacity:
+                break
+            candidate = (1 + best[end + 1][0], used * used + best[end + 1][1])
+            # Fill earlier rows first when scores tie; reading order is stable.
+            if candidate <= best[start]:
+                best[start], end_at[start] = candidate, end + 1
+    rows, start = [], 0
+    while start < size:
+        end = end_at[start]
+        rows.append([(key, min(capacity, max(1, weights[key]))) for key in keys[start:end]])
+        start = end
+    return rows
 
 
 class Flow:
@@ -117,34 +143,28 @@ class Flow:
 
 
 def kpi_height(component: dict) -> int:
-    return HEIGHT['kpi'] + (1 if kpi_type(component) in TALL_KPIS else 0)
+    config = kpi_config(component)
+    height = HEIGHT['kpi'] + (1 if kpi_type(component) in TALL_KPIS or kpi_primary(component) else 0)
+    # Reserve a grid row for a multiline title/description rather than clipping
+    # auxiliary values. No changes to format, units, or comparison calculations.
+    title = str(component.get('title', config.get('label', '')))
+    subtitle = str(component.get('subtitle', config.get('subtitle', '')))
+    if len(title) > 32 or len(subtitle) > 48:
+        height += 1
+    return height
 
 
 def kpi_size(component: dict, per_row: int, breakpoint: str) -> int:
-    kind = kpi_type(component)
     if breakpoint == 'mobile':
-        return per_row if kind in MOBILE_FULL_KPIS else 1
-    return 2 if kind in WIDE_KPIS and per_row >= 3 else 1
+        return per_row if kpi_type(component) in MOBILE_FULL_KPIS or kpi_primary(component) else 1
+    return 2 if (kpi_type(component) in WIDE_KPIS or kpi_primary(component)) and per_row >= 3 else 1
 
 
 def kpi_rows(flow: Flow, kpis: list, per_row: int, components: dict, breakpoint: str = 'desktop'):
-    """Balanced KPI rows; wide shapes claim two slots (the full row on phones)."""
     if not kpis:
         return
     sizes = {key: kpi_size(components[key], per_row, breakpoint) for key in kpis}
-    if all(size == 1 for size in sizes.values()):
-        rows = [[(key, 1) for key in chunk] for chunk in balanced(kpis, per_row)]
-    else:
-        rows, current, weight = [], [], 0
-        for key in kpis:
-            size = sizes[key]
-            if current and weight + size > per_row:
-                rows.append(current)
-                current, weight = [], 0
-            current.append((key, size))
-            weight += size
-        if current:
-            rows.append(current)
+    rows = weighted_rows(kpis, sizes, per_row)
     for row_items in rows:
         units = sum(size for _, size in row_items)
         unit_widths = split(flow.cols, units)
@@ -156,7 +176,6 @@ def kpi_rows(flow: Flow, kpis: list, per_row: int, components: dict, breakpoint:
 
 
 def sequence_rows(flow: Flow, items: list, chart_per_row: int, chart_height: int, roles: dict):
-    """Charts in balanced rows; text and tables break the row and span the width."""
     pending = []
 
     def flush():
@@ -173,11 +192,10 @@ def sequence_rows(flow: Flow, items: list, chart_per_row: int, chart_height: int
 
 
 def compute_layout(manifest: dict, template: str, order=None) -> dict:
-    """Return {breakpoint: placements} for every component in the manifest."""
     if template not in TEMPLATES:
         raise ValueError(f'Unknown layout template: {template}')
     components = manifest['components']
-    ordered = [key for key in (order or []) if key in components]
+    ordered = list(dict.fromkeys(key for key in (order or []) if key in components))
     ordered += [key for key in components if key not in ordered]
     roles = {key: role(components[key]) for key in ordered}
     kpis = [key for key in ordered if roles[key] == 'kpi']
@@ -188,11 +206,10 @@ def compute_layout(manifest: dict, template: str, order=None) -> dict:
     for breakpoint, cols in COLS.items():
         flow = Flow(cols)
         desktop, tablet = breakpoint == 'desktop', breakpoint == 'tablet'
-        kpi_per_row = 4 if desktop else 2 if tablet else (2 if template == 'scorecard' else 1)
-        if template == 'scorecard':
-            kpi_per_row = 6 if desktop else 4 if tablet else 2
-        if template == 'sidebar' and desktop and kpis:
-            # Left metric column (3/12), wide chart column (9/12).
+        # Six-up cards become ~150px at the current 1050px desktop breakpoint.
+        # Keep text readable without shrinking it; grow the number of rows instead.
+        kpi_per_row = 4 if desktop else 2 if tablet else 1
+        if template == 'sidebar' and desktop and kpis and body:
             top = 0
             for key in kpis:
                 flow.place(key, 0, top, 3, kpi_height(components[key]))
@@ -225,7 +242,7 @@ def compute_layout(manifest: dict, template: str, order=None) -> dict:
                     if len(chunk) < len(widths):
                         widths = split(cols, len(chunk))
                     flow.row(chunk, widths, HEIGHT['chart'])
-                    index += len(chunk)
+                    index += len(widths)
                     pattern_index += 1
                 pending.clear()
             for key in body:
@@ -260,19 +277,14 @@ def compute_layout(manifest: dict, template: str, order=None) -> dict:
 
 
 def auto_place(manifest: dict, key: str, component: dict):
-    """Append one new component without re-flowing existing cards.
-
-    KPIs join a trailing row of KPIs; charts pair up two per desktop row;
-    tables and text span the width. Rows stay homogeneous so a KPI never
-    lands beside a chart.
-    """
+    """Append without reflowing or overwriting a hand-arranged layout."""
     kind = role(component)
     for breakpoint, cols in COLS.items():
         layout = manifest['layout'][breakpoint]
         height = kpi_height(component) if kind == 'kpi' else HEIGHT[kind]
         if kind == 'kpi':
             width = {'desktop': 3, 'tablet': 4, 'mobile': 4}[breakpoint]
-            if kpi_type(component) in WIDE_KPIS and breakpoint == 'desktop':
+            if (kpi_type(component) in WIDE_KPIS or kpi_primary(component)) and breakpoint == 'desktop':
                 width = 6
         elif kind == 'chart':
             width = {'desktop': 6, 'tablet': 8, 'mobile': 4}[breakpoint]
@@ -283,8 +295,7 @@ def auto_place(manifest: dict, key: str, component: dict):
         if layout and width < cols:
             top = max(p['y'] for p in layout)
             band = [p for p in layout if p['y'] == top]
-            same = all(p['id'] in manifest['components'] and role(manifest['components'][p['id']]) == kind and p['h'] == height
-                       for p in band)
+            same = all(p['id'] in manifest['components'] and role(manifest['components'][p['id']]) == kind and p['h'] == height for p in band)
             used = max(p['x'] + p['w'] for p in band)
             candidate = {'id': key, 'x': used, 'y': top, 'w': width, 'h': height}
             if same and used + width <= cols and not any(overlaps(candidate, p) for p in layout):
@@ -302,4 +313,5 @@ def templates_catalog() -> dict:
                       'notes': ['The template is applied after every other operation in the same patch, so components created in that patch are included.',
                                 'The choice is saved as manifest.layoutTemplate; later put_component/remove_component patches re-flow the template automatically.',
                                 'An explicit set_layout (including dragging cards in the editor) replaces the template with the manual layout.',
+                                'Set component.layoutPriority to primary to give a headline KPI extra room; this never changes reading order or metric values.',
                                 'Vary the composition with the content: do not default every dashboard to executive.']}}
