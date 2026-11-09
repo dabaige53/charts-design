@@ -39,7 +39,9 @@ def test_new_annotation_targets_outer_component(tmp_path):
             panel = page.locator('.annotation-panel')
             assert '原位置已失效' not in panel.inner_text()
             assert page.locator('.annotation-outline').is_visible()
-            assert panel.locator('.annotation-context').bounding_box()['height'] < 65
+            context_box = panel.locator('.annotation-context').bounding_box()
+            assert context_box is not None
+            assert context_box['height'] < 65
             assert panel.locator('header').is_visible()
             assert panel.get_by_role('button', name='保存批注').is_visible()
             panel.locator('textarea').fill('测试批注')

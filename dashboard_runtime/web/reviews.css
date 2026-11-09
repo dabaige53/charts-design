@@ -38,7 +38,7 @@
 .annotation-list-entry .annotation-entry-top{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
 .annotation-entry-number{font-size:11px;font-variant-numeric:tabular-nums;color:var(--accent);font-weight:650}
 .annotation-entry-location{flex:1;min-width:0;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.annotation-entry-text{display:-webkit-box!important;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;font-size:13px;line-height:1.7;white-space:pre-wrap;margin-bottom:8px}
+.annotation-entry-text{display:-webkit-box!important;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;font-size:13px;line-height:1.7;white-space:pre-wrap;margin-bottom:8px}
 .annotation-meta,.annotation-list-entry .annotation-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:11px}
 .annotation-label,.annotation-source{font-size:11px;color:var(--muted);line-height:1.5}
 .annotation-status{font-size:11px;color:var(--accent);background:var(--canvas);border:1px solid var(--line);padding:2px 6px;border-radius:4px}

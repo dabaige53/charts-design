@@ -78,7 +78,7 @@ export function createAnnotations({root,getDocument,save,readOnly,onError=consol
         pin.title=group.items.map(item=>`${item.index}. ${item.note.text}`).join('\n').slice(0,4000);
         pin.setAttribute('aria-label',count>1?`${L.title} ${count}`:`${L.title} ${first.index}: ${first.note.text}`);
         Object.assign(pin.style,{left:group.x+'px',top:group.y+'px'});
-        pin.onclick=()=>{if(discard())count>1?showList(group.items.map(item=>item.note.id)):openNote(current(first.note.id)||first.note);};
+        pin.onclick=()=>{if(!discard())return;if(count>1)showList(group.items.map(item=>item.note.id));else openNote(current(first.note.id)||first.note);};
         pins.append(pin);
       }
     }
@@ -215,7 +215,7 @@ export function createAnnotations({root,getDocument,save,readOnly,onError=consol
       const update=()=>{count.textContent=`${area.value.length} / ${REVIEW_LIMITS.text}`;dirty=area.value!==(isNew?'':note.text)||category.value!==reviewCategory(note);submit.disabled=!area.value.trim()||(!isNew&&!attachContext&&!dirty);};
       area.oninput=update;category.oninput=update;update();
       area.onkeydown=e=>{if(!e.isComposing&&e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();submit.click();}};
-      panelFooter.append(action('取消',()=>{if(discard()){drafts.delete(board());isNew?showList():openNote(current(note.id));}}),submit);
+      panelFooter.append(action('取消',()=>{if(discard()){drafts.delete(board());if(isNew)showList();else openNote(current(note.id));}}),submit);
     }else{
       const text=node('p','annotation-body-text',note.text);text.setAttribute('aria-label',L.content);panelBody.append(text);
       const tools=node('div','annotation-note-tools');tools.append(node('span','annotation-label',L[reviewCategory(note)]));

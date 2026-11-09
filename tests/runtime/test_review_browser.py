@@ -32,7 +32,9 @@ def open_fixture(page, query='', saved=None):
         source = re.sub(r'\bexport\s+(?=function|const)', '', source)
         bundle += 'const ' + variables[name] + '=(()=>{\n' + source + '\nreturn {' + ','.join(exported) + '};})();\n'
     html = (ROOT / 'tests/runtime/fixtures/review-harness.html').read_text()
-    script = re.search(r'<script type="module">(.*?)</script>', html, re.S)[1]
+    script_match = re.search(r'<script type="module">(.*?)</script>', html, re.S)
+    assert script_match is not None, 'Review fixture must contain its module script'
+    script = script_match[1]
     script = re.sub(r"import\s*\{([^}]+)\}\s*from\s*'[^']+/annotations.mjs';", r'const {\1}=annotationModule;', script)
     script = re.sub(r"import\s*\{([^}]+)\}\s*from\s*'[^']+/annotation-points.mjs';", r'const {\1}=pointModule;', script)
     script = script.replace('location.search', json.dumps(query)).replace('localStorage', 'testStorage')
@@ -52,7 +54,7 @@ def open_fixture(page, query='', saved=None):
 def page():
     with sync_playwright() as p:
         executable = os.getenv('CHARTS_TEST_CHROMIUM')
-        browser = p.chromium.launch(**({'executable_path': executable} if executable else {}), args=['--no-sandbox'])
+        browser = p.chromium.launch(executable_path=executable, args=['--no-sandbox'])
         context = browser.new_context(viewport={'width': 1600, 'height': 1000})
         page = context.new_page()
         page.set_default_timeout(4000)
