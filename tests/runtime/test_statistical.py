@@ -70,8 +70,6 @@ def test_revision_and_source_refresh(tmp_path):
     assert before['statisticalArtifacts']['distribution']['dataUri']!=after['statisticalArtifacts']['distribution']['dataUri']
     assert 'statisticalArtifacts' not in service.store.get('statistics')
     assert service.call('statistical_render',{'dashboardId':'statistics','componentId':'distribution','format':'png'})['mimeType']=='image/png'
-    from dashboard_runtime.assets import export_document
-    assert 'statisticalArtifacts' in export_document(after['document'])
 
 
 # @wu-test type=behavior | scope=统计图依赖 | protects=缺Seaborn错误隐藏

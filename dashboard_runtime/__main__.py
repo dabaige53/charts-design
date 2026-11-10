@@ -210,8 +210,6 @@ def main(argv=None):
             )
             result["migrationNotes"] = notes
         elif command == "export":
-            from .assets import export_document
-
             doc = service.store.get(args.id, hydrate=False)
             path = Path(args.output).expanduser()
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,12 +219,12 @@ def main(argv=None):
                 shutil.copyfile(exported['path'], path)
                 print(json.dumps({'output': str(path.resolve()), 'revision': doc['revision'], 'format': 'csv', **{k: v for k, v in exported.items() if k != 'path'}}))
                 return 0
-            doc = service.store.hydrate(doc)
-            content = (
-                json.dumps(doc, ensure_ascii=False, indent=2)
-                if args.format == "json"
-                else export_document(doc)
-            )
+            if args.format == 'html':
+                exported = service.call('dashboard_export', {'dashboardId': args.id, 'format': 'html'})['export']
+                content = Path(exported['path']).read_text(encoding='utf-8')
+            else:
+                doc = service.store.hydrate(doc)
+                content = json.dumps(doc, ensure_ascii=False, indent=2)
             path.write_text(content)
             result = {
                 "output": str(path.resolve()),
@@ -237,7 +235,7 @@ def main(argv=None):
             from .http_server import RuntimeHTTPServer
             from .assets import render_html
 
-            render_html("web")  # fail early with the exact build command
+            render_html("web")
             server = RuntimeHTTPServer(
                 service, args.port, idle_timeout=args.idle_timeout
             )

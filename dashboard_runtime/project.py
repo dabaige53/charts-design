@@ -1,11 +1,12 @@
 """Project-owned assets, draft revisions and explicit checkpoints."""
 from pathlib import Path
+from typing import cast
 import copy
 import json
 import uuid
 from .store import Store
 from .local_data import LocalData
-from .model import apply_operations, json_bytes, require, utcnow
+from .model import DashboardError, apply_operations, json_bytes, require, utcnow
 
 DEFAULTS = {'history': {'keepCheckpoints': 100}, 'loading': {'debounceMs': 150, 'maxConcurrent': 4, 'pageSize': 50}}
 
@@ -109,7 +110,7 @@ class ProjectStore(Store):
         self._files(board_id)
         return self.get(board_id)
 
-    def mutate(self, board_id, expected_revision, operations=None, restore_revision=None, use_current_data=False):
+    def mutate(self, board_id, expected_revision, operations=None, restore_revision=None, use_current_data=False, expected_annotations=None):
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT document,revision FROM boards WHERE id=?', (board_id,)).fetchone()
@@ -117,6 +118,11 @@ class ProjectStore(Store):
             require(row['revision'] == expected_revision, 'Reload before editing', 'REVISION_CONFLICT')
             current = json.loads(row['document'])
             current['manifest']['annotations'] = self._notes(db, board_id)
+            if expected_annotations is not None:
+                require(restore_revision is None and operations and all(isinstance(op, dict) and op.get('op') == 'set_annotations' for op in operations),
+                        'Independent annotation saves may only replace annotations')
+                require(current['manifest']['annotations'] == expected_annotations,
+                        '批注已被其他页面更新，请重试以保留最新批注。', 'ANNOTATION_CONFLICT')
             if restore_revision is not None:
                 saved = db.execute('SELECT document FROM revisions WHERE board_id=? AND revision=?', (board_id, restore_revision)).fetchone()
                 require(saved is not None, 'Checkpoint not found')
@@ -126,17 +132,19 @@ class ProjectStore(Store):
                     doc['snapshot'] = copy.deepcopy(current['snapshot'])
             else:
                 doc = apply_operations(current, operations)
-                if not any(op['op'] == 'set_annotations' for op in operations):
+                if not any(op['op'] == 'set_annotations' for op in cast(list[dict], operations)):
                     doc['manifest']['annotations'] = copy.deepcopy(current['manifest']['annotations'])
             doc['revision'] = expected_revision
             doc = self.compact(doc)
             if doc == current:
                 return self.compatible(current)
-            doc['revision'] += 1
+            if expected_annotations is None:
+                doc['revision'] += 1
             self._save_notes(db, doc, doc['manifest'].get('annotations', []))
             stored = copy.deepcopy(doc)
             stored['manifest'].pop('annotations', None)
-            db.execute('UPDATE boards SET revision=?,document=? WHERE id=?', (doc['revision'], json_bytes(stored).decode(), board_id))
+            if expected_annotations is None:
+                db.execute('UPDATE boards SET revision=?,document=? WHERE id=?', (doc['revision'], json_bytes(stored).decode(), board_id))
             if restore_revision is not None:
                 db.execute('INSERT OR REPLACE INTO revisions VALUES(?,?,?,?,?)', (board_id, doc['revision'], utcnow(), f'restore:{restore_revision}', json_bytes(stored).decode()))
         self._files(board_id)
@@ -158,7 +166,8 @@ class ProjectStore(Store):
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM boards WHERE id=?', (board,)).fetchone()
-            require(row is not None and row['revision'] == expected, 'Reload before checkpoint', 'REVISION_CONFLICT')
+            if row is None or row['revision'] != expected:
+                raise DashboardError('REVISION_CONFLICT', 'Reload before checkpoint')
             batch = db.execute('SELECT * FROM batches WHERE board_id=?', (board,)).fetchone()
             if batch_id:
                 require(batch is not None and batch['batch_id'] == batch_id, 'Unknown edit batch')

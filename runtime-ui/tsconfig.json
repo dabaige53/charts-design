@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "baseUrl": ".", "paths": {"@/*": ["./src/*"]},
+    "module": "ESNext", "moduleResolution": "Bundler", "jsx": "react-jsx",
+    "strict": true, "noEmit": true, "skipLibCheck": true,
+    "allowJs": true, "checkJs": false, "esModuleInterop": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src"]
+}

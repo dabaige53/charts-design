@@ -10,7 +10,7 @@ from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
-# @wu-test type=integration | scope=MCP stdio | protects=协议修改报告大响应丢失 | debt=D1
+# @wu-test type=integration | scope=MCP stdio | protects=协议修改报告大响应丢失或构建资源不可读取
 def test_real_stdio_protocol(tmp_path):
     from dashboard_runtime.store import Store
     Store(tmp_path/'mcp').create('mcp-test', 'MCP')
@@ -21,19 +21,20 @@ def test_real_stdio_protocol(tmp_path):
                 await session.initialize()
                 tools=await session.list_tools()
                 assert 'dashboard_preview' in [t.name for t in tools.tools]
-                from dashboard_runtime.mcp_server import UI_TOOLS, URI, MIME
                 by_name = {tool.name: tool for tool in tools.tools}
-                for name in UI_TOOLS:
-                    assert by_name[name].meta == {'ui': {'resourceUri': URI}, 'ui/resourceUri': URI}
-                assert by_name['runtime_keepalive'].meta == {'ui': {'visibility': ['app']}}
+                assert not any(name.startswith('dashboard_preview_') for name in by_name)
+                assert all(tool.meta is None for name,tool in by_name.items() if name != 'dashboard_preview')
+                preview_meta = by_name['dashboard_preview'].meta
+                assert preview_meta is not None
+                assert preview_meta['ui']['resourceUri'].startswith('ui://charts-design/')
                 assert by_name['generation_examples'].meta is None
-                ui = await session.read_resource(AnyUrl(URI))
-                assert isinstance(ui.contents[0], TextResourceContents)
-                assert ui.contents[0].mimeType == MIME
-                assert ui.contents[0].meta == {'ui': {'prefersBorder': True}}
-                assert '"mode": "mcp"' in ui.contents[0].text
+                preview = await session.call_tool('dashboard_preview', {'dashboardId': 'mcp-test'})
+                assert not preview.isError
+                assert preview.structuredContent is not None
+                assert preview.structuredContent['document']['id'] == 'mcp-test'
                 result=await session.call_tool('dashboard_create',{'dashboardId':'mcp-test','title':'MCP'})
                 assert result.isError
+                assert result.structuredContent is not None
                 assert result.structuredContent['error']['code'] == 'PROJECT_REQUIRED'
                 result=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':1,'operations':[{'op':'set_title','value':'Edited over MCP'}]})
                 assert not result.isError
@@ -81,12 +82,15 @@ def test_real_stdio_protocol(tmp_path):
                 async def resolve(result):
                     import base64
                     envelope = result.structuredContent
+                    assert envelope is not None
                     if 'transport' not in envelope:
                         return envelope
                     info = envelope['transport']
                     parts = []
                     for index in range(info['chunks']):
                         chunk = await session.call_tool('runtime_result_chunk', {'requestId': info['requestId'], 'index': index})
+                        assert isinstance(chunk.content[0], TextContent)
+                        assert chunk.structuredContent is not None
                         assert len(chunk.content[0].text) < 25000
                         parts.append(chunk.structuredContent['data'])
                     raw = base64.b64decode(''.join(parts))
@@ -111,7 +115,10 @@ def test_real_stdio_protocol(tmp_path):
                 assert json.loads(payload.content[0].text)['transport']['bytes'] > 900000
                 assert len(payload.content[0].text) < 1000
                 resources=await session.list_resources()
-                assert any(str(r.uri).startswith('ui://') for r in resources.resources)
+                assert all(str(resource.uri).startswith(('charts://','ui://charts-design/')) for resource in resources.resources)
+                ui=await session.read_resource(preview_meta['ui']['resourceUri'])
+                assert isinstance(ui.contents[0], TextResourceContents)
+                assert 'window.__chartsBoot=' in ui.contents[0].text
                 contract=await session.read_resource(AnyUrl('charts://contract'))
                 assert isinstance(contract.contents[0], TextResourceContents)
                 assert 'set_layout' in contract.contents[0].text
@@ -119,7 +126,7 @@ def test_real_stdio_protocol(tmp_path):
     asyncio.run(check())
 
 
-# @wu-test type=integration | scope=MCP批注 | protects=批注目标更新删除后丢批注 | debt=D1
+# @wu-test type=integration | scope=MCP批注 | protects=批注目标更新删除后丢批注
 def test_read_annotations_and_edit_target_over_stdio(tmp_path):
     from dashboard_runtime.store import Store
     Store(tmp_path/'annotations').create('review', 'Review')
@@ -131,12 +138,14 @@ def test_read_annotations_and_edit_target_over_stdio(tmp_path):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 tools = {t.name: t for t in (await session.list_tools()).tools}
+                assert tools['dashboard_annotations'].annotations is not None
                 assert tools['dashboard_annotations'].annotations.readOnlyHint is True
                 assert tools['dashboard_annotations'].meta is None
 
                 async def call(name, **args):
                     result = await session.call_tool(name, args)
                     assert not result.isError, result
+                    assert result.structuredContent is not None
                     return result.structuredContent
 
                 empty = await call('dashboard_annotations', dashboardId='review')

@@ -1,6 +1,9 @@
 # 本地 MCP 安装更新
 
 
+> **当前状态（2026-11-10）**
+> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/ui-refactor-plan.md`。
+
 ## 完整打包并更新 analyst-workspace
 
 在 charts-design 本项目的 Codex 本地环境中执行“更新 charts-design MCP”。analyst-workspace 是更新目标，不放置该操作按钮。
@@ -19,12 +22,7 @@ node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/ana
 
 ## 按文件清单更新已有安装包
 
-已确定目标安装目录与改动文件时，先构建，再传入明确的包内相对路径：
-
-```sh
-npm --prefix runtime-ui run build
-node bin/update-runtime.js /absolute/install/package dashboard_runtime/web/dist/app.js dashboard_runtime/web/dist/app.css
-```
+已确定目标安装目录与改动文件时，传入明确的包内后端相对路径：
 
 脚本检查目标包身份和全部源文件，然后复制清单内文件，最后原子写入 `.runtime-generation`。后端源文件更新也必须逐项列入清单。只复制前端产物不会更新后端。依赖变化需另行完成依赖安装或选择完整打包更新；此脚本只复制指定文件。
 
@@ -34,7 +32,7 @@ node bin/update-runtime.js /absolute/install/package dashboard_runtime/web/dist/
 
 1. 对所用项目调用 `runtime_info`，显式传入 `projectRoot`。检查 `moduleRoot`、`backendBuildId`、`uiBuildId`、进程编号和资产路径，确认连接使用目标安装。
 2. 更新入口或工具定义后重新连接 MCP。重新读取工具列表，调用当前构建的预览工具并打开新预览。
-3. 在页面“运行诊断”中对照页面与服务的 UI 构建标识，再检查实际改动。页面每 30 秒独立检查界面版本，编辑中也只提示，不刷新文档或清除输入。
+3. 页面可见时每 5 秒检查版本。发现界面构建标识变化会提示重新打开预览；正在编辑时保留输入。
 
 刷新报表只更新数据，不替换界面代码。已打开页面仍由宿主重新打开；本项目没有可调用的宿主 MCP 重载或标签替换接口。工具与资源正确、连接已切换、页面已更新分别记录。宿主尚未实际检查时，验收状态保留待确认。
 
@@ -48,10 +46,4 @@ node bin/python-runtime.js -m pytest tests/test_local_mcp_update.py -q
 
 该检查覆盖单行与多行 TOML 参数、仅替换入口并保留其他配置，以及拒绝未知入口。安装包实际启动与预览资源仍按完整更新脚本检查。
 
-文件标记更新、SDK 能力保留及页面生命周期：
-
-```sh
-node --test tests/runtime/mcp-reload.test.mjs tests/runtime/host-app.test.mjs tests/runtime/lifecycle.test.mjs
-```
-
-源码或自动检查通过后，仍需按上述步骤确认连接与实际宿主页面。维护时机：构建、安装更新入口、进程切换或重连方式变化时更新本文。
+源码或自动检查通过后，仍需确认连接状态。维护时机：构建、安装更新入口、进程切换或重连方式变化时更新本文。

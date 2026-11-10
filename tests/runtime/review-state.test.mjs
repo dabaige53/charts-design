@@ -77,10 +77,6 @@ test('editing requested content makes the request stale',()=>{
 test('context includes replies and sources, not only the root text',()=>{
  const n=r.addReviewReply(note(),'Done',{author:{kind:'ai'},replyId:'r'});assert.equal(r.reviewContextText(n),'Check denominator\n\n[ai] Done');
 });
-// @wu-test type=behavior | scope=review-state.test | protects=pin collision clusters without relocating anchors
-test('pin collision clusters without relocating anchors',()=>{
- const input=[{x:20,y:20,id:'a'},{x:25,y:25,id:'b'},{x:100,y:100,id:'c'},{x:NaN,y:1,id:'d'}];const groups=r.clusterReviewPins(input);assert.equal(groups.length,2);assert.equal(groups[0].items.length,2);assert.equal(groups[0].x,20);assert.equal(input[1].x,25);
-});
 // @wu-test type=behavior | scope=review-state.test | protects=IDs work without randomUUID on non-secure LAN origins
 test('IDs work without randomUUID on non-secure LAN origins',()=>{
  const fallback={getRandomValues:bytes=>globalThis.crypto.getRandomValues(bytes)};

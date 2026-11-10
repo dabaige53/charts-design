@@ -39,4 +39,6 @@
 
 ## 独立 HTML 生成器
 
-`scripts/dashboard_workspace.py build` 与 `generate_dashboard.py` 生成的单页仍使用固定三段式（KPI `grid-cols-2 lg:grid-cols-4`、图表 `grid-cols-1 md:grid-cols-2`、表格通栏），相当于 `executive`；多模板构图由 MCP 运行时提供。单页图表容器高度建议：柱/线/复合图 280–320px，环形/饼图/仪表盘 260–280px，散点/四象限/桑基图 300–340px；卡片内边距 `p-5`–`p-6`。
+> **历史参考说明**：原独立 HTML 生成脚本（`generate_dashboard.py`）与工作区构建命令（`dashboard_workspace.py build`）已于 2026-11-10 架构重构中移除，调用会直接失败。
+
+历史单页布局使用固定三段式（KPI `grid-cols-2 lg:grid-cols-4`、图表 `grid-cols-1 md:grid-cols-2`、表格通栏），相当于 `executive`；多模板构图由 MCP 运行时与数据声明提供。容器高度参考建议：柱/线/复合图 280–320px，环形/饼图/仪表盘 260–280px，散点/四象限/桑基图 300–340px；卡片内边距 `p-5`–`p-6`。

@@ -1,13 +1,16 @@
 ---
 name: executive-charts
-description: Build or revise ECharts dashboards with dataset-bound charts, KPI cards, filters and tables through the project MCP runtime or bundled HTML generators. Use for new dashboards, component embedding, or upgrades of existing HTML/frontend projects.
+description: Build or revise executive dashboard data assets, declarations, KPI cards, filters and tables through the project MCP runtime or CLI workspace tools. Use for dashboard data modeling, component declarations and analytical workspaces.
 ---
 
 # Executive Charts
 
 Turn business evidence into a restrained executive dashboard. Run the scripts bundled beside this file and compose the result from small, reviewable building blocks.
 
-The goal is a reusable business-component generation system whose deliverable is working HTML or an explicit framework Adapter. Use the Gallery and `examples/` for discovery and visual comparison. Generate final markup from explicit business data through the registered component pipeline.
+> **Current status (2026-11-10)**
+> The shared React component library and MCP application use separate adapters and explicit build/package steps. Preview, JSON/CSV, HTML snapshots and static site exports use the new resources. Missing builds return `UI_UNAVAILABLE`. Current completion and host acceptance are tracked in package-root `docs/ui-refactor-plan.md`.
+
+The goal is a reusable business-component generation system whose configuration is grounded in explicit business evidence, typed metrics, and strict component declarations.
 
 ## Project MCP editing and display
 
@@ -19,7 +22,7 @@ Before revising an accepted dashboard, read [the existing-project checklist](ref
 
 For local datasets that must remain outside the preview, read [local-data.md](references/local-data.md). Use `dataset_attach` to stream an operator-configured SQLite table into a versioned local dataset; bind components to that dataset. MCP returns local aggregate results and table pages by default. Use `dashboard_view` for unsaved reader filters, pagination, sorting and time-grain changes; `dataset_export` streams every matching row to a managed local CSV. Do not expand rows per chart, send full observations in component configs, or launch an HTTP service. Inspect data versions, row counts and sizes with `dashboard_data_inspect`.
 
-This is the Dashboard generation track. Preserve the existing Gallery and `examples/` cases. For the local runtime, call `generation_examples` with `{"caseId":"executive-dashboard"}` or read `charts://examples/executive-dashboard`: it returns synthetic KPI/chart/table/filter declarations ready for an atomic patch. Read `charts://declarations` for chart contracts and `charts://contract` for mutation rules. Pass `projectRoot` on every project call; create, begin an edit batch, patch with the latest revision, finish the batch and resolve Doctor errors, then preview once. New interactive charts use registered original codes and explicit supported bindings; `chartType` authoring is rejected, with compatibility reading for historical generic charts.
+This is the Dashboard generation track. For the local runtime, call `generation_examples` with `{"caseId":"executive-dashboard"}` or read `charts://examples/executive-dashboard`: it returns synthetic KPI/chart/table/filter declarations ready for an atomic patch. Read `charts://declarations` for chart contracts and `charts://contract` for mutation rules. Pass `projectRoot` on every project call; create, begin an edit batch, patch with the latest revision, finish the batch and resolve Doctor errors. Open the saved dashboard with `dashboard_preview` after finishing its edit batch. New interactive charts use registered original codes and explicit supported bindings; `chartType` authoring is rejected, with compatibility reading for historical generic charts.
 
 For Markdown-first analytical documents, use [analytical-reports](../analytical-reports/SKILL.md) and its approved academic master instead of composing a dashboard grid. Both tracks reuse existing chart definitions and source/data semantics.
 
@@ -34,75 +37,56 @@ Generated dashboards must not all look alike. Decide the composition from the bu
 
 ## Self-hosted server
 
-When the MCP runs as the self-hosted server (`python3 -m dashboard_runtime server`), `projectRoot` is a project name on that server, `dashboard_preview` also returns `previewUrl` (an expiring read-only browser link) and `dashboard_share` creates view or edit links. Give the link to the user after the edit batch finishes. Deployment and security are described in package-root `docs/self-hosted-server.md`.
+When the MCP runs as the self-hosted server (`python3 -m dashboard_runtime server`), `projectRoot` is a project name on that server. Deployment, authentication and boundaries are described in package-root `docs/self-hosted-server.md`. Remote browser preview and sharing links will resume once the replacement UI is connected.
 
 ## Route the task
 
-- For one chart, provide a complete chart component JSON and run `scripts/generate_chart.py --config`; deliver the generated HTML component.
-- For several candidate charts, use bounded batch mode to compare one focused shortlist.
-- For a dashboard, run `scripts/dashboard_workspace.py` and use the workspace loop below.
+- For a dashboard workspace, use `charts-design dashboard` or run `scripts/dashboard_workspace.py` with `init`, `add`, `inspect`, and `validate`.
 - For an existing workspace, start with `inspect` and `validate`.
-- For an existing HTML dashboard or frontend project, read [references/existing-project-checklist.md](references/existing-project-checklist.md) before mapping components and generating the target page.
+- For an existing dashboard migration or frontend project, read [references/existing-project-checklist.md](references/existing-project-checklist.md) to preserve IDs, metrics, bindings, and business questions.
 - For CSV input, use `import-csv` as a draft, then review the inferred fields before adding charts.
+- Note: Standalone HTML generation scripts (`generate_chart.py`, `generate_dashboard.py`) and `workspace build` are unavailable; HTML outputs cannot be compiled until the new UI is connected.
 
 Resolve the directory containing this `SKILL.md` once, then invoke its sibling scripts with `python3` as the execution interface.
 
 In this source repository, `skills/executive-charts/` is the maintained implementation. Point local agent skill installations at that directory; do not maintain independent renderer copies in `.agents/skills/`. Verify the resolved script path before generating or diagnosing output.
 
-For any task that creates, restyles, migrates, or embeds component HTML, read [references/component-html-generation.md](references/component-html-generation.md) before writing markup. It defines which layer generates each component, the stable DOM contract, and the completion gate.
+For component structure, mounting contracts and historical HTML architecture, read [references/component-html-generation.md](references/component-html-generation.md).
 
 ## Dashboard workspace loop
 
-1. Discover registered chart codes through the catalog command:
+1. Discover registered chart codes and metadata:
 
-   ```bash
-   python3 skills/executive-charts/scripts/generate_chart.py --list
-   ```
+   Read [references/chart_catalog.json](references/chart_catalog.json) or run `charts-design list`.
 
    Continue when the selected code matches the business question.
-
-   For a standalone chart, place the selected code, title, data, and full `presentation` contract in one JSON object, then generate it directly:
-
-   ```bash
-   python3 skills/executive-charts/scripts/generate_chart.py \
-     --config ./regional-sales.chart.json --output ./dist/regional-sales.html
-   ```
-
-   The command validates the selected renderer contract, writes the HTML, and runs static Generated HTML inspection.
 
 2. Create an empty workspace outside this skill directory:
 
    ```bash
-   python3 skills/executive-charts/scripts/dashboard_workspace.py init ./board \
-     --title "经营决策看板" --org "经营分析部"
+   charts-design dashboard init ./board --title "经营决策看板" --org "经营分析部"
    ```
 
    The workspace is ready when `inspect --json` reports the intended starting components and every reference resolves.
 
-3. Add one evidence block at a time. Keep each KPI, chart, or table in its own small JSON file; keep filters in the dynamic array managed by the CLI.
+3. Add one evidence block at a time. Keep each KPI, chart, or table in its own small JSON file; manage filters with the CLI:
 
    ```bash
-   python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./board revenue \
-     --label "营业收入" --value 224 --unit "万元"
-   python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./board regional-sales \
-     --from ./regional-sales.chart.json
+   charts-design dashboard add kpi ./board revenue --label "营业收入" --value 224 --unit "万元"
+   charts-design dashboard add chart ./board regional-sales --from ./regional-sales.chart.json
    ```
 
    Put the chart's `code`, title, unit, data, and complete `presentation` contract in `regional-sales.chart.json`. After each meaningful block, run `inspect --json`. Proceed when the current values and display semantics match the business requirement.
 
    When adding filters, first load table rows and declare each consumer's aggregation `binding` using [dashboard-workspace.md](references/dashboard-workspace.md#filter-bindings). Validation checks the referenced columns, consumers, and supported aggregation shape.
 
-4. Validate early and build thin slices:
+4. Validate early and verify strict contracts:
 
    ```bash
-   python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./board --strict --json
-   python3 skills/executive-charts/scripts/dashboard_workspace.py build ./board \
-     --output ./dist/board.html
+   charts-design dashboard validate ./board --strict --json
    ```
 
-   Every workspace build runs the static Generated HTML Inspector. Build after the first useful KPI or chart, then iterate. Generation is complete when strict validation and HTML inspection pass and every rendered block supports a stated management question.
-
-   For migrations, create and review the Preservation Manifest from the baseline with `inventory-html`, then add `--manifest <existing-file>` to build. New dashboards do not need a preservation file.
+   Workspace validation confirms reference integrity, schema compliance, and binding correctness. Iteration is complete when strict validation passes and every block supports a stated management question.
 
 For command shapes and component schemas, read [references/dashboard-workspace.md](references/dashboard-workspace.md) when assembling a dashboard.
 
@@ -120,10 +104,9 @@ Before authoring or revising metric explanations, read [metric-definitions.md](r
 - **Business-owned data:** Final workspaces contain explicit user/business data. Use catalog and preset data for structural preview.
 - **Business-owned presentation:** Declare `presentation` metadata for axes, series, Tooltip values, units, complete `tableHeaders`, and renderer-specific domains, thresholds, or labels.
 - **Bounded context:** Use `inspect --json` for summaries and edit one component file at a time.
-- **Visual system:** Standalone HTML generators retain chart-code badges; Runtime titles omit them and use the package-root `docs/icon-header-and-bindings.md` contract for action placement and pagination. Generate explicit units, the restrained categorical palette, and 红涨绿跌 semantics: red (`positive`) for increases, green (`negative`) for decreases, and neither for status or series identity. Colors come from `scripts/core/palette.py`. Read [references/design_standards.md](references/design_standards.md) when changing visual behavior.
-
-Select codes from [references/chart_catalog.json](references/chart_catalog.json). Use its metadata for chart choice and CLI-generated previews for visual comparison. Final component markup follows the component JSON → shared renderer → Runtime pipeline.
+- **Visual system:** The replacement presentation system is under redesign and new visual tokens are not yet finalized. Historical palettes and guidelines in [references/design_standards.md](references/design_standards.md) serve as historical reference only and do not automatically bind the new UI.
+- **Catalog metadata:** Select codes from [references/chart_catalog.json](references/chart_catalog.json). Use its metadata for chart choice and intent alignment.
 
 ## Tooling boundary
 
-Treat this skill directory as installed tooling during generation. Put workspaces, source data and generated outputs in the user's project. Improve shared component behavior in the registered schema, renderer, and Runtime source, then regenerate the target HTML.
+Treat this skill directory as installed tooling during generation. Put workspaces, source data and configured assets in the user's project. Component definitions and data structures are maintained in the workspace and project stores.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {statisticalImageSource,updateStatisticalArtifacts,mountStatisticalImage} from '../../dashboard_runtime/web/statistical.mjs';
+import {statisticalImageSource,updateStatisticalArtifacts} from '../../dashboard_runtime/web/statistical.mjs';
 
 const svg='data:image/svg+xml;base64,PHN2Zy8+';
 const png='data:image/png;base64,YQ==';
@@ -38,48 +38,4 @@ test('Artifact records are isolated own properties and accept only string displa
   assert.equal(Object.getPrototypeOf(result),null);
   assert.equal(result.__proto__.caption,'Safe');assert.deepEqual(result.plot,{error:'Unavailable'});
   assert.equal(Object.hasOwn(result,'invalid'),false);
-});
-
-// A tiny DOM fixture keeps mount tests dependency-free. Full browser integration
-// additionally verifies image decoding, layout, transport and editor behavior.
-function withDocument(run){
-  const previous=globalThis.document;
-  const createElement=tag=>({tagName:tag,className:'',textContent:'',children:[],attributes:{},listeners:{},
-    append(child){child.parent=this;this.children.push(child);},
-    setAttribute(name,value){this.attributes[name]=value;},
-    addEventListener(name,listener){this.listeners[name]=listener;},
-    remove(){this.parent.children=this.parent.children.filter(child=>child!==this);}
-  });
-  globalThis.document={createElement};
-  try{run(createElement('section'));}finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
-}
-
-// @wu-test type=boundary | scope=statistical image mounting | protects=图注HTML执行或图片失败无提示
-test('Statistical mount creates an inert image with title alt and literal caption',()=>withDocument(card=>{
-  const caption='<img src=x onerror=alert(1)>; n = 3';
-  mountStatisticalImage(card,{title:'Distribution'},{dataUri:svg,caption});
-  const [figure]=card.children,[image,text]=figure.children;
-  assert.equal(figure.tagName,'figure');assert.equal(image.tagName,'img');
-  assert.equal(image.src,svg);assert.equal(image.alt,'Distribution');
-  assert.equal(text.tagName,'figcaption');assert.equal(text.textContent,caption);
-  assert.equal(text.children.length,0);
-  image.listeners.error();
-  assert.equal(figure.children.some(child=>child.tagName==='img'),false);
-  assert.match(figure.children.at(-1).textContent,/无法加载/);
-  assert.equal(figure.children.at(-1).attributes.role,'alert');
-}));
-
-// @wu-test type=boundary | scope=statistical image mounting | protects=缺失或远程图片被加载且无错误提示
-test('Missing, failed and remote artifacts show clear errors without assigning image URLs',()=>{
-  for(const [artifact,expected] of [
-    [undefined,/未包含生成的图片/],
-    [{error:'Backend unavailable <script>',dataUri:svg},/Backend unavailable <script>/],
-    [{dataUri:'https://example.com/plot.svg'},/图片格式无效/]
-  ])withDocument(card=>{
-    mountStatisticalImage(card,{title:'Distribution'},artifact);
-    const [figure]=card.children;
-    assert.equal(figure.children.some(child=>child.tagName==='img'),false);
-    assert.match(figure.children[0].textContent,expected);
-    assert.equal(figure.children[0].attributes.role,'alert');
-  });
 });

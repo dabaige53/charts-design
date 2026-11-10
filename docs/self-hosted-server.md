@@ -2,6 +2,9 @@
 
 `python3 -m dashboard_runtime server` 在一台服务器上同时提供远程 MCP（Streamable HTTP）和看板、分析报告的网页预览。它复用本地 Runtime 的同一套 `Service`、项目存储、Doctor 与前端构建；区别在于长期运行、按项目名隔离存储、用令牌和签名链接控制访问。本地 stdio MCP（`mcp` 命令）和本机编辑器（`serve` 命令）保持不变。
 
+> **当前状态（2026-11-10）**
+> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/ui-refactor-plan.md`。
+
 ## 提供的入口
 
 | 路径 | 用途 | 鉴权 |
@@ -9,16 +12,16 @@
 | `/mcp` | Streamable HTTP MCP 端点，供 Claude Code、Claude Desktop、IDE 等客户端连接 | `Authorization: Bearer <服务器令牌>` |
 | `/mcp/<令牌>` | 同上，供无法设置请求头的客户端使用 | 路径中的服务器令牌 |
 | `/view/<项目>/<看板>` | 只读预览：看板网格或学术单栏报告 | URL 片段 `#token=` 中的签名分享令牌 |
-| `/edit/<项目>/<看板>` | 浏览器编辑：拖动布局、改标题与说明、版本历史 | 编辑权限的签名分享令牌 |
-| `/` | 管理入口：输入服务器令牌后浏览全部项目，为任一看板生成预览或编辑链接 | 服务器令牌（只保存在当前标签页） |
-| `/files/<令牌>` | 导出文件下载（PDF、HTML、JSON、CSV、网页部署包） | 24 小时有效的签名链接 |
+| `/edit/<项目>/<看板>` | 浏览器编辑：拖动与缩放布局、修改标题、版本历史 | 编辑权限的签名分享令牌 |
+| `/` | 默认项目预览入口；跨项目管理通过 API／CLI | 服务器令牌（只保存在当前标签页） |
+| `/files/<令牌>` | 导出文件下载（JSON、CSV、HTML、静态 ZIP） | 24 小时有效的签名链接 |
 | `/health` | 存活检查，返回版本 | 无 |
 
 页面外壳不含业务数据；数据只经由带令牌的接口读取。分享令牌放在 URL 片段中，浏览器不会把片段发送给服务器、代理或 Referer；页面加载后从地址栏移除，只保留在当前标签页的 sessionStorage。
 
 ## 快速开始
 
-先构建前端：`npm --prefix runtime-ui ci && npm --prefix runtime-ui run build`。服务器依赖只有 `mcp>=1.28,<2`（随附 Starlette 与 uvicorn）；Seaborn 统计图需要另装 `.[statistics]`。
+服务器依赖只有 `mcp>=1.28,<2`（随附 Starlette 与 uvicorn）；Seaborn 统计图独立于旧 UI，需要另装 `.[statistics]`。
 
 本机试用：
 
@@ -37,7 +40,7 @@ python3 -m dashboard_runtime server --workspace /data/projects --host 127.0.0.1 
 
 `deploy/` 提供可直接改用的文件：
 
-- `deploy/Dockerfile`、`deploy/docker-compose.yml`：两阶段构建（Node 构建前端，Python 运行），以非 root 用户运行，数据卷挂载 `/data`。在仓库根目录执行 `docker compose -f deploy/docker-compose.yml up -d --build`，配置写入 `deploy/charts.env`（从 `deploy/environment.example` 复制，不提交 Git）。
+- `deploy/Dockerfile`、`deploy/docker-compose.yml`：纯 Python 后端镜像，以非 root 用户运行，数据卷挂载 `/data`。在仓库根目录执行 `docker compose -f deploy/docker-compose.yml up -d --build`，配置写入 `deploy/charts.env`（从 `deploy/environment.example` 复制，不提交 Git）。
 - `deploy/charts-design.service`：systemd 单元，假设代码位于 `/opt/charts-design` 并使用其中的虚拟环境。
 - `deploy/nginx.conf`：TLS 反向代理示例；`/mcp` 关闭缓冲以支持 SSE，`/mcp` 与 `/files/` 关闭访问日志，避免令牌进入日志。
 

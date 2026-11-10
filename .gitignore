@@ -7,7 +7,11 @@
 # Explicitly ignore common agent/IDE/Stitch dotdirs
 .agents/
 .claude/
-.codex/
+!.codex/
+.codex/*
+!.codex/environments/
+.codex/environments/*
+!.codex/environments/environment.toml
 .cursor/
 .stitch/
 .tempmediaStorage/
@@ -20,6 +24,7 @@
 .env*
 *secret*
 *token*
+!docs/design-system/project/tokens.json
 *.key
 *.pem
 *.pfx

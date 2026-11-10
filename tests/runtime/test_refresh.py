@@ -28,7 +28,7 @@ def test_refresh_uses_latest_filter_labels_without_saving_reader_values(tmp_path
     assert saved['manifest']['filters'][0]['values'] == []
     info = service.call('runtime_info', {'dashboardId': 'refresh'})
     assert info['dashboardRevision'] == updated['revision']
-    assert len(info['uiBuildId']) == 12
+    assert info['uiBuildId'] == 'unavailable'
 
 
 # @wu-test type=boundary | scope=刷新筛选 | protects=非法ID或单选多值进入刷新

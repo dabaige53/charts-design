@@ -1,0 +1,975 @@
+{
+  "manifestVersion": 3,
+  "name": "McKinsey MDS",
+  "namespace": "McKinseyMDS",
+  "files": [
+    "assets/Artboards/README.md",
+    "assets/ChartUI/README.md",
+    "assets/ChartUI/chart-builders.json",
+    "assets/ChartUI/definitions/c01.js.txt",
+    "assets/ChartUI/definitions/c02.js.txt",
+    "assets/ChartUI/definitions/c03.js.txt",
+    "assets/ChartUI/definitions/c04.js.txt",
+    "assets/ChartUI/definitions/c05.js.txt",
+    "assets/ChartUI/definitions/c06.js.txt",
+    "assets/ChartUI/definitions/c07.js.txt",
+    "assets/ChartUI/definitions/c08.js.txt",
+    "assets/ChartUI/definitions/d01.js.txt",
+    "assets/ChartUI/definitions/d02.js.txt",
+    "assets/ChartUI/definitions/d03.js.txt",
+    "assets/ChartUI/definitions/d04.js.txt",
+    "assets/ChartUI/definitions/f01.js.txt",
+    "assets/ChartUI/definitions/f02.js.txt",
+    "assets/ChartUI/definitions/f03.js.txt",
+    "assets/ChartUI/definitions/fn01.js.txt",
+    "assets/ChartUI/definitions/fn02.js.txt",
+    "assets/ChartUI/definitions/fn03.js.txt",
+    "assets/ChartUI/definitions/fn04.js.txt",
+    "assets/ChartUI/definitions/k01.js.txt",
+    "assets/ChartUI/definitions/k02.js.txt",
+    "assets/ChartUI/definitions/k03.js.txt",
+    "assets/ChartUI/definitions/k04.js.txt",
+    "assets/ChartUI/definitions/k05.js.txt",
+    "assets/ChartUI/definitions/k06.js.txt",
+    "assets/ChartUI/definitions/m01.js.txt",
+    "assets/ChartUI/definitions/m02.js.txt",
+    "assets/ChartUI/definitions/m03.js.txt",
+    "assets/ChartUI/definitions/m04.js.txt",
+    "assets/ChartUI/definitions/r01.js.txt",
+    "assets/ChartUI/definitions/r02.js.txt",
+    "assets/ChartUI/definitions/r03.js.txt",
+    "assets/ChartUI/definitions/r04.js.txt",
+    "assets/ChartUI/definitions/r05.js.txt",
+    "assets/ChartUI/definitions/t01.js.txt",
+    "assets/ChartUI/definitions/t02.js.txt",
+    "assets/ChartUI/definitions/t03.js.txt",
+    "assets/ChartUI/definitions/t04.js.txt",
+    "assets/ChartUI/definitions/t05.js.txt",
+    "assets/ChartUI/definitions/t06.js.txt",
+    "assets/ChartUI/original-dashboard-engine.js.txt",
+    "assets/ChartUI/original-template-style-1.css.txt",
+    "assets/ChartUI/preservation.json",
+    "assets/ChartUI/project-chart-palette.json",
+    "assets/ChartUI/source/dashboard_runtime/web/adaptive.mjs.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/echarts-options.mjs.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/encoding.mjs.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/engine.mjs.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/kpi-layout.css.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/original-adapter.css.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/original-global.css.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/original.mjs.txt",
+    "assets/ChartUI/source/dashboard_runtime/web/statistical.mjs.txt",
+    "assets/ChartUI/source/examples/executive_report.html.txt",
+    "assets/ChartUI/source/examples/gallery.html.txt",
+    "assets/ChartUI/source/examples/sample_comprehensive_taxonomy_showcase.html.txt",
+    "assets/ChartUI/source/examples/sample_executive_monthly.html.txt",
+    "assets/ChartUI/source/examples/sample_financial_attribution.html.txt",
+    "assets/ChartUI/source/examples/sample_saas_product_analytics.html.txt",
+    "assets/ChartUI/source/examples/sample_strategic_matrix_portfolio.html.txt",
+    "assets/ChartUI/source/runtime-ui/build.mjs.txt",
+    "assets/ChartUI/source/runtime-ui/extract-original.py.txt",
+    "assets/ChartUI/source/skills/executive-charts/references/chart_catalog.json.txt",
+    "assets/ChartUI/source/skills/executive-charts/references/chart_explanations.json.txt",
+    "assets/ChartUI/source/skills/executive-charts/references/chart_options.js.txt",
+    "assets/ChartUI/source/skills/executive-charts/references/data_formatting_standards.md.txt",
+    "assets/ChartUI/source/skills/executive-charts/references/design_standards.md.txt",
+    "assets/ChartUI/source/skills/executive-charts/references/kpi-cards.md.txt",
+    "assets/ChartUI/source/skills/executive-charts/scripts/core/chart_builders.py.txt",
+    "assets/ChartUI/source/skills/executive-charts/scripts/core/chart_catalog.py.txt",
+    "assets/ChartUI/source/skills/executive-charts/scripts/core/chart_interactions.py.txt",
+    "assets/ChartUI/source/skills/executive-charts/scripts/core/component_schemas.py.txt",
+    "assets/ChartUI/source/skills/executive-charts/scripts/core/dashboard_template.py.txt",
+    "assets/ChartUI/source/skills/executive-charts/scripts/core/palette.py.txt",
+    "assets/ScriptMarks/README.md",
+    "assets/Sources/README.md",
+    "assets/Sources/contrast.json",
+    "assets/Sources/inventory.json",
+    "assets/Sources/source-layout.txt",
+    "assets/Sources/source-ocr.txt",
+    "chart-ui.md",
+    "components/Alerts/README.md",
+    "components/Avatars/README.md",
+    "components/Badges/README.md",
+    "components/Breadcrumbs/README.md",
+    "components/Buttons/README.md",
+    "components/Cards/README.md",
+    "components/Checkboxes/README.md",
+    "components/DataTables/README.md",
+    "components/DatePicker/README.md",
+    "components/Footers/README.md",
+    "components/Headers/README.md",
+    "components/Links/README.md",
+    "components/Modals/README.md",
+    "components/MultiSelect/README.md",
+    "components/PageSwitcher/README.md",
+    "components/Pagination/README.md",
+    "components/PopupMenu/README.md",
+    "components/RadioButtons/README.md",
+    "components/Select/README.md",
+    "components/Sliders/README.md",
+    "components/Tabs/README.md",
+    "components/Tags/README.md",
+    "components/TextAreas/README.md",
+    "components/TextInputs/README.md",
+    "components/ToggleButtons/README.md",
+    "components/Tooltips/README.md",
+    "tokens.css"
+  ],
+  "libraries": [],
+  "components": [
+    {
+      "name": "Alerts",
+      "group": "反馈",
+      "summary": "Global 在页面 Header 之上，用于全系统信息；Contextual 用于当前操作与状态，不能互换。"
+    },
+    {
+      "name": "Avatars",
+      "group": "身份",
+      "summary": "头像使用圆形；有照片、姓名缩写、无照片无姓名三类。"
+    },
+    {
+      "name": "Badges",
+      "group": "反馈",
+      "summary": "紧邻所指对象，计数上限显示 999+；状态徽章用于展示而不交互。"
+    },
+    {
+      "name": "Breadcrumbs",
+      "group": "导航",
+      "summary": "显示 2–5 个层级；末项是当前位置，使用 Electric Blue。"
+    },
+    {
+      "name": "Buttons",
+      "group": "操作",
+      "summary": "Primary、Secondary、Tertiary 表示交互优先级；尽可能每页一个主要按钮。"
+    },
+    {
+      "name": "Cards",
+      "group": "内容",
+      "summary": "标题 1–3 行，建议 2 行；正文 2–5 行，建议 3–4 行。"
+    },
+    {
+      "name": "Checkboxes",
+      "group": "表单",
+      "summary": "用于选择一项、多项或全部；按最可能选择或字母顺序排列。"
+    },
+    {
+      "name": "DataTables",
+      "group": "数据",
+      "summary": "至少三列；表头与内容行均为 48px。"
+    },
+    {
+      "name": "DatePicker",
+      "group": "表单",
+      "summary": "提供单日与日期范围选择；从输入框右侧日历入口展开。"
+    },
+    {
+      "name": "Footers",
+      "group": "导航",
+      "summary": "提供 Large、Default、Condensed 版本及桌面、平板、移动布局。"
+    },
+    {
+      "name": "Headers",
+      "group": "导航",
+      "summary": "提供桌面、平板、移动的浅色 Header，以及带或不带菜单入口的版本。"
+    },
+    {
+      "name": "Links",
+      "group": "操作",
+      "summary": "Inline Link 保持周围文字的字号与颜色，默认下划线作为非颜色识别线索。"
+    },
+    {
+      "name": "Modals",
+      "group": "反馈",
+      "summary": "仅用于需要集中注意力的关键内容或任务；打开后阻止底层页面交互。"
+    },
+    {
+      "name": "MultiSelect",
+      "group": "表单",
+      "summary": "少量选择使用 Tags，已选项从候选列表移除；大量选择使用 Checkbox 与数量计数。"
+    },
+    {
+      "name": "PageSwitcher",
+      "group": "导航",
+      "summary": "位于页面底部，Previous 与 Next 成对出现，导航到流程中的前后页面。"
+    },
+    {
+      "name": "Pagination",
+      "group": "导航",
+      "summary": "用于分页内容；显示当前位置并支持跳页。"
+    },
+    {
+      "name": "PopupMenu",
+      "group": "操作",
+      "summary": "文案直接对应保存、删除、下载等动作；分隔线划分操作组。"
+    },
+    {
+      "name": "RadioButtons",
+      "group": "表单",
+      "summary": "用于互斥选项；纵向单列排列，按常用优先或字母顺序。"
+    },
+    {
+      "name": "Select",
+      "group": "表单",
+      "summary": "用于从列表中选择一个选项；提供小、默认、大号和 Help Text 版本。"
+    },
+    {
+      "name": "Sliders",
+      "group": "表单",
+      "summary": "提供单值、带图标单值和区间选择；需要时显示数值。"
+    },
+    {
+      "name": "Tabs",
+      "group": "导航",
+      "summary": "用于同一上下文的 3–8 个区段；仅显示当前项内容，其余选择持续可见。"
+    },
+    {
+      "name": "Tags",
+      "group": "表单",
+      "summary": "用于可选择、可移除的选项，适配多选输入；不与只读 Badge 混淆。"
+    },
+    {
+      "name": "TextAreas",
+      "group": "表单",
+      "summary": "用于评论等多行文字；允许从右下角调整大小。"
+    },
+    {
+      "name": "TextInputs",
+      "group": "表单",
+      "summary": "用于单行输入；Placeholder 不能替代 Label。"
+    },
+    {
+      "name": "ToggleButtons",
+      "group": "表单",
+      "summary": "用于即时切换 On / Off；保留 Off、On、Disabled Off、Disabled On。"
+    },
+    {
+      "name": "Tooltips",
+      "group": "反馈",
+      "summary": "用于解释工具或图标；通常一个词或一行短句。"
+    }
+  ],
+  "assetGroups": [
+    {
+      "name": "ChartUI"
+    },
+    {
+      "name": "Sources",
+      "order": [
+        "McK_DS_core_Artboards.pdf"
+      ],
+      "files": [
+        {
+          "path": "assets/Sources/McK_DS_core_Artboards.pdf",
+          "id": "699fa1f14639234c0e962f22d6dedd10"
+        }
+      ]
+    },
+    {
+      "name": "ScriptMarks",
+      "order": [
+        "script-mark-deep-blue.png",
+        "script-mark-black.png",
+        "script-mark-white.png"
+      ],
+      "files": [
+        {
+          "path": "assets/ScriptMarks/script-mark-deep-blue.png",
+          "id": "2341a2055f275d98dd38a44c7bcaa0dc"
+        },
+        {
+          "path": "assets/ScriptMarks/script-mark-black.png",
+          "id": "878f99b2338e80c67146707eb5702c89"
+        },
+        {
+          "path": "assets/ScriptMarks/script-mark-white.png",
+          "id": "29745c9d631020629092ebeb04381182"
+        }
+      ]
+    },
+    {
+      "name": "Artboards",
+      "order": [
+        "page-01.jpg",
+        "page-02.jpg",
+        "page-03.jpg",
+        "page-04.jpg",
+        "page-05.jpg",
+        "page-06.jpg",
+        "page-07.jpg",
+        "page-08.jpg",
+        "page-09.jpg",
+        "page-10.jpg",
+        "page-11.jpg",
+        "page-12.jpg",
+        "page-13.jpg",
+        "page-14.jpg",
+        "page-15.jpg",
+        "page-16.jpg",
+        "page-17.jpg",
+        "page-18.jpg",
+        "page-19.jpg",
+        "page-20.jpg",
+        "page-21.jpg",
+        "page-22.jpg",
+        "page-23.jpg",
+        "page-24.jpg",
+        "page-25.jpg",
+        "page-26.jpg",
+        "page-27.jpg",
+        "detail-28.jpg",
+        "detail-29.jpg",
+        "detail-30.jpg",
+        "detail-31.jpg",
+        "detail-32.jpg",
+        "detail-33.jpg",
+        "detail-34.jpg",
+        "detail-35.jpg",
+        "detail-36.jpg",
+        "detail-37.jpg",
+        "detail-38.jpg",
+        "detail-39.jpg",
+        "detail-40.jpg",
+        "detail-41.jpg",
+        "detail-42.jpg",
+        "detail-43.jpg",
+        "detail-44.jpg",
+        "detail-45.jpg",
+        "detail-46.jpg",
+        "detail-47.jpg",
+        "detail-48.jpg",
+        "detail-49.jpg",
+        "detail-50.jpg",
+        "detail-51.jpg",
+        "detail-52.jpg",
+        "detail-53.jpg",
+        "detail-54.jpg",
+        "detail-55.jpg",
+        "detail-56.jpg",
+        "detail-57.jpg",
+        "detail-58.jpg",
+        "detail-59.jpg"
+      ],
+      "files": [
+        {
+          "path": "assets/Artboards/page-01.jpg",
+          "id": "bcabeed2fc0aec87764fe59afa86c240"
+        },
+        {
+          "path": "assets/Artboards/page-02.jpg",
+          "id": "55df1b4bed64069398ffd5d191db52e2"
+        },
+        {
+          "path": "assets/Artboards/page-03.jpg",
+          "id": "87e6b3fd9d354453903ceb9b0806a415"
+        },
+        {
+          "path": "assets/Artboards/page-04.jpg",
+          "id": "44a768065bbf7bb7a2404e3432dbfdcd"
+        },
+        {
+          "path": "assets/Artboards/page-05.jpg",
+          "id": "a168497b44cb3c5fb94b03d319f99ebe"
+        },
+        {
+          "path": "assets/Artboards/page-06.jpg",
+          "id": "8588ee75f64c1228f256d09b88b39c06"
+        },
+        {
+          "path": "assets/Artboards/page-07.jpg",
+          "id": "4230eb226972defa7039c7fa2499ddc8"
+        },
+        {
+          "path": "assets/Artboards/page-08.jpg",
+          "id": "08321a111b5e1361146ddfd672e3e92f"
+        },
+        {
+          "path": "assets/Artboards/page-09.jpg",
+          "id": "922c233ff1a378ca8ae1e5d9964b573d"
+        },
+        {
+          "path": "assets/Artboards/page-10.jpg",
+          "id": "4b8ac34f7161d54e36dab34d66e277de"
+        },
+        {
+          "path": "assets/Artboards/page-11.jpg",
+          "id": "5acc5308421e7d627ac4a8da9531b9fa"
+        },
+        {
+          "path": "assets/Artboards/page-12.jpg",
+          "id": "447574bc337946c501fcf4330384426f"
+        },
+        {
+          "path": "assets/Artboards/page-13.jpg",
+          "id": "4a00a95632b54bedb82b319e4da60fb4"
+        },
+        {
+          "path": "assets/Artboards/page-14.jpg",
+          "id": "5bb9d304e007951422b23eb588ebf867"
+        },
+        {
+          "path": "assets/Artboards/page-15.jpg",
+          "id": "a30d1833a7ee6cc85aedf3bd7e18e538"
+        },
+        {
+          "path": "assets/Artboards/page-16.jpg",
+          "id": "a22a900f9c9f747fe8a2a790fe5d4992"
+        },
+        {
+          "path": "assets/Artboards/page-17.jpg",
+          "id": "0a721e0c5426873b48815e1d5794c4eb"
+        },
+        {
+          "path": "assets/Artboards/page-18.jpg",
+          "id": "5b8e5c19eb08c6a3b8c23587adaf40b4"
+        },
+        {
+          "path": "assets/Artboards/page-19.jpg",
+          "id": "2bd800b9533dd4dd590ccf855e2c37a6"
+        },
+        {
+          "path": "assets/Artboards/page-20.jpg",
+          "id": "460498336a79b7af29193af91298b09f"
+        },
+        {
+          "path": "assets/Artboards/page-21.jpg",
+          "id": "5d902d4052e8dadfb5b6a0c05e493885"
+        },
+        {
+          "path": "assets/Artboards/page-22.jpg",
+          "id": "c6b37eeb4983f1beada0476deba78ac5"
+        },
+        {
+          "path": "assets/Artboards/page-23.jpg",
+          "id": "fef039b293ee8021be4a5dda0ddf25ff"
+        },
+        {
+          "path": "assets/Artboards/page-24.jpg",
+          "id": "6c5c1729ef6325cd13bb5c3ff10c4a82"
+        },
+        {
+          "path": "assets/Artboards/page-25.jpg",
+          "id": "8c285e9dc4da212f11f120128cf37ddb"
+        },
+        {
+          "path": "assets/Artboards/page-26.jpg",
+          "id": "c9caf874cf735f07c883e3b220bdeeb5"
+        },
+        {
+          "path": "assets/Artboards/page-27.jpg",
+          "id": "8206b30d378d8e356cf15a4ea087e30f"
+        },
+        {
+          "path": "assets/Artboards/detail-28.jpg",
+          "id": "638823059db1d644cc943fb93ea3abd0"
+        },
+        {
+          "path": "assets/Artboards/detail-29.jpg",
+          "id": "2063ebbd895a579414eb62a7d94b3014"
+        },
+        {
+          "path": "assets/Artboards/detail-30.jpg",
+          "id": "130ade3e880ec4f51a7561c64e27c362"
+        },
+        {
+          "path": "assets/Artboards/detail-31.jpg",
+          "id": "b6f3db5ea099f1a7b9b30cb311081018"
+        },
+        {
+          "path": "assets/Artboards/detail-32.jpg",
+          "id": "a62fbb318fc9add89c253c3b4c346ac3"
+        },
+        {
+          "path": "assets/Artboards/detail-33.jpg",
+          "id": "2288a16cbfce5b4784bb251726fd3f9f"
+        },
+        {
+          "path": "assets/Artboards/detail-34.jpg",
+          "id": "fcb137b6abe3c01be61f36a1ea857c5d"
+        },
+        {
+          "path": "assets/Artboards/detail-35.jpg",
+          "id": "0aaabafa29ea6bf9ee8dfdc058c56403"
+        },
+        {
+          "path": "assets/Artboards/detail-36.jpg",
+          "id": "0139f0cb56c500485af1b80d792674c3"
+        },
+        {
+          "path": "assets/Artboards/detail-37.jpg",
+          "id": "05e57557de2c131ea027227637d8564e"
+        },
+        {
+          "path": "assets/Artboards/detail-38.jpg",
+          "id": "54539508868310dd17415c781badd2ee"
+        },
+        {
+          "path": "assets/Artboards/detail-39.jpg",
+          "id": "5c41c58b3378f7722c147c02c77afd9a"
+        },
+        {
+          "path": "assets/Artboards/detail-40.jpg",
+          "id": "ce715b7b2cfcb261ffee4fca578145c3"
+        },
+        {
+          "path": "assets/Artboards/detail-41.jpg",
+          "id": "f61a95a0ff279cca252b39a291be4555"
+        },
+        {
+          "path": "assets/Artboards/detail-42.jpg",
+          "id": "530f76dedb96b256a99dff709df8aab6"
+        },
+        {
+          "path": "assets/Artboards/detail-43.jpg",
+          "id": "d611c24bb55f6ee6d7e5d286c0de901c"
+        },
+        {
+          "path": "assets/Artboards/detail-44.jpg",
+          "id": "93e7a9a141c1e7f2b805c2e035e49292"
+        },
+        {
+          "path": "assets/Artboards/detail-45.jpg",
+          "id": "57c107a5c137482b1987638c8ec67bc7"
+        },
+        {
+          "path": "assets/Artboards/detail-46.jpg",
+          "id": "3643a03c69096f0bb63b146053091df0"
+        },
+        {
+          "path": "assets/Artboards/detail-47.jpg",
+          "id": "9bb70e6adcaef17714f39d39daaa067a"
+        },
+        {
+          "path": "assets/Artboards/detail-48.jpg",
+          "id": "1d7820d7bcb69a6db80b60031f92fc55"
+        },
+        {
+          "path": "assets/Artboards/detail-49.jpg",
+          "id": "7a5984d946c0cbec95deb3166a5749a0"
+        },
+        {
+          "path": "assets/Artboards/detail-50.jpg",
+          "id": "79d69a4e1da1b58eebbd6b21e996527f"
+        },
+        {
+          "path": "assets/Artboards/detail-51.jpg",
+          "id": "be4acc0986091d6d0c52b1cbdfa55f14"
+        },
+        {
+          "path": "assets/Artboards/detail-52.jpg",
+          "id": "45c64b3f4db08f34d3e6f356816cd307"
+        },
+        {
+          "path": "assets/Artboards/detail-53.jpg",
+          "id": "c1c439832de92ae5a64d9623115ea457"
+        },
+        {
+          "path": "assets/Artboards/detail-54.jpg",
+          "id": "c3b3e7c428df55ef92a646825f52f650"
+        },
+        {
+          "path": "assets/Artboards/detail-55.jpg",
+          "id": "c65d5930be7ed2dd7c8ac872e8b78a84"
+        },
+        {
+          "path": "assets/Artboards/detail-56.jpg",
+          "id": "a5d7cfb43bf044a4ba2846c4b309f161"
+        },
+        {
+          "path": "assets/Artboards/detail-57.jpg",
+          "id": "da1aa4cfdaf07411a72e948c1c47d393"
+        },
+        {
+          "path": "assets/Artboards/detail-58.jpg",
+          "id": "caa35c0b66e463b3da7f6712707be492"
+        },
+        {
+          "path": "assets/Artboards/detail-59.jpg",
+          "id": "cf7faf6b7fc77043d19da9de0c744692"
+        }
+      ]
+    }
+  ],
+  "storage": {
+    "files": {
+      "assets/Artboards/detail-28.jpg": {
+        "store": "blob",
+        "id": "638823059db1d644cc943fb93ea3abd0",
+        "bytes": 129959,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-29.jpg": {
+        "store": "blob",
+        "id": "2063ebbd895a579414eb62a7d94b3014",
+        "bytes": 367350,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-30.jpg": {
+        "store": "blob",
+        "id": "130ade3e880ec4f51a7561c64e27c362",
+        "bytes": 185365,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-31.jpg": {
+        "store": "blob",
+        "id": "b6f3db5ea099f1a7b9b30cb311081018",
+        "bytes": 158521,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-32.jpg": {
+        "store": "blob",
+        "id": "a62fbb318fc9add89c253c3b4c346ac3",
+        "bytes": 496612,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-33.jpg": {
+        "store": "blob",
+        "id": "2288a16cbfce5b4784bb251726fd3f9f",
+        "bytes": 290923,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-34.jpg": {
+        "store": "blob",
+        "id": "fcb137b6abe3c01be61f36a1ea857c5d",
+        "bytes": 228249,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-35.jpg": {
+        "store": "blob",
+        "id": "0aaabafa29ea6bf9ee8dfdc058c56403",
+        "bytes": 261372,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-36.jpg": {
+        "store": "blob",
+        "id": "0139f0cb56c500485af1b80d792674c3",
+        "bytes": 928744,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-37.jpg": {
+        "store": "blob",
+        "id": "05e57557de2c131ea027227637d8564e",
+        "bytes": 497657,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-38.jpg": {
+        "store": "blob",
+        "id": "54539508868310dd17415c781badd2ee",
+        "bytes": 293255,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-39.jpg": {
+        "store": "blob",
+        "id": "5c41c58b3378f7722c147c02c77afd9a",
+        "bytes": 433773,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-40.jpg": {
+        "store": "blob",
+        "id": "ce715b7b2cfcb261ffee4fca578145c3",
+        "bytes": 237562,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-41.jpg": {
+        "store": "blob",
+        "id": "f61a95a0ff279cca252b39a291be4555",
+        "bytes": 228028,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-42.jpg": {
+        "store": "blob",
+        "id": "530f76dedb96b256a99dff709df8aab6",
+        "bytes": 183085,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-43.jpg": {
+        "store": "blob",
+        "id": "d611c24bb55f6ee6d7e5d286c0de901c",
+        "bytes": 276731,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-44.jpg": {
+        "store": "blob",
+        "id": "93e7a9a141c1e7f2b805c2e035e49292",
+        "bytes": 205871,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-45.jpg": {
+        "store": "blob",
+        "id": "57c107a5c137482b1987638c8ec67bc7",
+        "bytes": 344715,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-46.jpg": {
+        "store": "blob",
+        "id": "3643a03c69096f0bb63b146053091df0",
+        "bytes": 125694,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-47.jpg": {
+        "store": "blob",
+        "id": "9bb70e6adcaef17714f39d39daaa067a",
+        "bytes": 134749,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-48.jpg": {
+        "store": "blob",
+        "id": "1d7820d7bcb69a6db80b60031f92fc55",
+        "bytes": 94364,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-49.jpg": {
+        "store": "blob",
+        "id": "7a5984d946c0cbec95deb3166a5749a0",
+        "bytes": 105527,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-50.jpg": {
+        "store": "blob",
+        "id": "79d69a4e1da1b58eebbd6b21e996527f",
+        "bytes": 163816,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-51.jpg": {
+        "store": "blob",
+        "id": "be4acc0986091d6d0c52b1cbdfa55f14",
+        "bytes": 602881,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-52.jpg": {
+        "store": "blob",
+        "id": "45c64b3f4db08f34d3e6f356816cd307",
+        "bytes": 453206,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-53.jpg": {
+        "store": "blob",
+        "id": "c1c439832de92ae5a64d9623115ea457",
+        "bytes": 186762,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-54.jpg": {
+        "store": "blob",
+        "id": "c3b3e7c428df55ef92a646825f52f650",
+        "bytes": 258452,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-55.jpg": {
+        "store": "blob",
+        "id": "c65d5930be7ed2dd7c8ac872e8b78a84",
+        "bytes": 324328,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-56.jpg": {
+        "store": "blob",
+        "id": "a5d7cfb43bf044a4ba2846c4b309f161",
+        "bytes": 138041,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-57.jpg": {
+        "store": "blob",
+        "id": "da1aa4cfdaf07411a72e948c1c47d393",
+        "bytes": 111577,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-58.jpg": {
+        "store": "blob",
+        "id": "caa35c0b66e463b3da7f6712707be492",
+        "bytes": 144148,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/detail-59.jpg": {
+        "store": "blob",
+        "id": "cf7faf6b7fc77043d19da9de0c744692",
+        "bytes": 222655,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-01.jpg": {
+        "store": "blob",
+        "id": "bcabeed2fc0aec87764fe59afa86c240",
+        "bytes": 110708,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-02.jpg": {
+        "store": "blob",
+        "id": "55df1b4bed64069398ffd5d191db52e2",
+        "bytes": 143879,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-03.jpg": {
+        "store": "blob",
+        "id": "87e6b3fd9d354453903ceb9b0806a415",
+        "bytes": 75556,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-04.jpg": {
+        "store": "blob",
+        "id": "44a768065bbf7bb7a2404e3432dbfdcd",
+        "bytes": 67965,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-05.jpg": {
+        "store": "blob",
+        "id": "a168497b44cb3c5fb94b03d319f99ebe",
+        "bytes": 62838,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-06.jpg": {
+        "store": "blob",
+        "id": "8588ee75f64c1228f256d09b88b39c06",
+        "bytes": 40859,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-07.jpg": {
+        "store": "blob",
+        "id": "4230eb226972defa7039c7fa2499ddc8",
+        "bytes": 97382,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-08.jpg": {
+        "store": "blob",
+        "id": "08321a111b5e1361146ddfd672e3e92f",
+        "bytes": 57024,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-09.jpg": {
+        "store": "blob",
+        "id": "922c233ff1a378ca8ae1e5d9964b573d",
+        "bytes": 151722,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-10.jpg": {
+        "store": "blob",
+        "id": "4b8ac34f7161d54e36dab34d66e277de",
+        "bytes": 23547,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-11.jpg": {
+        "store": "blob",
+        "id": "5acc5308421e7d627ac4a8da9531b9fa",
+        "bytes": 53007,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-12.jpg": {
+        "store": "blob",
+        "id": "447574bc337946c501fcf4330384426f",
+        "bytes": 28494,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-13.jpg": {
+        "store": "blob",
+        "id": "4a00a95632b54bedb82b319e4da60fb4",
+        "bytes": 35627,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-14.jpg": {
+        "store": "blob",
+        "id": "5bb9d304e007951422b23eb588ebf867",
+        "bytes": 26239,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-15.jpg": {
+        "store": "blob",
+        "id": "a30d1833a7ee6cc85aedf3bd7e18e538",
+        "bytes": 23630,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-16.jpg": {
+        "store": "blob",
+        "id": "a22a900f9c9f747fe8a2a790fe5d4992",
+        "bytes": 36571,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-17.jpg": {
+        "store": "blob",
+        "id": "0a721e0c5426873b48815e1d5794c4eb",
+        "bytes": 53871,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-18.jpg": {
+        "store": "blob",
+        "id": "5b8e5c19eb08c6a3b8c23587adaf40b4",
+        "bytes": 36044,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-19.jpg": {
+        "store": "blob",
+        "id": "2bd800b9533dd4dd590ccf855e2c37a6",
+        "bytes": 32780,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-20.jpg": {
+        "store": "blob",
+        "id": "460498336a79b7af29193af91298b09f",
+        "bytes": 28242,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-21.jpg": {
+        "store": "blob",
+        "id": "5d902d4052e8dadfb5b6a0c05e493885",
+        "bytes": 26303,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-22.jpg": {
+        "store": "blob",
+        "id": "c6b37eeb4983f1beada0476deba78ac5",
+        "bytes": 37640,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-23.jpg": {
+        "store": "blob",
+        "id": "fef039b293ee8021be4a5dda0ddf25ff",
+        "bytes": 53932,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-24.jpg": {
+        "store": "blob",
+        "id": "6c5c1729ef6325cd13bb5c3ff10c4a82",
+        "bytes": 45354,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-25.jpg": {
+        "store": "blob",
+        "id": "8c285e9dc4da212f11f120128cf37ddb",
+        "bytes": 32732,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-26.jpg": {
+        "store": "blob",
+        "id": "c9caf874cf735f07c883e3b220bdeeb5",
+        "bytes": 30045,
+        "type": "image/jpeg"
+      },
+      "assets/Artboards/page-27.jpg": {
+        "store": "blob",
+        "id": "8206b30d378d8e356cf15a4ea087e30f",
+        "bytes": 27135,
+        "type": "image/jpeg"
+      },
+      "assets/ScriptMarks/script-mark-black.png": {
+        "store": "blob",
+        "id": "878f99b2338e80c67146707eb5702c89",
+        "bytes": 399,
+        "type": "image/png"
+      },
+      "assets/ScriptMarks/script-mark-deep-blue.png": {
+        "store": "blob",
+        "id": "2341a2055f275d98dd38a44c7bcaa0dc",
+        "bytes": 3970,
+        "type": "image/png"
+      },
+      "assets/ScriptMarks/script-mark-white.png": {
+        "store": "blob",
+        "id": "29745c9d631020629092ebeb04381182",
+        "bytes": 387,
+        "type": "image/png"
+      },
+      "assets/Sources/McK_DS_core_Artboards.pdf": {
+        "store": "blob",
+        "id": "699fa1f14639234c0e962f22d6dedd10",
+        "bytes": 9646958,
+        "type": "application/pdf"
+      }
+    },
+    "blobBytesUsed": 19904812
+  }
+}

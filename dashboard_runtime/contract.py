@@ -3,6 +3,7 @@ from .service import TOOLS
 from .statistical import statistical_declarations
 CONTRACT = {
     'schemaVersion': 2,
+    'presentationStatus': 'unavailable: native HTML generators and previous UI removed on 2026-11-10; data contracts remain supported',
     'declarationsResource': 'charts://declarations',
     'tools': {key: {'description': value[0], 'inputSchema': value[1]} for key, value in TOOLS.items()},
     'operations': {
@@ -59,7 +60,7 @@ CONTRACT = {
         'charts://declarations provides required-field schemas and original family/code requirements with authoritative validator sources and coverage limits.',
         'The original discovery catalog lists chart, KPI and table entries; its installed validator registry has 40 chart codes and 16 KPI types (mc01-mc16). Do not use every catalog entry as a chart code. Choose KPI shapes by question (chart_declarations returns kpiGuide), not mc01 for every metric.',
         'Legacy chart configs require explicit data and presentation from the registered schema. Per-code discovery metadata is partial guidance, not a complete JSON Schema.',
-        'Optional config.echarts supplies native ECharts JSON option overrides after preset generation. Unknown fields pass through; objects merge and component arrays merge by id/index. No extra feature tools or JavaScript-string execution. Binding, data tables and cross-chart filtering retain their existing scope. See docs/echarts-options.md.',
+        'Optional config.echarts remains accepted as stored native ECharts configuration. The preset renderer and UI have been removed; rendering and option application await the replacement UI. See docs/echarts-options.md.',
         'Source verification supplied is not proof of execution or certification.'
     ]
 }

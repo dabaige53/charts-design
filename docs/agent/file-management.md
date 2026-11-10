@@ -11,24 +11,20 @@
 | `docs/agent/` | 文件管理等长期项目准则 | 已确认的项目约定变化时原位更新 |
 | `docs/plans/`、`docs/records/`、`docs/adr/` | 按需新增的专项方案、验证记录和架构决定 | 有实际内容时创建；已有清楚路径沿用 |
 | `docs/images/`、`docs/performance-results.json` | 文档配套截图与已有性能证据 | 与对应记录一同保留，标明测量范围 |
-| `skills/executive-charts/` | Dashboard Skill、组件渲染器、声明、设计规范和脚本 | 维护源码；本地安装指向此目录，避免另存渲染器副本 |
+| `skills/executive-charts/` | 看板规范、指标卡、布局模板、图表声明和工作区脚本 | 维护源码；本地安装指向此目录 |
 | `skills/analytical-reports/` | 分析报告 Skill 与随包参考材料 | 保留相对引用和随包可用性 |
-| `dashboard_runtime/`、`runtime-ui/`、`bin/` | 后端、前端构建与启动更新脚本 | 修改对应维护源码后重新构建 |
+| `dashboard_runtime/`、`bin/` | 后端 SQLite 存储、数据计算、MCP 服务与启动更新脚本 | 修改对应维护源码后更新 |
 | `deploy/` | 自托管服务器的 Dockerfile、compose、systemd 与 nginx 示例 | 服务器参数或运行方式变化时同步 `docs/self-hosted-server.md`；不存放令牌、密钥或 `charts.env` |
-| `examples/`、`skills/executive-charts/examples/` | 人工浏览与视觉比较案例 | 作为展示材料 |
-| `dashboard_runtime/examples/academic-report.md` | 分析报告案例的唯一 Markdown 母稿 | CLI 与 MCP 案例共同读取，避免独立副本 |
-| `tests/`、`.github/workflows/` | 自动检查与 CI；`tests/deploy/` 为部署镜像冒烟检查 | 以已有命令及 CI 配置确定检查入口，分层见 `docs/testing.md` |
+| `dashboard_runtime/examples/academic-report.md` | 分析报告案例的唯一 Markdown 母稿 | MCP 案例直接读取，避免独立副本 |
+| `tests/`、`.github/workflows/` | 静态检查、后端单元测试与部署镜像冒烟检查 | 检查入口以 `docs/testing.md` 为准，不含浏览器验收 |
 
 Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原位。项目级文档正文放在 `docs/`，不为工具发现另建根目录正文、链接入口或符号链接。适配 Skill 或插件要求时优先改用已有正文；自动发现失败时直接读取实际路径。
 
-## 生成文件
+## 生成文件与重构边界
 
-以下目录可重新构建，不独立维护其中的渲染实现：
+`runtime-ui/src` 维护 React 组件、应用和宿主适配。`runtime-ui/fixtures` 仅保存设计预览数据，生产构建禁止引用该目录及 `docs`。40 个图表定义维护在 `runtime-ui/src/charts`，不再在构建时提取归档源码。
 
-- `runtime-ui/generated/`：在仓库执行 `npm --prefix runtime-ui run build` 生成。
-- `dashboard_runtime/web/dist/`：由同一次前端构建生成，供预览和安装包使用。
-
-清理生成文件前检查其维护源码和重建入口。重建源码目录不会自动更新其他安装目录或已经打开的宿主页面；安装更新按本地 MCP 更新说明执行。
+构建只写 `runtime-ui/dist`；`ui:package` 显式复制应用资源到 `dashboard_runtime/web/dist`，供 MCP、npm 与 Python 包使用；容器在独立 Node 阶段重新构建。`ui:package:design` 单独更新设计系统组件 bundle，画板资源另行维护。不要把构建步骤与设计文档编辑串联。
 
 ## 业务资产与临时文件
 

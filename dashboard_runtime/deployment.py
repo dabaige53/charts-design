@@ -1,207 +1,78 @@
-"""Portable static website and rebuildable source; no runtime database references."""
-
+"""Independent static site using the same React components and shared query worker."""
 import copy
-import hashlib
-import html
-import json
+import gzip
 import shutil
 import uuid
-from pathlib import Path
-from .model import require
-from .assets import DIST
+import zipfile
+
+from .assets import DIST, require_preview, ui_build_id
 from .build import BACKEND_BUILD_ID
+from .model import json_bytes, require
 
 
-def write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")),
-        encoding="utf-8",
-    )
+def _write_shards(site, key, rows):
+    files, batch, count = [], [], 0
+    for row in rows:
+        batch.append(row)
+        count += 1
+        if len(batch) == 5000:
+            name = 'data/' + key + '-' + str(len(files)) + '.json.gz'
+            (site / name).write_bytes(gzip.compress(json_bytes(batch), mtime=0))
+            files.append(name)
+            batch = []
+    if batch:
+        name = 'data/' + key + '-' + str(len(files)) + '.json.gz'
+        (site / name).write_bytes(gzip.compress(json_bytes(batch), mtime=0))
+        files.append(name)
+    return files, count
 
 
 def export_site(store, board):
-    doc = copy.deepcopy(store.get(board, hydrate=False))
-    base = (
-        getattr(store, "project_root", store.root)
-        / "deployments"
-        / (board + "-" + uuid.uuid4().hex[:12])
-    )
-    site = base / "dist"
-    site.mkdir(parents=True)
-    root = Path(__file__).resolve().parent.parent
-    require(
-        (root / "runtime-ui/generated/original-engine.mjs").exists(),
-        "Build the runtime before exporting source",
-        "ASSETS_NOT_BUILT",
-    )
-    refs = doc["snapshot"].pop("datasetRefs", {})
-    table_refs = doc["snapshot"].pop("componentDataRefs", {})
-    doc.pop("computed", None)
-    doc.pop("progressive", None)
-    doc["snapshot"].pop("localMode", None)
-    doc["manifest"]["annotations"] = []
-    doc["manifest"].pop("originalWorkspace", None)
-    # Publish labels, not local connection names, SQL, parameters or file paths.
-    doc["manifest"]["sources"] = {
-        key: {"id": key, "name": value.get("name", key), "kind": "file"}
-        for key, value in doc["manifest"].get("sources", {}).items()
-    }
-    files, counts = {}, {}
-    options = {f["id"]: {} for f in doc["manifest"]["filters"] if f["op"] == "in"}
-    for cid, ref in table_refs.items():
-        key = "component-" + cid
-        refs[key] = ref
-        c = doc["manifest"]["components"][cid]
-        c["datasetId"] = key
-        c.setdefault("binding", {})
-        c["config"].pop("rowsRef", None)
-    used = {c.get("datasetId") for c in doc["manifest"]["components"].values()} - {None}
-    refs = {k: v for k, v in refs.items() if k in used}
-    datasets = {
-        k: v for k, v in doc["snapshot"].get("datasets", {}).items() if k in used
-    }
-    doc["manifest"]["datasets"] = {
-        k: v for k, v in doc["manifest"]["datasets"].items() if k in used
-    }
-    doc["manifest"]["metrics"] = {
-        k: v
-        for k, v in doc["manifest"]["metrics"].items()
-        if v.get("datasetId") in used
-    }
-    for key in sorted(set(datasets) | set(refs)):
-        rows = store.data.iter_rows(refs[key]) if key in refs else iter(datasets[key])
-        paths = []
-        chunk = []
-        size = 2
-        count = 0
-        related = [
-            f
-            for f in doc["manifest"]["filters"]
-            if f["id"] in options
-            and any(
-                doc["manifest"]["components"][cid].get("datasetId") == key
-                for cid in f["componentIds"]
-            )
-        ]
-
-        def flush():
-            if not chunk:
-                return
-            name = (
-                "data/"
-                + hashlib.sha256(key.encode()).hexdigest()[:16]
-                + "-"
-                + str(len(paths))
-                + ".json"
-            )
-            write(site / name, chunk)
-            paths.append(name)
-
-        for row in rows:
-            encoded = len(json.dumps(row, ensure_ascii=False).encode())
-            require(
-                encoded < 8_000_000, "One data row exceeds static export size limit"
-            )
-            if chunk and size + encoded > 4_000_000:
-                flush()
-                chunk = []
-                size = 2
-            chunk.append(row)
-            size += encoded + 1
-            count += 1
-            for f in related:
-                v = row.get(f["field"])
-                options[f["id"]][json.dumps(v, ensure_ascii=False)] = v
-        flush()
-        files[key] = paths
-        counts[key] = count
-    doc["snapshot"]["datasets"] = {}
-    doc["staticFiles"] = files
-    doc["staticFilterOptions"] = {
-        key: list(values.values()) for key, values in options.items()
-    }
+    require_preview()
+    doc = store.compact(store.readable(board) if getattr(store, 'project_root', None) else store.get(board, hydrate=False))
+    doc = copy.deepcopy(doc)
     from .statistical import statistical_artifacts
-
-    original = store.get(board, hydrate=False)
-    artifacts = statistical_artifacts(store.statistical_document(original))
-    write(site / "document.json", {"document": doc, "statisticalArtifacts": artifacts})
-    (site / "assets").mkdir()
-    for name in ("app.js", "app.css"):
-        shutil.copy2(DIST / name, site / "assets" / name)
-    (site / "index.html").write_text(
-        '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard</title><link rel="stylesheet" href="./assets/app.css"></head><body><script>window.__DASHBOARD_BOOT__={mode:"static",documentUrl:"./document.json"};</script><script src="./assets/app.js"></script></body></html>'.replace(
-            "<title>Dashboard</title>",
-            "<title>" + html.escape(doc["manifest"]["title"]) + "</title>",
-        )
-    )
-    (site / "_headers").write_text(
-        "/*\n  Cache-Control: no-cache\n  X-Content-Type-Options: nosniff\n"
-    )
-    if (root / "LICENSE").exists():
-        shutil.copy2(root / "LICENSE", base / "LICENSE")
-    source = base / "source"
-    shutil.copytree(
-        root / "dashboard_runtime/web",
-        source / "dashboard_runtime/web",
-        ignore=shutil.ignore_patterns("dist", "node_modules"),
-    )
-    for name in ("entry.mjs", "echarts.mjs", "report-markdown.mjs", "host-app.mjs"):
-        (source / "runtime-ui").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(root / "runtime-ui" / name, source / "runtime-ui" / name)
-    shutil.copytree(root / "runtime-ui/generated", source / "runtime-ui/generated")
-    pkg = json.loads((root / "runtime-ui/package.json").read_text())
-    pkg["name"] = "standalone-dashboard"
-    pkg["scripts"] = {
-        "build": "node build.mjs",
-        "deploy:cloudflare": "npx wrangler pages deploy dist",
-    }
-    write(base / "package.json", pkg)
-    lock = root / "runtime-ui/package-lock.json"
-    if lock.exists():
-        data = json.loads(lock.read_text())
-        data["name"] = pkg["name"]
-        data["packages"][""]["name"] = pkg["name"]
-        write(base / "package-lock.json", data)
-    (base / "build.mjs").write_text(
-        "import {build} from 'esbuild';\nawait build({entryPoints:['source/runtime-ui/entry.mjs'],bundle:true,format:'iife',target:['es2022'],outfile:'dist/assets/app.js',minify:true,legalComments:'eof',loader:{'.woff2':'dataurl','.woff':'dataurl'}});\n"
-    )
-    write(
-        base / "export-manifest.json",
-        {
-            "dashboardId": board,
-            "revision": doc["revision"],
-            "backendBuildId": BACKEND_BUILD_ID,
-            "datasets": counts,
-            "dataScope": "all rows of datasets used by components",
-            "annotations": "excluded",
-            "runtime": "static browser only",
-        },
-    )
-    (base / "README.md").write_text("""# 独立看板网页
-
-`dist/` 是可直接部署的静态网站，含完整数据，不需要 MCP、Codex、Python 或数据库。
-
-- 发布：将 `dist/` 上传到任意静态网站；Cloudflare Pages 可直接上传该目录，或运行 `npm run deploy:cloudflare -- --project-name <已有项目名>`。
-- 本地预览：通过任意静态 HTTP 服务打开 `dist/`。数据通过相对 URL 读取，不使用 file:// 双击方式。
-- 修改与重建：`npm ci`，编辑 `source/` 或 `dist/document.json`，运行 `npm run build`。源码和固定依赖随包保留，无需原 MCP 仓库。
-- 数据：`dist/data/` 为导出时的数据版本，包含页面所用数据集的全部数据行。浏览器按组件读取所需数据集，筛选、排序、表格分页在本地计算。数据集首次使用时会读取该数据集的所有分片。
-- 网站为只读设计；支持阅读与筛选，不连接原项目的编辑、批注保存或数据刷新接口。批注默认不发布。统计 SVG 保留导出时计算结果。
-- 只有 `dist/` 是网站发布目录。完整源码压缩包用于维护，不应当作网站目录上传。
-
-Cloudflare 官方说明：https://developers.cloudflare.com/pages/get-started/direct-upload/
-""")
-    shutil.make_archive(str(base / "site"), "zip", site)
-    archive = shutil.make_archive(str(base.parent / base.name), "zip", base)
-    return {
-        "export": {
-            "path": archive,
-            "directory": str(base),
-            "siteArchive": str(base / "site.zip"),
-            "publishDirectory": str(site),
-            "revision": doc["revision"],
-            "datasetRows": counts,
-            "requiresMcp": False,
-            "includesSource": True,
-        }
-    }
+    doc['statisticalArtifacts'] = {key: {field: value for field, value in artifact.items() if field != 'provenance'}
+                                  for key, artifact in statistical_artifacts(store.statistical_document(doc)).items()}
+    export_id = uuid.uuid4().hex
+    directory = store.root / 'exports' / export_id
+    site = directory / 'site'
+    (site / 'data').mkdir(mode=0o700, parents=True)
+    used = {c.get('datasetId') for c in doc['manifest']['components'].values() if c.get('datasetId')}
+    refs = doc['snapshot'].get('datasetRefs', {})
+    doc['staticFiles'] = {}
+    counts = {}
+    for key in sorted(used):
+        rows = store.data.iter_rows(refs[key]) if key in refs else iter(doc['snapshot'].get('datasets', {}).get(key, []))
+        doc['staticFiles'][key], counts[key] = _write_shards(site, key, rows)
+    for key, ref in doc['snapshot'].get('componentDataRefs', {}).items():
+        component = doc['manifest']['components'].get(key)
+        if component is None:
+            continue
+        dataset = 'component-' + key
+        component['datasetId'] = dataset
+        doc['manifest']['datasets'][dataset] = {'fields': ref['fields']}
+        doc['staticFiles'][dataset], counts[dataset] = _write_shards(site, dataset, store.data.iter_rows(ref))
+        component['config'].pop('rowsRef', None)
+    for key in ('sources', 'queries', 'annotations'):
+        doc['manifest'].pop(key, None)
+    doc['snapshot'] = {'datasets': {}}
+    doc.pop('computed', None)
+    doc.pop('progressive', None)
+    doc.pop('loading', None)
+    for name in ('app.js', 'app.css', 'static-worker.js'):
+        require((DIST / name).is_file(), 'Static UI resource missing: ' + name, 'UI_UNAVAILABLE')
+        shutil.copyfile(DIST / name, site / name)
+    (site / 'document.json').write_bytes(json_bytes(doc))
+    (site / 'index.html').write_text('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Charts Design</title><link rel="stylesheet" href="app.css"></head><body><div id="root"></div><script>window.__chartsBoot={mode:"static"};</script><script src="app.js"></script></body></html>', encoding='utf-8')
+    manifest = {'dashboardId': board, 'revision': doc['revision'], 'uiBuildId': ui_build_id(), 'backendBuildId': BACKEND_BUILD_ID, 'datasets': counts}
+    (site / 'export-manifest.json').write_bytes(json_bytes(manifest))
+    (site / 'README.txt').write_text('将此目录放入普通静态 HTTP 服务。网页按组件加载 data/ 分片，在浏览器本地筛选，不连接 MCP。数据包含使用中的数据集全部记录。\n', encoding='utf-8')
+    archive = directory / (board + '.zip')
+    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
+        for path in sorted(site.rglob('*')):
+            if path.is_file():
+                output.write(path, path.relative_to(site))
+    return {'export': {'id': export_id, 'filename': archive.name, 'path': str(archive.resolve()),
+                       'directory': str(site.resolve()), 'format': 'zip', 'mimeType': 'application/zip',
+                       'bytes': archive.stat().st_size, 'scope': 'static-site-with-used-datasets', 'manifest': manifest}}

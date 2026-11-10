@@ -292,7 +292,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             {'tool': 'dashboard_get', 'purpose': 'Read canonical state and current revision before mutation.'},
             {'tool': 'dashboard_patch', 'purpose': 'Supply dashboardId, the latest expectedRevision and an operations array. Put source, dataset, metric and component in one atomic batch.'},
             {'tool': 'dashboard_validate', 'purpose': 'Validate the saved dashboard or a complete proposed document.'},
-            {'tool': 'dashboard_preview', 'purpose': 'Render and inspect the result. A successful declaration check does not substitute for visual review.'},
+            {'tool': 'dashboard_get', 'purpose': 'Inspect saved declarations and data; UI rendering is unavailable during reconstruction.'},
         ],
         'common': common, 'legacy': _legacy(common),
         'reportEmbedding': {

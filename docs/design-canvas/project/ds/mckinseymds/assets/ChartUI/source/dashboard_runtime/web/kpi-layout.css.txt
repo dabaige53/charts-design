@@ -1,0 +1,21 @@
+/* Shared KPI shadow-root rules: loaded after the original adapter at build time.
+   Preserve values/units; reserve readable content areas instead of scaling down. */
+#app-kpis>.component-kpi{min-width:0;overflow-y:auto;scrollbar-width:thin;scrollbar-gutter:stable}
+#app-kpis>.component-kpi.kpi-aligned{grid-template-rows:auto auto minmax(32px,1fr) auto;gap:4px}
+#app-kpis .component-title{line-height:1.5!important;overflow-wrap:anywhere}
+#app-kpis .component-description{line-height:1.6!important}
+#app-kpis .kpi-headline{min-width:0;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;scrollbar-width:thin;font-variant-numeric:tabular-nums}
+#app-kpis .kpi-headline .text-2xl{font-size:clamp(24px,9cqw,32px)!important;line-height:1.2!important;letter-spacing:-.4px}
+#app-kpis .kpi-headline .text-4xl{font-size:clamp(28px,11cqw,40px)!important;line-height:1.2!important}
+#app-kpis .kpi-aux{min-width:0;overflow:auto;scrollbar-width:thin}
+#app-kpis .kpi-footer{font-variant-numeric:tabular-nums;line-height:1.6;overflow-wrap:anywhere}
+#app-kpis .kpi-footer>div{flex-wrap:wrap;row-gap:4px}
+@container(max-width:240px){
+ #app-kpis .component-kpi{padding:12px!important}
+ #app-kpis .component-header{gap:6px!important}
+ #app-kpis .component-status{white-space:normal}
+}
+@media print{
+ #app-kpis>.component-kpi,#app-kpis .kpi-aux,#app-kpis .kpi-headline{overflow:visible;scrollbar-gutter:auto}
+ #app-kpis .kpi-headline .text-2xl,#app-kpis .kpi-headline .text-4xl{white-space:normal;overflow-wrap:anywhere}
+}

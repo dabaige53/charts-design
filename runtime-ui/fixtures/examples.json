@@ -1,0 +1,1429 @@
+{
+  "document": {
+    "schemaVersion": 2,
+    "id": "design-sample",
+    "revision": 1,
+    "manifest": {
+      "title": "民航航空集团月度运营与收益复盘全景看板",
+      "theme": "light",
+      "components": {
+        "total": {
+          "kind": "legacy",
+          "family": "kpi",
+          "title": "主营收入",
+          "sourceId": "fixture",
+          "datasetId": "sales",
+          "config": {
+            "type": "mc01",
+            "label": "主营收入",
+            "value": "484",
+            "unit": "万元",
+            "statusBadge": "月度核算",
+            "subLabel": "基期收入"
+          },
+          "binding": {
+            "datasetId": "sales",
+            "measures": {
+              "value": "revenue",
+              "subVal": "baseline-revenue",
+              "yoy": "yield-growth"
+            }
+          },
+          "measures": [
+            "revenue",
+            "baseline-revenue",
+            "yield-growth"
+          ]
+        },
+        "load": {
+          "kind": "legacy",
+          "family": "kpi",
+          "title": "客座率",
+          "sourceId": "fixture",
+          "datasetId": "sales",
+          "config": {
+            "type": "mc02",
+            "label": "客座率",
+            "value": "83.56%",
+            "unit": "",
+            "statusBadge": "月度核算",
+            "subLabel": "可用座位"
+          },
+          "binding": {
+            "datasetId": "sales",
+            "measures": {
+              "value": "load-factor",
+              "subVal": "seats"
+            }
+          },
+          "measures": [
+            "load-factor",
+            "seats"
+          ]
+        },
+        "trend": {
+          "kind": "legacy",
+          "family": "chart",
+          "title": "收入与收益变动 · 月度 / 季度",
+          "subtitle": "按月度与季度追踪收入规模及收益变动",
+          "sourceId": "fixture",
+          "datasetId": "sales",
+          "config": {
+            "code": "t06",
+            "title": "Synthetic monthly / quarterly revenue",
+            "unit": "万元",
+            "data": {
+              "month": {
+                "categories": [
+                  "2026-07",
+                  "2026-08",
+                  "2026-09"
+                ],
+                "revenue": [
+                  140,
+                  174,
+                  170
+                ],
+                "yieldGrowth": [
+                  7.6923076923076925,
+                  33.84615384615385,
+                  30.76923076923077
+                ]
+              },
+              "quarter": {
+                "categories": [
+                  "2026-Q3"
+                ],
+                "revenue": [
+                  484
+                ],
+                "yieldGrowth": [
+                  24.102564102564102
+                ]
+              }
+            },
+            "presentation": {
+              "axisLabels": {
+                "x": "周期",
+                "leftY": "收入",
+                "rightY": "收益变动率"
+              },
+              "seriesLabels": [
+                "收入",
+                "收益变动率"
+              ],
+              "tooltipValueLabels": [
+                "收入",
+                "收益变动率"
+              ],
+              "units": [
+                "万元",
+                "%"
+              ],
+              "tableHeaders": [
+                "周期",
+                "收入",
+                "收益变动率"
+              ]
+            }
+          },
+          "binding": {
+            "datasetId": "sales",
+            "categoryField": "month",
+            "categoryTarget": "categories",
+            "timeGrain": "month",
+            "measures": {
+              "revenue": "revenue",
+              "yieldGrowth": "yield-growth"
+            },
+            "scale": {
+              "yieldGrowth": 100
+            }
+          },
+          "measures": [
+            "revenue",
+            "yield-growth"
+          ]
+        },
+        "regions": {
+          "kind": "legacy",
+          "family": "chart",
+          "title": "各基地营业收入贡献对比",
+          "subtitle": "比较各基地收入贡献与业务规模",
+          "sourceId": "fixture",
+          "config": {
+            "code": "c01",
+            "title": "区域收入贡献",
+            "unit": "万元",
+            "data": {
+              "categories": [
+                "华东基地",
+                "华南基地"
+              ],
+              "values": [
+                278,
+                206
+              ]
+            },
+            "presentation": {
+              "axisLabels": {
+                "x": "基地",
+                "y": "收入"
+              },
+              "seriesLabels": [
+                "营业收入"
+              ],
+              "tooltipValueLabels": [
+                "营业收入"
+              ],
+              "units": [
+                "万元"
+              ],
+              "tableHeaders": [
+                "基地",
+                "营业收入"
+              ]
+            }
+          },
+          "binding": {
+            "datasetId": "sales",
+            "categoryField": "region",
+            "categoryTarget": "categories",
+            "measures": {
+              "values": "revenue"
+            }
+          },
+          "datasetId": "sales",
+          "measures": [
+            "revenue"
+          ]
+        },
+        "details": {
+          "kind": "table",
+          "title": "经营数据明细",
+          "datasetId": "sales",
+          "subtitle": "与指标卡和图表使用同一筛选范围"
+        },
+        "passengers": {
+          "kind": "legacy",
+          "family": "kpi",
+          "title": "旅客运输量",
+          "sourceId": "fixture",
+          "datasetId": "sales",
+          "config": {
+            "type": "mc03",
+            "label": "旅客运输量",
+            "value": "376",
+            "unit": "万人次",
+            "statusBadge": "月度核算",
+            "subLabel": "可用座位",
+            "sparkMonths": [
+              "2026-07",
+              "2026-08",
+              "2026-09"
+            ],
+            "sparkData": [
+              117,
+              133,
+              126
+            ]
+          },
+          "binding": {
+            "datasetId": "sales",
+            "measures": {
+              "value": "passengers",
+              "subVal": "seats"
+            },
+            "timeField": "month"
+          },
+          "measures": [
+            "passengers",
+            "seats"
+          ]
+        },
+        "goal": {
+          "kind": "legacy",
+          "family": "kpi",
+          "title": "预算目标推进",
+          "sourceId": "fixture",
+          "datasetId": "sales",
+          "config": {
+            "type": "mc04",
+            "label": "预算目标推进",
+            "value": "92.19%",
+            "unit": "",
+            "statusBadge": "月度核算",
+            "subLabel": "预算收入",
+            "percent": 92.19047619047619,
+            "subVal": "",
+            "trendLabel": "按所选范围重算"
+          },
+          "binding": {
+            "datasetId": "sales",
+            "measures": {
+              "value": "attainment",
+              "subVal": "budget",
+              "percent": "attainment"
+            },
+            "scale": {
+              "percent": 100
+            }
+          },
+          "measures": [
+            "attainment",
+            "budget"
+          ]
+        }
+      },
+      "datasets": {
+        "sales": {
+          "sourceId": "fixture",
+          "fields": {
+            "month": {
+              "type": "date",
+              "label": "月份"
+            },
+            "region": {
+              "type": "string",
+              "label": "区域"
+            },
+            "revenue": {
+              "type": "number",
+              "label": "营业收入"
+            },
+            "passengers": {
+              "type": "number",
+              "label": "旅客量"
+            },
+            "seats": {
+              "type": "number",
+              "label": "座位数"
+            },
+            "budget": {
+              "type": "number",
+              "label": "预算"
+            },
+            "yieldDelta": {
+              "type": "number",
+              "label": "收益增量"
+            },
+            "yieldBase": {
+              "type": "number",
+              "label": "基期金额"
+            }
+          }
+        }
+      },
+      "metrics": {
+        "revenue": {
+          "datasetId": "sales",
+          "field": "revenue",
+          "aggregation": "sum",
+          "label": "营业收入",
+          "unit": "万元",
+          "definition": "所选月份和区域内，收入记录的金额合计，用于比较各期与各区域的收入规模。",
+          "status": "unverified"
+        },
+        "load-factor": {
+          "datasetId": "sales",
+          "aggregation": "ratio",
+          "numerator": "passengers",
+          "denominator": "seats",
+          "label": "Load factor",
+          "unit": "",
+          "format": "percent",
+          "scale": "fraction",
+          "definition": "所选月份和区域内，旅客量占可用座位数的比例，反映座位使用情况。先分别汇总旅客量与座位数，再计算比例。",
+          "status": "unverified"
+        },
+        "attainment": {
+          "datasetId": "sales",
+          "aggregation": "ratio",
+          "numerator": "revenue",
+          "denominator": "budget",
+          "label": "预算达成率",
+          "unit": "",
+          "format": "percent",
+          "scale": "fraction",
+          "definition": "所选月份和区域内，营业收入占同期预算收入的比例，反映当前收入相对于预算目标的完成程度。"
+        },
+        "yield-growth": {
+          "datasetId": "sales",
+          "aggregation": "ratio",
+          "numerator": "yieldDelta",
+          "denominator": "yieldBase",
+          "label": "收益变动率",
+          "unit": "",
+          "format": "percent",
+          "scale": "fraction",
+          "definition": "所选月份和区域内，收入相对基期金额的增减幅度。正值表示收入增加，负值表示收入减少。"
+        },
+        "passengers": {
+          "datasetId": "sales",
+          "field": "passengers",
+          "aggregation": "sum",
+          "label": "旅客运输量",
+          "unit": "万人次",
+          "definition": "所选月份和区域内，数据表记录的旅客运输量合计，用于比较运输业务规模。"
+        },
+        "budget": {
+          "datasetId": "sales",
+          "field": "budget",
+          "aggregation": "sum",
+          "label": "预算收入",
+          "unit": "万元",
+          "definition": "所选月份和区域对应的预算收入合计，作为同一范围营业收入的目标比较值。"
+        },
+        "seats": {
+          "datasetId": "sales",
+          "field": "seats",
+          "aggregation": "sum",
+          "label": "可用座位数",
+          "unit": "万座",
+          "definition": "所选月份和区域内记录的可用座位数合计，作为座位使用比例的计算基础。"
+        },
+        "baseline-revenue": {
+          "datasetId": "sales",
+          "field": "yieldBase",
+          "aggregation": "sum",
+          "label": "基期收入",
+          "unit": "万元",
+          "definition": "与所选月份和区域对应的基期收入合计，作为收入增减幅度的比较基础。"
+        }
+      },
+      "sources": {
+        "fixture": {
+          "kind": "fixture",
+          "name": "Synthetic acceptance-test data; not a real query"
+        }
+      },
+      "filters": [
+        {
+          "id": "region",
+          "label": "区域",
+          "field": "region",
+          "op": "in",
+          "values": [],
+          "componentIds": [
+            "total",
+            "load",
+            "passengers",
+            "goal",
+            "trend",
+            "regions",
+            "details"
+          ]
+        },
+        {
+          "id": "period",
+          "label": "月份范围",
+          "field": "month",
+          "op": "range",
+          "values": [],
+          "componentIds": [
+            "total",
+            "load",
+            "passengers",
+            "goal",
+            "trend",
+            "regions",
+            "details"
+          ]
+        },
+        {
+          "id": "search",
+          "label": "搜索区域",
+          "field": "region",
+          "op": "contains",
+          "values": [],
+          "componentIds": [
+            "total",
+            "load",
+            "passengers",
+            "goal",
+            "trend",
+            "regions",
+            "details"
+          ]
+        }
+      ],
+      "layout": {
+        "desktop": [
+          {
+            "id": "total",
+            "x": 0,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          {
+            "id": "load",
+            "x": 3,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          {
+            "id": "passengers",
+            "x": 6,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          {
+            "id": "goal",
+            "x": 9,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          {
+            "id": "trend",
+            "x": 0,
+            "y": 4,
+            "w": 6,
+            "h": 9
+          },
+          {
+            "id": "regions",
+            "x": 6,
+            "y": 4,
+            "w": 6,
+            "h": 9
+          },
+          {
+            "id": "details",
+            "x": 0,
+            "y": 13,
+            "w": 12,
+            "h": 7
+          }
+        ],
+        "tablet": [
+          {
+            "id": "total",
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "load",
+            "x": 4,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "passengers",
+            "x": 0,
+            "y": 4,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "goal",
+            "x": 4,
+            "y": 4,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "trend",
+            "x": 0,
+            "y": 8,
+            "w": 8,
+            "h": 9
+          },
+          {
+            "id": "regions",
+            "x": 0,
+            "y": 17,
+            "w": 8,
+            "h": 7
+          },
+          {
+            "id": "details",
+            "x": 0,
+            "y": 24,
+            "w": 8,
+            "h": 7
+          }
+        ],
+        "mobile": [
+          {
+            "id": "total",
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "load",
+            "x": 0,
+            "y": 4,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "passengers",
+            "x": 0,
+            "y": 8,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "goal",
+            "x": 0,
+            "y": 12,
+            "w": 4,
+            "h": 4
+          },
+          {
+            "id": "trend",
+            "x": 0,
+            "y": 16,
+            "w": 4,
+            "h": 9
+          },
+          {
+            "id": "regions",
+            "x": 0,
+            "y": 25,
+            "w": 4,
+            "h": 7
+          },
+          {
+            "id": "details",
+            "x": 0,
+            "y": 32,
+            "w": 4,
+            "h": 7
+          }
+        ]
+      },
+      "meta": {
+        "iconKey": "plane",
+        "subtitle": "收入规模、运力利用与目标推进",
+        "org": "航空运营管理中心",
+        "system": "经营决策与运行控制系统 (AOC / RMS)",
+        "statusText": "月度经营复盘"
+      }
+    },
+    "snapshot": {
+      "status": "fixture",
+      "updatedAt": "2026-11-10T02:09:36.083966+00:00",
+      "datasets": {},
+      "datasetRefs": {
+        "sales": {
+          "version": "c19aa3678d4ead4f2e4fcc3ca908ac6e4c8325258de99afd96644b05a939d04f",
+          "rowCount": 6,
+          "fields": {
+            "month": {
+              "label": "月份",
+              "type": "date"
+            },
+            "region": {
+              "label": "区域",
+              "type": "string"
+            },
+            "revenue": {
+              "label": "营业收入",
+              "type": "number"
+            },
+            "passengers": {
+              "label": "旅客量",
+              "type": "number"
+            },
+            "seats": {
+              "label": "座位数",
+              "type": "number"
+            },
+            "budget": {
+              "label": "预算",
+              "type": "number"
+            },
+            "yieldDelta": {
+              "label": "收益增量",
+              "type": "number"
+            },
+            "yieldBase": {
+              "label": "基期金额",
+              "type": "number"
+            }
+          },
+          "fieldOrder": [
+            "month",
+            "region",
+            "revenue",
+            "passengers",
+            "seats",
+            "budget",
+            "yieldDelta",
+            "yieldBase"
+          ],
+          "bytes": 287
+        }
+      },
+      "componentDataRefs": {},
+      "localMode": true
+    },
+    "computed": {
+      "components": {
+        "total": {
+          "type": "mc01",
+          "label": "主营收入",
+          "value": "484 万元",
+          "unit": "万元",
+          "statusBadge": "月度核算",
+          "subLabel": "基期收入",
+          "subVal": "390 万元",
+          "yoy": "+24.1%"
+        },
+        "load": {
+          "type": "mc02",
+          "label": "客座率",
+          "value": "83.56%",
+          "unit": "",
+          "statusBadge": "月度核算",
+          "subLabel": "可用座位",
+          "subVal": "450 万座"
+        },
+        "trend": {
+          "code": "t06",
+          "title": "Synthetic monthly / quarterly revenue",
+          "unit": "万元",
+          "data": {
+            "month": {
+              "categories": [
+                "2026-07",
+                "2026-08",
+                "2026-09"
+              ],
+              "revenue": [
+                140.0,
+                174.0,
+                170.0
+              ],
+              "yieldGrowth": [
+                7.69,
+                33.85,
+                30.77
+              ]
+            },
+            "quarter": {
+              "categories": [
+                "2026-07",
+                "2026-08",
+                "2026-09"
+              ],
+              "revenue": [
+                140.0,
+                174.0,
+                170.0
+              ],
+              "yieldGrowth": [
+                7.69,
+                33.85,
+                30.77
+              ]
+            }
+          },
+          "presentation": {
+            "axisLabels": {
+              "x": "周期",
+              "leftY": "收入",
+              "rightY": "收益变动率"
+            },
+            "seriesLabels": [
+              "收入",
+              "收益变动率"
+            ],
+            "tooltipValueLabels": [
+              "收入",
+              "收益变动率"
+            ],
+            "units": [
+              "万元",
+              "%"
+            ],
+            "tableHeaders": [
+              "周期",
+              "收入",
+              "收益变动率"
+            ]
+          },
+          "defaultGranularity": "month",
+          "hasGranularity": true
+        },
+        "regions": {
+          "code": "c01",
+          "title": "区域收入贡献",
+          "unit": "万元",
+          "data": {
+            "categories": [
+              "华东基地",
+              "华南基地"
+            ],
+            "values": [
+              278.0,
+              206.0
+            ]
+          },
+          "presentation": {
+            "axisLabels": {
+              "x": "基地",
+              "y": "收入"
+            },
+            "seriesLabels": [
+              "营业收入"
+            ],
+            "tooltipValueLabels": [
+              "营业收入"
+            ],
+            "units": [
+              "万元"
+            ],
+            "tableHeaders": [
+              "基地",
+              "营业收入"
+            ]
+          },
+          "hasGranularity": false
+        },
+        "details": {
+          "rows": [
+            {
+              "month": "2026-07-01",
+              "region": "华东基地",
+              "revenue": 80,
+              "passengers": 72,
+              "seats": 100,
+              "budget": 100,
+              "yieldDelta": 5,
+              "yieldBase": 75
+            },
+            {
+              "month": "2026-07-01",
+              "region": "华南基地",
+              "revenue": 60,
+              "passengers": 45,
+              "seats": 50,
+              "budget": 75,
+              "yieldDelta": 5,
+              "yieldBase": 55
+            },
+            {
+              "month": "2026-08-01",
+              "region": "华东基地",
+              "revenue": 102,
+              "passengers": 85,
+              "seats": 100,
+              "budget": 100,
+              "yieldDelta": 27,
+              "yieldBase": 75
+            },
+            {
+              "month": "2026-08-01",
+              "region": "华南基地",
+              "revenue": 72,
+              "passengers": 48,
+              "seats": 50,
+              "budget": 75,
+              "yieldDelta": 17,
+              "yieldBase": 55
+            },
+            {
+              "month": "2026-09-01",
+              "region": "华东基地",
+              "revenue": 96,
+              "passengers": 80,
+              "seats": 100,
+              "budget": 100,
+              "yieldDelta": 21,
+              "yieldBase": 75
+            },
+            {
+              "month": "2026-09-01",
+              "region": "华南基地",
+              "revenue": 74,
+              "passengers": 46,
+              "seats": 50,
+              "budget": 75,
+              "yieldDelta": 19,
+              "yieldBase": 55
+            }
+          ],
+          "columns": [
+            {
+              "key": "month",
+              "title": "月份",
+              "align": "left"
+            },
+            {
+              "key": "region",
+              "title": "区域",
+              "align": "left"
+            },
+            {
+              "key": "revenue",
+              "title": "营业收入",
+              "align": "right"
+            },
+            {
+              "key": "passengers",
+              "title": "旅客量",
+              "align": "right"
+            },
+            {
+              "key": "seats",
+              "title": "座位数",
+              "align": "right"
+            },
+            {
+              "key": "budget",
+              "title": "预算",
+              "align": "right"
+            },
+            {
+              "key": "yieldDelta",
+              "title": "收益增量",
+              "align": "right"
+            },
+            {
+              "key": "yieldBase",
+              "title": "基期金额",
+              "align": "right"
+            }
+          ]
+        },
+        "passengers": {
+          "type": "mc03",
+          "label": "旅客运输量",
+          "value": "376 万人次",
+          "unit": "万人次",
+          "statusBadge": "月度核算",
+          "subLabel": "可用座位",
+          "sparkMonths": [
+            "2026-07-01",
+            "2026-08-01",
+            "2026-09-01"
+          ],
+          "sparkData": [
+            117,
+            133,
+            126
+          ],
+          "subVal": "450 万座"
+        },
+        "goal": {
+          "type": "mc04",
+          "label": "预算目标推进",
+          "value": "92.19%",
+          "unit": "",
+          "statusBadge": "月度核算",
+          "subLabel": "预算收入",
+          "percent": 92.19047619047619,
+          "subVal": "525 万元",
+          "trendLabel": "按所选范围重算"
+        }
+      },
+      "tables": {
+        "details": {
+          "page": 1,
+          "pageSize": 10,
+          "totalRows": 6,
+          "sortCol": null,
+          "sortDir": "asc",
+          "keyword": "",
+          "durationMs": 0.1441249914932996
+        }
+      },
+      "grouped": {},
+      "filterOptions": {
+        "region": [
+          "华东基地",
+          "华南基地"
+        ]
+      },
+      "filterPages": {
+        "region": {
+          "values": [
+            "华东基地",
+            "华南基地"
+          ],
+          "totalValues": 2,
+          "offset": 0,
+          "hasMore": false
+        }
+      },
+      "cacheHits": 0,
+      "durationMs": 4.603332985425368,
+      "sourceRows": {
+        "sales": 6
+      },
+      "sourceBytes": 287,
+      "responseBytes": 12246,
+      "totalDurationMs": 8.380290993954986
+    }
+  },
+  "metrics": {
+    "mc01": {
+      "name": "基础数值卡",
+      "question": "How big is one headline metric now?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "statusBadge": "Short neutral status text"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal"
+      ],
+      "example": {
+        "label": "营业收入",
+        "value": "484 万元",
+        "yoy": "+24.1%",
+        "statusBadge": "月度核算",
+        "subLabel": "基期收入",
+        "subVal": "390 万元"
+      }
+    },
+    "mc02": {
+      "name": "同环比波动卡",
+      "question": "Is the metric rising or falling against last year and last period?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "mom": "Signed period-over-period comparison"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "mom",
+        "subVal"
+      ],
+      "example": {
+        "label": "客座率",
+        "value": "83.6%",
+        "yoy": "+2.1%",
+        "mom": "-0.4%",
+        "subLabel": "可用座位",
+        "subVal": "450 万座"
+      }
+    },
+    "mc03": {
+      "name": "微走势迷你面积卡",
+      "question": "What is the value and its recent continuous trend?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "sparkMonths": "Period labels",
+        "sparkData": "Finite values, same length",
+        "trendLabel": "Neutral trend note"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal",
+        "timeField → sparkMonths/sparkData"
+      ],
+      "example": {
+        "label": "旅客运输量",
+        "value": "376 万人次",
+        "sparkMonths": [
+          "2026-07",
+          "2026-08",
+          "2026-09"
+        ],
+        "sparkData": [
+          117,
+          133,
+          126
+        ],
+        "subLabel": "可用座位",
+        "subVal": "450 万座"
+      }
+    },
+    "mc04": {
+      "name": "目标进度条形卡",
+      "question": "How far along is a target, as a percentage?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Numeric percent display, e.g. \"92.2%\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "percent": "Optional 0-100 bar width"
+      },
+      "bind": [
+        "value",
+        "percent",
+        "subVal"
+      ],
+      "example": {
+        "label": "预算达成率",
+        "value": "92.2%",
+        "percent": 92.2,
+        "subLabel": "预算收入",
+        "subVal": "525 万元"
+      }
+    },
+    "mc05": {
+      "name": "迷你半环仪表卡",
+      "question": "Where does a 0-100 score sit on its scale?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Numeric display",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "percent": "0-100 gauge position",
+        "gaugeSub": "Badge beside the value"
+      },
+      "bind": [
+        "value",
+        "percent",
+        "subVal"
+      ],
+      "example": {
+        "label": "航班正常率",
+        "value": "88.6%",
+        "percent": 88.6,
+        "gaugeSub": "基准 85%",
+        "subLabel": "行业基准",
+        "subVal": "85.0%"
+      }
+    },
+    "mc06": {
+      "name": "双指标并列卡",
+      "question": "How do two peer metrics compare side by side?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "leftTitle": "Left metric name",
+        "leftVal": "Left value text",
+        "leftYoy": "Optional signed change",
+        "rightTitle": "Right metric name",
+        "rightVal": "Right value text",
+        "rightYoy": "Optional signed change",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text"
+      },
+      "bind": [
+        "leftVal",
+        "rightVal",
+        "subVal"
+      ],
+      "example": {
+        "label": "供给与需求",
+        "leftTitle": "可用座公里",
+        "leftVal": "52.4 亿",
+        "leftYoy": "+6.2%",
+        "rightTitle": "客公里",
+        "rightVal": "43.8 亿",
+        "rightYoy": "+8.1%",
+        "subLabel": "匹配率",
+        "subVal": "83.6%"
+      }
+    },
+    "mc07": {
+      "name": "排位梯队徽章卡",
+      "question": "What rank or tier does the business hold?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Rank headline text",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "rankSub": "Line under the rank",
+        "rankBadge": "Badge text such as \"#2 / 12\""
+      },
+      "bind": [],
+      "example": {
+        "label": "区域收入排名",
+        "value": "华东第 2",
+        "rankSub": "共 12 个区域",
+        "rankBadge": "#2",
+        "subLabel": "收入占比",
+        "subVal": "18.4%"
+      }
+    },
+    "mc08": {
+      "name": "阈值预警卡",
+      "question": "Which metric crossed a warning threshold?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "alertLabel": "Threshold text shown in the attention badge"
+      },
+      "bind": [],
+      "example": {
+        "label": "成本超支率",
+        "value": "6.3%",
+        "alertLabel": "超过 5% 红线",
+        "subLabel": "超支金额",
+        "subVal": "42 万元"
+      }
+    },
+    "mc09": {
+      "name": "结构分段卡",
+      "question": "How is a total split between two parts?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Left segment label and value",
+        "subVal": "Right segment label and value",
+        "segLeftWidth": "Left share 0-100",
+        "segRightWidth": "Right share; the two sum to 100"
+      },
+      "bind": [],
+      "example": {
+        "label": "收入结构",
+        "value": "484 万元",
+        "segLeftWidth": "72%",
+        "segRightWidth": "28%",
+        "subLabel": "国内 348 万元",
+        "subVal": "国际 136 万元"
+      }
+    },
+    "mc10": {
+      "name": "中位数极差分布卡",
+      "question": "What is typical, and how spread out is a skewed distribution?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed median text",
+        "valueLabel": "Label before the value (default 中位数)",
+        "stats": "Finite numbers {min, p25, median, p75, max}, ascending",
+        "meanText": "Optional mean text",
+        "sampleText": "Optional sample size text"
+      },
+      "bind": [],
+      "example": {
+        "label": "客单票价",
+        "value": "¥680",
+        "meanText": "均值 ¥742.5",
+        "sampleText": "5,420 万张",
+        "stats": {
+          "min": 320,
+          "p25": 540,
+          "median": 680,
+          "p75": 920,
+          "max": 1850
+        }
+      }
+    },
+    "mc11": {
+      "name": "环形进度卡",
+      "question": "How complete is a goal, at a glance?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "percent": "Completion 0-100 (above 100 fills the ring and shows the real percent)",
+        "trendLabel": "Optional neutral note"
+      },
+      "bind": [
+        "value",
+        "percent",
+        "subVal"
+      ],
+      "example": {
+        "label": "年度收入目标",
+        "value": "1,840 万元",
+        "percent": 92,
+        "trendLabel": "按月累计",
+        "subLabel": "年度目标",
+        "subVal": "2,000 万元"
+      }
+    },
+    "mc12": {
+      "name": "迷你柱趋势卡",
+      "question": "How does the latest period compare with the previous few?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "sparkMonths": "Period labels",
+        "sparkData": "Finite values, same length; the last bar is emphasized",
+        "trendLabel": "Optional neutral note"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal",
+        "timeField → sparkMonths/sparkData"
+      ],
+      "example": {
+        "label": "月度新增客户",
+        "value": "1,268 户",
+        "yoy": "+12.4%",
+        "sparkMonths": [
+          "04",
+          "05",
+          "06",
+          "07",
+          "08",
+          "09"
+        ],
+        "sparkData": [
+          940,
+          1012,
+          1105,
+          990,
+          1180,
+          1268
+        ],
+        "subLabel": "近六个月均值",
+        "subVal": "1,083 户"
+      }
+    },
+    "mc13": {
+      "name": "子弹目标卡",
+      "question": "Is actual above target, and in which qualitative range?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "actual": "Finite actual value",
+        "target": "Finite target value (marker)",
+        "ranges": "Up to three ascending range limits in the same unit",
+        "rangeBasis": "value (absolute limits, default) or target (limits are fractions of target, e.g. [0.8, 1.0]; use when filters recompute target)",
+        "max": "Optional scale maximum",
+        "unit": "Unit used when target text is derived"
+      },
+      "bind": [
+        "value",
+        "actual",
+        "target",
+        "subVal"
+      ],
+      "example": {
+        "label": "季度营收对目标",
+        "value": "484 万元",
+        "actual": 484,
+        "target": 525,
+        "ranges": [
+          400,
+          500
+        ],
+        "unit": "万元",
+        "subLabel": "季度目标",
+        "subVal": "525 万元"
+      }
+    },
+    "mc14": {
+      "name": "双期对比卡",
+      "question": "How does this period compare with the prior period?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "currentLabel": "Current period label",
+        "currentValue": "Finite current value",
+        "priorLabel": "Prior period label",
+        "priorValue": "Finite prior value",
+        "currentText": "Optional display text",
+        "priorText": "Optional display text",
+        "deltaLabel": "Badge label (default 较上期)",
+        "unit": "Unit for derived text"
+      },
+      "bind": [
+        "value",
+        "currentValue",
+        "priorValue",
+        "yoy",
+        "subVal"
+      ],
+      "example": {
+        "label": "季度收入对比",
+        "value": "484 万元",
+        "yoy": "+24.1%",
+        "currentLabel": "2026Q3",
+        "currentValue": 484,
+        "priorLabel": "2025Q3",
+        "priorValue": 390,
+        "unit": "万元"
+      }
+    },
+    "mc15": {
+      "name": "指标清单卡",
+      "question": "What are 2-4 related sub-metrics of one theme?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Optional headline text",
+        "valueLabel": "Optional note beside it",
+        "items": "1-4 objects {label, value, delta?}; delta is a signed comparison"
+      },
+      "bind": [],
+      "example": {
+        "label": "渠道收入",
+        "value": "484 万元",
+        "valueLabel": "合计",
+        "items": [
+          {
+            "label": "直销",
+            "value": "226 万元",
+            "delta": "+8.2%"
+          },
+          {
+            "label": "分销",
+            "value": "172 万元",
+            "delta": "-3.1%"
+          },
+          {
+            "label": "电商",
+            "value": "86 万元",
+            "delta": "+21.5%"
+          }
+        ]
+      }
+    },
+    "mc16": {
+      "name": "大字主指标卡",
+      "question": "What is the single number that matters most, and the takeaway?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "note": "Authored one-line takeaway (at most 120 characters)"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal"
+      ],
+      "example": {
+        "label": "北极星 · 月活跃客户",
+        "value": "12.6 万",
+        "yoy": "+9.8%",
+        "note": "新客留存改善带动活跃规模连续三个月增长。",
+        "subLabel": "目标",
+        "subVal": "13 万"
+      }
+    }
+  }
+}

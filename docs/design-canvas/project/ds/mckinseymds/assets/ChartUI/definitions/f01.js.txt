@@ -1,0 +1,55 @@
+{
+        id: 'chart-f01',
+        code: 'f01',
+        title: '航司官方渠道机票预订全链路流转漏斗',
+        subtitle: '监控自航班检索至完成出票支付全链路转化率与留存',
+        explainKey: 'f01',
+        data: {
+            stages: [
+                { value: 5000, name: '航线航班检索', itemStyle: { color: '#0B2A42' } },
+                { value: 2800, name: '舱位票价选择', itemStyle: { color: '#123B5D' } },
+                { value: 1400, name: '乘机人信息录入', itemStyle: { color: '#3A5A78' } },
+                { value: 600, name: '完成出票支付', itemStyle: { color: '#52606D' } }
+            ]
+        },
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+            const tooltipLabel = (presentation.tooltipValueLabels || [seriesLabel])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            return ({
+            tooltip: {
+                trigger: 'item',
+                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                borderColor: tokens.palette.rule,
+                borderWidth: 1,
+                padding: [8, 12],
+                extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
+                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params.name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">${tooltipLabel}:</span><span class="font-mono font-bold text-primary">${params.value}${unit ? ` ${unit}` : ''} (${params.percent}%)</span></div>`
+            },
+            series: [{
+                type: 'funnel',
+                left: '12%',
+                width: '76%',
+                top: 25,
+                bottom: 25,
+                gap: 3,
+                name: seriesLabel,
+                label: { show: true, position: 'inside', formatter: params => `${params.name}\n${params.value}${unit ? ` ${unit}` : ''} (${params.percent}%)`, color: '#FFF', fontSize: 11, fontWeight: 600 },
+                data: d.stages
+            }]
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const seriesLabel = (presentation.seriesLabels || ['数值'])[0];
+            const unit = (presentation.units || [cfg.unit || ''])[0];
+            const labels = presentation.labels || {};
+            const baselineIndex = (presentation.derivedMetricRules || {}).baselineIndex || 0;
+            const baseline = d.stages[baselineIndex] ? d.stages[baselineIndex].value : 0;
+            return {
+                headers: presentation.tableHeaders || [labels.stageHeader || '阶段', `${seriesLabel}${unit ? ` (${unit})` : ''}`, labels.ratioHeader || '总体占比'],
+                rows: d.stages.map(s => [s.name, `${s.value}${unit ? ` ${unit}` : ''}`, `${baseline ? ((s.value / baseline) * 100).toFixed(1) : '0.0'}%`])
+            };
+        }
+    }

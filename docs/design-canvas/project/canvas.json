@@ -1,0 +1,506 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Buttons.dc.html": {
+      "h": 150,
+      "w": 700,
+      "x": 3200,
+      "y": 800
+    },
+    "ChartC01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 4000
+    },
+    "ChartC02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 4000
+    },
+    "ChartC03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 4000
+    },
+    "ChartC04.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 4000
+    },
+    "ChartC05.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 4550
+    },
+    "ChartC06.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 4550
+    },
+    "ChartC07.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 4550
+    },
+    "ChartC08.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 4550
+    },
+    "ChartD01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 7300
+    },
+    "ChartD02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 7300
+    },
+    "ChartD03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 7300
+    },
+    "ChartD04.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 7300
+    },
+    "ChartF01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 8950
+    },
+    "ChartF02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 8950
+    },
+    "ChartF03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 8950
+    },
+    "ChartFN01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 9500
+    },
+    "ChartFN02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 9500
+    },
+    "ChartFN03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 9500
+    },
+    "ChartFN04.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 9500
+    },
+    "ChartK01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 6200
+    },
+    "ChartK02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 6200
+    },
+    "ChartK03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 6200
+    },
+    "ChartK04.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 6200
+    },
+    "ChartK05.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 6750
+    },
+    "ChartK06.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 6750
+    },
+    "ChartM01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 10050
+    },
+    "ChartM02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 10050
+    },
+    "ChartM03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 10050
+    },
+    "ChartM04.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 10050
+    },
+    "ChartR01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 7850
+    },
+    "ChartR02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 7850
+    },
+    "ChartR03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 7850
+    },
+    "ChartR04.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 7850
+    },
+    "ChartR05.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 8400
+    },
+    "ChartT01.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 5100
+    },
+    "ChartT02.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 5100
+    },
+    "ChartT03.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1280,
+      "y": 5100
+    },
+    "ChartT04.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 1920,
+      "y": 5100
+    },
+    "ChartT05.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 0,
+      "y": 5650
+    },
+    "ChartT06.dc.html": {
+      "h": 430,
+      "w": 560,
+      "x": 640,
+      "y": 5650
+    },
+    "ChartToolbar.dc.html": {
+      "h": 160,
+      "is_interactive": true,
+      "title": "图表操作与口径说明",
+      "w": 900,
+      "x": 2622,
+      "y": 4000
+    },
+    "GlobalFilter.dc.html": {
+      "h": 480,
+      "is_interactive": true,
+      "title": "筛选器与联动条件",
+      "w": 1440,
+      "x": 3200,
+      "y": 0
+    },
+    "InteractiveTable.dc.html": {
+      "expand": "fill",
+      "h": 600,
+      "is_interactive": true,
+      "title": "交互检索数据表 · TB02",
+      "w": 1200,
+      "x": 4800,
+      "y": 720
+    },
+    "Layouts.dc.html": {
+      "expand": "fill",
+      "h": 1500,
+      "title": "02 · 七种页面布局",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Metric01.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 0,
+      "y": 10800
+    },
+    "Metric02.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 500,
+      "y": 10800
+    },
+    "Metric03.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1000,
+      "y": 10800
+    },
+    "Metric04.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1500,
+      "y": 10800
+    },
+    "Metric05.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 0,
+      "y": 11240
+    },
+    "Metric06.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 500,
+      "y": 11240
+    },
+    "Metric07.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1000,
+      "y": 11240
+    },
+    "Metric08.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1500,
+      "y": 11240
+    },
+    "Metric09.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 0,
+      "y": 11680
+    },
+    "Metric10.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 500,
+      "y": 11680
+    },
+    "Metric11.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1000,
+      "y": 11680
+    },
+    "Metric12.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1500,
+      "y": 11680
+    },
+    "Metric13.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 0,
+      "y": 12120
+    },
+    "Metric14.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 500,
+      "y": 12120
+    },
+    "Metric15.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1000,
+      "y": 12120
+    },
+    "Metric16.dc.html": {
+      "h": 320,
+      "w": 420,
+      "x": 1500,
+      "y": 12120
+    },
+    "StatusBadge.dc.html": {
+      "h": 140,
+      "title": "状态徽章",
+      "w": 500,
+      "x": 6080,
+      "y": 0
+    },
+    "Tables.dc.html": {
+      "expand": "fill",
+      "h": 600,
+      "title": "标准数据表 · TB01",
+      "w": 1200,
+      "x": 4800,
+      "y": 0
+    },
+    "Toast.dc.html": {
+      "h": 160,
+      "w": 500,
+      "x": 6080,
+      "y": 720
+    },
+    "Tooltip.dc.html": {
+      "h": 160,
+      "w": 400,
+      "x": 2700,
+      "y": 4300
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-10T02:00:00Z",
+    "v": 1
+  },
+  "designSystems": [
+    {
+      "artifact": "/Users/w/.codex/worktrees/b832/charts-design/docs/design-system",
+      "copiedAt": "2026-11-10T06:35:42Z",
+      "namespace": "mckinseymds",
+      "title": "McKinsey MDS",
+      "version": null
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  },
+  "noteOrder": [
+    "library"
+  ],
+  "notes": {
+    "library": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "图表与数据组件",
+      "w": 240,
+      "x": 3040,
+      "y": -280
+    }
+  },
+  "order": [
+    "Layouts.dc.html",
+    "Tables.dc.html",
+    "InteractiveTable.dc.html",
+    "Buttons.dc.html",
+    "ChartToolbar.dc.html",
+    "GlobalFilter.dc.html",
+    "Toast.dc.html",
+    "Tooltip.dc.html",
+    "StatusBadge.dc.html",
+    "ChartC01.dc.html",
+    "ChartC02.dc.html",
+    "ChartC03.dc.html",
+    "ChartC04.dc.html",
+    "ChartC05.dc.html",
+    "ChartC06.dc.html",
+    "ChartC07.dc.html",
+    "ChartC08.dc.html",
+    "ChartK01.dc.html",
+    "ChartK02.dc.html",
+    "ChartK03.dc.html",
+    "ChartK04.dc.html",
+    "ChartK05.dc.html",
+    "ChartK06.dc.html",
+    "ChartT01.dc.html",
+    "ChartT02.dc.html",
+    "ChartT03.dc.html",
+    "ChartT04.dc.html",
+    "ChartT05.dc.html",
+    "ChartT06.dc.html",
+    "ChartD01.dc.html",
+    "ChartD02.dc.html",
+    "ChartD03.dc.html",
+    "ChartD04.dc.html",
+    "ChartF01.dc.html",
+    "ChartF02.dc.html",
+    "ChartF03.dc.html",
+    "ChartFN01.dc.html",
+    "ChartFN02.dc.html",
+    "ChartFN03.dc.html",
+    "ChartFN04.dc.html",
+    "ChartM01.dc.html",
+    "ChartM02.dc.html",
+    "ChartM03.dc.html",
+    "ChartM04.dc.html",
+    "ChartR01.dc.html",
+    "ChartR02.dc.html",
+    "ChartR03.dc.html",
+    "ChartR04.dc.html",
+    "ChartR05.dc.html",
+    "Metric01.dc.html",
+    "Metric02.dc.html",
+    "Metric03.dc.html",
+    "Metric04.dc.html",
+    "Metric05.dc.html",
+    "Metric06.dc.html",
+    "Metric07.dc.html",
+    "Metric08.dc.html",
+    "Metric09.dc.html",
+    "Metric10.dc.html",
+    "Metric11.dc.html",
+    "Metric12.dc.html",
+    "Metric13.dc.html",
+    "Metric14.dc.html",
+    "Metric15.dc.html",
+    "Metric16.dc.html"
+  ],
+  "pages": [],
+  "title": "看板组件工作台"
+}

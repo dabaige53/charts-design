@@ -102,13 +102,3 @@ export function requestReviewAgent(note, at=now()) {
 export function reviewContextText(note) {
   return [note.text,...reviewReplies(note).map(reply=>`[${reviewAuthor(reply.author).kind}] ${reply.text}`)].join('\n\n');
 }
-// Group nearby pins instead of moving an individual pin away from its target.
-export function clusterReviewPins(items, radius=28) {
-  const groups=[];
-  for (const item of items) {
-    if (!Number.isFinite(item.x)||!Number.isFinite(item.y)) continue;
-    const group=groups.find(group=>Math.hypot(group.x-item.x,group.y-item.y)<radius);
-    if (group) group.items.push(item);else groups.push({x:item.x,y:item.y,items:[item]});
-  }
-  return groups;
-}

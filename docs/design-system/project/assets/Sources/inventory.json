@@ -1,0 +1,808 @@
+{
+  "sourceVersion": "MDS v0.9.1 (2020)",
+  "pdfPages": 59,
+  "baseColorCount": 23,
+  "extractedColorCount": 26,
+  "typographyStyleCount": 39,
+  "spacingScale": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64,
+    96
+  ],
+  "componentFamilies": [
+    {
+      "name": "Alerts",
+      "group": "反馈",
+      "pages": [
+        29
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Avatars",
+      "group": "身份",
+      "pages": [
+        30
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Breadcrumbs",
+      "group": "导航",
+      "pages": [
+        31
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Buttons",
+      "group": "操作",
+      "pages": [
+        32,
+        33,
+        34,
+        35
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Cards",
+      "group": "内容",
+      "pages": [
+        36
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "DataTables",
+      "group": "数据",
+      "pages": [
+        37
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Footers",
+      "group": "导航",
+      "pages": [
+        38
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "DatePicker",
+      "group": "表单",
+      "pages": [
+        39
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "TextInputs",
+      "group": "表单",
+      "pages": [
+        40,
+        41
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "TextAreas",
+      "group": "表单",
+      "pages": [
+        42
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Select",
+      "group": "表单",
+      "pages": [
+        43,
+        44
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "MultiSelect",
+      "group": "表单",
+      "pages": [
+        45
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Checkboxes",
+      "group": "表单",
+      "pages": [
+        46
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "RadioButtons",
+      "group": "表单",
+      "pages": [
+        47
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "ToggleButtons",
+      "group": "表单",
+      "pages": [
+        48
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Sliders",
+      "group": "表单",
+      "pages": [
+        49
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Headers",
+      "group": "导航",
+      "pages": [
+        50
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Links",
+      "group": "操作",
+      "pages": [
+        51
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Modals",
+      "group": "反馈",
+      "pages": [
+        52
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "PageSwitcher",
+      "group": "导航",
+      "pages": [
+        53
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Pagination",
+      "group": "导航",
+      "pages": [
+        54
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "PopupMenu",
+      "group": "操作",
+      "pages": [
+        55
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Tabs",
+      "group": "导航",
+      "pages": [
+        56
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Tooltips",
+      "group": "反馈",
+      "pages": [
+        57
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Badges",
+      "group": "反馈",
+      "pages": [
+        58
+      ],
+      "status": "guidelines and original-artboard reference"
+    },
+    {
+      "name": "Tags",
+      "group": "表单",
+      "pages": [
+        59
+      ],
+      "status": "guidelines and original-artboard reference"
+    }
+  ],
+  "pages": [
+    {
+      "page": 1,
+      "sizePoints": [
+        1000.0,
+        1000.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-01.jpg"
+    },
+    {
+      "page": 2,
+      "sizePoints": [
+        1440.0,
+        1970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-02.jpg"
+    },
+    {
+      "page": 3,
+      "sizePoints": [
+        1440.0,
+        2970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-03.jpg"
+    },
+    {
+      "page": 4,
+      "sizePoints": [
+        1440.0,
+        2970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-04.jpg"
+    },
+    {
+      "page": 5,
+      "sizePoints": [
+        1440.0,
+        2970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-05.jpg"
+    },
+    {
+      "page": 6,
+      "sizePoints": [
+        1440.0,
+        2970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-06.jpg"
+    },
+    {
+      "page": 7,
+      "sizePoints": [
+        1440.0,
+        2727.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-07.jpg"
+    },
+    {
+      "page": 8,
+      "sizePoints": [
+        1440.0,
+        6084.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-08.jpg"
+    },
+    {
+      "page": 9,
+      "sizePoints": [
+        1440.0,
+        1554.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-09.jpg"
+    },
+    {
+      "page": 10,
+      "sizePoints": [
+        304.0,
+        568.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-10.jpg"
+    },
+    {
+      "page": 11,
+      "sizePoints": [
+        400.0,
+        896.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-11.jpg"
+    },
+    {
+      "page": 12,
+      "sizePoints": [
+        768.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-12.jpg"
+    },
+    {
+      "page": 13,
+      "sizePoints": [
+        1024.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-13.jpg"
+    },
+    {
+      "page": 14,
+      "sizePoints": [
+        1440.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-14.jpg"
+    },
+    {
+      "page": 15,
+      "sizePoints": [
+        1568.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-15.jpg"
+    },
+    {
+      "page": 16,
+      "sizePoints": [
+        304.0,
+        568.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-16.jpg"
+    },
+    {
+      "page": 17,
+      "sizePoints": [
+        400.0,
+        896.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-17.jpg"
+    },
+    {
+      "page": 18,
+      "sizePoints": [
+        864.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-18.jpg"
+    },
+    {
+      "page": 19,
+      "sizePoints": [
+        1224.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-19.jpg"
+    },
+    {
+      "page": 20,
+      "sizePoints": [
+        1416.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-20.jpg"
+    },
+    {
+      "page": 21,
+      "sizePoints": [
+        1512.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-21.jpg"
+    },
+    {
+      "page": 22,
+      "sizePoints": [
+        304.0,
+        568.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-22.jpg"
+    },
+    {
+      "page": 23,
+      "sizePoints": [
+        400.0,
+        896.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-23.jpg"
+    },
+    {
+      "page": 24,
+      "sizePoints": [
+        864.0,
+        1024.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/page-24.jpg"
+    },
+    {
+      "page": 25,
+      "sizePoints": [
+        1264.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-25.jpg"
+    },
+    {
+      "page": 26,
+      "sizePoints": [
+        1440.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-26.jpg"
+    },
+    {
+      "page": 27,
+      "sizePoints": [
+        1552.0,
+        1024.0
+      ],
+      "textExtracted": false,
+      "asset": "assets/Artboards/page-27.jpg"
+    },
+    {
+      "page": 28,
+      "sizePoints": [
+        1440.0,
+        2970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-28.jpg"
+    },
+    {
+      "page": 29,
+      "sizePoints": [
+        1440.0,
+        4171.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-29.jpg"
+    },
+    {
+      "page": 30,
+      "sizePoints": [
+        1440.0,
+        2970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-30.jpg"
+    },
+    {
+      "page": 31,
+      "sizePoints": [
+        1440.0,
+        2970.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-31.jpg"
+    },
+    {
+      "page": 32,
+      "sizePoints": [
+        1440.0,
+        5698.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-32.jpg"
+    },
+    {
+      "page": 33,
+      "sizePoints": [
+        1440.0,
+        3938.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-33.jpg"
+    },
+    {
+      "page": 34,
+      "sizePoints": [
+        1440.0,
+        4502.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-34.jpg"
+    },
+    {
+      "page": 35,
+      "sizePoints": [
+        1440.0,
+        4502.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-35.jpg"
+    },
+    {
+      "page": 36,
+      "sizePoints": [
+        1440.0,
+        7827.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-36.jpg"
+    },
+    {
+      "page": 37,
+      "sizePoints": [
+        1440.0,
+        6874.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-37.jpg"
+    },
+    {
+      "page": 38,
+      "sizePoints": [
+        1440.0,
+        4430.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-38.jpg"
+    },
+    {
+      "page": 39,
+      "sizePoints": [
+        1440.0,
+        5029.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-39.jpg"
+    },
+    {
+      "page": 40,
+      "sizePoints": [
+        1441.0,
+        4311.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-40.jpg"
+    },
+    {
+      "page": 41,
+      "sizePoints": [
+        1441.0,
+        4311.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-41.jpg"
+    },
+    {
+      "page": 42,
+      "sizePoints": [
+        1440.0,
+        4311.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-42.jpg"
+    },
+    {
+      "page": 43,
+      "sizePoints": [
+        1440.0,
+        4311.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-43.jpg"
+    },
+    {
+      "page": 44,
+      "sizePoints": [
+        1440.0,
+        4311.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-44.jpg"
+    },
+    {
+      "page": 45,
+      "sizePoints": [
+        1440.0,
+        4311.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-45.jpg"
+    },
+    {
+      "page": 46,
+      "sizePoints": [
+        1440.0,
+        2501.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-46.jpg"
+    },
+    {
+      "page": 47,
+      "sizePoints": [
+        1440.0,
+        2501.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-47.jpg"
+    },
+    {
+      "page": 48,
+      "sizePoints": [
+        1440.0,
+        2501.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-48.jpg"
+    },
+    {
+      "page": 49,
+      "sizePoints": [
+        1440.0,
+        2501.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-49.jpg"
+    },
+    {
+      "page": 50,
+      "sizePoints": [
+        1440.0,
+        3463.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-50.jpg"
+    },
+    {
+      "page": 51,
+      "sizePoints": [
+        1440.0,
+        5235.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-51.jpg"
+    },
+    {
+      "page": 52,
+      "sizePoints": [
+        1440.0,
+        4599.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-52.jpg"
+    },
+    {
+      "page": 53,
+      "sizePoints": [
+        1440.0,
+        4171.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-53.jpg"
+    },
+    {
+      "page": 54,
+      "sizePoints": [
+        1440.0,
+        4171.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-54.jpg"
+    },
+    {
+      "page": 55,
+      "sizePoints": [
+        1440.0,
+        4171.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-55.jpg"
+    },
+    {
+      "page": 56,
+      "sizePoints": [
+        1440.0,
+        1221.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-56.jpg"
+    },
+    {
+      "page": 57,
+      "sizePoints": [
+        1440.0,
+        1417.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-57.jpg"
+    },
+    {
+      "page": 58,
+      "sizePoints": [
+        1440.0,
+        1906.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-58.jpg"
+    },
+    {
+      "page": 59,
+      "sizePoints": [
+        1440.0,
+        3377.0
+      ],
+      "textExtracted": true,
+      "asset": "assets/Artboards/detail-59.jpg"
+    }
+  ],
+  "notProvided": [
+    "Reusable McKinsey Sans and Bower web-font masters",
+    "Original Sketch library",
+    "Individual vector icon assets",
+    "Vector Script Mark master",
+    "Global corner-radius scale",
+    "Motion durations and easing",
+    "Explicit full dark theme",
+    "Authoritative status-color hexadecimal values"
+  ],
+  "sourceConflicts": [
+    {
+      "location": "p.4 Display 4",
+      "values": "52px / 64px; ratio 1.153",
+      "decision": "Use explicit 52px and 64px, not inconsistent ratio."
+    },
+    {
+      "location": "p.5 Heading 2/5/6",
+      "values": "36/44 with 1.111; 24/28 with 1.333; 20/24 with 1.4",
+      "decision": "Use explicit pixel sizes and pixel line heights."
+    },
+    {
+      "location": "p.30 Huge avatar",
+      "values": "Body 256px; construction and initials map 200px",
+      "decision": "Use 200px construction in token map; record 256px discrepancy."
+    },
+    {
+      "location": "p.3 vs p.32 buttons",
+      "values": "Electric Blue #2251FF vs action color #1F40E6",
+      "decision": "Keep both as distinct tokens."
+    },
+    {
+      "location": "p.55 popup row",
+      "values": "Text 32px; construction 48px",
+      "decision": "Keep text 32px token; no claim all variants use it."
+    },
+    {
+      "location": "p.52 modal scrim",
+      "values": "Body 85% opacity vs caption 85% transparency",
+      "decision": "Use body opacity=0.85, retain ambiguity."
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {aggregate,visibleRows,grouped,optionFor,compatible,csv} from '../../dashboard_runtime/web/engine.mjs';
+import {aggregate,visibleRows,grouped,compatible,csv} from '../../dashboard_runtime/web/engine.mjs';
 const doc=JSON.parse(execFileSync('python3',['-c','import json;from dashboard_runtime.demo import document;print(json.dumps(document()))'],{encoding:'utf8'}));
 // @wu-test type=behavior | scope=aggregate ratio | protects=比例按百分比平均或零分母产生错误值
 test('weighted ratio is recomputed, not mean of percentages',()=>{
@@ -14,16 +14,6 @@ test('filters feed KPIs and charts from the same reviewed rows',()=>{
   assert.equal(visibleRows(d,'total').length,3);
   assert.equal(aggregate(visibleRows(d,'total'),d.manifest.metrics.revenue),278);
   assert.equal(grouped(d,'trend').reduce((s,r)=>s+r.values.revenue,0),278);
-});
-// @wu-test type=behavior | scope=chart type switching | protects=切换图表类型更改源数据或类型错误
-test('native chart type switching preserves source snapshot',()=>{
-  for(const [type,seriesType] of Object.entries({bar:'bar',line:'line',area:'line',pie:'pie',funnel:'funnel'})){
-    const d=structuredClone(doc);d.manifest.components.trend.chartType=type;
-    const series=optionFor(d,'trend').series;
-    assert.deepEqual([...new Set(series.map(item=>item.type))],[seriesType]);
-    if(type==='area')assert.ok(series.every(item=>item.areaStyle));
-    assert.deepEqual(d.snapshot,doc.snapshot);
-  }
 });
 // @wu-test type=boundary | scope=chart compatibility | protects=字段角色不足时启用不兼容图表
 test('shape compatibility blocks missing roles',()=>{

@@ -1,37 +1,37 @@
 # Component HTML Generation Contract
 
-Read this reference whenever the task produces, changes, embeds, or migrates HTML for an `executive-charts` component. The component JSON is the source; the shared renderer owns the HTML. Generate through the bundled scripts so the same component identity, structure, styles, interactions, and inspection rules apply on every run.
+> **Historical Reference Notice (2026-11-10 Architecture Rebuild)**
+> The native standalone HTML generation scripts (`generate_dashboard.py`, `generate_chart.py`, `dashboard_template.py`, `runtime_bundle.py`) have been removed for the React + TypeScript / Tailwind CSS v4 / shadcn/ui / ECharts / GridStack / Lucide rebuild.
+> This document is retained as a reference for historical DOM contracts, component mounting structure, and visual interactions. It cannot be used as an active execution command set in the current rebuild phase.
+
+Read this reference whenever understanding component DOM identity, structure, styles, and interaction contracts. The component JSON is the source; the renderer owns the presentation.
 
 Use [dashboard-workspace.md](dashboard-workspace.md) for component JSON fields and current CLI syntax. Use [existing-project-checklist.md](existing-project-checklist.md) when applying this contract to an existing project.
 
-## Generation pipeline
+## Historical generation pipeline (Reference)
 
-Dashboard HTML is produced in this order:
+In the previous generation pipeline, dashboard HTML was produced in this order:
 
-1. `dashboard_workspace.py` resolves `dashboard.json`, `filters.json`, KPI files, chart files, and `table.json` into one validated configuration.
-2. `generate_dashboard.py` serializes business data and merges each chart component with the renderer selected by its `code`. The component's explicit `id`, title, data, and unit override catalog preview values.
-3. `dashboard_template.py` emits the document shell, design tokens, root mounting points, serialized `window.DASHBOARD_CONFIG`, renderer classes, and interaction engine into one HTML file.
-4. `runtime_bundle.py` creates `DashboardRuntime`; `mount()` constructs `DashboardApp`, which calls `renderHeader`, `renderFilters`, `renderKPIs`, `renderChartsGrid`, `renderTableSection`, and `renderTableEngine` in that order.
+1. `dashboard_workspace.py` resolved component files into one validated configuration.
+2. `generate_dashboard.py` serialized business data and merged each chart component with the selected renderer.
+3. `dashboard_template.py` emitted the document shell, root mounting points, and interaction engine.
+4. `runtime_bundle.py` mounted the component sections in sequence.
 5. ECharts initializes only after its chart and KPI canvas containers exist. Event handlers attach to the generated component identities.
-6. `build` runs static HTML inspection to check document metadata, DOM references, local assets, and any supplied preservation requirements.
+6. Static HTML inspection checked document metadata, DOM references, local assets, and preservation requirements.
 
-Completion criterion: the delivered HTML comes from this pipeline and passes strict component validation and static HTML inspection.
-
-For an interactive preview, also check the rendered target page. Server-side JSON parsing and static inspection do not verify host decoding or frontend rendering. On failure, separate serialization, transport, decoding and rendering evidence; retain the error and response size, and do not claim a fix merely because reducing data made a local JSON check pass. Synthetic prototypes should reuse a bounded dataset across charts and tables, with row counts and response size reviewed before preview. Preserve required filter choices and aggregation semantics; do not silently truncate real data.
+In the current rebuild phase, workspace contracts are strictly validated with `charts-design dashboard validate ./board --strict --json` without invoking legacy HTML builders.
 
 ## Choose the output mode
 
 ### Standalone chart
 
-Use `generate_chart.py --config <chart.json> --output <chart.html>` when the deliverable is one business chart card. The JSON supplies the chart code, business data, title, unit, and full `presentation` contract. The command validates the selected renderer, generates the standalone HTML document, and runs static inspection. Use code-only generation for catalog preview and `--snippet` for ECharts option source.
-
-Completion criterion: the selected chart code answers the stated business question and the standalone HTML passes component validation and static inspection.
+In the historical workflow, standalone charts were compiled via `generate_chart.py --config`. In the current rebuild phase, chart components are authored as JSON declarations adhering to `presentation` contracts and validated via workspace tools. Standalone HTML compilation is deferred until the new UI is connected.
 
 ### Dashboard
 
-Use the workspace commands for KPI, chart, filter, and table composition. These components are rendered into the shared dashboard shell at runtime; they are not independent handwritten HTML partials. Build after adding the smallest useful component slice.
+Use the workspace commands for KPI, chart, filter, and table composition. These components are validated together in the workspace before rendering.
 
-Completion criterion: strict workspace validation passes before build, and the built dashboard contains every declared component by stable identity.
+Completion criterion: strict workspace validation passes, and the configuration contains every declared component by stable identity.
 
 ### Existing frontend project
 

@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- [html-validate-disable element-name, no-inline-style] -->
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>七种页面布局</title><script src="./support.js"></script><link rel="stylesheet" href="ds/mckinseymds/tokens.css"></head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0}a{color:#2251ff}a:hover{color:#051c2c}</style></helmet>
+<main style="font-family:var(--font-sans);color:#333333;background:#ffffff;min-height:1500px;padding:48px 32px;box-sizing:border-box">
+  <div style="max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:32px">
+    <div style="display:flex;flex-direction:column;gap:12px"><span style="font-size:14px;color:#4d4d4d">LAYOUT / 01—07</span><h1 style="font-size:36px;line-height:44px;font-weight:500;color:#051c2c;margin:0">按问题选择页面构图</h1><p style="font-size:16px;line-height:24px;margin:0">同一套组件，七种阅读顺序。线框表示信息角色与所占列数。</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(390px,100%),1fr));gap:32px">
+      <sc-for list="{{layouts}}" as="item" hint-placeholder-count="7">
+        <article style="display:flex;flex-direction:column;gap:16px;border:1px solid #d0d0d0;padding:24px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0;font-size:24px;font-weight:500">{{item.name}}</h2><span style="font-size:14px;color:#4d4d4d">{{item.id}}</span></div>
+          <div style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px;background:#f0f0f0;padding:16px;min-height:200px;align-content:start">
+            <sc-for list="{{item.cells}}" as="cell" hint-placeholder-count="6">
+              <div style="grid-column:{{cell.span}};height:{{cell.height}};background:{{cell.fill}};color:{{cell.ink}};display:flex;align-items:center;justify-content:center;font-size:12px;text-align:center;box-sizing:border-box;padding:4px">{{cell.label}}</div>
+            </sc-for>
+          </div>
+          <p style="margin:0;font-size:14px;line-height:22px;min-height:44px">{{item.use}}</p>
+          <span style="font-size:14px;color:#4d4d4d">{{item.sequence}}</span>
+        </article>
+      </sc-for>
+    </div>
+    <section style="border-top:1px solid #d0d0d0;padding-top:24px;display:flex;gap:32px;flex-wrap:wrap">
+      <div style="flex:1 1 280px"><h2 style="font-size:20px;font-weight:500">桌面 12 列 / 平板 8 列 / 手机 4 列</h2><p style="font-size:14px;line-height:22px">手机按阅读顺序排布，宽表格在自身容器内横向滚动。直接对比的指标卡保持相同形态。</p></div>
+      <div style="flex:1 1 280px"><h2 style="font-size:20px;font-weight:500">保持内容，再换构图</h2><p style="font-size:14px;line-height:22px">模板只改变位置与尺寸。指标、单位、图例、筛选范围与数据口径保持一致。</p></div>
+    </section>
+  </div>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const cell=(span,label,height=48)=>({span:'span '+span,label,height:height+'px',fill:label==='KPI'?'#051c2c':'#dce8f0',ink:label==='KPI'?'#ffffff':'#333333'});
+    return {layouts:[
+      {id:'executive',name:'经典三段式',use:'月度复盘；核心指标、证据图与明细同页。',sequence:'KPI → 双列图表 → 通栏表格',cells:[cell(3,'KPI'),cell(3,'KPI'),cell(3,'KPI'),cell(3,'KPI'),cell(6,'图表',72),cell(6,'图表',72),cell(12,'明细表',40)]},
+      {id:'focus',name:'主图聚焦',use:'一个决定性趋势或对比，加少量支撑证据。',sequence:'KPI → 通栏主图 → 三列支撑',cells:[cell(4,'KPI'),cell(4,'KPI'),cell(4,'KPI'),cell(12,'主图',88),cell(4,'支撑图'),cell(4,'支撑图'),cell(4,'支撑图')]},
+      {id:'bento',name:'便当格拼贴',use:'重要性不同的混合证据，主次交替。',sequence:'8+4 → 4+8 → 6+6',cells:[cell(8,'主要证据',72),cell(4,'辅助证据',72),cell(4,'辅助证据',72),cell(8,'主要证据',72),cell(6,'对比'),cell(6,'对比')]},
+      {id:'sidebar',name:'侧栏指标',use:'监控场景；指标置左，分析证据置右。',sequence:'左侧 3 列 KPI / 右侧 9 列图表',cells:[cell(3,'KPI',72),cell(9,'图表',72),cell(3,'KPI',72),cell(9,'图表',72),cell(3,'KPI'),cell(9,'图表')]},
+      {id:'grid3',name:'三列小多图',use:'同一指标按区域或产品拆分，方便比较。',sequence:'等宽、同尺度、同一指标',cells:[cell(4,'区域 A',88),cell(4,'区域 B',88),cell(4,'区域 C',88),cell(4,'区域 D',88),cell(4,'区域 E',88),cell(4,'区域 F',88)]},
+      {id:'narrative',name:'图文叙事',use:'图后附一句结论，适合分析简报。',sequence:'8 列图表 + 4 列解读，向下阅读',cells:[cell(8,'图表',88),cell(4,'解读',88),cell(8,'图表',88),cell(4,'解读',88)]},
+      {id:'scorecard',name:'指标墙',use:'6–12 个运营指标，少量证据图。',sequence:'桌面每行最多 6 张 / 手机每行 2 张',cells:[...Array.from({length:12},()=>cell(2,'KPI',64)),cell(12,'证据图',56)]}
+    ]};
+  }
+}
+</script>
+</body>
+</html>

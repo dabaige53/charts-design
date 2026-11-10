@@ -10,7 +10,17 @@ function period(value,grain){
 }
 export function resolveOriginal(doc,id,granularity='month'){
   if(doc.computed?.components?.[id])return structuredClone(doc.computed.components[id]);
-  const c=doc.manifest.components[id],b=c.binding,raw=structuredClone(c.config);
+  const c=doc.manifest.components[id],b=c.binding,raw=structuredClone(c.config||c.presentation||{});
+  if(c.kind==='kpi'){
+    const metric=doc.manifest.metrics[c.measures[0]],rows=visibleRows(doc,id),active=doc.manifest.filters.some(f=>f.componentIds.includes(id)&&f.values.length);
+    raw.type=raw.type||'mc01';raw.label=c.title;raw.value=format(aggregate(rows,metric),metric);
+    if(active){for(const target of ['yoy','mom','subVal','leftVal','rightVal','trendLabel','gaugeSub'])if(target in raw)raw[target]='—';for(const target of ['percent','actual','target','currentValue','priorValue','stats','items'])delete raw[target];}
+    if(['mc03','mc12'].includes(raw.type)&&raw.timeField){
+      const groups=new Map();for(const row of rows){const key=row[raw.timeField];if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);}
+      raw.sparkMonths=[...groups.keys()].sort();raw.sparkData=raw.sparkMonths.map(key=>aggregate(groups.get(key),metric));
+    }
+    return raw;
+  }
   if(!b)return raw;
   if(raw.encoding){raw.data={records:encodingRecords(doc,id)};return raw;}
   const rows=visibleRows(doc,id),metrics=doc.manifest.metrics;

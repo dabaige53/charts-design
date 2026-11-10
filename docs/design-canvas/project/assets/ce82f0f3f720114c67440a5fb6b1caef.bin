@@ -1,0 +1,2699 @@
+{
+  "source": "charts-design · 2026-11-10 · 合成示例，非业务实绩",
+  "charts": [
+    {
+      "id": "c01",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "标准垂直柱状图",
+      "nameEn": "Standard Column Chart",
+      "seriesType": "bar",
+      "legend": "none",
+      "bestFor": "跨实体/跨大区规模与绝对值对比",
+      "axisRules": "Y轴置顶标量纲，X轴居中标大区，柱顶直接标数值",
+      "config": {
+        "id": "chart-c01",
+        "code": "c01",
+        "title": "全国各大基地枢纽机场营收贡献对比",
+        "subtitle": "衡量全国五大核心基地枢纽当期客运收入贡献与规模差异",
+        "explainKey": "c01",
+        "data": {
+          "categories": [
+            "华东基地",
+            "华南基地",
+            "北方基地",
+            "西南基地",
+            "海外基地"
+          ],
+          "values": [
+            4.9,
+            3.4,
+            2.8,
+            1.9,
+            1.2
+          ]
+        }
+      }
+    },
+    {
+      "id": "c02",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "排序横向条形图",
+      "nameEn": "Ordered Horizontal Bar",
+      "seriesType": "bar (horizontal)",
+      "legend": "none",
+      "bestFor": "产品/业务线降序排列，长文本标签无遮挡展示",
+      "axisRules": "Y轴inverse:true且nameLocation:'start'，X轴居中标量纲",
+      "config": {
+        "id": "chart-c02",
+        "code": "c02",
+        "title": "主流客运机型机队年度创收排行",
+        "subtitle": "评估远程宽体客机与主力窄体机队的年度创收顺位与效能",
+        "explainKey": "c02",
+        "data": {
+          "categories": [
+            "A350-900",
+            "B787-9",
+            "A321neo",
+            "B737-800",
+            "C919",
+            "ARJ21"
+          ],
+          "values": [
+            4.9,
+            3.4,
+            2.8,
+            1.9,
+            1.5,
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "id": "c03",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "分组对比柱状图",
+      "nameEn": "Grouped Column Chart",
+      "seriesType": "bar (multi-series)",
+      "legend": "2-column-top",
+      "bestFor": "多周期考核预算与实际完成对比",
+      "axisRules": "双色区分预算与完成，图例靠右",
+      "config": {
+        "id": "chart-c03",
+        "code": "c03",
+        "title": "四大核心航线集群预算收入 vs 实际完成",
+        "subtitle": "对比各大航线集群年度预算配额与实际完成情况及超额缺口",
+        "explainKey": "c03",
+        "data": {
+          "clusters": [
+            "京津冀集群",
+            "长三角集群",
+            "粤港澳大湾区",
+            "成渝城市群"
+          ],
+          "budget": [
+            4.2,
+            4.8,
+            3.5,
+            2.5
+          ],
+          "actual": [
+            4.5,
+            5.2,
+            3.6,
+            2.6
+          ]
+        }
+      }
+    },
+    {
+      "id": "c04",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "双向偏离条形图",
+      "nameEn": "Diverging Bar Chart",
+      "seriesType": "bar",
+      "legend": "none",
+      "bestFor": "业务线正负增长率对比，基准线0偏离",
+      "axisRules": "正值墨黑/深蓝，负值克制红，数值右侧标注",
+      "config": {
+        "id": "chart-c04",
+        "code": "c04",
+        "title": "各机队板块座公里收益相对行业基准偏离",
+        "subtitle": "以全行业统一座公里基准收益率为参考线，量化各机队的超额或滞后幅度",
+        "explainKey": "c04",
+        "data": {
+          "fleets": [
+            "远程宽体客机 (A350/B787)",
+            "骨干窄体客机 (A321/B737)",
+            "国产干支客机 (C919/ARJ21)",
+            "全货机机队 (B777F)"
+          ],
+          "deviations": [
+            18.2,
+            6.4,
+            -5.8,
+            -12.4
+          ]
+        }
+      }
+    },
+    {
+      "id": "c05",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "棒棒糖图",
+      "nameEn": "Lollipop Chart",
+      "seriesType": "bar + scatter",
+      "legend": "none",
+      "bestFor": "大样本细分类目精确数值点对比，视觉轻盈",
+      "axisRules": "细线条+端点圆球，高数据墨水比",
+      "config": {
+        "id": "chart-c05",
+        "code": "c05",
+        "title": "航司各乘机服务环节 NPS 满意度排行",
+        "subtitle": "对标呈现行李直挂、机上餐食、贵宾厅等环节满意度评分与顺位",
+        "explainKey": "c05",
+        "data": {
+          "categories": [
+            "行李直挂",
+            "快速安检",
+            "贵宾休息室",
+            "机上餐食",
+            "客舱Wi-Fi",
+            "登机引导",
+            "退改签响应"
+          ],
+          "scores": [
+            94,
+            88,
+            82,
+            76,
+            71,
+            68,
+            65
+          ]
+        }
+      }
+    },
+    {
+      "id": "c06",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "哑铃跨度图",
+      "nameEn": "Dumbbell Plot",
+      "seriesType": "custom line + scatter",
+      "legend": "2-column-top",
+      "bestFor": "2024基期 vs 2025当期跨期渗透率增量与跃升幅度",
+      "axisRules": "双点连线，图例标注基期与当期",
+      "config": {
+        "id": "chart-c06",
+        "code": "c06",
+        "title": "各大基地重点商务航线客座率跃升跨度",
+        "subtitle": "对比四大枢纽基地在淡季基期与商务旺季当期的客座率跃升幅度",
+        "explainKey": "c06",
+        "data": {
+          "hubs": [
+            "华东基地",
+            "华南基地",
+            "北方基地",
+            "西南基地"
+          ],
+          "offSeason": [
+            76.5,
+            74.2,
+            71.8,
+            68.5
+          ],
+          "peakSeason": [
+            92.4,
+            89.6,
+            87.5,
+            84.2
+          ]
+        }
+      }
+    },
+    {
+      "id": "c07",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "目标重叠达成柱",
+      "nameEn": "Overlaid Bar Chart",
+      "seriesType": "bar (overlapping)",
+      "legend": "2-column-top",
+      "bestFor": "目标底槽与实测完成进度重叠对比",
+      "axisRules": "浅灰宽底槽+深蓝窄实柱，barGap:'-77%'",
+      "config": {
+        "id": "chart-c07",
+        "code": "c07",
+        "title": "核心航线集群上年度同期 vs 当期运力投放对比",
+        "subtitle": "直观对比上一年度同期基期与当期实际完成运力与营收规模",
+        "explainKey": "c07",
+        "data": {
+          "clusters": [
+            "京津冀集群",
+            "长三角集群",
+            "粤港澳大湾区",
+            "成渝城市群",
+            "西北枢纽群",
+            "东北走廊"
+          ],
+          "base2024": [
+            3.8,
+            4.2,
+            3,
+            2.1,
+            1.8,
+            1.2
+          ],
+          "curr2025": [
+            4.5,
+            5.2,
+            3.6,
+            2.6,
+            2.2,
+            1.5
+          ]
+        }
+      }
+    },
+    {
+      "id": "c08",
+      "catId": 1,
+      "category": "对比与排名",
+      "nameZh": "双向对峙蝴蝶图",
+      "nameEn": "Butterfly Chart",
+      "seriesType": "bar (dual-grid)",
+      "legend": "2-column-top-center",
+      "bestFor": "线上直营 vs 线下门店同一品类的对称对比",
+      "axisRules": "双Grid对称排布，中间共享类目轴",
+      "config": {
+        "id": "chart-c08",
+        "code": "c08",
+        "title": "国内航线 vs 国际及地区航线主要基地客运规模对比",
+        "subtitle": "按大区基地维度对称呈现国内与国际航线客运收入分布",
+        "explainKey": "c08",
+        "data": {
+          "categories": [
+            "华东基地",
+            "华南基地",
+            "北方基地",
+            "西南基地"
+          ],
+          "domestic": [
+            4.9,
+            3.4,
+            2.8,
+            1.9
+          ],
+          "intl": [
+            1.8,
+            1.2,
+            1.5,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "id": "t01",
+      "catId": 2,
+      "category": "时间与趋势",
+      "nameZh": "极简单线走势图",
+      "nameEn": "Single Line Trend",
+      "seriesType": "line",
+      "legend": "none",
+      "bestFor": "单核心指标月度/季度连续演变轨迹",
+      "axisRules": "Y轴标量纲，拐点带微圆点并标注关键数值",
+      "config": {
+        "id": "chart-t01",
+        "code": "t01",
+        "title": "民航旅客月度运输总周转量 RPK 走势",
+        "subtitle": "反映全年各月份旅客实际运输总周转量 RPK 的连续平滑演进轨迹",
+        "explainKey": "t01",
+        "data": {
+          "months": [
+            "1月",
+            "2月",
+            "3月",
+            "4月",
+            "5月",
+            "6月",
+            "7月",
+            "8月",
+            "9月",
+            "10月",
+            "11月",
+            "12月"
+          ],
+          "rpk": [
+            142,
+            168,
+            155,
+            160,
+            185,
+            192,
+            220,
+            235,
+            198,
+            215,
+            170,
+            188
+          ]
+        }
+      }
+    },
+    {
+      "id": "t02",
+      "catId": 2,
+      "category": "时间与趋势",
+      "nameZh": "实测与预测折线图",
+      "nameEn": "Forecast Line Chart",
+      "seriesType": "line (solid + dashed)",
+      "legend": "2-column-top",
+      "bestFor": "历史真实业绩与未来预期指引对比",
+      "axisRules": "实线历史，虚线未来预测，分界点无缝衔接",
+      "config": {
+        "id": "chart-t02",
+        "code": "t02",
+        "title": "总可用座公里 ASK 历史投放与未来旺季预测",
+        "subtitle": "对比历史实际运力供给与未来春运/暑运旺季情景预测走廊",
+        "explainKey": "t02",
+        "data": {
+          "quarters": [
+            "24Q1",
+            "24Q2",
+            "24Q3",
+            "24Q4",
+            "25Q1 (E)",
+            "25Q2 (E)"
+          ],
+          "actual": [
+            42,
+            48.5,
+            56,
+            52,
+            null,
+            null
+          ],
+          "forecast": [
+            null,
+            null,
+            null,
+            52,
+            58.5,
+            65
+          ]
+        }
+      }
+    },
+    {
+      "id": "t03",
+      "catId": 2,
+      "category": "时间与趋势",
+      "nameZh": "阶梯步阶折线图",
+      "nameEn": "Step Line Chart",
+      "seriesType": "line (step:'end')",
+      "legend": "none",
+      "bestFor": "调价基准、汇率政策等离散突变节点跟踪",
+      "axisRules": "step属性呈现离散阶梯跳跃",
+      "config": {
+        "id": "chart-t03",
+        "code": "t03",
+        "title": "常旅客飞行航段与金银卡升级阶梯门槛",
+        "subtitle": "呈现常旅客飞行定级航段对应会员等级的阶梯升级门槛规则",
+        "explainKey": "t03",
+        "data": {
+          "segments": [
+            "0-10段 (普卡)",
+            "11-25段 (银卡)",
+            "26-50段 (金卡)",
+            "51-90段 (白金卡)",
+            "90+段 (终身白金)"
+          ],
+          "rates": [
+            0.18,
+            0.25,
+            0.32,
+            0.4,
+            0.45
+          ]
+        }
+      }
+    },
+    {
+      "id": "t04",
+      "catId": 2,
+      "category": "时间与趋势",
+      "nameZh": "堆叠面积演进图",
+      "nameEn": "Stacked Area Chart",
+      "seriesType": "line (stack:'total', areaStyle)",
+      "legend": "4-column-top-center",
+      "bestFor": "多产品线长期营收总额与结构演变",
+      "axisRules": "多色阶层级堆叠，图例顶部居中展开",
+      "config": {
+        "id": "chart-t04",
+        "code": "t04",
+        "title": "客运、货邮与航空辅营业务收入结构演变",
+        "subtitle": "追踪两舱客票、经济舱客票、腹舱货运与航空辅营在历史时序中的占比",
+        "explainKey": "t04",
+        "data": {
+          "quarters": [
+            "23Q3",
+            "23Q4",
+            "24Q1",
+            "24Q2",
+            "24Q3",
+            "24Q4",
+            "25Q1",
+            "25Q2"
+          ],
+          "premium": [
+            0.7,
+            0.8,
+            0.8,
+            0.9,
+            1.2,
+            1.4,
+            1.6,
+            1.8
+          ],
+          "economy": [
+            2.5,
+            2.7,
+            2.8,
+            3.2,
+            3.8,
+            4.2,
+            4.6,
+            5
+          ],
+          "cargo": [
+            0.4,
+            0.5,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            1
+          ],
+          "ancillary": [
+            0.2,
+            0.3,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "id": "t05",
+      "catId": 2,
+      "category": "时间与趋势",
+      "nameZh": "战略斜率对照图",
+      "nameEn": "Slopegraph",
+      "seriesType": "line (2-point)",
+      "legend": "4-column-top-center",
+      "bestFor": "变革前后两大时间截面关键业务排位与利润率跃迁",
+      "axisRules": "左右两轴对比，直观观察斜率上升与下降",
+      "config": {
+        "id": "chart-t05",
+        "code": "t05",
+        "title": "机队机型优化升级前后座公里成本 CASK 对照",
+        "subtitle": "评估新一代节油客机替换老旧机型后座公里成本 CASK 的改善斜率",
+        "explainKey": "t05",
+        "data": {
+          "stages": [
+            "换装前 (2024)",
+            "换装后 (2025)"
+          ],
+          "lines": [
+            {
+              "name": "远程宽体机队 (A350 替换 B767)",
+              "data": [
+                45.2,
+                38.1
+              ]
+            },
+            {
+              "name": "骨干窄体机队 (A321neo 替换 A320ceo)",
+              "data": [
+                36.5,
+                31.2
+              ]
+            },
+            {
+              "name": "支线机队 (ARJ21 规模化投入)",
+              "data": [
+                38,
+                34.5
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t06",
+      "catId": 2,
+      "category": "时间与趋势",
+      "nameZh": "双Y轴柱线复合图",
+      "nameEn": "Dual-Axis Combo Chart",
+      "seriesType": "bar (left) + line (right)",
+      "legend": "2-column-top-center",
+      "bestFor": "绝对营收规模与同比增速同屏复合分析",
+      "axisRules": "左Y轴营收，右Y轴增速，柱内沉底标金额，折线上标增速",
+      "config": {
+        "id": "chart-t06",
+        "code": "t06",
+        "title": "季度客运总收入与客公里收益走势",
+        "subtitle": "按季度/月度追踪民航主营客运收入绝对规模与客公里收益变动率",
+        "hasGranularity": true,
+        "defaultGranularity": "month",
+        "explainKey": "t06",
+        "data": {
+          "month": {
+            "categories": [
+              "1月",
+              "2月",
+              "3月",
+              "4月",
+              "5月",
+              "6月",
+              "7月",
+              "8月",
+              "9月",
+              "10月",
+              "11月",
+              "12月"
+            ],
+            "revenue": [
+              0.38,
+              0.42,
+              0.4,
+              0.45,
+              0.52,
+              0.53,
+              0.58,
+              0.6,
+              0.62,
+              0.7,
+              0.72,
+              0.78
+            ],
+            "yieldGrowth": [
+              12,
+              14.5,
+              13.8,
+              16.2,
+              18,
+              19.5,
+              22,
+              24.5,
+              25,
+              28.2,
+              30.5,
+              32.5
+            ]
+          },
+          "quarter": {
+            "categories": [
+              "2024Q1",
+              "24Q2",
+              "24Q3",
+              "24Q4"
+            ],
+            "revenue": [
+              1.2,
+              1.5,
+              1.8,
+              2.2
+            ],
+            "yieldGrowth": [
+              15.2,
+              18.4,
+              24,
+              32.5
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "k01",
+      "catId": 3,
+      "category": "构成与层级",
+      "nameZh": "中心指标环形图",
+      "nameEn": "Donut Metric Chart",
+      "seriesType": "pie (donut)",
+      "legend": "single-column-vertical-right",
+      "bestFor": "客群/营收构成及中心总额度展示",
+      "axisRules": "环心展示总值与说明，右侧垂悬单列图例",
+      "config": {
+        "id": "chart-k01",
+        "code": "k01",
+        "title": "旅客舱位等级与出行客群构成分布",
+        "subtitle": "反映公商务出行、休闲度假、探亲求学与团队政务等不同客群的构成占比",
+        "explainKey": "k01",
+        "data": {
+          "demographics": [
+            {
+              "value": 42,
+              "name": "公商务高频出行 (42%)"
+            },
+            {
+              "value": 30,
+              "name": "休闲旅游度假 (30%)"
+            },
+            {
+              "value": 18,
+              "name": "探亲求学探访 (18%)"
+            },
+            {
+              "value": 10,
+              "name": "政务团队出行 (10%)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "k02",
+      "catId": 3,
+      "category": "构成与层级",
+      "nameZh": "100%堆叠条形图",
+      "nameEn": "100% Stacked Bar",
+      "seriesType": "bar (stack:'t', max:100)",
+      "legend": "4-column-top-center",
+      "bestFor": "各大区渠道结构（直销/分销/电商）百分比归一构成",
+      "axisRules": "总长100%，各分段占比一目了然",
+      "config": {
+        "id": "chart-k02",
+        "code": "k02",
+        "title": "各大核心基地直销 vs OTA 渠道销售配比",
+        "subtitle": "横向对比各大基地枢纽在官方 App 直销、大客户协议与 OTA 渠道配比",
+        "explainKey": "k02",
+        "data": {
+          "hubs": [
+            "华东基地",
+            "华南基地",
+            "北方基地",
+            "西南基地"
+          ],
+          "appDirect": [
+            48,
+            42,
+            38,
+            32
+          ],
+          "corpDirect": [
+            28,
+            25,
+            24,
+            20
+          ],
+          "ota": [
+            24,
+            33,
+            38,
+            48
+          ]
+        }
+      }
+    },
+    {
+      "id": "k03",
+      "catId": 3,
+      "category": "构成与层级",
+      "nameZh": "矩形树图",
+      "nameEn": "Treemap",
+      "seriesType": "treemap",
+      "legend": "none",
+      "bestFor": "预算分配与业务板块多层级面积拆解",
+      "axisRules": "面积正比于金额，深浅表达层级",
+      "config": {
+        "id": "chart-k03",
+        "code": "k03",
+        "title": "民航机队在册客机资产估值分布",
+        "subtitle": "通过几何面积直观映射各机型机队的账面净值与资产估值体量",
+        "explainKey": "k03",
+        "data": {
+          "assets": [
+            {
+              "name": "A350-900 远程机队",
+              "value": 12.5
+            },
+            {
+              "name": "B787-9 梦想客机",
+              "value": 8.8
+            },
+            {
+              "name": "A321neo 主力窄体",
+              "value": 6.4
+            },
+            {
+              "name": "B737-800 骨干客机",
+              "value": 4.8
+            },
+            {
+              "name": "C919 国产干线客机",
+              "value": 3.2
+            },
+            {
+              "name": "ARJ21 支线机队",
+              "value": 1.6
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "k04",
+      "catId": 3,
+      "category": "构成与层级",
+      "nameZh": "帕累托 80/20 诊断图",
+      "nameEn": "Pareto Analysis Chart",
+      "seriesType": "bar + line (dual-axis)",
+      "legend": "2-column-top",
+      "bestFor": "客户流失主因与质量缺陷 80/20 定律识别",
+      "axisRules": "频次降序柱状 + 累计百分比折线",
+      "config": {
+        "id": "chart-k04",
+        "code": "k04",
+        "title": "航班延误与服务投诉主因帕累托 80/20 诊断",
+        "subtitle": "依延误发生频数降序与累计占比曲线识别 80% 核心运行阻碍",
+        "explainKey": "k04",
+        "data": {
+          "causes": [
+            "天气及流量管制",
+            "前序航班晚到",
+            "跑道维护及保障",
+            "飞机机械偶发",
+            "其他地服原因"
+          ],
+          "counts": [
+            480,
+            320,
+            140,
+            60,
+            30
+          ],
+          "cumPercent": [
+            46.6,
+            77.7,
+            91.3,
+            97.1,
+            100
+          ]
+        }
+      }
+    },
+    {
+      "id": "k05",
+      "catId": 3,
+      "category": "构成与层级",
+      "nameZh": "标准实心饼图",
+      "nameEn": "Standard Solid Pie",
+      "seriesType": "pie",
+      "legend": "single-column-vertical-right",
+      "bestFor": "2~4 项大类结构切分",
+      "axisRules": "饼内直接展示名称与百分比",
+      "config": {
+        "id": "chart-k05",
+        "code": "k05",
+        "title": "国内航线 vs 国际及地区航线收入占比",
+        "subtitle": "展示国内与国际航线在客运收入大盘中的份额结构占比",
+        "explainKey": "k05",
+        "data": {
+          "shares": [
+            {
+              "value": 72,
+              "name": "国内主营航线 (72%)"
+            },
+            {
+              "value": 28,
+              "name": "国际及地区航线 (28%)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "k06",
+      "catId": 3,
+      "category": "构成与层级",
+      "nameZh": "双层嵌套同心饼图",
+      "nameEn": "Nested Sunburst Pie",
+      "seriesType": "pie (inner + outer)",
+      "legend": "single-column-vertical-right",
+      "bestFor": "主分类与其下二级细分类别的两层嵌套拆解",
+      "axisRules": "内环一级分类，外环二级细分",
+      "config": {
+        "id": "chart-k06",
+        "code": "k06",
+        "title": "航线网络国内外与区域层级结构",
+        "subtitle": "呈现国内干线/支线与国际远程/周边区域航线的同心多层级客运构成",
+        "explainKey": "k06",
+        "data": {
+          "hierarchy": [
+            {
+              "name": "国内网络 (72%)",
+              "children": [
+                {
+                  "name": "商务干线 (50%)",
+                  "value": 50
+                },
+                {
+                  "name": "区域支线 (22%)",
+                  "value": 22
+                }
+              ]
+            },
+            {
+              "name": "国际网络 (28%)",
+              "children": [
+                {
+                  "name": "洲际远程 (18%)",
+                  "value": 18
+                },
+                {
+                  "name": "周边短程 (10%)",
+                  "value": 10
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d01",
+      "catId": 4,
+      "category": "分布与离散",
+      "nameZh": "客单价频数直方图",
+      "nameEn": "Frequency Histogram",
+      "seriesType": "bar (continuous)",
+      "legend": "none",
+      "bestFor": "连续订单金额与客单价区间密度分布",
+      "axisRules": "柱宽95%紧凑排列，表现频数集中度",
+      "config": {
+        "id": "chart-d01",
+        "code": "d01",
+        "title": "旅客平均机票购票金额频数分布",
+        "subtitle": "展示特价舱、标准经济舱、全价舱与两舱机票的购票频数与聚集分布",
+        "explainKey": "d01",
+        "data": {
+          "brackets": [
+            "¥300-600",
+            "¥600-1000",
+            "¥1000-1500",
+            "¥1500-2200",
+            "¥2200+"
+          ],
+          "counts": [
+            120,
+            380,
+            490,
+            260,
+            95
+          ]
+        }
+      }
+    },
+    {
+      "id": "d02",
+      "catId": 4,
+      "category": "分布与离散",
+      "nameZh": "多大区合同箱线图",
+      "nameEn": "Boxplot",
+      "seriesType": "boxplot",
+      "legend": "none",
+      "bestFor": "四大区合同金额的中位数、四分位与离群值",
+      "axisRules": "展示 Min, Q1, Median, Q3, Max",
+      "config": {
+        "id": "chart-d02",
+        "code": "d02",
+        "title": "各大基地航线平均单座票价收益分布特征",
+        "subtitle": "呈现各大基地航线单座票价收益的极值、四分位数与中位数分布",
+        "explainKey": "d02",
+        "data": {
+          "categories": [
+            "华东基地",
+            "华南基地",
+            "北方基地",
+            "西南基地"
+          ],
+          "boxData": [
+            [
+              320,
+              450,
+              580,
+              720,
+              950
+            ],
+            [
+              300,
+              420,
+              540,
+              680,
+              890
+            ],
+            [
+              280,
+              390,
+              510,
+              640,
+              820
+            ],
+            [
+              240,
+              350,
+              460,
+              590,
+              760
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "d03",
+      "catId": 4,
+      "category": "分布与离散",
+      "nameZh": "工单响应密度曲线",
+      "nameEn": "Density Curve",
+      "seriesType": "line (smooth, areaStyle)",
+      "legend": "none",
+      "bestFor": "服务响应时间与履约时长的概率密度波峰",
+      "axisRules": "平滑面积曲线，隐去Y轴具体数字，凸显波峰",
+      "config": {
+        "id": "chart-d03",
+        "code": "d03",
+        "title": "航线综合客座率离散度概率分布",
+        "subtitle": "拟合全网航线实际综合客座率连续分布特征与正态偏度特征",
+        "explainKey": "d03",
+        "data": {
+          "plfRange": [
+            "60%",
+            "65%",
+            "70%",
+            "75%",
+            "80%",
+            "85%",
+            "90%",
+            "95%",
+            "100%"
+          ],
+          "density": [
+            0.02,
+            0.05,
+            0.12,
+            0.28,
+            0.45,
+            0.68,
+            0.52,
+            0.22,
+            0.06
+          ]
+        }
+      }
+    },
+    {
+      "id": "d04",
+      "catId": 4,
+      "category": "分布与离散",
+      "nameZh": "24H 全周热力矩阵",
+      "nameEn": "Hour-Day Heatmap",
+      "seriesType": "heatmap",
+      "legend": "none",
+      "bestFor": "用户全周 7x24 小时活跃时段与负载峰谷",
+      "axisRules": "色阶深浅映射活跃密度",
+      "config": {
+        "id": "chart-d04",
+        "code": "d04",
+        "title": "全周 24 小时航班起降与枢纽港吞吐高峰时刻",
+        "subtitle": "定位一周内各时段枢纽机场航班波进出港与停机位负荷密度峰值",
+        "explainKey": "d04",
+        "data": {
+          "days": [
+            "周一",
+            "周二",
+            "周三",
+            "周四",
+            "周五",
+            "周六",
+            "周日"
+          ],
+          "hours": [
+            "00:00",
+            "03:00",
+            "06:00",
+            "09:00",
+            "12:00",
+            "15:00",
+            "18:00",
+            "21:00"
+          ],
+          "data": [
+            [
+              0,
+              0,
+              12
+            ],
+            [
+              1,
+              0,
+              8
+            ],
+            [
+              2,
+              0,
+              15
+            ],
+            [
+              3,
+              0,
+              65
+            ],
+            [
+              4,
+              0,
+              88
+            ],
+            [
+              5,
+              0,
+              92
+            ],
+            [
+              6,
+              0,
+              70
+            ],
+            [
+              7,
+              0,
+              40
+            ],
+            [
+              0,
+              1,
+              10
+            ],
+            [
+              1,
+              1,
+              5
+            ],
+            [
+              2,
+              1,
+              18
+            ],
+            [
+              3,
+              1,
+              72
+            ],
+            [
+              4,
+              1,
+              95
+            ],
+            [
+              5,
+              1,
+              98
+            ],
+            [
+              6,
+              1,
+              75
+            ],
+            [
+              7,
+              1,
+              45
+            ],
+            [
+              0,
+              2,
+              14
+            ],
+            [
+              1,
+              2,
+              6
+            ],
+            [
+              2,
+              2,
+              16
+            ],
+            [
+              3,
+              2,
+              68
+            ],
+            [
+              4,
+              2,
+              90
+            ],
+            [
+              5,
+              2,
+              94
+            ],
+            [
+              6,
+              2,
+              72
+            ],
+            [
+              7,
+              2,
+              42
+            ],
+            [
+              0,
+              3,
+              11
+            ],
+            [
+              1,
+              3,
+              9
+            ],
+            [
+              2,
+              3,
+              20
+            ],
+            [
+              3,
+              3,
+              75
+            ],
+            [
+              4,
+              3,
+              92
+            ],
+            [
+              5,
+              3,
+              96
+            ],
+            [
+              6,
+              3,
+              78
+            ],
+            [
+              7,
+              3,
+              48
+            ],
+            [
+              0,
+              4,
+              15
+            ],
+            [
+              1,
+              4,
+              7
+            ],
+            [
+              2,
+              4,
+              14
+            ],
+            [
+              3,
+              4,
+              60
+            ],
+            [
+              4,
+              4,
+              85
+            ],
+            [
+              5,
+              4,
+              89
+            ],
+            [
+              6,
+              4,
+              65
+            ],
+            [
+              7,
+              4,
+              35
+            ],
+            [
+              0,
+              5,
+              8
+            ],
+            [
+              1,
+              5,
+              4
+            ],
+            [
+              2,
+              5,
+              6
+            ],
+            [
+              3,
+              5,
+              25
+            ],
+            [
+              4,
+              5,
+              38
+            ],
+            [
+              5,
+              5,
+              42
+            ],
+            [
+              6,
+              5,
+              30
+            ],
+            [
+              7,
+              5,
+              20
+            ],
+            [
+              0,
+              6,
+              6
+            ],
+            [
+              1,
+              6,
+              3
+            ],
+            [
+              2,
+              6,
+              5
+            ],
+            [
+              3,
+              6,
+              20
+            ],
+            [
+              4,
+              6,
+              32
+            ],
+            [
+              5,
+              6,
+              35
+            ],
+            [
+              6,
+              6,
+              28
+            ],
+            [
+              7,
+              6,
+              18
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "r01",
+      "catId": 5,
+      "category": "关系与相关",
+      "nameZh": "战略 BCG 四象限矩阵",
+      "nameEn": "Strategic BCG Quadrant Matrix",
+      "seriesType": "scatter + markLine + graphic",
+      "legend": "none",
+      "bestFor": "业务线增速 vs 利润率象限定位（明星/现金牛/探索/收缩）",
+      "axisRules": "双连续数值轴标量纲，背景带四象限语义水印",
+      "config": {
+        "id": "chart-r01",
+        "code": "r01",
+        "title": "航线网络战略四象限增长与收益矩阵",
+        "subtitle": "按客座率增速与座公里利润率定位明星快线、现金牛与待优化航线",
+        "explainKey": "r01",
+        "data": {
+          "routes": [
+            [
+              35.2,
+              68.5,
+              "京沪黄金快线"
+            ],
+            [
+              18.4,
+              62,
+              "沪深商务快线"
+            ],
+            [
+              12,
+              54.2,
+              "京广商务干线"
+            ],
+            [
+              -4.8,
+              42,
+              "蓉京高原干线"
+            ],
+            [
+              22.5,
+              48,
+              "沪蓉骨干快线"
+            ],
+            [
+              8.5,
+              71,
+              "广深通勤快线"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "r02",
+      "catId": 5,
+      "category": "关系与相关",
+      "nameZh": "战略 3D 气泡图",
+      "nameEn": "Strategic 3D Bubble Chart",
+      "seriesType": "scatter (variable size)",
+      "legend": "none",
+      "bestFor": "获客成本 CAC vs 生命周期价值 LTV vs 客户体量",
+      "axisRules": "X轴CAC，Y轴LTV，气泡大小对应客户规模",
+      "config": {
+        "id": "chart-r02",
+        "code": "r02",
+        "title": "常旅客获客成本 CAC 与生命周期价值 LTV 分布",
+        "subtitle": "量化高端商旅、普通商务与大众旅客的获客成本与生命周期价值关系",
+        "explainKey": "r02",
+        "data": {
+          "clusters": [
+            [
+              3.2,
+              28.5,
+              45,
+              "白金卡高端商旅"
+            ],
+            [
+              2.1,
+              16.8,
+              120,
+              "金卡高频商务"
+            ],
+            [
+              1.2,
+              8.4,
+              380,
+              "银卡大众商旅"
+            ],
+            [
+              0.4,
+              2.1,
+              950,
+              "普卡休闲度假"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "r03",
+      "catId": 5,
+      "category": "关系与相关",
+      "nameZh": "多维相关系数热力图",
+      "nameEn": "Correlation Matrix",
+      "seriesType": "heatmap",
+      "legend": "none",
+      "bestFor": "营收、营销投入、研发、客单价等维度的相关性矩阵",
+      "axisRules": "色阶映射 -1 到 +1 相关系数",
+      "config": {
+        "id": "chart-r03",
+        "code": "r03",
+        "title": "民航运营核心要素相关性系数矩阵",
+        "subtitle": "量化客座率、票价指数、日利用率、准点率与利润率的关联强度",
+        "explainKey": "r03",
+        "data": {
+          "dimensions": [
+            "客座率",
+            "票价指数",
+            "日利用率",
+            "准点率",
+            "利润率"
+          ],
+          "matrix": [
+            [
+              0,
+              0,
+              1
+            ],
+            [
+              0,
+              1,
+              0.45
+            ],
+            [
+              0,
+              2,
+              0.72
+            ],
+            [
+              0,
+              3,
+              0.58
+            ],
+            [
+              0,
+              4,
+              0.82
+            ],
+            [
+              1,
+              0,
+              0.45
+            ],
+            [
+              1,
+              1,
+              1
+            ],
+            [
+              1,
+              2,
+              0.38
+            ],
+            [
+              1,
+              3,
+              0.42
+            ],
+            [
+              1,
+              4,
+              0.88
+            ],
+            [
+              2,
+              0,
+              0.72
+            ],
+            [
+              2,
+              1,
+              0.38
+            ],
+            [
+              2,
+              2,
+              1
+            ],
+            [
+              2,
+              3,
+              0.65
+            ],
+            [
+              2,
+              4,
+              0.75
+            ],
+            [
+              3,
+              0,
+              0.58
+            ],
+            [
+              3,
+              1,
+              0.42
+            ],
+            [
+              3,
+              2,
+              0.65
+            ],
+            [
+              3,
+              3,
+              1
+            ],
+            [
+              3,
+              4,
+              0.68
+            ],
+            [
+              4,
+              0,
+              0.82
+            ],
+            [
+              4,
+              1,
+              0.88
+            ],
+            [
+              4,
+              2,
+              0.75
+            ],
+            [
+              4,
+              3,
+              0.68
+            ],
+            [
+              4,
+              4,
+              1
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "r04",
+      "catId": 5,
+      "category": "关系与相关",
+      "nameZh": "业务拓扑网络关系图",
+      "nameEn": "Network Topology Graph",
+      "seriesType": "graph (force layout)",
+      "legend": "none",
+      "bestFor": "集团核心与各事业群、子公司的资金与管理拓扑",
+      "axisRules": "节点大小表体量，连线表归属与资金流",
+      "config": {
+        "id": "chart-r04",
+        "code": "r04",
+        "title": "全国核心枢纽机场航线网络拓扑关联图",
+        "subtitle": "呈现北京、上海、广州等主枢纽与各区域节点的航线协同流向与关联强度",
+        "explainKey": "r04",
+        "data": {
+          "nodes": [
+            {
+              "name": "北京大兴/首都"
+            },
+            {
+              "name": "上海虹桥/浦东"
+            },
+            {
+              "name": "广州白云"
+            },
+            {
+              "name": "成都天府"
+            },
+            {
+              "name": "深圳宝安"
+            },
+            {
+              "name": "西安咸阳"
+            },
+            {
+              "name": "昆明长水"
+            }
+          ],
+          "links": [
+            {
+              "source": "北京大兴/首都",
+              "target": "上海虹桥/浦东"
+            },
+            {
+              "source": "上海虹桥/浦东",
+              "target": "广州白云"
+            },
+            {
+              "source": "北京大兴/首都",
+              "target": "广州白云"
+            },
+            {
+              "source": "上海虹桥/浦东",
+              "target": "成都天府"
+            },
+            {
+              "source": "北京大兴/首都",
+              "target": "深圳宝安"
+            },
+            {
+              "source": "广州白云",
+              "target": "成都天府"
+            },
+            {
+              "source": "成都天府",
+              "target": "西安咸阳"
+            },
+            {
+              "source": "广州白云",
+              "target": "昆明长水"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f01",
+      "catId": 6,
+      "category": "流程与转化",
+      "nameZh": "商业决策转化漏斗",
+      "nameEn": "Conversion Funnel",
+      "seriesType": "funnel",
+      "legend": "none",
+      "bestFor": "销售线索初筛到正式签约的逐级损耗与流失率",
+      "axisRules": "自上而下递减，内部标阶段与转化量",
+      "config": {
+        "id": "chart-f01",
+        "code": "f01",
+        "title": "航司官方渠道机票预订全链路流转漏斗",
+        "subtitle": "监控自航班检索至完成出票支付全链路转化率与留存",
+        "explainKey": "f01",
+        "data": {
+          "stages": [
+            {
+              "value": 5000,
+              "name": "航线航班检索"
+            },
+            {
+              "value": 2800,
+              "name": "舱位票价选择"
+            },
+            {
+              "value": 1400,
+              "name": "乘机人信息录入"
+            },
+            {
+              "value": 600,
+              "name": "完成出票支付"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f02",
+      "catId": 6,
+      "category": "流程与转化",
+      "nameZh": "资金价值链桑基图",
+      "nameEn": "Value Chain Sankey Diagram",
+      "seriesType": "sankey",
+      "legend": "none",
+      "bestFor": "营业总额到综合毛利、支出及净利润的流向分配",
+      "axisRules": "流向带宽度正比于金额规模",
+      "config": {
+        "id": "chart-f02",
+        "code": "f02",
+        "title": "客货运主营收入向成本与航油分流资金流向",
+        "subtitle": "清晰呈现客货运收入扣减航油、起降费与机组薪酬后转化为综合毛利",
+        "explainKey": "f02",
+        "data": {
+          "nodes": [
+            {
+              "name": "客运机票主收入"
+            },
+            {
+              "name": "货邮及辅营收入"
+            },
+            {
+              "name": "主营业务总营收"
+            },
+            {
+              "name": "综合经营毛利"
+            },
+            {
+              "name": "航油采购成本"
+            },
+            {
+              "name": "机场起降与保障"
+            },
+            {
+              "name": "机组薪酬与折旧"
+            },
+            {
+              "name": "企业所得税"
+            },
+            {
+              "name": "航线净利润"
+            }
+          ],
+          "links": [
+            {
+              "source": "客运机票主收入",
+              "target": "主营业务总营收",
+              "value": 10.5
+            },
+            {
+              "source": "货邮及辅营收入",
+              "target": "主营业务总营收",
+              "value": 2.5
+            },
+            {
+              "source": "主营业务总营收",
+              "target": "航油采购成本",
+              "value": 3.8
+            },
+            {
+              "source": "主营业务总营收",
+              "target": "机场起降与保障",
+              "value": 2.2
+            },
+            {
+              "source": "主营业务总营收",
+              "target": "机组薪酬与折旧",
+              "value": 1.5
+            },
+            {
+              "source": "主营业务总营收",
+              "target": "综合经营毛利",
+              "value": 5.5
+            },
+            {
+              "source": "综合经营毛利",
+              "target": "企业所得税",
+              "value": 1.2
+            },
+            {
+              "source": "综合经营毛利",
+              "target": "航线净利润",
+              "value": 4.3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f03",
+      "catId": 6,
+      "category": "流程与转化",
+      "nameZh": "客户批次留存 Cohort",
+      "nameEn": "Retention Cohort Heatmap",
+      "seriesType": "heatmap",
+      "legend": "none",
+      "bestFor": "新客批次 M0 到 M3 的留存衰减轨迹分析",
+      "axisRules": "X轴留存周期，Y轴获客批次，颜色越深留存越高",
+      "config": {
+        "id": "chart-f03",
+        "code": "f03",
+        "title": "新增常旅客会员批次 M0~M3 乘机复购留存",
+        "subtitle": "追踪各季度新入会会员在生命周期前 3 个月的乘机复购留存率演变",
+        "explainKey": "f03",
+        "data": {
+          "cohorts": [
+            "24Q1 批次",
+            "24Q2 批次",
+            "24Q3 批次",
+            "24Q4 批次"
+          ],
+          "months": [
+            "M0",
+            "M1",
+            "M2",
+            "M3"
+          ],
+          "matrix": [
+            [
+              0,
+              0,
+              100
+            ],
+            [
+              1,
+              0,
+              88
+            ],
+            [
+              2,
+              0,
+              78
+            ],
+            [
+              3,
+              0,
+              72
+            ],
+            [
+              0,
+              1,
+              100
+            ],
+            [
+              1,
+              1,
+              90
+            ],
+            [
+              2,
+              1,
+              82
+            ],
+            [
+              3,
+              1,
+              76
+            ],
+            [
+              0,
+              2,
+              100
+            ],
+            [
+              1,
+              2,
+              92
+            ],
+            [
+              2,
+              2,
+              85
+            ],
+            [
+              3,
+              2,
+              80
+            ],
+            [
+              0,
+              3,
+              100
+            ],
+            [
+              1,
+              3,
+              94
+            ],
+            [
+              2,
+              3,
+              88
+            ],
+            [
+              3,
+              3,
+              84
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "fn01",
+      "catId": 7,
+      "category": "财务与归因",
+      "nameZh": "EBITDA 瀑布归因图",
+      "nameEn": "EBITDA Waterfall Attribution",
+      "seriesType": "bar (floating waterfall)",
+      "legend": "none",
+      "bestFor": "期初利润到期末利润各业务增减利因素桥梁归因",
+      "axisRules": "透明占位柱+增量悬浮柱，直观展示正向拉动与负向侵蚀",
+      "config": {
+        "id": "chart-fn01",
+        "code": "fn01",
+        "title": "主营客运边际利润形成与航油扣减归因",
+        "subtitle": "穿透客票基础毛利至当期航线边际利润 EBITDA 的核心归因链路",
+        "explainKey": "fn01",
+        "data": {
+          "categories": [
+            "基期客票毛利",
+            "票价溢价拉动",
+            "周转增长",
+            "航油价格上涨",
+            "当期EBITDA"
+          ],
+          "baseSteps": [
+            0,
+            1.2,
+            1.6,
+            1.5,
+            0
+          ],
+          "deltas": [
+            1.2,
+            0.4,
+            0.2,
+            -0.3,
+            1.5
+          ],
+          "labels": [
+            "¥1.2亿",
+            "+¥0.4亿",
+            "+¥0.2亿",
+            "-¥0.3亿",
+            "¥1.5亿"
+          ]
+        }
+      }
+    },
+    {
+      "id": "fn02",
+      "catId": 7,
+      "category": "财务与归因",
+      "nameZh": "盈亏平衡剪刀差走势",
+      "nameEn": "Break-even Analysis Chart",
+      "seriesType": "line (intersecting)",
+      "legend": "2-column-top",
+      "bestFor": "营业总收入与运营总支出的交叉盈亏临界点",
+      "axisRules": "双线交点即盈亏平衡拐点",
+      "config": {
+        "id": "chart-fn02",
+        "code": "fn02",
+        "title": "季度客运总收入与运营总成本盈亏演变",
+        "subtitle": "反映营业收入与运营总成本（航油/起降/折旧）的走势及盈亏平衡拐点",
+        "explainKey": "fn02",
+        "data": {
+          "quarters": [
+            "2024Q1",
+            "24Q2",
+            "24Q3",
+            "24Q4"
+          ],
+          "revenue": [
+            1.2,
+            1.5,
+            1.8,
+            2.3
+          ],
+          "cost": [
+            1.3,
+            1.4,
+            1.5,
+            1.7
+          ]
+        }
+      }
+    },
+    {
+      "id": "fn03",
+      "catId": 7,
+      "category": "财务与归因",
+      "nameZh": "敏感性龙卷风图",
+      "nameEn": "Sensitivity Tornado Chart",
+      "seriesType": "bar (diverging horizontal)",
+      "legend": "2-column-top",
+      "bestFor": "各经营变量对净利润波动影响程度的降序排列",
+      "axisRules": "Y轴变量居上，X轴左右延伸标变动金额",
+      "config": {
+        "id": "chart-fn03",
+        "code": "fn03",
+        "title": "民航经营关键变量敏感性分析",
+        "subtitle": "测试平均票价、客座率、航油采购价与汇率变动对净利润的影响弹性",
+        "explainKey": "fn03",
+        "data": {
+          "variables": [
+            "客单票价 (+10%)",
+            "综合客座率 (+5pp)",
+            "航油采购价 (+10%)",
+            "美元汇率 (+5%)"
+          ],
+          "negative": [
+            -52,
+            -38,
+            -25,
+            -12
+          ],
+          "positive": [
+            52,
+            38,
+            25,
+            12
+          ]
+        }
+      }
+    },
+    {
+      "id": "fn04",
+      "catId": 7,
+      "category": "财务与归因",
+      "nameZh": "基准归一指数走势",
+      "nameEn": "Normalized Baseline Index",
+      "seriesType": "line (Base=100)",
+      "legend": "2-column-top",
+      "bestFor": "不同量级业务线在统一 Base=100 基线下的增速快慢对比",
+      "axisRules": "起点统一定为100，观察后期发散幅度",
+      "config": {
+        "id": "chart-fn04",
+        "code": "fn04",
+        "title": "各大基地主营航线收入归一增长指数走势",
+        "subtitle": "消除基地体量差异，对比华东、华南、北方与西南基地主营航线的成长动能",
+        "explainKey": "fn04",
+        "data": {
+          "nodes": [
+            "24Q1 (基期)",
+            "24Q2",
+            "24Q3",
+            "24Q4",
+            "25Q1"
+          ],
+          "east": [
+            100,
+            118,
+            142,
+            185,
+            210
+          ],
+          "south": [
+            100,
+            112,
+            130,
+            160,
+            182
+          ],
+          "north": [
+            100,
+            108,
+            120,
+            145,
+            162
+          ],
+          "west": [
+            100,
+            105,
+            115,
+            132,
+            148
+          ]
+        }
+      }
+    },
+    {
+      "id": "m01",
+      "catId": 8,
+      "category": "目标与监控",
+      "nameZh": "目标考核子弹图",
+      "nameEn": "Target Bullet Graph",
+      "seriesType": "bar + scatter (target marker)",
+      "legend": "2-column-top",
+      "bestFor": "关键 KPI 实际达成、合格底槽与 Target 目标线对比",
+      "axisRules": "底槽+实际柱+目标竖线marker",
+      "config": {
+        "id": "chart-m01",
+        "code": "m01",
+        "title": "民航年度战略关键绩效考核达成情况",
+        "subtitle": "对比各项民航运营核心 KPI 实际考核值与目标基准线差距",
+        "explainKey": "m01",
+        "data": {
+          "metrics": [
+            "客运总收入",
+            "综合客座率",
+            "航班正常率",
+            "直销渠道比"
+          ],
+          "actual": [
+            106.8,
+            104.2,
+            98.5,
+            94
+          ],
+          "target": 100
+        }
+      }
+    },
+    {
+      "id": "m02",
+      "catId": 8,
+      "category": "目标与监控",
+      "nameZh": "不确定性扇形预测图",
+      "nameEn": "Uncertainty Fan Chart",
+      "seriesType": "line + area (confidence band)",
+      "legend": "none",
+      "bestFor": "未来季度中枢预测及 95% 置信区间走廊",
+      "axisRules": "中枢线+半透明置信区间带",
+      "config": {
+        "id": "chart-m02",
+        "code": "m02",
+        "title": "春运及暑运民航客运量预测扩散走廊",
+        "subtitle": "基于历史基线展示未来春运与暑运客运量悲观、基准与乐观扩散区间",
+        "explainKey": "m02",
+        "data": {
+          "quarters": [
+            "24Q1",
+            "24Q2",
+            "24Q3",
+            "24Q4",
+            "25Q1(E)",
+            "25Q2(E)"
+          ],
+          "baseline": [
+            8.5,
+            9.2,
+            11.5,
+            10.2,
+            12,
+            13.5
+          ],
+          "optimistic": [
+            8.5,
+            9.2,
+            11.5,
+            10.2,
+            13.2,
+            15.2
+          ],
+          "pessimistic": [
+            8.5,
+            9.2,
+            11.5,
+            10.2,
+            10.8,
+            11.8
+          ]
+        }
+      }
+    },
+    {
+      "id": "m03",
+      "catId": 8,
+      "category": "目标与监控",
+      "nameZh": "红线阈值监控图",
+      "nameEn": "Threshold Alert Chart",
+      "seriesType": "bar + markLine",
+      "legend": "none",
+      "bestFor": "超时率与故障率监控，超 5% 红线变色告警",
+      "axisRules": "达标深蓝，破红线自动变克制红",
+      "config": {
+        "id": "chart-m03",
+        "code": "m03",
+        "title": "各机场地面服务与延误保障费用超支红线监控",
+        "subtitle": "监控各机场配餐、地面摆渡与延误改签安置费用并标识 5.0% 警戒红线",
+        "explainKey": "m03",
+        "data": {
+          "airports": [
+            "上海虹桥",
+            "北京大兴",
+            "广州白云",
+            "成都天府",
+            "深圳宝安"
+          ],
+          "overage": [
+            6.8,
+            3.2,
+            5.4,
+            2.1,
+            7.5
+          ]
+        }
+      }
+    },
+    {
+      "id": "m04",
+      "catId": 8,
+      "category": "目标与监控",
+      "nameZh": "半环进度仪表盘",
+      "nameEn": "Semi-Gauge Meter",
+      "seriesType": "gauge (semi-circle)",
+      "legend": "none",
+      "bestFor": "年度核心战略综合指标达成进度量化展示",
+      "axisRules": "180度半圆进度环，中央巨大字号呈现百分比",
+      "config": {
+        "id": "chart-m04",
+        "code": "m04",
+        "title": "民航年度主营营收预算目标综合达成率",
+        "subtitle": "大字直显机队与客货运全网年度预算目标的综合推进完成比例",
+        "explainKey": "m04",
+        "data": {
+          "rate": 84.5,
+          "target": "100.0%"
+        }
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "code": "mc01",
+      "name": "基础数值卡",
+      "question": "How big is one headline metric now?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "statusBadge": "Short neutral status text"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal"
+      ],
+      "example": {
+        "label": "营业收入",
+        "value": "484 万元",
+        "yoy": "+24.1%",
+        "statusBadge": "月度核算",
+        "subLabel": "基期收入",
+        "subVal": "390 万元"
+      }
+    },
+    {
+      "code": "mc02",
+      "name": "同环比波动卡",
+      "question": "Is the metric rising or falling against last year and last period?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "mom": "Signed period-over-period comparison"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "mom",
+        "subVal"
+      ],
+      "example": {
+        "label": "客座率",
+        "value": "83.6%",
+        "yoy": "+2.1%",
+        "mom": "-0.4%",
+        "subLabel": "可用座位",
+        "subVal": "450 万座"
+      }
+    },
+    {
+      "code": "mc03",
+      "name": "微走势迷你面积卡",
+      "question": "What is the value and its recent continuous trend?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "sparkMonths": "Period labels",
+        "sparkData": "Finite values, same length",
+        "trendLabel": "Neutral trend note"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal",
+        "timeField → sparkMonths/sparkData"
+      ],
+      "example": {
+        "label": "旅客运输量",
+        "value": "376 万人次",
+        "sparkMonths": [
+          "2026-07",
+          "2026-08",
+          "2026-09"
+        ],
+        "sparkData": [
+          117,
+          133,
+          126
+        ],
+        "subLabel": "可用座位",
+        "subVal": "450 万座"
+      }
+    },
+    {
+      "code": "mc04",
+      "name": "目标进度条形卡",
+      "question": "How far along is a target, as a percentage?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Numeric percent display, e.g. \"92.2%\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "percent": "Optional 0-100 bar width"
+      },
+      "bind": [
+        "value",
+        "percent",
+        "subVal"
+      ],
+      "example": {
+        "label": "预算达成率",
+        "value": "92.2%",
+        "percent": 92.2,
+        "subLabel": "预算收入",
+        "subVal": "525 万元"
+      }
+    },
+    {
+      "code": "mc05",
+      "name": "迷你半环仪表卡",
+      "question": "Where does a 0-100 score sit on its scale?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Numeric display",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "percent": "0-100 gauge position",
+        "gaugeSub": "Badge beside the value"
+      },
+      "bind": [
+        "value",
+        "percent",
+        "subVal"
+      ],
+      "example": {
+        "label": "航班正常率",
+        "value": "88.6%",
+        "percent": 88.6,
+        "gaugeSub": "基准 85%",
+        "subLabel": "行业基准",
+        "subVal": "85.0%"
+      }
+    },
+    {
+      "code": "mc06",
+      "name": "双指标并列卡",
+      "question": "How do two peer metrics compare side by side?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "leftTitle": "Left metric name",
+        "leftVal": "Left value text",
+        "leftYoy": "Optional signed change",
+        "rightTitle": "Right metric name",
+        "rightVal": "Right value text",
+        "rightYoy": "Optional signed change",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text"
+      },
+      "bind": [
+        "leftVal",
+        "rightVal",
+        "subVal"
+      ],
+      "example": {
+        "label": "供给与需求",
+        "leftTitle": "可用座公里",
+        "leftVal": "52.4 亿",
+        "leftYoy": "+6.2%",
+        "rightTitle": "客公里",
+        "rightVal": "43.8 亿",
+        "rightYoy": "+8.1%",
+        "subLabel": "匹配率",
+        "subVal": "83.6%"
+      }
+    },
+    {
+      "code": "mc07",
+      "name": "排位梯队徽章卡",
+      "question": "What rank or tier does the business hold?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Rank headline text",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "rankSub": "Line under the rank",
+        "rankBadge": "Badge text such as \"#2 / 12\""
+      },
+      "bind": [],
+      "example": {
+        "label": "区域收入排名",
+        "value": "华东第 2",
+        "rankSub": "共 12 个区域",
+        "rankBadge": "#2",
+        "subLabel": "收入占比",
+        "subVal": "18.4%"
+      }
+    },
+    {
+      "code": "mc08",
+      "name": "阈值预警卡",
+      "question": "Which metric crossed a warning threshold?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "alertLabel": "Threshold text shown in the attention badge"
+      },
+      "bind": [],
+      "example": {
+        "label": "成本超支率",
+        "value": "6.3%",
+        "alertLabel": "超过 5% 红线",
+        "subLabel": "超支金额",
+        "subVal": "42 万元"
+      }
+    },
+    {
+      "code": "mc09",
+      "name": "结构分段卡",
+      "question": "How is a total split between two parts?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Left segment label and value",
+        "subVal": "Right segment label and value",
+        "segLeftWidth": "Left share 0-100",
+        "segRightWidth": "Right share; the two sum to 100"
+      },
+      "bind": [],
+      "example": {
+        "label": "收入结构",
+        "value": "484 万元",
+        "segLeftWidth": "72%",
+        "segRightWidth": "28%",
+        "subLabel": "国内 348 万元",
+        "subVal": "国际 136 万元"
+      }
+    },
+    {
+      "code": "mc10",
+      "name": "中位数极差分布卡",
+      "question": "What is typical, and how spread out is a skewed distribution?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed median text",
+        "valueLabel": "Label before the value (default 中位数)",
+        "stats": "Finite numbers {min, p25, median, p75, max}, ascending",
+        "meanText": "Optional mean text",
+        "sampleText": "Optional sample size text"
+      },
+      "bind": [],
+      "example": {
+        "label": "客单票价",
+        "value": "¥680",
+        "meanText": "均值 ¥742.5",
+        "sampleText": "5,420 万张",
+        "stats": {
+          "min": 320,
+          "p25": 540,
+          "median": 680,
+          "p75": 920,
+          "max": 1850
+        }
+      }
+    },
+    {
+      "code": "mc11",
+      "name": "环形进度卡",
+      "question": "How complete is a goal, at a glance?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "percent": "Completion 0-100 (above 100 fills the ring and shows the real percent)",
+        "trendLabel": "Optional neutral note"
+      },
+      "bind": [
+        "value",
+        "percent",
+        "subVal"
+      ],
+      "example": {
+        "label": "年度收入目标",
+        "value": "1,840 万元",
+        "percent": 92,
+        "trendLabel": "按月累计",
+        "subLabel": "年度目标",
+        "subVal": "2,000 万元"
+      }
+    },
+    {
+      "code": "mc12",
+      "name": "迷你柱趋势卡",
+      "question": "How does the latest period compare with the previous few?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "sparkMonths": "Period labels",
+        "sparkData": "Finite values, same length; the last bar is emphasized",
+        "trendLabel": "Optional neutral note"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal",
+        "timeField → sparkMonths/sparkData"
+      ],
+      "example": {
+        "label": "月度新增客户",
+        "value": "1,268 户",
+        "yoy": "+12.4%",
+        "sparkMonths": [
+          "04",
+          "05",
+          "06",
+          "07",
+          "08",
+          "09"
+        ],
+        "sparkData": [
+          940,
+          1012,
+          1105,
+          990,
+          1180,
+          1268
+        ],
+        "subLabel": "近六个月均值",
+        "subVal": "1,083 户"
+      }
+    },
+    {
+      "code": "mc13",
+      "name": "子弹目标卡",
+      "question": "Is actual above target, and in which qualitative range?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "actual": "Finite actual value",
+        "target": "Finite target value (marker)",
+        "ranges": "Up to three ascending range limits in the same unit",
+        "rangeBasis": "value (absolute limits, default) or target (limits are fractions of target, e.g. [0.8, 1.0]; use when filters recompute target)",
+        "max": "Optional scale maximum",
+        "unit": "Unit used when target text is derived"
+      },
+      "bind": [
+        "value",
+        "actual",
+        "target",
+        "subVal"
+      ],
+      "example": {
+        "label": "季度营收对目标",
+        "value": "484 万元",
+        "actual": 484,
+        "target": 525,
+        "ranges": [
+          400,
+          500
+        ],
+        "unit": "万元",
+        "subLabel": "季度目标",
+        "subVal": "525 万元"
+      }
+    },
+    {
+      "code": "mc14",
+      "name": "双期对比卡",
+      "question": "How does this period compare with the prior period?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "currentLabel": "Current period label",
+        "currentValue": "Finite current value",
+        "priorLabel": "Prior period label",
+        "priorValue": "Finite prior value",
+        "currentText": "Optional display text",
+        "priorText": "Optional display text",
+        "deltaLabel": "Badge label (default 较上期)",
+        "unit": "Unit for derived text"
+      },
+      "bind": [
+        "value",
+        "currentValue",
+        "priorValue",
+        "yoy",
+        "subVal"
+      ],
+      "example": {
+        "label": "季度收入对比",
+        "value": "484 万元",
+        "yoy": "+24.1%",
+        "currentLabel": "2026Q3",
+        "currentValue": 484,
+        "priorLabel": "2025Q3",
+        "priorValue": 390,
+        "unit": "万元"
+      }
+    },
+    {
+      "code": "mc15",
+      "name": "指标清单卡",
+      "question": "What are 2-4 related sub-metrics of one theme?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Optional headline text",
+        "valueLabel": "Optional note beside it",
+        "items": "1-4 objects {label, value, delta?}; delta is a signed comparison"
+      },
+      "bind": [],
+      "example": {
+        "label": "渠道收入",
+        "value": "484 万元",
+        "valueLabel": "合计",
+        "items": [
+          {
+            "label": "直销",
+            "value": "226 万元",
+            "delta": "+8.2%"
+          },
+          {
+            "label": "分销",
+            "value": "172 万元",
+            "delta": "-3.1%"
+          },
+          {
+            "label": "电商",
+            "value": "86 万元",
+            "delta": "+21.5%"
+          }
+        ]
+      }
+    },
+    {
+      "code": "mc16",
+      "name": "大字主指标卡",
+      "question": "What is the single number that matters most, and the takeaway?",
+      "fields": {
+        "label": "Card label (the component title replaces it in the runtime header)",
+        "value": "Displayed headline text, including unit, e.g. \"484 万元\"",
+        "yoy": "Optional signed comparison: number or text such as \"+4.8%\" (red = increase, green = decrease)",
+        "subLabel": "Footer label",
+        "subVal": "Footer value text",
+        "note": "Authored one-line takeaway (at most 120 characters)"
+      },
+      "bind": [
+        "value",
+        "yoy",
+        "subVal"
+      ],
+      "example": {
+        "label": "北极星 · 月活跃客户",
+        "value": "12.6 万",
+        "yoy": "+9.8%",
+        "note": "新客留存改善带动活跃规模连续三个月增长。",
+        "subLabel": "目标",
+        "subVal": "13 万"
+      }
+    }
+  ]
+}

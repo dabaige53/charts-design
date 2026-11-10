@@ -20,8 +20,8 @@ Pick chart codes with `chart_recommend`, KPI shapes from `kpiGuide` (returned by
 
 1. Resolve the project's durable assets and the disposable runtime directory. Keep data references, design checkpoints and annotations in the project. Prefer existing immutable data versions over duplicate copies.
 2. Begin an edit batch, apply draft changes with the latest revision, and finish it. Resolve Doctor errors before automatic display. If checks are explicitly waived, preserve the draft and report the skipped gate; do not label it validated.
-3. Deliver preview as a URL, rather than opening an embedded MCP App panel. Prefer an existing browser URL; on the self-hosted server use `dashboard_share` to issue a view/edit URL with the access needed for the task. `dashboard_share_revoke` invalidates these links. Do not call an embedded preview tool solely to display the artifact. Use component-scoped `dashboard_view` patches for reader interactions, search/page large filter lists and paginate tables. Use file exports for full data.
-4. Check the actual target page for the changed states. Report source checks, installed package, connected worker and host rendering separately. A preview response or test host is not actual host acceptance. A required restart remains pending until the connected worker is verified.
+3. After a successful finish, call `dashboard_preview` once with the same projectRoot and dashboardId. Component-scoped `dashboard_view` patches verify actual data; JSON exports preserve canonical state. Build and package the React resources before previewing.
+4. Verify document revisions, component references, dataset integrity, and Doctor check results directly. Record host rendering acceptance separately; this refactor does not run UI tests or browser automation.
 
 Annotations remain independent of design restoration. Preserve their original context when anchors become unavailable.
 
@@ -37,10 +37,9 @@ Read the repository's check scripts and CI before adding checks. Attach mechanic
 
 Paths below are relative to the package root:
 
-- `dashboard_runtime/web/`: MCP UI, filters, encoding, tooltip and transport behavior.
+- `dashboard_runtime/web/`: shared data, statistical calculation and local filter modules (pure data and static-query modules).
 - `dashboard_runtime/local_data.py`, `local_view.py`, `bindings.py`: option queries, component calculations and binding validation.
 - `dashboard_runtime/service.py`: MCP operations and diagnostics.
-- `skills/executive-charts/scripts/core/dashboard_template.py`: shared original-chart engine source. Rebuild through `runtime-ui`; generated engine files are build output.
 - `docs/project-runtime.md`: storage, loading and edit lifecycle; `docs/mcp-transport-diagnostics.md`: transport diagnosis; `docs/dynamic-encoding.md`: dynamic bindings.
 
 ## Self-hosted server
@@ -49,4 +48,4 @@ Paths below are relative to the package root:
 
 ## Standalone hosting
 
-For a website that must survive without MCP, call `dashboard_export_site`; ordinary HTML export is only a fixed-view snapshot. The deployment project includes `dist/`, data chunks, source and a Node build. Verify filtering through a static HTTP server and rebuild using only the exported project before claiming independence. Static export includes every row of the used datasets, not just the selected filter. See package-root `docs/static-deployment.md` for deployment and data-loading limits.
+Static website export via `dashboard_export_site` returns the shared React application and used dataset shards as a managed ZIP. See package-root `docs/static-deployment.md`.

@@ -2,12 +2,15 @@
 
 两条 Skill 独立保留，共用来源、数据集、指标和声明式图表。MCP 不仅提供截图或母稿：它提供可读取的案例、声明合同和原子写入工具，调用方可以从空白文档生成完整内容。
 
+> **当前状态（2026-11-10）**
+> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/ui-refactor-plan.md`。
+
 | 目标 | Skill | 可执行参考案例 |
 | --- | --- | --- |
 | KPI、图表、表格、筛选组成的 Dashboard | `skills/executive-charts/SKILL.md` | `charts://examples/executive-dashboard`、`charts://examples/operations-scorecard` |
 | Markdown 正文与嵌入图表组成的论文式报告 | `skills/analytical-reports/SKILL.md` | `charts://examples/academic-report` |
 
-原 Dashboard HTML 案例继续保留在 `skills/executive-charts/examples/`。分析报告以当前认可的学术单栏案例作为母稿；其唯一 Markdown 源文是 `dashboard_runtime/examples/academic-report.md`，CLI 示例和 MCP 案例均从它读取。
+分析报告以当前认可的学术单栏案例作为母稿；其唯一 Markdown 源文是 `dashboard_runtime/examples/academic-report.md`，CLI 示例和 MCP 案例均从它读取。历史 HTML 示例已从仓库清理。
 
 ## 从空白报告生成，而非套一个静态页面
 
@@ -17,8 +20,8 @@
 2. `chart_recommend {"intent":"trend","measures":1}` 按问题与数据形态排列候选图表；`chart_declarations {}` 发现类型索引与指标卡选型 `kpiGuide`，`chart_declarations {"code":"c01"}` 阅读所选声明要求与工作示例；`layout_templates {}` 选择构图；`charts://contract` 阅读操作合同。相应资源为 `charts://declarations`、`charts://catalog`、`charts://layouts`。
 3. `dashboard_create {"dashboardId":"my-report","title":"我的分析报告"}` 建立空白文档，取得 revision。
 4. 用当前 `expectedRevision` 调用 `dashboard_edit_begin` 开始或恢复编辑批次，保存返回的批次 ID。调用方根据自己的数据和问题编写内容，并通过一次或多次 `dashboard_patch` 提交 `put_source`、`put_dataset`、`put_metric`、`put_component`、`set_report_markdown`、`set_view_mode=report`。传入当前 `expectedRevision`。组件与 Markdown 引用在整批操作结束后统一校验，创建与嵌入可以在同一批完成。
-6. 完成后预览一次，优先使用当前工具列表中的 `dashboard_preview_<uiBuildId>`；固定名称 `dashboard_preview` 保留兼容。只有预览工具声明界面资源。没有 UI 的宿主可通过本地 CLI serve/export 检查实际页面。
-7. 核对数值与单位、图号、图文顺序、指标定义、来源、局限及保存/重载。发生冲突时先读取新版本，不盲目覆盖。
+5. 调用 `dashboard_edit_finish` 结束编辑批次。成功后返回 `nextAction=dashboard_preview` 与 `displayPolicy=saved-dashboard-ui`，再打开一次已保存预览。
+6. 通过 `dashboard_get` 核实文档保存状态、数据计算结果与组件声明；检查数值与单位、图号、图文顺序、指标定义、来源与局限。发生版本冲突时先读取新版本，不盲目覆盖。
 
 
 ## 内容合同

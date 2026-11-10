@@ -27,8 +27,7 @@ env:
   FORCE_COLOR: '1'
 
 # Jobs run in parallel so one failing layer never hides the others' results.
-# Layers: static checks, dependency audit, fast unit tests (Python matrix +
-# Node), Chromium acceptance, and the deployable container image.
+# Layers: static checks, backend/data unit tests, and the deployable container.
 jobs:
   checks:
     name: Static checks
@@ -49,18 +48,6 @@ jobs:
       - name: Syntax, skill links and documentation links/anchors
         run: npm run check
 
-  audit:
-    name: Dependency audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-      - name: Audit production browser dependencies
-        run: npm --prefix runtime-ui audit --omit=dev --audit-level=moderate
-
   unit:
     name: Unit tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
@@ -80,23 +67,27 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: runtime-ui/package-lock.json
-      - name: Install test dependencies and build the shared UI bundle
+      - name: Install backend test dependencies
         run: |
           python -m pip install '.[statistics,mcp,test]'
-          npm --prefix runtime-ui ci
-          npm --prefix runtime-ui run build
+      - name: Build shared React resources for backend protocol checks
+        working-directory: runtime-ui
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm build
+          pnpm package:runtime
       - name: Runtime, MCP protocol and server tests (no browser)
         run: >-
-          python -m pytest tests/runtime -m "not browser" -q
+          python -m pytest tests/runtime -q
           --junitxml=reports/runtime-unit.xml
           --cov=dashboard_runtime --cov-report=xml:reports/coverage.xml
           --cov-report=term:skip-covered --cov-fail-under=84
-      - name: Browser engine modules (Node)
+      - name: Shared data modules (Node)
         run: node --test tests/runtime/*.test.mjs
-      - name: Standalone chart and dashboard generators
-        run: python -m pytest tests --ignore=tests/runtime -q --junitxml=reports/standalone.xml
+      - name: Workspace and data contracts
+        run: python -m pytest tests --ignore=tests/runtime -q --junitxml=reports/workspace.xml
       - name: Coverage summary
         if: always()
         run: |
@@ -118,47 +109,6 @@ jobs:
           path: reports/
           retention-days: 14
 
-  browser:
-    name: Browser acceptance (Chromium)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: runtime-ui/package-lock.json
-      - uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies, Chromium and Poppler
-        run: |
-          python -m pip install '.[statistics,mcp,test]'
-          npm --prefix runtime-ui ci
-          python -m playwright install --with-deps chromium
-          sudo apt-get install -y poppler-utils
-      - name: Build the shared browser and MCP App bundle
-        run: npm --prefix runtime-ui run build
-      - name: Real-browser acceptance (rendering, editing, previews, PDF)
-        run: python -m pytest tests/runtime -m browser -q --junitxml=reports/browser.xml
-      - uses: actions/upload-artifact@v5
-        if: always()
-        with:
-          name: browser-evidence
-          path: |
-            reports/
-            component-review/
-            runtime-*.png
-          if-no-files-found: ignore
-          retention-days: 14
-
   container:
     name: Container image smoke test
     runs-on: ubuntu-latest
@@ -169,10 +119,10 @@ jobs:
         run: |
           python3 - <<'EOF'
           from pathlib import Path
-          for name in ('deploy/charts.env', '.env', 'dashboard_runtime/.env', 'runtime-ui/local.env'):
+          for name in ('deploy/charts.env', '.env', 'dashboard_runtime/.env'):
               Path(name).write_text('CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n')
           EOF
       - name: Build the deployable image
         run: docker build -f deploy/Dockerfile -t charts-design:ci .
-      - name: Run the image and exercise remote MCP, previews and downloads
+      - name: Run the image and exercise remote MCP and JSON downloads
         run: python3 tests/deploy/container_smoke.py --image charts-design:ci

@@ -385,10 +385,9 @@ def _validate_strict_data(
             if not isinstance(line, dict):
                 continue
             line_path = f"{path}.lines[{index}]"
-            for key in ("name", "color"):
-                value = _required(line, key, line_path, errors)
-                if value is not None and (not isinstance(value, str) or not value):
-                    _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{line_path}.{key}", f"Line {key} must be a string")
+            name = _required(line, "name", line_path, errors)
+            if name is not None and (not isinstance(name, str) or not name):
+                _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{line_path}.name", "Line name must be a string")
             line_data = _array(line, "data", line_path, errors, "number")
             _equal_lengths([("stages", stages), ("data", line_data)], line_path, errors)
         return
@@ -407,10 +406,6 @@ def _validate_strict_data(
             name = _required(item, "name", item_path, errors)
             if name is not None and (not isinstance(name, str) or not name):
                 _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{item_path}.name", "Demographic name must be a string")
-            style = _required(item, "itemStyle", item_path, errors)
-            color = style.get("color") if isinstance(style, dict) else None
-            if not isinstance(style, dict) or not isinstance(color, str) or not color:
-                _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{item_path}.itemStyle.color", "Demographic color must be a string")
         return
 
     routes = _array(data, "routes", path, errors, "array")

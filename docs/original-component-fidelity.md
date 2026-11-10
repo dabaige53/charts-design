@@ -2,9 +2,13 @@
 
 The first runtime incorrectly reduced c01/c02 to native bars and original KPI cards to text. This change removes those lossy conversions. The original executive-charts source is the component authority, not a visual reference to imitate.
 
+> **Current Status Notice (2026-11-10 Architecture Rebuild)**
+> The historical extraction script (`runtime-ui/extract-original.py`) and legacy bundle build (`runtime-ui/build.mjs`) have been removed for the unified React + TypeScript / Tailwind CSS v4 / shadcn/ui / ECharts / GridStack / Lucide rebuild.
+> This document is retained as a specification for lossless component fidelity: ensuring that all 40 chart contracts, 16 KPI card definitions, units, presentation metadata, and table configurations survive migrations without structural loss.
+
 ## Architecture
 
-`runtime-ui/extract-original.py` imports the original dashboard template, scoped runtime, chart builders, explanation renderer and catalog at build time. `build.mjs` compiles their original utility CSS, sanitizes HTML sinks through a typed AST transform, and bundles the renderer. Each component mounts into a ShadowRoot: no duplicate iframe card, no CDN dependency in normal previews or HTML exports. Generated source hashes are recorded in `runtime-ui/generated/provenance.json`.
+In the historical architecture, `runtime-ui/extract-original.py` and `build.mjs` extracted components into a ShadowRoot runtime bundle. In the ongoing rebuild, the presentation layer is being re-implemented directly as a native React + TypeScript component library, while the underlying component schemas, presentation contracts, and data-binding models described below remain authoritative.
 
 The existing versioned service, MCP tools, CLI, query provenance and GridStack layouts remain. SQL/semantic inspection is an additional action, not a replacement for the original business-definition dialog.
 
@@ -17,16 +21,6 @@ The existing versioned service, MCP tools, CLI, query provenance and GridStack l
 - Original aggregate snapshots do not become live cross-filtered datasets merely because they were imported. Original filter definitions are preserved as metadata until their data bindings are deliberately configured.
 - Native chart-type switching stays compatibility-checked. Arbitrary conversion between all original chart codes is not implemented.
 
-## Verification
-
-`tests/runtime/test_fidelity.py` checks lossless migration and uses real Chromium for original toolbar, mini-trend KPI, period persistence, chart/table toggle, explanation dialog, column visibility/restore, offline bundling and mobile overflow. This is a representative integration test, not a pixel-perfect audit of all 40 charts, all 16 KPI variants or all browsers.
-
-Rebuild after checkout:
-
-```sh
-npm --prefix runtime-ui install
-npm --prefix runtime-ui run build
-python3 -m pytest tests/runtime -q
-```
+## Verification and migration contract
 
 Original unbound components remain explicit snapshots; native governed metrics retain shared filter and query provenance behavior. Existing dashboards already imported by the first version must be reimported from their original workspace to recover discarded presentation fields. The runtime cannot reconstruct fields that were deleted from a previously saved artifact.

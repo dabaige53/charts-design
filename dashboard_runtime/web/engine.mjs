@@ -82,50 +82,6 @@ export function formatComparison(value, metric = {}) {
   if (Number(number[0].replaceAll(',', '')) === 0) return shown.replace(/^-/, '');
   return value > 0 ? '+' + shown : shown;
 }
-export function optionFor(doc, id) {
-  const c = doc.manifest.components[id], data = grouped(doc,id), type = c.chartType;
-  const reason = compatible(doc,c,type); if (reason) throw Error(reason);
-  const dark = false;
-  const colors = ['#123b5d','#628ea8','#a17b45','#638878','#a65d58','#8d7f9d'];
-  const text = dark ? '#e4e9ed' : '#293440', line = dark ? '#35404c' : '#e8edf1';
-  const base = {animation:false,color:colors,textStyle:{fontFamily:'system-ui',color:text},
-    tooltip:{trigger:'item',confine:true,renderMode:'richText'},
-    legend:{top:0,textStyle:{color:text},type:'scroll'},
-    grid:{left:12,right:20,top:42,bottom:12,containLabel:true}};
-  const xs = [...new Set(data.map(d => d.x))], groups = [...new Set(data.map(d => d.group))];
-  const metric = doc.manifest.metrics[c.measures[0]];
-  const yAxis = {type:'value',axisLabel:{color:text,formatter:v=>format(v,{...metric,unit:''})},splitLine:{lineStyle:{color:line}}};
-  const xAxis = {type:'category',data:xs,axisLabel:{color:text,hideOverlap:true},axisLine:{lineStyle:{color:line}}};
-  if (['pie','funnel'].includes(type)) {
-    const values = data.map(d => ({name:String(d.x ?? '\u672a\u77e5'),value:d.values[c.measures[0]]})).filter(v=>v.value!=null);
-    if (values.some(v=>v.value<0)) throw Error('Pie/funnel cannot display negative values; choose a bar chart.');
-    return {...base,series:[{type,radius:['40%','72%'],top:45,bottom:15,label:{color:text},data:values}]};
-  }
-  if (type === 'scatter') return {...base,xAxis:{...yAxis,name:c.x},yAxis,series:[{type:'scatter',name:metric.label,symbolSize:10,data:data.map(d=>[d.x,d.values[c.measures[0]]])}]};
-  if (type === 'heatmap') {
-    const values = data.map(d=>[xs.indexOf(d.x),groups.indexOf(d.group),d.values[c.measures[0]]]).filter(v=>v[2]!=null);
-    const range = values.map(v=>v[2]);
-    return {...base,grid:{...base.grid,bottom:60},xAxis,yAxis:{type:'category',data:groups,axisLabel:{color:text}},
-      visualMap:{min:Math.min(0,...range),max:Math.max(1,...range),orient:'horizontal',left:'center',bottom:0,textStyle:{color:text},inRange:{color:['#e8f0f5','#123b5d']}},series:[{type:'heatmap',data:values}]};
-  }
-  if (type === 'waterfall') {
-    let running=0;
-    const values=data.map((d,index)=>{const delta=d.values[c.measures[0]]??0;const start=running;running+=delta;return [index,start,running,delta];});
-    return {...base,legend:{show:false},xAxis,yAxis,
-      tooltip:{...base.tooltip,formatter:p=>String(xs[p.value[0]])+'\n'+format(p.value[3],metric)},
-      series:[{type:'custom',name:metric.label,encode:{x:0,y:[1,2]},data:values,
-        renderItem:(params,api)=>{const a=api.coord([api.value(0),api.value(1)]),b=api.coord([api.value(0),api.value(2)]),width=api.size([1,0])[0]*0.65;
-          return {type:'rect',shape:{x:a[0]-width/2,y:Math.min(a[1],b[1]),width,height:Math.max(1,Math.abs(a[1]-b[1]))},style:{fill:api.value(3)>=0?colors[0]:colors[4]}};}}]};
-  }
-  const series=[];
-  for (const mid of c.measures) for (const group of groups) {
-    const name=doc.manifest.metrics[mid].label+(c.series?` / ${String(group)}`:'');
-    const lookup=new Map(data.filter(d=>d.group===group).map(d=>[d.x,d.values[mid]]));
-    series.push({name,type:type==='bar'?'bar':'line',showSymbol:false,connectNulls:false,
-      ...(type==='area'?{areaStyle:{opacity:0.15}}:{}),data:xs.map(x=>lookup.get(x)??null),barMaxWidth:52});
-  }
-  return {...base,tooltip:{...base.tooltip,trigger:'axis'},xAxis,yAxis,series};
-}
 export function chartTable(doc,id) {
   const c=doc.manifest.components[id];
   return grouped(doc,id).map(d=>Object.fromEntries([[c.x,d.x],...(c.series?[[c.series,d.group]]:[]),...c.measures.map(mid=>[doc.manifest.metrics[mid].label,d.values[mid]])]));
@@ -137,10 +93,11 @@ export function csv(rows) {
 }
 
 // Ratios are calculated from grouped totals; missing/zero denominators stay missing.
-export function calculateTableRows(rows,presentation){
+export function calculateTableRows(rows,presentation,display=true){
   const specs=presentation?.calculatedColumns;if(!specs)return rows;
   return rows.map(source=>{const row={...source};for(const [target,spec]of Object.entries(specs)){
     const n=row[spec.numerator],d=row[spec.denominator],unit=row[spec.unitField],digits=spec.decimals??1;
-    row[target]=n==null||!(d>0)?'—':unit==='%'?`${(100*n/d).toFixed(digits)}%`:`${(n/d).toFixed(digits)} ${unit}`.trimEnd();
+    const value=n==null||!(d>0)?null:n/d;
+    row[target]=!display?value:value==null?'—':unit==='%'?`${(100*value).toFixed(digits)}%`:`${value.toFixed(digits)} ${unit}`.trimEnd();
   }return row;});
 }

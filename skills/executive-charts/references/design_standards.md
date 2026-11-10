@@ -1,15 +1,13 @@
 # 麦肯锡级高管商业图表与数据看板设计规范 (Executive Design Standards & Guidelines)
 
-本文档为高管商业图表、决策看板与高密度数据表格的**独立设计建议与视觉工程规范中心**。
-任何图表生成、UI 调整与页面重构均需严格遵守本规范中的色彩令牌、几何零碰撞法则、全要素 Tooltip 及排版层次。
+> **历史参考说明（2026-11-10 架构重构）**
+> 本文档为旧版设计历史参考，原前端实现与样式代码已移除。重构视觉规范尚未确认，本文旧配色、几何零碰撞与排版规则不自动约束新 UI（React + TS / Tailwind v4 / shadcn / ECharts / GridStack / Lucide）。保留正文作为历史视觉工程参考。
 
 ---
 
 ## 1. 咨询级调色盘与语义 Token 规范 (Color Palette & Semantic Tokens)
 
-本系统采用麦肯锡（McKinsey）、英国《金融时报》（Financial Times）与彭博（Bloomberg）风格的高级商务深海蓝体系，杜绝高饱和度与刺眼荧光色。
-
-色值的唯一来源是 `scripts/core/palette.py`。看板与单图模板中的 Tailwind 颜色类和 ECharts `TOKENS.palette` 都由它生成，调整颜色只改这一个文件。
+本系统历史设计采用高级商务深海蓝体系，杜绝高饱和度与刺眼荧光色。以下为旧版颜色 Token 历史记录：
 
 ```javascript
 const colorTokens = {

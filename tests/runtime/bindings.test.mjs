@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolveOriginal} from '../../dashboard_runtime/web/bindings.mjs';
 import {formatComparison} from '../../dashboard_runtime/web/engine.mjs';
-import {linkageValue, linkagePoint} from '../../dashboard_runtime/web/linkage.mjs';
+import {linkageValue} from '../../dashboard_runtime/web/linkage.mjs';
 const source={
  manifest:{components:{bar:{kind:'legacy',family:'chart',datasetId:'ds',config:{code:'c01',data:{categories:['old'],values:[999]},presentation:{}},binding:{datasetId:'ds',categoryField:'region',categoryTarget:'categories',measures:{values:'revenue'}}}},metrics:{revenue:{aggregation:'sum',field:'revenue'},ratio:{aggregation:'ratio',numerator:'p',denominator:'s',format:'percent'}},filters:[]},
  snapshot:{datasets:{ds:[{region:'East',date:'2026-01-01',revenue:100,p:90,s:100},{region:'East',date:'2026-02-01',revenue:20,p:1,s:10},{region:'West',date:'2026-02-01',revenue:35,p:7,s:10}]}}};
@@ -56,20 +56,17 @@ test('bubble aggregation follows filters and keeps the clicked agent identity',(
  d.manifest.filters=[{componentIds:['bubble'],field:'date',op:'in',values:['2026-02-01']}];
  const points=resolveOriginal(d,'bubble').data.clusters;
  assert.deepEqual(points,[[10,20,1,'East'],[70,35,1,'West']]);
- const highlighted=linkagePoint(points[0],0,[],'East',true);
- assert.equal(highlighted.itemStyle.opacity,1);
- assert.equal(linkagePoint(points[1],1,[],'East',true).itemStyle.opacity,.22);
- assert.equal(linkageValue({value:highlighted.value},true),'East');
+ assert.equal(linkageValue({value:points[0]},true),'East');
  assert.equal(linkageValue({name:'East'},false),'East');
  d.manifest.filters[0].values=['missing'];
  assert.deepEqual(resolveOriginal(d,'bubble').data.clusters,[]);
 });
-// @wu-test type=behavior | scope=KPI binding geometry | protects=筛选后几何字段变成文本或数值未重算
-test('bullet, comparison and mini-bar KPIs keep geometry numeric while headlines stay formatted',()=>{
+// @wu-test type=behavior | scope=KPI numeric binding | protects=筛选后数值字段变成文本或趋势数值未重算
+test('KPI measures stay numeric while headlines stay formatted',()=>{
  const d=structuredClone(source);
  d.manifest.components.bullet={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc13',value:'old',actual:1,target:1},binding:{datasetId:'ds',measures:{value:'revenue',actual:'revenue',target:'revenue'}}};
  d.manifest.components.compare={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc14',value:'old',currentValue:1,priorValue:1},binding:{datasetId:'ds',measures:{value:'revenue',currentValue:'revenue',priorValue:'revenue'}}};
- d.manifest.components.bars={kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc12',value:'old'},binding:{datasetId:'ds',measures:{value:'revenue'},timeField:'date'}};
+ Object.assign(d.manifest.components,{bars:{kind:'legacy',family:'kpi',datasetId:'ds',config:{type:'mc12',value:'old'},binding:{datasetId:'ds',measures:{value:'revenue'},timeField:'date'}}});
  d.manifest.filters=[{componentIds:['bullet','compare','bars'],field:'region',op:'in',values:['East']}];
  const bullet=resolveOriginal(d,'bullet');assert.equal(bullet.actual,120);assert.equal(typeof bullet.target,'number');assert.equal(typeof bullet.value,'string');
  const compare=resolveOriginal(d,'compare');assert.equal(compare.currentValue,120);assert.equal(compare.priorValue,120);

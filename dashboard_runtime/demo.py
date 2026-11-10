@@ -31,7 +31,7 @@ def document(board_id='demo'):
         doc = apply_operations(doc, [{'op':'set_layout','breakpoint':bp,'value':[
             {'id':'total','x':0,'y':0,'w':half,'h':4}, {'id':'load','x':half,'y':0,'w':half,'h':4},
             {'id':'trend','x':0,'y':4,'w':half,'h':7}, {'id':'regions','x':half,'y':4,'w':half,'h':7},
-            {'id':'details','x':0,'y':11,'w':cols,'h':7}]}])
+            {'id':'details','x':0,'y':11,'w':cols,'h':11}]}])
     return doc
 
 def report_document(board_id='report-demo'):
@@ -110,9 +110,9 @@ def executive_document(board_id='executive-demo'):
         positions = [{'id': key, 'x': (index % (cols // card_cols)) * card_cols, 'y': (index // (cols // card_cols)) * 4, 'w': card_cols, 'h': 4} for index, key in enumerate(ids)]
         y = card_rows * 4
         if bp == 'desktop':
-            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': 6, 'h': 9}, {'id': 'regions', 'x': 6, 'y': y, 'w': 6, 'h': 9}, {'id': 'details', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}]
+            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': 6, 'h': 9}, {'id': 'regions', 'x': 6, 'y': y, 'w': 6, 'h': 9}, {'id': 'details', 'x': 0, 'y': y + 9, 'w': cols, 'h': 11}]
         else:
-            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': cols, 'h': 9}, {'id': 'regions', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}, {'id': 'details', 'x': 0, 'y': y + 16, 'w': cols, 'h': 7}]
+            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': cols, 'h': 9}, {'id': 'regions', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}, {'id': 'details', 'x': 0, 'y': y + 16, 'w': cols, 'h': 11}]
         ops.append({'op': 'set_layout', 'breakpoint': bp, 'value': positions})
     return apply_operations(doc, ops)
 

@@ -17,6 +17,8 @@ def test_drafts_checkpoints_notes_and_runtime_removal(tmp_path):
     assert service.store.revision('board') == 3
     done=service.call('dashboard_edit_finish', {'dashboardId':'board','expectedRevision':3,'batchId':batch['batch_id'],'name':'Approved'})
     assert done['ok']
+    assert done['nextAction'] == 'dashboard_preview'
+    assert done['displayPolicy'] == 'saved-dashboard-ui'
     assert len(service.store.history('board')) == 2
     restored=service.call('dashboard_restore', {'dashboardId':'board','expectedRevision':3,'revision':1})['document']
     assert restored['manifest']['title']=='Original'
@@ -29,12 +31,12 @@ def test_drafts_checkpoints_notes_and_runtime_removal(tmp_path):
     assert not (runtime/'data.sqlite3').exists()
 
 
-# @wu-test type=behavior | scope=渐进预览 | protects=预览提前携带完整数据或无法按组件加载
-def test_preview_has_no_component_results(tmp_path):
+# @wu-test type=behavior | scope=渐进数据读取 | protects=定义读取提前携带完整数据或无法按组件加载
+def test_local_document_has_no_component_results(tmp_path):
     from dashboard_runtime.demo import executive_document
     service=Service(tmp_path/'runtime', project_root=tmp_path/'project')
     service.call('dashboard_create', {'dashboardId':'demo','document':executive_document('demo')})
-    result=service.call('dashboard_preview', {'dashboardId':'demo'})
+    result=service.call('dashboard_get', {'dashboardId':'demo','dataMode':'local'})
     assert result['document']['snapshot']['datasets']=={}
     assert result['document']['computed']['components']=={}
     assert result['document']['progressive']

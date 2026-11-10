@@ -20,32 +20,30 @@ board/
 ## Commands
 
 ```bash
-WORKSPACE_SCRIPT="skills/executive-charts/scripts/dashboard_workspace.py"
+charts-design dashboard init ./board --title "经营决策看板" --org "经营分析部"
 
-python3 "$WORKSPACE_SCRIPT" init ./board --title "经营决策看板" --org "经营分析部"
+charts-design dashboard import-csv ./board --csv ./data.csv --title "渠道经营看板"
 
-python3 "$WORKSPACE_SCRIPT" import-csv ./board --csv ./data.csv --title "渠道经营看板"
+charts-design dashboard meta set ./board --subtitle "2026 年 7 月" --system "月度经营复盘"
 
-python3 "$WORKSPACE_SCRIPT" meta set ./board --subtitle "2026 年 7 月" --system "月度经营复盘"
-
-python3 "$WORKSPACE_SCRIPT" add kpi ./board revenue \
+charts-design dashboard add kpi ./board revenue \
   --label "营业收入" --value 224 --unit "万元" --yoy "+12.6% YoY"
 
-python3 "$WORKSPACE_SCRIPT" add kpi ./board gross-margin --from ./gross-margin.json
+charts-design dashboard add kpi ./board gross-margin --from ./gross-margin.json
 
-python3 "$WORKSPACE_SCRIPT" add chart ./board regional-sales \
+charts-design dashboard add chart ./board regional-sales \
   --from ./regional-sales.chart.json
 
-python3 "$WORKSPACE_SCRIPT" add chart ./board revenue-trend --from ./revenue-trend.json
+charts-design dashboard add chart ./board revenue-trend --from ./revenue-trend.json
 
-python3 "$WORKSPACE_SCRIPT" table set ./board --from ./store-table.json
+charts-design dashboard table set ./board --from ./store-table.json
 
-python3 "$WORKSPACE_SCRIPT" inspect ./board --json
-python3 "$WORKSPACE_SCRIPT" validate ./board --strict --json
-python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html --json
+charts-design dashboard inspect ./board --json
+charts-design dashboard validate ./board --strict --json
 ```
 
-When the skill is installed outside this repository, set `WORKSPACE_SCRIPT` to the `scripts/dashboard_workspace.py` beside the active `SKILL.md`.
+When calling the Python script directly, invoke `skills/executive-charts/scripts/dashboard_workspace.py`.
+Note that legacy HTML generation (`build`) and HTML inspection commands have been completely removed and will fail if called.
 
 Use `--replace` for an intentional replacement of an existing KPI or chart with the same id.
 
@@ -220,25 +218,15 @@ Warnings identify missing units or incomplete executive metadata. Resolve releva
 The workspace contract covers all shipped component families:
 
 - KPI cards: `mc01`–`mc16` (16 types; see the selection guide in [kpi-cards.md](kpi-cards.md));
-- chart renderers: every code returned by `generate_chart.py --list` (currently 40 codes across `c`, `d`, `f`, `fn`, `k`, `m`, `r` and `t` families);
+- chart renderers: every code registered in `chart_catalog.json` (currently 40 codes across `c`, `d`, `f`, `fn`, `k`, `m`, `r` and `t` families);
 - dynamic filters: 0–N `select` or `multi-select` components with explicit fields and consumers;
 - one structured table component with stable column keys and typed units;
 - shared card shell capabilities: chart/table view, export, copy, fullscreen, explanation, resize and destroy lifecycle.
 
 `component.id` is unique and preserved. `component.code` selects the visual renderer and may repeat.
 
-## Generated HTML inspection and migration preservation
+## Historical HTML inspection and preservation (Reference)
 
-`build` always runs strict static inspection. Use the standalone commands for an existing page or CI:
+The previous standalone HTML generation and inspection pipeline (`build`, `inspect-html`, `inventory-html`, `compare-html`) has been completely removed during the 2026-11-10 rebuild; invoking them will fail.
 
-For a migration, first create and review the Preservation Manifest from the baseline, then pass the existing file to `build --manifest`. New dashboards build without this option.
-
-```bash
-python3 "$WORKSPACE_SCRIPT" inventory-html ./before.html --output ./preservation.json --json
-python3 "$WORKSPACE_SCRIPT" inspect-html ./dist/board.html --strict --manifest ./preservation.json --json
-python3 "$WORKSPACE_SCRIPT" compare-html ./before.html ./dist/board.html --manifest ./preservation.json --json
-```
-
-A Preservation Manifest may declare `requiredIds`, `requiredText`, `forbiddenText`, `requiredAssets` and `components`. Inspection checks document metadata, duplicate ids, broken DOM references, missing local assets and manifest requirements. Comparison additionally catches baseline ids, visible text and asset references lost during migration.
-
-Report strict validation, static inspection, generated inline-script syntax, and component behavior test results with the delivery.
+In the current phase, workspace validation is performed strictly through `charts-design dashboard validate ./board --strict --json`. It validates component identities, referenced columns, bindings, and presentation contracts without rendering HTML.
