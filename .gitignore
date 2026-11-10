@@ -3,6 +3,9 @@
 !.gitignore
 !.github/
 !.github/**
+!docs/.impeccable/
+docs/.impeccable/*
+!docs/.impeccable/design.json
 
 # Explicitly ignore common agent/IDE/Stitch dotdirs
 .agents/
