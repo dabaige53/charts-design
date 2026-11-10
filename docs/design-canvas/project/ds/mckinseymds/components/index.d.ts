@@ -18,3 +18,5 @@ export type PaginationProps={page:number;pages:number;pageSize:number;onChange:(
 export type AlertsProps=ComponentProps<'div'>&{variant?:'default'|'destructive'};
 export type ChartTileProps={code:string};
 export type MetricTileProps={code:string};
+export type TableGalleryProps={variant:'tb01'|'tb02'};
+export type ControlPreviewProps={kind:string};

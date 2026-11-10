@@ -29,10 +29,12 @@ export declare function chartData(config: Config, grain?: string, context?: Char
     headers: string[];
     rows: any[][];
 };
-export declare function EChartSurface({ option, label, className, onReady, onSelect, }: {
+export declare function EChartSurface({ option, label, className, onReady, onSelect, selectedName, adaptive, }: {
     option: Config;
     label: string;
     className?: string;
     onReady?: (chart: echarts.ECharts | undefined) => void;
     onSelect?: (point: Config) => void;
+    selectedName?: string;
+    adaptive?: boolean;
 }): import("react").JSX.Element;

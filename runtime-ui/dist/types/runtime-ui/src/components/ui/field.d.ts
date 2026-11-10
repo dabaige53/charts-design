@@ -6,7 +6,7 @@ declare function FieldLegend({ className, variant, ...props }: React.ComponentPr
 }): import("react").JSX.Element;
 declare function FieldGroup({ className, ...props }: React.ComponentProps<"div">): import("react").JSX.Element;
 declare const fieldVariants: (props?: ({
-    orientation?: "vertical" | "horizontal" | "responsive" | null | undefined;
+    orientation?: "horizontal" | "vertical" | "responsive" | null | undefined;
 } & import("class-variance-authority/types").ClassProp) | undefined) => string;
 declare function Field({ className, orientation, ...props }: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>): import("react").JSX.Element;
 declare function FieldContent({ className, ...props }: React.ComponentProps<"div">): import("react").JSX.Element;

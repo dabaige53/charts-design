@@ -647,7 +647,7 @@ export function ChartToolbar({
   grain?: string;
   onGrain?: (v: string) => void;
   showTable: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
   onExport?: () => void;
   onCopy?: () => void;
   onImage?: () => void;
@@ -690,12 +690,12 @@ export function ChartToolbar({
           <ToggleGroupItem value="quarter">季度</ToggleGroupItem>
         </ToggleGroup>
       )}
-      <IconAction
+      {onToggle && <IconAction
         label={showTable ? "显示图表" : "显示数据表"}
         onClick={onToggle}
       >
         <Table2 />
-      </IconAction>
+      </IconAction>}
       </div>
       <IconAction label="业务口径" onClick={onInfo}>
         <MetricInfoIcon />

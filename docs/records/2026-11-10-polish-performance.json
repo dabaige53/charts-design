@@ -1,0 +1,42 @@
+{
+  "status": "passed",
+  "rows": 1000000,
+  "sourceRows": 1000000,
+  "exportRows": 1000000,
+  "timingsMs": {
+    "import": 5858.62170899054,
+    "open": 1.2627090036403388,
+    "filter": 172.55420799483545,
+    "aggregate": 42.56079200422391,
+    "page": 1.4793330046813935,
+    "sort": 10.77462499961257,
+    "search": 1554.3232090130914,
+    "export": 2621.500165987527,
+    "edit": 3.1905829964671284,
+    "restore": 1.657374989008531
+  },
+  "responseBytes": {
+    "attach": 1628,
+    "open": 7347,
+    "filter": 7356,
+    "page": 9498,
+    "sort": 9568,
+    "search": 9538,
+    "export": 311,
+    "edit": 7424,
+    "restore": 7348
+  },
+  "peakRSSBytes": 39845888,
+  "memoryScope": "Peak RSS of Python acceptance process on macOS; excludes browser and Codex host",
+  "diskBytes": {
+    "source": 50647040,
+    "data": 133459968,
+    "config": 20480,
+    "configWAL": 94792,
+    "csv": 49345956
+  },
+  "dataVersions": 1,
+  "date": "2026-11-10",
+  "baseCommit": "ce091eab6960aa837b4ad25833f118fd0ef7a841",
+  "scope": "Single local Python run over synthetic data; excludes browser/MCP host latency and P95."
+}

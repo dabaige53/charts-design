@@ -1,4 +1,4 @@
 import type { Config } from "./types";
-export declare function MetricCard({ config }: {
+export declare const MetricCard: import("react").NamedExoticComponent<{
     config: Config;
-}): import("react").JSX.Element;
+}>;

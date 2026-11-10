@@ -12,6 +12,7 @@
 | 文档 | 用途与查阅时机 | 更新时机 |
 | --- | --- | --- |
 | [当前 UI 设计记录](DESIGN.md) | 从 React 源码提取的颜色、字阶、布局、组件与动效规则；配套预览说明位于 `docs/.impeccable/design.json` | 当前实现的视觉规则变化后同步 |
+| [产品上下文](PRODUCT.md) | 产品定位、主要用户、MCP 使用流程与长期边界；产品或设计工作开始时查阅 | 已确认的用户、用途或产品边界变化 |
 | [图表 UI 与设计系统](design-system/project/chart-ui.md) | 重构前查阅保留的 40 个图表定义、视觉、配色与交互参考；PDF 数据色盘与旧项目配色分开 | 图表视觉迁移或来源规范变化 |
 | [文件管理](agent/file-management.md) | 新增、移动或清理文件前，确定位置和维护入口 | 目录职责或保留规则变化 |
 | [指标定义](../skills/executive-charts/references/metric-definitions.md) | 撰写业务说明与统计口径时查阅 | 指标说明要求变化 |
@@ -25,6 +26,7 @@
 
 - [UI 整改计划](ui-refactor-plan.md)：范围、阶段、构建路径和完成条件。
 - [UI 组件清单](ui-component-inventory.md)：实际输入、事件、状态、数据与宿主依赖。
+- [产品组件规则盘点](ui-design-rule-audit.md)：代码硬限制、产品强约定、选型建议、库外图表入口与当前规则缺口。
 - [产品 React 组件](design-system/project/react-ui.md)：设计系统与运行变量映射、可运行预览。
 
 | 文档 | 用途与查阅时机 | 当前状态 / 维护说明 |

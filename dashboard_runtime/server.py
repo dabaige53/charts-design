@@ -51,7 +51,7 @@ FILE_LINK_SECONDS = 24 * 3600
 VIEW_TOOLS = frozenset({
     'dashboard_get', 'dashboard_view', 'dashboard_refresh', 'dashboard_filter_options',
     'component_data', 'query_inspect', 'semantic_inspect', 'statistical_render',
-    'dashboard_annotations', 'dashboard_list', 'dashboard_preview', 'runtime_info', 'runtime_keepalive', 'runtime_result_chunk',
+    'dashboard_annotations', 'dashboard_list', 'dashboard_preview', 'runtime_info', 'runtime_keepalive',
     'runtime_report_error', 'dashboard_export', 'dashboard_export_read', 'dataset_export', 'legacy_render',
 })
 # An edit link additionally saves layout, titles, descriptions and checkpoints.

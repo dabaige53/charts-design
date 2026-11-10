@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from core.csv_profiler import profile_csv
-from core.component_schemas import CHART_SCHEMA_REGISTRY, KPI_TYPES, validate_chart_data, validate_kpi_presentation
+from core.component_schemas import KPI_TYPES, validate_chart_data, validate_kpi_presentation, validate_kpi_content, validate_chart_renderer
 from core.filter_bindings import validate_filter_bindings
 
 
@@ -230,6 +230,7 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
             error("KPI_TYPE_INVALID", f"{path}.type", "KPI type must be one of mc01 through mc09")
         if strict and not item.get("unit"):
             error("KPI_UNIT_MISSING", f"{path}.unit", "Declare a unit for the KPI")
+        errors.extend(validate_kpi_content(item, path))
         if strict:
             errors.extend(validate_kpi_presentation(item, path))
 
@@ -244,10 +245,11 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
         else:
             seen_ids.add(item_id)
         code = str(item.get("code", "")).lower()
-        if code not in CHART_SCHEMA_REGISTRY:
-            error("CHART_CODE_UNKNOWN", f"{path}.code", f"Unknown chart code: {code or '<missing>'}")
+        errors.extend(validate_chart_renderer(item, path))
         if not item.get("title"):
             error("CHART_TITLE_MISSING", f"{path}.title", "Chart title is required")
+        if item.get("renderer", "preset") != "preset":
+            continue
         if "data" not in item:
             error("CHART_DATA_MISSING", f"{path}.data", "Chart data is required; catalog demo data is not used in workspace builds")
         else:
@@ -498,14 +500,6 @@ def cmd_set_table(args: argparse.Namespace) -> None:
     emit("dashboard.table.set", {"workspace": str(root), "component": {"path": str(table_path)}}, args.json)
 
 
-def cmd_build(args: argparse.Namespace) -> None:
-    raise WorkspaceError(
-        "HTML_GENERATOR_REMOVED",
-        "Native HTML generation has been removed for the React rebuild. "
-        "Workspace assets remain available through init, import-csv, inspect, validate, meta, add, and table.",
-    )
-
-
 def add_json_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="Emit one stable JSON object to stdout")
 
@@ -606,15 +600,6 @@ def build_parser() -> argparse.ArgumentParser:
     table_set.add_argument("--from", dest="from_file", required=True)
     add_json_flag(table_set)
     table_set.set_defaults(func=cmd_set_table)
-
-    build_cmd = subparsers.add_parser("build", help="Report that native HTML generation has been removed")
-    build_cmd.add_argument("workspace")
-    build_cmd.add_argument("--output", "-o", required=True)
-    build_cmd.add_argument("--open", action="store_true")
-    build_cmd.add_argument("--inspect-html", action="store_true", help=argparse.SUPPRESS)
-    build_cmd.add_argument("--manifest", help=argparse.SUPPRESS)
-    add_json_flag(build_cmd)
-    build_cmd.set_defaults(func=cmd_build)
 
     return parser
 

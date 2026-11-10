@@ -28,6 +28,7 @@ import { ChartToolbar, IconAction } from "./controls";
 import { browserDownload, csvBlob, type Download } from "./host";
 import { RecoveryAlert } from "./recovery-alert";
 import { SemanticDetails } from "./semantic-details";
+import { CustomSurface } from "./custom-surface";
 import type { Config, Document, Filter, TableState } from "./types";
 class ComponentBoundary extends React.Component<
   { children: React.ReactNode; title: string; resetKey: unknown; onRetry?: () => void },
@@ -76,10 +77,11 @@ function ChartBody({
 }) {
   const historical =
     context.document.manifest.components[context.id].kind === "chart";
+  const customHtml = config.renderer === "html";
   const grouped = context.document.computed?.grouped?.[context.id];
   const option = useMemo(
     () =>
-      historical
+      customHtml ? null : historical
         ? historicalOption(context.document, context.id, palette)
         : chartOption(config, grain, context),
     [config, grain, context.document.manifest, context.id, grouped],
@@ -107,15 +109,16 @@ function ChartBody({
       />
       )}
       <div className={table ? "hidden" : "flex min-h-0 w-full flex-1"}>
-        <EChartSurface
-          option={option}
+        {customHtml ? <CustomSurface config={config} title={context.document.manifest.components[context.id].title} /> : <EChartSurface
+          option={option!}
           label={
             config.title || context.document.manifest.components[context.id].title
           }
           onReady={onReady}
           onSelect={onSelect}
           selectedName={selectedName}
-        />
+          adaptive={config.renderer !== "echarts"}
+        />}
       </div>
     </>
   );
@@ -197,6 +200,12 @@ export function ComponentView({
   }, [family, id]);
   const config =
     doc.computed?.components?.[id] || c.config || c.presentation || {};
+  const custom = config.renderer === "echarts" || config.renderer === "html";
+  const hasChartTable = !custom || !!config.table;
+  const hasChartImage = config.renderer !== "html";
+  useEffect(() => {
+    if (!hasChartTable) setTable(false);
+  }, [hasChartTable]);
   const ready =
     family === "text" ||
     family === "statistical" ||
@@ -270,7 +279,7 @@ export function ComponentView({
               )}
               <span className="min-w-0 break-words">{c.title}</span>
             </CardTitle>
-            {(c.subtitle || config.subtitle) && (
+            {family !== "kpi" && (c.subtitle || config.subtitle) && (
               <CardDescription>
                 {c.subtitle || config.subtitle}
               </CardDescription>
@@ -279,15 +288,15 @@ export function ComponentView({
               {family === "table" && <div ref={setTableToolbarTarget} />}
               {family === "chart" ? (
                 <ChartToolbar
-                  chartType={editing && onChartType && ["c01", "c02"].includes(config.code) ? config.code : undefined}
-                  onChartType={editing && onChartType && ["c01", "c02"].includes(config.code) ? (code) => run(() => onChartType(code)) : undefined}
+                  chartType={!custom && editing && onChartType && ["c01", "c02"].includes(config.code) ? config.code : undefined}
+                  onChartType={!custom && editing && onChartType && ["c01", "c02"].includes(config.code) ? (code) => run(() => onChartType(code)) : undefined}
                   grain={grain}
-                  onGrain={config.hasGranularity ? onGrain : undefined}
+                  onGrain={!custom && config.hasGranularity ? onGrain : undefined}
                   showTable={table}
-                  onToggle={() => setTable(!table)}
-                  onExport={ready ? () => run(csv) : undefined}
+                  onToggle={hasChartTable ? () => setTable(!table) : undefined}
+                  onExport={ready && hasChartTable ? () => run(csv) : undefined}
                   onImage={
-                    !table && ready
+                    !table && ready && hasChartImage
                       ? () =>
                           run(async () =>
                             download({
@@ -301,6 +310,7 @@ export function ComponentView({
                   onCopy={
                     !table &&
                     ready &&
+                    hasChartImage &&
                     typeof navigator.clipboard?.write === "function" &&
                     typeof ClipboardItem !== "undefined"
                       ? () =>
@@ -351,7 +361,7 @@ export function ComponentView({
             <ChartBody
               config={config}
               grain={grain}
-              table={table}
+              table={table && hasChartTable}
               context={{ document: doc, id }}
               onReady={(instance) => {
                 chart.current = instance;

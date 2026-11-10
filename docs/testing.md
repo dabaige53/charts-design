@@ -4,6 +4,8 @@
 
 > **2026-11-10 重构调整**：`runtime-ui/src` 维护共享 React 组件与应用。UI 修改采用类型检查、构建和画板格式检查，不运行 UI 测试、浏览器自动化或截图验收。后端只运行直接受影响模块的局部验证，全量测试需用户明确授权。
 
+用户明确授权完整测试时，另运行 `pnpm --dir runtime-ui test:components`，覆盖图表配置及 Runtime 的筛选、分页、联动和请求顺序回归；浏览器验收单独记录。Python 两组测试按下表分别运行。覆盖率依赖和 Docker 缺失时必须明确报告，不能将未执行项写成通过。
+
 | 层 | 本地命令 | CI 作业 | 内容 |
 | --- | --- | --- | --- |
 | 静态检查 | `npm run check`、`npm run lint:py` | Static checks | Node/Python 语法，Skill 入口链接，全部 Markdown 的本地链接与章节锚点（`bin/check-doc-links.js`），ruff 的 pyflakes 规则（未定义名称、未使用导入、无效 f-string） |

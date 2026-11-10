@@ -268,13 +268,13 @@ function DetailData({ fields, onReadData }: {
           <Table aria-label="当前筛选范围的明细数据示例">
             <TableHeader>
               <TableRow>
-                {keys.map((key) => <TableHead key={key} className={`whitespace-nowrap text-xs ${fields[key]?.type === "number" ? "text-right" : ""}`}>{fields[key]?.label || key}</TableHead>)}
+                {keys.map((key) => <TableHead key={key} className="whitespace-nowrap text-center text-xs">{fields[key]?.label || key}</TableHead>)}
               </TableRow>
             </TableHeader>
             <TableBody>
               {result?.rows?.length ? result.rows.map((row: Config, index: number) => (
                 <TableRow key={index}>
-                  {keys.map((key) => <TableCell key={key} className={`whitespace-nowrap text-xs tabular-nums ${fields[key]?.type === "number" ? "text-right" : ""}`}>
+                  {keys.map((key) => <TableCell key={key} className="whitespace-nowrap text-center text-xs tabular-nums">
                     {row[key] == null ? "—" : typeof row[key] === "object" ? JSON.stringify(row[key]) : String(row[key])}
                   </TableCell>)}
                 </TableRow>

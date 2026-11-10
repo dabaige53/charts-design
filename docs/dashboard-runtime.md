@@ -326,13 +326,13 @@ Local server launch links now use an explicit `#token=...` fragment. Ordinary Ma
 
 图表联动只刷新旧、新条件的关联组件，来源图保留完整类别；再次点击同一来源的同一类别取消选择。图表以稳定系列 ID 和类别名称合并数据，柱状图选中类别保留原色，其余柱子变灰；清除联动条件恢复原色。图形与指标卡主数值使用 260ms 更新过渡，生效条件行展开、收起使用短过渡；系统启用减少动态效果时直接呈现最终数据。本次仅构建和同步资源，未运行 UI 测试、浏览器自动化或性能实测。
 
-百万行、40 个共享数据图表的独立合成压力测试：
+百万行本地数据的独立合成验收：
 
 ```sh
-node bin/python-runtime.js tests/runtime/benchmark_incremental.py --output /tmp/charts-performance.json
+node bin/python-runtime.js tests/runtime/benchmark_local.py --rows 1000000 --output /private/tmp/charts-performance.json
 ```
 
-该命令创建独立临时数据，记录首次可见图表耗时、100 次翻页的中位数/P95、响应后绘制时间、实例保留数及 GC 后内存和监听器数量。不会读取或修改现有业务看板。首次全字段子串搜索仍需扫描完整数据；自然字符串排序、多列排序及随机深页保留 OFFSET 路径。缓存绑定不可变数据版本。
+该命令创建独立临时 SQLite 数据，以两张指标卡、一个分类图和一张明细表检查导入、打开、筛选、聚合、翻页、排序、搜索和完整 CSV 导出，并记录响应体积、进程峰值内存及磁盘大小。结果核对独立计算的行数与合计，测量范围为后端查询和数据导出。首次全字段子串搜索需扫描完整数据；自然字符串排序、多列排序及随机深页使用 OFFSET。缓存绑定不可变数据版本。
 
 
 ### 位置批注

@@ -8,13 +8,13 @@ One MCP registration can serve multiple projects. Pass the absolute asset direct
 
 Inspect the current artifact before editing. Record the requested changes and retain stable dashboard/component IDs. For each affected component compare the before/after configuration: data and metric references, aggregation, comparison baselines, units, explanations, tooltip fields, filter consumers, sorting and drilldown.
 
-For KPI comparisons, bind real prior-period data at the same scope and grain. Compute aggregate values or ratios before their changes; distinguish relative percent changes from percentage-point differences. Missing baselines remain missing. Keep the visible subtitle separate from the detailed metric definition: removing a subtitle must preserve the explanation.
+For KPI comparisons, bind real prior-period data at the same scope and grain. Compute aggregate values or ratios before their changes; distinguish relative percent changes from percentage-point differences. Missing baselines remain missing. KPI cards forbid descriptions and subtitles; retain business explanations in metric definitions and the detail view.
 
 For tooltip references, inspect content and interaction together: heading, aggregate total, denominator, units, series order/colors, value/share rows and pointer placement. When showing only top series, state whether totals include hidden series; verify that the tooltip and table use that same definition. Loading, empty results and errors are distinct states; a completed empty result clears the previous result.
 
 ## Compose before writing
 
-Pick chart codes with `chart_recommend`, KPI shapes from `kpiGuide` (returned by `chart_declarations {}`), and one composition from `layout_templates`. Put `apply_layout_template` in the same batch as the components; it runs after the other operations. Vary compositions across the pages of a project.
+Choose a preset, native ECharts, or custom HTML/JavaScript route. `chart_recommend`, `kpiGuide` and `layout_templates` are optional aids. Use explicit `set_layout` or a suitable template. KPI cards never contain narrative descriptions.
 
 ## Save and display
 

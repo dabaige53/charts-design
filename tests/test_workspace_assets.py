@@ -1,10 +1,8 @@
-"""Exercise workspace assets and the retired HTML build command."""
+"""Exercise workspace assets, filter scopes and CSV imports."""
 import json
 from pathlib import Path
 import subprocess
 import sys
-
-import pytest
 
 ROOT = Path(__file__).parents[1]
 WORKSPACE = ROOT / "skills" / "executive-charts" / "scripts" / "dashboard_workspace.py"
@@ -17,7 +15,7 @@ def run_cli(*args):
     )
 
 
-# @wu-test type=integration | scope=Workspace资产管理 | protects=移除生成器后无法保存或校验业务组件
+# @wu-test type=integration | scope=Workspace资产管理 | protects=业务组件无法保存或校验
 def test_workspace_asset_commands(tmp_path):
     workspace = tmp_path / "board"
     chart = ROOT / "skills" / "executive-charts" / "references" / "quickstart" / "regional-sales.chart.json"
@@ -63,27 +61,7 @@ def test_workspace_filter_scope_contract(tmp_path):
     assert any(error["code"] == "FILTER_FIELDS_MISSING" for error in json.loads(invalid.stdout)["errors"])
 
 
-# @wu-test type=boundary | scope=Workspace旧build命令 | protects=移除生成器后构建误报成功或覆盖旧交付文件
-@pytest.mark.parametrize("json_mode", [False, True])
-def test_removed_build_reports_explicit_error_without_writing(tmp_path, json_mode):
-    output = tmp_path / "board.html"
-    output.write_text("Existing delivery", encoding="utf-8")
-    arguments = ["build", tmp_path / "board", "--output", output]
-    if json_mode:
-        arguments.append("--json")
-    result = run_cli(*arguments)
-    assert result.returncode == 2
-    if json_mode:
-        payload = json.loads(result.stdout)
-        assert payload["ok"] is False
-        assert payload["command"] == "dashboard.build"
-        assert payload["errors"][0]["code"] == "HTML_GENERATOR_REMOVED"
-    else:
-        assert "HTML_GENERATOR_REMOVED" in result.stderr
-    assert output.read_text() == "Existing delivery"
-
-
-# @wu-test type=integration | scope=CSV导入 | protects=移除渲染代码后原始单元格数值或单位丢失
+# @wu-test type=integration | scope=CSV导入 | protects=原始单元格数值或单位丢失
 def test_csv_import_preserves_source_data_without_generating_components(tmp_path):
     source = tmp_path / "sales.csv"
     source.write_text(

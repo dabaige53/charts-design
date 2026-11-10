@@ -24,9 +24,10 @@ class DashboardError(ValueError):
     def __init__(self, code: str, message: str, status: int = 400):
         super().__init__(message)
         self.code, self.status = code, status
+        self.request_id: str | None = None
     def as_dict(self):
         detail = {'code': self.code, 'message': str(self)}
-        if getattr(self, 'request_id', None):
+        if self.request_id:
             detail['requestId'] = self.request_id
         return {'ok': False, 'error': detail}
 
@@ -506,6 +507,18 @@ def apply_layout_template(m, template, order=None):
     m['layout'] = compute_layout(m, template, order)
     m['layoutTemplate'] = {'id': template, **({'order': list(order)} if order else {})}
 
+def validate_component_content(value, key):
+    """Authoring-only content rules; historical documents remain readable."""
+    if value.get('kind') == 'kpi' or (value.get('kind') == 'legacy' and value.get('family') == 'kpi'):
+        from .legacy import component_schemas
+        schemas = component_schemas()
+        errors = schemas.validate_kpi_content(value, f'components.{key}')
+        for config_key in ('config', 'presentation'):
+            if isinstance(value.get(config_key), dict):
+                errors += schemas.validate_kpi_content(value[config_key], f'components.{key}.{config_key}')
+        require(not errors, str(errors), 'KPI_DESCRIPTION_NOT_ALLOWED')
+
+
 def apply_operations(doc, operations):
     require(isinstance(operations, list) and 0 < len(operations) <= 200, 'Expected 1-200 operations')
     result = copy.deepcopy(doc)
@@ -520,6 +533,8 @@ def apply_operations(doc, operations):
             key = identifier(op.get('id'))
             collection = {'put_source': 'sources', 'put_metric': 'metrics', 'put_component': 'components'}[kind]
             require(isinstance(op.get('value'), dict), 'Operation value must be an object')
+            if kind == 'put_component':
+                validate_component_content(op['value'], key)
             if kind == 'put_component' and key not in m['components']:
                 place_new(m, key, op['value'])
                 if 'report' in m and 'markdown' not in m['report']:
@@ -565,6 +580,7 @@ def apply_operations(doc, operations):
             require(key in m['components'], 'Chart not found')
             component = m['components'][key]
             require(component.get('kind') == 'legacy' and component.get('family') == 'chart', 'Original chart required')
+            require(component['config'].get('renderer', 'preset') == 'preset', 'Custom renderers are edited through put_component, not preset switching', 'INCOMPATIBLE_CHART')
             current = component['config']['code']
             require(current in ('c01', 'c02') and code in ('c01', 'c02'), 'No reviewed conversion between these original codes', 'INCOMPATIBLE_CHART')
             if current != code:

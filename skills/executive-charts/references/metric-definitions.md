@@ -63,7 +63,7 @@
 
 Runtime 的业务定义写入 `manifest.metrics[id].definition`；计算依据仍由 `aggregation`、`field` 或 `numerator`/`denominator` 指定。使用完整中文句子记录已确认的范围和边界，不添加未声明的指标字段。
 
-原版组件使用 `config.explanation.overview`、`type`、`period`、`comparison`、`structure` 和 `metrics[]`；每个指标的 `name`、`definition`、`formula`、`rule` 分别承担名称、业务定义、中文公式和已确认的判定规则。更长的统计范围或边界可写入 `notes` 或 `limitations`，页面直接展开。
+组件使用 `config.explanation.overview`、`type`、`period`、`comparison`、`structure` 和 `metrics[]`；每个指标的 `name`、`definition`、`formula`、`rule` 分别承担名称、业务定义、中文公式和已确认的判定规则。更长的统计范围或边界可写入 `notes` 或 `limitations`，页面直接展开。
 
 交付前逐项检查：定义能独立阅读；限定词都有解释；公式对应实际配置；比例汇总顺序正确；单位与时间范围一致；未虚构纳入/排除项、去重或判定规则；SQL 和来源可复核；缺失依据明确列出。
 

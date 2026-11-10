@@ -87,8 +87,8 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                 done = await call(session, 'dashboard_edit_finish', first, dashboardId='same',
                     expectedRevision=2, batchId=batch['batch_id'])
                 assert done['ok']
-                assert done['nextAction'] == 'dashboard_get'
-                assert done['displayPolicy'] == 'data-only-ui-unavailable'
+                assert done['nextAction'] == 'dashboard_preview'
+                assert done['displayPolicy'] == 'saved-dashboard-ui'
                 assert (await call(session, 'dashboard_annotations', first, dashboardId='same'))['count'] == 1
                 assert (await call(session, 'dashboard_annotations', second, dashboardId='same'))['count'] == 0
                 assert len((await call(session, 'dashboard_history', first, dashboardId='same'))['history']) == 2

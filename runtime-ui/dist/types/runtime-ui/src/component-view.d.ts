@@ -1,7 +1,7 @@
 import React from "react";
 import { type Download } from "./host";
 import type { Config, Document, Filter, TableState } from "./types";
-export declare function ComponentView({ document: doc, id, grain, tableState, onTableChange, editing, onGrain, onInspect, onExport, onSelect, download, loading, error, onError, onSaveTable, onChartType, onRetry, filters, }: {
+export declare function ComponentView({ document: doc, id, grain, tableState, onTableChange, editing, onGrain, onInspect, onReadData, onExport, onSelect, selectedName, download, loading, error, onError, onSaveTable, onChartType, onRetry, filters, }: {
     document: Document;
     id: string;
     grain?: string;
@@ -10,8 +10,10 @@ export declare function ComponentView({ document: doc, id, grain, tableState, on
     editing?: boolean;
     onGrain?: (g: string) => void;
     onInspect?: () => Promise<Config>;
+    onReadData?: (state: TableState) => Promise<Config>;
     onExport?: () => Promise<void>;
     onSelect?: (point: Config) => void;
+    selectedName?: string;
     download?: Download;
     loading?: boolean;
     error?: string;

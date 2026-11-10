@@ -7,6 +7,7 @@ from dashboard_runtime.model import DashboardError
 
 from dashboard_runtime.demo import document
 from dashboard_runtime.service import Service
+from dashboard_runtime.assets import ui_build_id
 
 
 # @wu-test type=integration | scope=看板刷新 | protects=旧筛选定义或读者选择被保存
@@ -28,7 +29,7 @@ def test_refresh_uses_latest_filter_labels_without_saving_reader_values(tmp_path
     assert saved['manifest']['filters'][0]['values'] == []
     info = service.call('runtime_info', {'dashboardId': 'refresh'})
     assert info['dashboardRevision'] == updated['revision']
-    assert info['uiBuildId'] == 'unavailable'
+    assert info['uiBuildId'] == ui_build_id()
 
 
 # @wu-test type=boundary | scope=刷新筛选 | protects=非法ID或单选多值进入刷新

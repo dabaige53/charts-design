@@ -300,7 +300,7 @@ class Service:
             return {'export': {**result, 'id': export_id, 'filename': path.name, 'format': 'csv', 'mimeType': 'text/csv'}}
         if tool == 'dashboard_create':
             if args.get('document'):
-                require(not any(c.get('kind') == 'chart' for c in args['document'].get('manifest', {}).get('components', {}).values()), 'New charts must use the original 40 codes (kind=legacy, family=chart)', 'UNSUPPORTED_CHART_FAMILY')
+                require(not any(c.get('kind') == 'chart' for c in args['document'].get('manifest', {}).get('components', {}).values()), 'Use kind=legacy, family=chart with a preset code or config.renderer=echarts/html', 'UNSUPPORTED_CHART_FAMILY')
             doc = args.get('document')
             if doc is not None:
                 doc = copy.deepcopy(doc)
@@ -345,7 +345,7 @@ class Service:
                     require(False, 'Use set_original_chart with an original code', 'UNSUPPORTED_CHART_FAMILY')
                 if isinstance(op, dict) and op.get('op') == 'put_component' and isinstance(op.get('value'), dict) and op['value'].get('kind') == 'chart':
                     old = current['manifest']['components'].get(op.get('id'), {})
-                    require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'New charts must use the original 40 codes', 'UNSUPPORTED_CHART_FAMILY')
+                    require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'Use kind=legacy, family=chart with a preset code or config.renderer=echarts/html for custom charts', 'UNSUPPORTED_CHART_FAMILY')
                 if isinstance(op, dict) and op.get('op') == 'put_source' and isinstance(op.get('value'), dict):
                     op['value']['verification'] = 'supplied'
             note_options = {}

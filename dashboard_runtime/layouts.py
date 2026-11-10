@@ -270,7 +270,8 @@ def compute_layout(manifest: dict, template: str, order=None) -> dict:
                 per_row = 2 if template in ('grid3', 'scorecard') else 1
             elif not desktop:
                 per_row = 1
-            sequence_rows(flow, body, per_row, HEIGHT['chart'], roles)
+            chart_height = 6 if template == 'scorecard' and cols > 4 else HEIGHT['chart']
+            sequence_rows(flow, body, per_row, chart_height, roles)
         flow.full(tables, HEIGHT['table'])
         result[breakpoint] = flow.placements
     return result

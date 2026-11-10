@@ -179,11 +179,11 @@ export const MetricCard = memo(function MetricCard({ config }: { config: Config 
     type = c.type || "mc01",
     percent = number(c.percent);
   if (!/^mc(?:0[1-9]|1[0-6])$/.test(type)) throw Error(`未注册指标卡：${type}`);
-  const detailLabel = c.subLabel || c.gaugeSub || c.trendLabel || c.statusBadge;
+  const detailLabel = c.subLabel;
   const detail =
-    detailLabel && c.subVal != null && c.subVal !== ""
-      ? `${detailLabel} ${c.subVal}`
-      : (detailLabel ?? c.subVal);
+    c.subVal != null && c.subVal !== ""
+      ? [detailLabel, c.subVal].filter((v) => v != null && v !== "").join(" ")
+      : null;
   const spark = useMemo(
     () => ({
       animation: false,
@@ -411,14 +411,6 @@ export const MetricCard = memo(function MetricCard({ config }: { config: Config 
             </li>
           ))}
         </ul>
-      )}
-      {type === "mc16" && c.note && (
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {c.note}
-        </p>
-      )}
-      {type === "mc07" && c.rankSub && (
-        <p className="text-xs text-muted-foreground">{c.rankSub}</p>
       )}
       {type === "mc06" && detail && (
         <p className="text-xs leading-5 text-muted-foreground">{detail}</p>

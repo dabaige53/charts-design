@@ -90,9 +90,10 @@ export function chartOption(
   context?: ChartContext,
 ): Config {
   const definition = definitions[config.code];
-  if (!definition) throw Error(`未注册图表：${config.code}`);
-  if (!config.data) throw Error(`图表 ${config.code} 缺少数据`);
-  const preset = config.encoding
+  const native = config.renderer === "echarts";
+  if (!native && !definition) throw Error(`图表 ${config.code} 需要声明 renderer: echarts 或 html`);
+  if (!native && !config.data) throw Error(`图表 ${config.code} 缺少数据`);
+  const preset = native ? {} : config.encoding
     ? encodedOption(config, context)
     : definition.optionBuilder(config.data, grain, tokens, config);
   const option = applyEChartsOptions(preset, config.echarts);
@@ -123,6 +124,10 @@ export function chartData(
   grain = "month",
   context?: ChartContext,
 ): { headers: string[]; rows: any[][] } {
+  if (config.renderer === "echarts" || config.renderer === "html") {
+    if (!config.table) throw Error("此自由组件未声明数据表");
+    return config.table;
+  }
   if (config.encoding) {
     if (!context) throw Error("动态数据表需要绑定指标与字段说明。");
     return encodingTable(context.document, context.id, config.data.records);
@@ -138,6 +143,7 @@ export function EChartSurface({
   onReady,
   onSelect,
   selectedName,
+  adaptive = true,
 }: {
   option: Config;
   label: string;
@@ -145,6 +151,7 @@ export function EChartSurface({
   onReady?: (chart: echarts.ECharts | undefined) => void;
   onSelect?: (point: Config) => void;
   selectedName?: string;
+  adaptive?: boolean;
 }) {
   const target = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
@@ -178,12 +185,15 @@ export function EChartSurface({
       if (!resized && !changed && !selectionChanged && renderedReducedMotion === motion.matches) return;
       try {
         if (resized) chart.resize({ width: nextWidth, height: nextHeight, silent: true });
-        const next = adaptOption(applyEChartsOptions(currentOption.current, {}), nextWidth, nextHeight);
+        const raw = applyEChartsOptions(currentOption.current, {});
+        const next = adaptive ? adaptOption(raw, nextWidth, nextHeight) : raw;
         const list = (value: any): Config[] => value == null ? [] : Array.isArray(value) ? value : [value];
-        next.animation = !motion.matches;
-        next.animationDuration = 0;
-        next.animationDurationUpdate = resized || motion.matches ? 0 : 260;
-        next.animationEasingUpdate = "cubicOut";
+        if (adaptive) {
+          next.animation = !motion.matches;
+          next.animationDuration = 0;
+          next.animationDurationUpdate = resized || motion.matches ? 0 : 260;
+          next.animationEasingUpdate = "cubicOut";
+        } else if (motion.matches) next.animation = false;
         next.series = list(next.series).map((series, index) => {
           const axes = series.type === "bar"
             ? [...list(next.xAxis).slice(series.xAxisIndex ?? 0, (series.xAxisIndex ?? 0) + 1),
@@ -193,10 +203,12 @@ export function EChartSurface({
           return {
             ...series,
             id: series.id ?? `runtime:${index}:${series.type}:${series.name ?? ""}`,
-            animation: !motion.matches,
-            animationDuration: 0,
-            animationDurationUpdate: next.animationDurationUpdate,
-            animationEasingUpdate: "cubicOut",
+            ...(adaptive ? {
+              animation: !motion.matches,
+              animationDuration: 0,
+              animationDurationUpdate: next.animationDurationUpdate,
+              animationEasingUpdate: "cubicOut",
+            } : motion.matches ? { animation: false } : {}),
             ...(Array.isArray(series.data) && categories ? {
               data: series.data.map((datum: any, at: number) => {
                 const item = datum !== null && typeof datum === "object" && !Array.isArray(datum)
@@ -248,7 +260,7 @@ export function EChartSurface({
       callbacks.current.onReady?.(undefined);
       chart.dispose();
     };
-  }, []);
+  }, [adaptive]);
   useEffect(() => {
     scheduleDraw.current?.();
   }, [option, selectedName]);

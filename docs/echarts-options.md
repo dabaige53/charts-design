@@ -1,6 +1,66 @@
-# 原生 ECharts 配置覆盖
+# 原生 ECharts 与自由组件
 
-40 个预设继续负责默认图形、卡片和布局。`config.echarts` 提供一个原生 ECharts JSON 配置入口，适用于 MCP 预览、本机 Runtime、Runtime 的 HTML/PDF 导出和单组件导出。
+40 个图表是预设，不是可生成图形的上限。图表有三条入口，均通过 `put_component` 保存为 `kind: "legacy"`、`family: "chart"`，复用标题、布局和详情外壳：
+
+| renderer | 内容 | 代码要求 |
+| --- | --- | --- |
+| `preset`（默认） | 预设 `data`、`presentation`，可加 `echarts` 覆盖 | 已注册代码 |
+| `echarts` | 完整原生 `echarts` option，不套预设几何和自适应改写 | 任意非空业务代码 |
+| `html` | 完整 HTML/CSS/JavaScript，可包含 SVG、Canvas 或浏览器可执行的 React bundle | 任意非空业务代码 |
+
+未注册代码不能省略渲染方式。保存时会明确提示选择 `echarts` 或 `html`，避免保存成功却由前端报“未注册图表”。这不是禁止库外图表。
+
+原生 ECharts 组件支持共享图片导出和复制。两种自由组件均可提供 `config.table: {headers: string[], rows: array[]}`，用于共享图／表切换和 CSV；未提供时不显示这些操作。HTML 自由组件不显示依赖宿主 ECharts 实例的图片导出和复制。
+
+自由组件当前使用显式数据快照，不接预设 `binding`、`datasetId` 或 `measures`。代码会拒绝这些不受支持的组合；不会把不能重算的图伪装成全局筛选消费者。自由脚本可自行实现组件内选择、动画、切换等交互。全局筛选与后端聚合仍通过已实现的绑定路径工作。
+
+### 自由 ECharts 声明
+
+以下为明确的合成示例；无需借用 c01 等预设代码：
+
+```json
+{
+  "kind": "legacy",
+  "family": "chart",
+  "title": "示例阶段贡献",
+  "config": {
+    "code": "stage-contribution",
+    "renderer": "echarts",
+    "echarts": {
+      "tooltip": {"trigger": "item"},
+      "series": [{"type": "funnel", "data": [
+        {"name": "阶段 A", "value": 100},
+        {"name": "阶段 B", "value": 65}
+      ]}]
+    },
+    "table": {"headers": ["阶段", "示例值"], "rows": [["阶段 A", 100], ["阶段 B", 65]]}
+  }
+}
+```
+
+### 自由脚本声明
+
+```json
+{
+  "kind": "legacy",
+  "family": "chart",
+  "title": "示例交互",
+  "config": {
+    "code": "custom-interaction",
+    "renderer": "html",
+    "data": {"values": [12, 18]},
+    "html": "<button id=\"next\">切换示例值</button><output id=\"value\"></output><script>let i=0;const output=document.getElementById('value');const draw=()=>output.textContent=window.chartData.values[i];document.getElementById('next').onclick=()=>{i=(i+1)%2;draw()};draw();</script>"
+  }
+}
+```
+
+脚本在独立 iframe 中执行，读取 `window.chartData`。允许内联脚本与样式、HTTPS 脚本／模块／字体／图片及请求，可加载自己需要的库和浏览器可执行的 React。原始 JSX 不会自动编译。内联代码和资源应由组件作者明确提供，不在主应用中使用 `eval`。
+
+iframe 只开放 `allow-scripts`，不开放同源、宿主 DOM、弹窗、表单或顶层导航。资源策略不允许嵌套页面和 HTTP／本机资源。脚本错误会显示在组件内，并提供重新运行入口。宿主额外 CSP、网络及资源的跨域许可仍可能影响外部库；需要离线交付时应内联代码与所需资源。
+
+## 预设原生覆盖
+
+`config.echarts` 也可继续覆盖已注册预设，适用于共享 React Runtime 的预览和 HTML／静态网页导出。PDF 导出已取消。
 
 渲染顺序：预设生成默认 option → 原有数据绑定更新数据 → 合并 `config.echarts` → ECharts 渲染。没有该字段时保持原有行为。
 

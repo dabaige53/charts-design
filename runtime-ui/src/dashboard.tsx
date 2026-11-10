@@ -317,7 +317,7 @@ export function DashboardApp({
             )}
           </div>
         </div>
-        <div data-annotation-ui className="screen-only flex flex-wrap items-center gap-2">
+        <div data-annotation-ui role="group" aria-label="看板操作" className="screen-only flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>[data-slot=field]]:basis-full">
           {boards.length > 1 && (
             <ChoiceSelect
               label="切换看板"

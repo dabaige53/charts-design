@@ -50,7 +50,7 @@ export declare function DateRangeFilter({ label, value, onApply, labelHidden, }:
     onApply: (from: string, to: string) => void;
     labelHidden?: boolean;
 }): import("react").JSX.Element;
-export declare function IconAction({ label, onClick, disabled, children, unavailable, size, variant, }: {
+export declare function IconAction({ label, onClick, disabled, children, unavailable, size, variant, pressed, }: {
     label: string;
     onClick?: () => void;
     disabled?: boolean;
@@ -58,12 +58,15 @@ export declare function IconAction({ label, onClick, disabled, children, unavail
     unavailable?: string;
     size?: "icon-xs" | "icon-sm";
     variant?: "ghost" | "outline" | "default";
+    pressed?: boolean;
 }): import("react").JSX.Element;
-export declare function ChartToolbar({ grain, onGrain, showTable, onToggle, onExport, onCopy, onImage, onFullscreen, onInfo, }: {
+export declare function ChartToolbar({ chartType, onChartType, grain, onGrain, showTable, onToggle, onExport, onCopy, onImage, onFullscreen, onInfo, }: {
+    chartType?: string;
+    onChartType?: (value: string) => void;
     grain?: string;
     onGrain?: (v: string) => void;
     showTable: boolean;
-    onToggle: () => void;
+    onToggle?: () => void;
     onExport?: () => void;
     onCopy?: () => void;
     onImage?: () => void;
@@ -90,10 +93,11 @@ export declare function Pagination({ page, pages, pageSize, onChange, }: {
     pageSize: number;
     onChange: (page: number, size: number) => void;
 }): import("react").JSX.Element;
-export declare function SortControl({ label, direction, onChange, }: {
+export declare function SortControl({ label, direction, onChange, align, }: {
     label: string;
     direction: "asc" | "desc" | null;
     onChange: (direction: "asc" | "desc") => void;
+    align?: "left" | "center" | "right";
 }): import("react").JSX.Element;
 export declare function StatusBadge({ children }: {
     children: ReactNode;

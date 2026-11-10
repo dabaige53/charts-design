@@ -94,7 +94,13 @@ def validate_original(component):
     require(family in ('chart', 'kpi', 'table'), 'Unknown original component family')
     schemas = component_schemas()
     if family == 'chart':
+        errors = schemas.validate_chart_renderer(config, 'config')
+        require(not errors, 'Chart renderer contract: ' + json.dumps(errors, ensure_ascii=False), 'CHART_RENDERER_INVALID')
         require('echarts' not in config or isinstance(config['echarts'], dict), 'config.echarts must be an ECharts option object')
+        if config.get('renderer', 'preset') != 'preset':
+            require(not component.get('binding'), 'Custom renderers use explicit data; preset bindings require renderer=preset', 'CUSTOM_BINDING_UNSUPPORTED')
+            require(not component.get('datasetId') and not component.get('measures'), 'Custom renderers require explicit config.data and config.table; dataset computation is not inferred', 'CUSTOM_BINDING_UNSUPPORTED')
+            return
         require(isinstance(config.get('data'), dict) and isinstance(config.get('presentation'), dict), 'Original charts need explicit data and presentation')
         if 'encoding' in config:
             from .encoding import validate_encoding

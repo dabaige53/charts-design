@@ -37,7 +37,7 @@ def test_signer_rejects_tampering_kind_and_expiry():
     assert signer.verify('not-a-token', 'share') is None
 
 
-# @wu-test type=boundary | scope=远程项目路径 | protects=项目参数逃逸工作区或非法名称被接受 | debt=D1
+# @wu-test type=boundary | scope=远程项目路径 | protects=项目参数逃逸工作区或非法名称被接受
 def test_projects_stay_inside_the_workspace(tmp_path):
     projects = WorkspaceProjects(settings(tmp_path))
     assert projects.name(None) == 'default'
@@ -52,7 +52,7 @@ def test_projects_stay_inside_the_workspace(tmp_path):
             projects.name(value)
 
 
-# @wu-test type=boundary | scope=服务器配置 | protects=无令牌或非回环地址免认证启动及签名密钥权限过宽 | debt=D1
+# @wu-test type=boundary | scope=服务器配置 | protects=无令牌或非回环地址免认证启动及签名密钥权限过宽
 def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     with pytest.raises(DashboardError, match='bearer token'):
         RemoteServer(ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'rt'))
@@ -222,12 +222,14 @@ def test_web_pages_and_assets_serve_the_shared_build(tmp_path):
                     assert b'window.__chartsBoot=' in body
 
 
-# @wu-test type=boundary | scope=查看接口 | protects=超大请求体被读取或分块接口对链接开放 | debt=D1
+# @wu-test type=boundary | scope=查看接口 | protects=超大请求体被读取或分享链接读取其他看板的缓存响应
 def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
     import http.client
     port = free_port()
     server = start(tmp_path, port)
     token = server.links.share('sales', 'exec', 'view')['url'].split('#token=')[1]
+    transfer = server.projects.service('sales').transport.pack(
+        {'dashboardId': 'report', 'rows': ['Other dashboard content'] * 4000}, 'dashboard_view')['transport']
     with Running(create_app(server), port):
         connection = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
         connection.request('POST', '/api/v1/p/sales/tools/dashboard_get', body=b'{}',
@@ -235,5 +237,6 @@ def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
         response = connection.getresponse()
         assert response.status == 413
         assert json.loads(response.read())['error']['code'] == 'PAYLOAD_TOO_LARGE'
-        status, _ = post(f'http://127.0.0.1:{port}/api/v1/p/sales/tools/runtime_result_chunk', {'requestId': 'x', 'index': 0}, token)
+        status, _ = post(f'http://127.0.0.1:{port}/api/v1/p/sales/tools/runtime_result_chunk',
+                         {'requestId': transfer['requestId'], 'index': 0}, token)
         assert status == 403
