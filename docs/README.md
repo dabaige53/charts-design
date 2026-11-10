@@ -11,6 +11,7 @@
 
 | 文档 | 用途与查阅时机 | 更新时机 |
 | --- | --- | --- |
+| [当前 UI 设计记录](DESIGN.md) | 从 React 源码提取的颜色、字阶、布局、组件与动效规则；配套预览说明位于 `docs/.impeccable/design.json` | 当前实现的视觉规则变化后同步 |
 | [图表 UI 与设计系统](design-system/project/chart-ui.md) | 重构前查阅保留的 40 个图表定义、视觉、配色与交互参考；PDF 数据色盘与旧项目配色分开 | 图表视觉迁移或来源规范变化 |
 | [文件管理](agent/file-management.md) | 新增、移动或清理文件前，确定位置和维护入口 | 目录职责或保留规则变化 |
 | [指标定义](../skills/executive-charts/references/metric-definitions.md) | 撰写业务说明与统计口径时查阅 | 指标说明要求变化 |

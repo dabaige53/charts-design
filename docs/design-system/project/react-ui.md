@@ -2,6 +2,8 @@
 
 产品操作组件基于 shadcn/ui 预设 `b4C6dEBLto` 的 `radix-sera` 结构，采用 Stone 中性色、Lucide 和项目紧凑尺寸。组件结构和样式维护在 `runtime-ui/src`。主要操作使用深海蓝 `#123B5D`，焦点使用 `#2C6485`；图表保留原数据色。
 
+当前源码提取的视觉规则、字阶和状态见 [UI 设计记录](../../DESIGN.md)。本文维护组件导出、设计映射和构建入口；归档来源与当前运行实现分别判断。
+
 ## 实现与预览
 
 | 设计系统组件 | 实际导出 | 维护文件 |
@@ -44,7 +46,7 @@
 
 Button 的 default、sm、xs、lg 高度为 32、28、24、40px；图表操作使用 24px 的 icon-xs。Input、InputGroup 和默认 Select 高 32px，采用一致的完整边框。Table 正文 12px，表头与内容行最小高度 36px；内容行上下内边距 8px。ToggleGroup 使用紧凑 sm 变体。
 
-卡片使用 CardHeader、CardTitle、CardDescription、CardAction、CardContent。水平内边距 16px，上方 12px、下方 16px；普通卡片标题区与内容区间隔 12px，指标卡使用 size="sm" 和 8px 间隔。图表和指标卡标题基准为 16px、最小 14px，均使用 Inter；描述在 12–16px 之间调整。实际标题和留白随容器宽高调整。图表工具栏位于标题右侧；表格总数、每页条数和分页在底部排列，窄屏换行。保留画板位置、尺寸和已保存的看板网格。
+卡片使用 CardHeader、CardTitle、CardDescription、CardAction、CardContent。组件标题、容器缩放、内边距和操作区的当前数值统一见 [UI 设计记录](../../DESIGN.md)，不使用旧版 16px 标题基准。保留画板位置、尺寸和已保存的看板网格。
 
 Inter Variable 和 Lora Variable 随组件资源提供；卡片标题使用 Inter，其他标题可使用 Lora。MCP 应用将字体打入 CSS；设计系统通过 `type.fonts` 加载本地字体文件，不依赖外部字体服务。原 PDF 的字体、尺寸与来源资产仍作为历史参考。
 

@@ -974,22 +974,29 @@ export function SortControl({
   label,
   direction,
   onChange,
+  align = "center",
 }: {
   label: string;
   direction: "asc" | "desc" | null;
   onChange: (direction: "asc" | "desc") => void;
+  align?: "left" | "center" | "right";
 }) {
   return (
     <Button
       variant="ghost"
       size="xs"
+      className={`relative w-full ${
+        align === "right" ? "justify-end pl-5 pr-0 text-right"
+          : align === "center" ? "justify-center px-5 text-center"
+          : "justify-start pl-0 pr-5 text-left"
+      }`}
       onClick={() => onChange(direction === "asc" ? "desc" : "asc")}
     >
       {label}
       {direction === "asc" ? (
-        <ArrowUp data-icon="inline-end" />
+        <ArrowUp className={`absolute size-3 ${align === "right" ? "left-0" : "right-0"}`} aria-hidden="true" />
       ) : direction === "desc" ? (
-        <ArrowDown data-icon="inline-end" />
+        <ArrowDown className={`absolute size-3 ${align === "right" ? "left-0" : "right-0"}`} aria-hidden="true" />
       ) : null}
     </Button>
   );

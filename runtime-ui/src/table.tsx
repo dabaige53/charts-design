@@ -44,7 +44,6 @@ import {
   SortControl,
   TableToolbar,
 } from "./controls";
-import { cn } from "./ui";
 import type { Config, TableState } from "./types";
 
 // Rows are already searched, sorted and paged by the runtime (or the design adapter).
@@ -93,6 +92,7 @@ export function DataTable({
           onChange ? (
             <SortControl
               label={c.title || c.label || c.key}
+              align="center"
               direction={
                 state.sortCol === c.key ? state.sortDir || "asc" : null
               }
@@ -110,7 +110,6 @@ export function DataTable({
           ),
         cell: (info) =>
           info.getValue() == null ? "—" : String(info.getValue()),
-        meta: { align: c.align },
       })),
     [specs, onChange, state],
   );
@@ -196,10 +195,6 @@ export function DataTable({
                           : "ascending"
                         : "none"
                     }
-                    className={cn(
-                      (header.column.columnDef.meta as { align?: string })
-                        ?.align === "right" && "text-right",
-                    )}
                   >
                     {flexRender(
                       header.column.columnDef.header,
@@ -223,10 +218,6 @@ export function DataTable({
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className={cn(
-                        (cell.column.columnDef.meta as { align?: string })
-                          ?.align === "right" && "text-right",
-                      )}
                     >
                       {flexRender(
                         cell.column.columnDef.cell,

@@ -838,9 +838,6 @@
   .max-h-\[85vh\] {
     max-height: 85vh;
   }
-  .max-h-\[420px\] {
-    max-height: 420px;
-  }
   .min-h-0 {
     min-height: 0px;
   }
@@ -1250,9 +1247,6 @@
   .gap-3 {
     gap: calc(var(--spacing) * 3);
   }
-  .gap-3\.5 {
-    gap: calc(var(--spacing) * 3.5);
-  }
   .gap-4 {
     gap: calc(var(--spacing) * 4);
   }
@@ -1314,11 +1308,11 @@
   .gap-x-2 {
     column-gap: calc(var(--spacing) * 2);
   }
-  .gap-x-2\.5 {
-    column-gap: calc(var(--spacing) * 2.5);
-  }
   .gap-x-4 {
     column-gap: calc(var(--spacing) * 4);
+  }
+  .gap-x-5 {
+    column-gap: calc(var(--spacing) * 5);
   }
   :where(.space-x-2 > :not(:last-child)) {
     --tw-space-x-reverse: 0;
@@ -1343,8 +1337,8 @@
   .gap-y-1 {
     row-gap: var(--spacing);
   }
-  .gap-y-1\.5 {
-    row-gap: calc(var(--spacing) * 1.5);
+  .gap-y-2 {
+    row-gap: calc(var(--spacing) * 2);
   }
   :where(.divide-x > :not(:last-child)) {
     --tw-divide-x-reverse: 0;
@@ -1367,6 +1361,9 @@
   }
   :where(.divide-slate-200 > :not(:last-child)) {
     border-color: var(--color-slate-200);
+  }
+  .self-center {
+    align-self: center;
   }
   .self-start {
     align-self: flex-start;
@@ -1706,12 +1703,6 @@
   .bg-muted {
     background-color: var(--muted);
   }
-  .bg-muted\/30 {
-    background-color: var(--muted);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--muted) 30%, transparent);
-    }
-  }
   .bg-muted\/40 {
     background-color: var(--muted);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1974,6 +1965,9 @@
   .pt-\[calc\(12px\*var\(--card-scale\,1\)\)\] {
     padding-top: calc(12px * var(--card-scale,1));
   }
+  .pr-0 {
+    padding-right: 0px;
+  }
   .pr-2 {
     padding-right: calc(var(--spacing) * 2);
   }
@@ -1982,6 +1976,9 @@
   }
   .pr-3 {
     padding-right: calc(var(--spacing) * 3);
+  }
+  .pr-5 {
+    padding-right: calc(var(--spacing) * 5);
   }
   .pr-7 {
     padding-right: calc(var(--spacing) * 7);
@@ -2010,6 +2007,9 @@
   .pb-\[calc\(16px\*var\(--card-scale\,1\)\)\] {
     padding-bottom: calc(16px * var(--card-scale,1));
   }
+  .pl-0 {
+    padding-left: 0px;
+  }
   .pl-2 {
     padding-left: calc(var(--spacing) * 2);
   }
@@ -2018,6 +2018,9 @@
   }
   .pl-3 {
     padding-left: calc(var(--spacing) * 3);
+  }
+  .pl-5 {
+    padding-left: calc(var(--spacing) * 5);
   }
   .pl-7 {
     padding-left: calc(var(--spacing) * 7);
@@ -2725,8 +2728,14 @@
     content: var(--tw-content);
     background-color: var(--muted);
   }
+  .first\:pt-0:first-child {
+    padding-top: 0px;
+  }
   .last\:mt-0:last-child {
     margin-top: 0px;
+  }
+  .last\:pb-0:last-child {
+    padding-bottom: 0px;
   }
   .even\:bg-slate-50\/50:nth-child(even) {
     background-color: color-mix(in srgb, oklch(98.4% 0.003 247.858) 50%, transparent);
