@@ -131,6 +131,7 @@ export function ComponentView({
   editing = false,
   onGrain,
   onInspect,
+  onReadData,
   onExport,
   onSelect,
   selectedName,
@@ -151,6 +152,7 @@ export function ComponentView({
   editing?: boolean;
   onGrain?: (g: string) => void;
   onInspect?: () => Promise<Config>;
+  onReadData?: (state: TableState) => Promise<Config>;
   onExport?: () => Promise<void>;
   onSelect?: (point: Config) => void;
   selectedName?: string;
@@ -402,19 +404,19 @@ export function ComponentView({
             }
           }}
         >
-          <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[720px]">
-            <DialogHeader className="min-h-[52px] flex-row items-center gap-2 border-b border-border px-5 py-3 pr-16">
+          <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden rounded-xl bg-white p-0 text-[#17212B] sm:max-w-[720px] [&>[data-slot=dialog-close]]:top-3 [&>[data-slot=dialog-close]]:right-5 [&>[data-slot=dialog-close]]:bg-transparent">
+            <DialogHeader className="h-[52px] shrink-0 flex-row items-center gap-2.5 border-b border-border bg-white px-5 pr-16">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-brand [&>svg]:size-4"><MetricInfoIcon /></span>
               <DialogTitle className="font-sans text-sm tracking-normal normal-case">{c.title}</DialogTitle>
               <DialogDescription className="sr-only">{family === "table" ? "表格与字段说明" : "图表与指标说明"}</DialogDescription>
             </DialogHeader>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto bg-white px-5 pt-[18px] pb-6">
               {localError ? (
                 <RecoveryAlert title="指标说明未能加载" message={localError} onRetry={() => void inspect()} busy={detailLoading} retryLabel="重新加载说明" />
               ) : detailLoading ? (
                 <p role="status" className="text-sm text-muted-foreground">正在加载指标说明…</p>
               ) : (
-                <SemanticDetails value={details} component={c} document={doc} componentId={id} filters={filters} />
+                <SemanticDetails value={details} component={c} document={doc} componentId={id} filters={filters} onReadData={onReadData} />
               )}
             </div>
           </DialogContent>

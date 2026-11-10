@@ -11,6 +11,7 @@ import {
   Search,
   RotateCcw,
   MessageSquareText,
+  MousePointer2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -262,6 +263,18 @@ export function DashboardApp({
         onInspect={() =>
           call("semantic_inspect", { dashboardId: doc.id, componentId: id })
         }
+        onReadData={!staticMode && (doc.manifest.components[id].datasetId || doc.manifest.components[id].binding?.datasetId)
+          ? (state) => call("component_data", {
+              dashboardId: doc.id,
+              componentId: id,
+              expectedRevision: doc.revision,
+              filters: runtime.view.filters,
+              offset: (state.page - 1) * state.pageSize,
+              limit: state.pageSize,
+              search: state.keyword || "",
+              ...(state.sortCol ? { sort: [{ field: state.sortCol, direction: state.sortDir || "asc" }] } : {}),
+            })
+          : undefined}
         onExport={() => exportTable(id)}
         onSaveTable={() => guard(() => saveTable(id))}
         onChartType={async (code) => {
@@ -349,10 +362,12 @@ export function DashboardApp({
           {!staticMode && (
             <IconAction
               label={notesOpen ? "退出位置批注" : readOnly ? "查看批注" : "添加位置批注"}
+              pressed={notesOpen}
+              variant={notesOpen ? "default" : "ghost"}
               disabled={editing || runtime.saving}
               onClick={() => setNotesOpen((value) => !value)}
             >
-              <MessageSquareText />
+              {notesOpen && !readOnly ? <MousePointer2 /> : <MessageSquareText />}
             </IconAction>
           )}
           {!readOnly && (

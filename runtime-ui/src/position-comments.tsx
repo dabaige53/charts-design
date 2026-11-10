@@ -144,7 +144,8 @@ export function PositionComments({
       return next;
     });
   };
-  const interacting = active || !!draft || !!openId || listOpen || busy || Object.keys(replies).length > 0;
+  const picking = active && !readOnly && !openId && !listOpen;
+  const interacting = active || busy;
   draftRef.current = draft;
 
   useEffect(() => {
@@ -204,16 +205,24 @@ export function PositionComments({
   useEffect(() => {
     if (active && readOnly) setListOpen(true);
     if (!active) {
+      setOpenId(null);
+      setListOpen(false);
       setHover(null);
       setDragRect(null);
       reanchor.current = null;
     }
   }, [active, readOnly]);
   useEffect(() => {
-    if (active && draft) input.current?.focus({ preventScroll: true });
-  }, [active, draft?.id, draft?.anchor]);
+    if (picking && draft) input.current?.focus({ preventScroll: true });
+  }, [picking, draft?.id, draft?.anchor]);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
+      if (event.isComposing || event.defaultPrevented || busyRef.current) return;
+      if (event.key === "Escape" && active) {
+        event.preventDefault();
+        onActiveChange(false);
+        return;
+      }
       if (busyRef.current || event.code !== "KeyC" || event.repeat || event.metaKey || event.ctrlKey || event.altKey ||
         !(event.target instanceof Element) ||
         event.target.closest("input, textarea, select, [contenteditable], [role=dialog], [role=combobox], [data-annotation-ui]")) return;
@@ -226,7 +235,7 @@ export function PositionComments({
 
   useEffect(() => {
     const page = root.current;
-    if (!page) return;
+    if (!page || !active) return;
     let frame = 0;
     const measure = () => {
       const next: Record<string, Rect> = {};
@@ -254,13 +263,14 @@ export function PositionComments({
       cancelAnimationFrame(frame); resize.disconnect(); mutation.disconnect();
       window.removeEventListener("scroll", schedule, true); window.removeEventListener("resize", schedule);
     };
-  }, [notes, draft, root]);
+  }, [active, notes, draft, root]);
 
   useEffect(() => {
     const page = root.current;
-    if (!page || !active || readOnly) return;
+    if (!page || !picking) return;
     const previousTouchAction = page.style.touchAction;
     page.style.touchAction = "none";
+    page.setAttribute("data-annotation-picking", "");
     let drag: { x: number; y: number; target: Element; moved: boolean } | null = null;
     const ignore = (element: Element) => !!element.closest("[data-annotation-ui]");
     const down = (event: PointerEvent) => {
@@ -310,9 +320,7 @@ export function PositionComments({
       }
     };
     const keyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busyRef.current) {
-        event.preventDefault(); onActiveChange(false); setHover(null);
-      } else if (event.key === "Enter" && event.target instanceof Element && page.contains(event.target) && !ignore(event.target)) {
+      if (event.key === "Enter" && event.target instanceof Element && page.contains(event.target) && !ignore(event.target)) {
         event.preventDefault(); event.stopPropagation(); choose(event.target);
       }
     };
@@ -329,8 +337,9 @@ export function PositionComments({
       window.removeEventListener("pointercancel", cancel); window.removeEventListener("keydown", keyboard, true);
       window.removeEventListener("blur", cancel);
       page.style.touchAction = previousTouchAction;
+      page.removeAttribute("data-annotation-picking");
     };
-  }, [active, readOnly, root, onActiveChange]);
+  }, [picking, root]);
 
   const write = async (change: (current: Config[]) => Config[]) => {
     if (readOnly || busyRef.current) return false;
@@ -397,9 +406,9 @@ export function PositionComments({
     });
     if (saved) setReply("");
   };
-  const selectedRect = dragRect || (active ? positions.draft : null) ||
-    (openId ? positions[openId] : null) || (active ? hover : null);
-  const anchor = positions.draft || (openId ? positions[openId] : null);
+  const selectedRect = (picking ? dragRect || positions.draft || hover : null) ||
+    (openId ? positions[openId] : null);
+  const anchor = (picking ? positions.draft : null) || (openId ? positions[openId] : null);
   const width = Math.min(340, screen.width - 24);
   const maxPanelHeight = Math.min(560, screen.height - 96);
   const panelStyle = screen.width < 640
@@ -407,10 +416,12 @@ export function PositionComments({
     : { left: Math.max(12, Math.min(screen.width - width - 12, anchor ? anchor.x + anchor.width + 12 : screen.width - width - 16)),
         top: Math.max(12, Math.min(screen.height - maxPanelHeight - 16, anchor?.y || 76)),
         width, maxHeight: maxPanelHeight };
-  const showComposer = active && !readOnly ? draft : null;
+  const showComposer = picking ? draft : null;
   const showPanel = !!showComposer || !!current || listOpen || (active && !!error);
   const visibleNotes = notes.filter((note) => status === "all" || (note.status === "resolved" ? status === "resolved" : status === "open"));
   const locationLabel = (note: Config) => note.componentId ? doc.manifest.components[note.componentId]?.title || "组件已移除" : "页面位置";
+
+  if (!active) return null;
 
   return createPortal(
     <div data-annotation-ui className="screen-only pointer-events-none fixed inset-0 z-[11000]">
@@ -425,16 +436,16 @@ export function PositionComments({
           className="pointer-events-auto fixed flex size-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           style={{ left: Math.min(screen.width - 36, Math.max(4, box.x + box.width - 16)), top: box.y - 12 }}
           disabled={busy}
-          onClick={() => { onActiveChange(false); setOpenId(note.id); setListOpen(false); setError(""); }}>{index + 1}</button>;
+          onClick={() => { setOpenId(note.id); setListOpen(false); setError(""); }}>{index + 1}</button>;
       })}
       {(active || listOpen || current || draft || error || Object.keys(replies).length > 0) && (
         <div className="pointer-events-auto fixed bottom-4 left-1/2 flex max-w-[calc(100vw-24px)] -translate-x-1/2 flex-wrap items-center gap-2 border border-border bg-popover px-3 py-2 text-xs shadow-md">
-          {active && !readOnly && <><MousePointer2 className="size-4" /><span>点击元素或拖动框选，再输入批注</span></>}
-          {!active && draft && <Button variant="ghost" size="sm" onClick={() => {
-            setOpenId(null); setListOpen(false); onActiveChange(true);
+          {picking && <><MousePointer2 className="size-4" /><span>点击元素或拖动框选，再输入批注</span></>}
+          {!picking && draft && <Button variant="ghost" size="sm" onClick={() => {
+            setOpenId(null); setListOpen(false);
           }}>继续未提交批注</Button>}
           {!current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => {
-            onActiveChange(false); setListOpen(false); setOpenId(Object.keys(replies)[0]);
+            setListOpen(false); setOpenId(Object.keys(replies)[0]);
           }}>继续未提交回复</Button>}
           {!current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => setReplies({})}>丢弃未提交回复</Button>}
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setListOpen(!listOpen); setOpenId(null); }}>批注列表（{notes.length}）</Button>

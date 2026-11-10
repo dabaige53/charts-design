@@ -592,6 +592,7 @@ export function IconAction({
   unavailable = "当前宿主未提供此操作",
   size = "icon-xs",
   variant = "ghost",
+  pressed,
 }: {
   label: string;
   onClick?: () => void;
@@ -600,6 +601,7 @@ export function IconAction({
   unavailable?: string;
   size?: "icon-xs" | "icon-sm";
   variant?: "ghost" | "outline" | "default";
+  pressed?: boolean;
 }) {
   const inactive = disabled || !onClick;
   return (
@@ -611,6 +613,7 @@ export function IconAction({
               variant={variant}
               size={size}
               aria-label={label}
+              aria-pressed={pressed}
               disabled={inactive}
               onClick={onClick}
             >
