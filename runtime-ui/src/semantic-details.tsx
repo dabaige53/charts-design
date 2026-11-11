@@ -56,8 +56,8 @@ function MetricDefinition({ metric, fields, scope, period }: {
   const unit = metric.unit || (percent ? "%" : "未配置单位");
   return <details className="semantic-metric" open>
     <summary>
-      <h4>{metric.label || metric.name || metric.id || "未命名指标"}</h4>
-      <span className="flex items-center gap-2 text-muted-foreground">{unit}<ChevronDown className="size-3.5" /></span>
+      <h4>{metric.label || metric.name || metric.id || "未命名指标"}<span className="semantic-metric-unit">（{unit}）</span></h4>
+      <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
     </summary>
     <dl className="semantic-metric-fields">
       <div className="semantic-wide"><dt>业务定义</dt><dd>
@@ -70,7 +70,7 @@ function MetricDefinition({ metric, fields, scope, period }: {
         {!scope.length && <span className="semantic-tag">当前数据集 · 未附加筛选</span>}
         {metric.scope && <span className="semantic-tag">{String(metric.scope)}</span>}
       </dd></div>
-      <div className="semantic-wide"><dt>计算公式</dt><dd className="semantic-formula">
+      <div><dt>计算公式</dt><dd className="semantic-formula">
         {metric.aggregation === "ratio" && !metric.formula && !metric.calculation
           ? <span className="inline-flex flex-col text-center">
             <span className="border-b border-muted-foreground px-3 py-1">{fieldLabel(metric.numerator)}合计</span>
@@ -78,7 +78,7 @@ function MetricDefinition({ metric, fields, scope, period }: {
           </span>
           : formula || "尚未提供计算方式"}
       </dd></div>
-      <div className="semantic-wide"><dt>汇总方式</dt><dd className="flex flex-wrap items-center gap-2">
+      <div><dt>汇总方式</dt><dd className="flex flex-wrap items-center gap-2">
         {ratio ? <><span>{metric.aggregation === "entity_ratio" ? "按实体汇总并计数" : "分子、分母分别求和"}</span><ArrowRight className="size-3.5 text-muted-foreground" /><span>相除</span></>
           : aggregations[metric.aggregation] || metric.aggregation || "未配置"}
       </dd></div>

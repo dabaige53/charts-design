@@ -318,30 +318,30 @@
 .semantic-section:last-child { border-bottom: 0; padding-bottom: 0; }
 .semantic-section h3 { margin: 0 0 12px; color: var(--foreground); font-size: 14px; font-weight: 600; line-height: 1.4; }
 .semantic-details dt, .semantic-details dd { margin: 0; }
-.semantic-metric { border-bottom: 1px solid var(--border); }
-.semantic-metric:last-child { border-bottom: 0; }
-.semantic-metric summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; cursor: pointer; list-style: none; }
+.semantic-metric { margin-top: 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
+.semantic-metric summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--muted); cursor: pointer; list-style: none; }
 .semantic-metric summary::-webkit-details-marker { display: none; }
-.semantic-metric summary h4 { font-weight: 600; }
+.semantic-metric summary h4 { font-size: 14px; font-weight: 600; }
+.semantic-metric-unit { color: var(--muted-foreground); font-size: 12px; font-weight: 500; }
 .semantic-metric[open] summary svg { transform: rotate(180deg); }
-.semantic-metric-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px 24px; padding: 4px 0 20px; line-height: 1.7; }
+.semantic-metric-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; padding: 18px 16px 20px; line-height: 1.6; }
 .semantic-metric-fields > div { min-width: 0; }
-.semantic-metric-fields dt { margin-bottom: 6px; color: var(--muted-foreground); }
-.semantic-metric-fields dd { overflow-wrap: anywhere; }
-.semantic-wide { grid-column: 1 / -1; }
+.semantic-metric-fields > .semantic-wide { grid-column: 1 / -1; }
+.semantic-metric-fields dt { margin-bottom: 6px; color: var(--muted-foreground); font-weight: 500; }
+.semantic-metric-fields dd { min-width: 0; color: var(--foreground); font-size: 13px; overflow-wrap: anywhere; }
 .semantic-tag { display: inline-flex; padding: 3px 8px; border-radius: 4px; background: var(--muted); }
-.semantic-formula { padding: 12px; border-radius: 6px; background: var(--muted); }
-.semantic-callout { width: max-content; padding: 6px 8px; min-height: 36px; border: 1px solid transparent; border-radius: 6px; text-align: left; font-size: 12px; line-height: 1.5; background: transparent; overflow-wrap: anywhere; }
+.semantic-formula { padding: 0; }
+.semantic-callout { width: max-content; padding: 6px 8px; min-height: 36px; border: 1px solid transparent; border-radius: 6px; text-align: left; font-size: 12px; line-height: 1.5; background: var(--background); overflow-wrap: anywhere; }
 .semantic-callout:hover { background: var(--muted); }
 .semantic-callout[aria-pressed=true] { border-color: var(--border); background: var(--muted); font-weight: 600; }
-.semantic-diagram-container { border-radius: 8px; background: color-mix(in oklch, var(--muted) 55%, var(--background)); }
 .semantic-diagram { position: relative; width: 100%; max-width: 600px; margin-inline: auto; color: var(--primary); }
 .semantic-diagram-compact { max-width: 480px; }
 .semantic-callout-unit { color: var(--muted-foreground); font-size: 11px; font-weight: 400; white-space: nowrap; }
 .semantic-diagram > svg { width: 100%; height: 100%; }
 .semantic-diagram svg path, .semantic-diagram svg circle { vector-effect: non-scaling-stroke; }
 @media (max-width: 480px) {
-  .semantic-metric-fields { grid-template-columns: minmax(0,1fr); }
+  .semantic-metric-fields { grid-template-columns: minmax(0, 1fr); }
+  .semantic-metric-fields > .semantic-wide { grid-column: auto; }
   .semantic-nav { gap: 14px; }
   .semantic-callout { padding: 5px 3px; font-size: 11px; }
 }

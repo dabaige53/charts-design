@@ -16,8 +16,9 @@ type StructureDiagram = {
     status?: "ready" | "stale";
 };
 /** Saved geometry, never reconstructed from chart type or filtered values. */
-export declare function SemanticStructure({ diagram, metrics }: {
+export declare function SemanticStructure({ diagram, metrics, compact }: {
     diagram?: StructureDiagram;
     metrics: Config;
+    compact?: boolean;
 }): import("react").JSX.Element;
 export {};
