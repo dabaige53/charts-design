@@ -63,6 +63,7 @@ class CloudShares:
         access_key = access_key if access_key is not None else f'{secrets.randbelow(100000000):08d}'
         require(isinstance(access_key, str) and bool(ACCESS_KEY.fullmatch(access_key)),
                 'accessKey must contain exactly eight ASCII digits', 'INVALID_ARGUMENT')
+        versions = None
         if service.project_root:
             from .versions import Versions
             versions = Versions(service.store)
@@ -76,6 +77,7 @@ class CloudShares:
         if pages is not None:
             require(service.project_root is not None and isinstance(pages, list),
                     'Multiple pages require a project and a page list', 'INVALID_ARGUMENT')
+            assert versions is not None
             seen = {board}
             for page in pages:
                 require(isinstance(page, dict) and isinstance(page.get('dashboardId'), str)
@@ -106,14 +108,33 @@ class CloudShares:
             exported = export_site(service.store, board, output_root=Path(temporary), document=doc)['export']
             site = Path(exported['directory'])
             if len(documents) > 1:
+                import os
                 import shutil
+                shards = {}
+                for path in (site / 'data').iterdir():
+                    if path.is_file():
+                        shards[hashlib.sha256(path.read_bytes()).hexdigest()] = path
                 entries = [{'id': board, 'title': doc['manifest']['title'], 'path': 'document.json', 'revision': doc['revision']}]
                 for page_id, page_doc in documents[1:]:
                     page_export = export_site(service.store, page_id, output_root=Path(temporary), document=page_doc)['export']
+                    page_site = Path(page_export['directory'])
                     target = site / 'pages' / page_id
                     target.mkdir(parents=True)
-                    shutil.copyfile(Path(page_export['directory']) / 'document.json', target / 'document.json')
-                    shutil.copytree(Path(page_export['directory']) / 'data', target / 'data')
+                    page_document = json.loads((page_site / 'document.json').read_bytes())
+                    for dataset, paths in page_document['staticFiles'].items():
+                        reused = []
+                        for name in paths:
+                            source = page_site / name
+                            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+                            destination = shards.get(digest)
+                            if destination is None:
+                                destination = target / name
+                                destination.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copyfile(source, destination)
+                                shards[digest] = destination
+                            reused.append(Path(os.path.relpath(destination, target)).as_posix())
+                        page_document['staticFiles'][dataset] = reused
+                    (target / 'document.json').write_text(json.dumps(page_document, ensure_ascii=False), encoding='utf-8')
                     entries.append({'id': page_id, 'title': page_doc['manifest']['title'],
                                     'path': 'pages/' + page_id + '/document.json', 'revision': page_doc['revision']})
                 root_doc = json.loads((site / 'document.json').read_bytes())

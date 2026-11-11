@@ -386,18 +386,40 @@ def test_gateway_limits_key_guesses(tmp_path):
 
 # @wu-test type=integration | scope=多页面云分享 | protects=分享遗漏选中页面或替换时丢失页面和发布版本
 def test_multi_page_publication_and_replace(tmp_path):
+    import gzip
+    import posixpath
+
     service, storage, shares, _ = publication(tmp_path)
     service.call('dashboard_create', {'dashboardId': 'second', 'document': executive_document('second')})
     with pytest.raises(DashboardError):
         shares.publish(service, 'board', 1, pages=[{'dashboardId': 'second', 'expectedRevision': 1}])
     service.call('dashboard_version_publish', {'dashboardId': 'second', 'expectedRevision': 1, 'revision': 1})
-    result = shares.publish(service, 'board', 1, pages=[{'dashboardId': 'second', 'expectedRevision': 1}])
+    third_document = executive_document('third')
+    third_document['snapshot']['datasets']['sales'][0]['revenue'] += 1
+    service.call('dashboard_create', {'dashboardId': 'third', 'document': third_document})
+    service.call('dashboard_version_publish', {'dashboardId': 'third', 'expectedRevision': 1, 'revision': 1})
+    result = shares.publish(service, 'board', 1, pages=[
+        {'dashboardId': 'second', 'expectedRevision': 1},
+        {'dashboardId': 'third', 'expectedRevision': 1},
+    ])
     root = json.loads(shares.content(result['shareId'], 'document.json'))
-    assert [page['id'] for page in root['staticPages']] == ['board', 'second']
+    assert [page['id'] for page in root['staticPages']] == ['board', 'second', 'third']
     second = json.loads(shares.content(result['shareId'], root['staticPages'][1]['path']))
     assert second['id'] == 'second'
-    assert len(shares.status(service, 'board', result['shareId'])['shares'][0]['pages']) == 2
+    for dataset, files in second['staticFiles'].items():
+        assert len(files) == len(root['staticFiles'][dataset])
+        for relative, root_file in zip(files, root['staticFiles'][dataset]):
+            resolved = posixpath.normpath(posixpath.join('pages/second', relative))
+            assert resolved == root_file
+            assert json.loads(gzip.decompress(shares.content(result['shareId'], resolved)))
+    assert not [key for key in storage.objects if key.startswith('shares/' + result['shareId'] + '/site/pages/second/data/')]
+    third = json.loads(shares.content(result['shareId'], 'pages/third/document.json'))
+    third_file = posixpath.normpath(posixpath.join('pages/third', third['staticFiles']['sales'][0]))
+    assert third_file.startswith('pages/third/data/')
+    assert json.loads(gzip.decompress(shares.content(result['shareId'], third_file)))[0]['revenue'] != \
+        json.loads(gzip.decompress(shares.content(result['shareId'], root['staticFiles']['sales'][0])))[0]['revenue']
+    assert len(shares.status(service, 'board', result['shareId'])['shares'][0]['pages']) == 3
     replaced = shares.replace(service, 'board', result['shareId'], 1)
     assert replaced['previousRevoked']
-    assert [page['id'] for page in replaced['pages']] == ['board', 'second']
+    assert [page['id'] for page in replaced['pages']] == ['board', 'second', 'third']
     assert json.loads(shares.content(replaced['shareId'], 'pages/second/document.json'))['id'] == 'second'
