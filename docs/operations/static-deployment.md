@@ -10,7 +10,7 @@
 | `app.js`、`app.css` | 已构建的应用与样式 |
 | `static-worker.js` | 筛选、汇总、表格搜索、排序和分页 |
 | `document.json` | 组件、布局、指标和数据分片相对路径 |
-| `data/*.json.gz` | 使用中的数据集，每片最多 5000 条 |
+| `data/*.json.gz` | 使用中的数据集，每片最多 5000 条，解压后的 JSON 不超过 16 MiB |
 | `export-manifest.json` | 看板 revision、前后端构建标识、数据集记录数 |
 | `README.txt` | 使用方式和数据范围 |
 
