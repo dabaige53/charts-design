@@ -208,7 +208,7 @@
       }
     ],
     "provenance": {
-      "document": "docs/DESIGN.md",
+      "document": "docs/reference/DESIGN.md",
       "mode": "source-extraction",
       "sources": [
         "runtime-ui/src/styles.css",

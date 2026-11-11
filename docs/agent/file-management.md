@@ -7,16 +7,19 @@
 | 位置 | 内容 | 维护方式 |
 | --- | --- | --- |
 | `README.md`、`AGENTS.md` | 项目快速开始与按任务阅读入口 | 用途、流程或文档路径变化时更新 |
-| `docs/` | 项目规范、当前实现说明、操作步骤和已有历史记录 | 每个主题保留一份负责该要求的正文 |
+| `docs/` | 仅 `README.md` 总导航 | 专题正文按职责进入下列子目录；文档检查自动执行此约束 |
+| `docs/reference/` | 设计规范 | 通用要求原位更新 |
+| `docs/implementation/` | 当前架构、功能与接口说明 | 随实现变化原位更新 |
+| `docs/operations/` | 开发检查、安装、部署与诊断 | 随执行流程变化原位更新 |
 | `docs/agent/` | 文件管理等长期项目准则 | 已确认的项目约定变化时原位更新 |
 | `docs/plans/`、`docs/records/`、`docs/adr/` | 按需新增的专项方案、验证记录和架构决定 | 有实际内容时创建；已有清楚路径沿用 |
-| `docs/images/`、`docs/performance-results.json` | 文档配套截图与已有性能证据 | 与对应记录一同保留，标明测量范围 |
+| `docs/images/`、`docs/records/performance-results.json` | 文档配套截图与已有性能证据 | 与对应记录一同保留，标明测量范围 |
 | `skills/executive-charts/` | 看板规范、指标卡、布局模板、图表声明和工作区脚本 | 维护源码；本地安装指向此目录 |
 | `skills/analytical-reports/` | 分析报告 Skill 与随包参考材料 | 保留相对引用和随包可用性 |
 | `dashboard_runtime/`、`bin/` | 后端 SQLite 存储、数据计算、MCP 服务与启动更新脚本 | 修改对应维护源码后更新 |
-| `deploy/` | 自托管服务器的 Dockerfile、compose、systemd 与 nginx 示例 | 服务器参数或运行方式变化时同步 `docs/self-hosted-server.md`；不存放令牌、密钥或 `charts.env` |
+| `deploy/` | 自托管服务器的 Dockerfile、compose、systemd 与 nginx 示例 | 服务器参数或运行方式变化时同步 `docs/operations/self-hosted-server.md`；不存放令牌、密钥或 `charts.env` |
 | `dashboard_runtime/examples/academic-report.md` | 分析报告案例的唯一 Markdown 母稿 | MCP 案例直接读取，避免独立副本 |
-| `tests/`、`.github/workflows/` | 静态检查、后端单元测试与部署镜像冒烟检查 | 检查入口以 `docs/testing.md` 为准，不含浏览器验收 |
+| `tests/`、`.github/workflows/` | 静态检查、后端单元测试与部署镜像冒烟检查 | 检查入口以 `docs/operations/testing.md` 为准，不含浏览器验收 |
 
 Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原位。项目级文档正文放在 `docs/`，不为工具发现另建根目录正文、链接入口或符号链接。适配 Skill 或插件要求时优先改用已有正文；自动发现失败时直接读取实际路径。
 
@@ -24,7 +27,7 @@ Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原
 
 `runtime-ui/src` 维护 React 组件、应用和宿主适配。`runtime-ui/fixtures` 仅保存设计预览数据，生产构建禁止引用该目录及 `docs`。40 个图表定义维护在 `runtime-ui/src/charts`，不再在构建时提取归档源码。
 
-构建输出为 `runtime-ui/dist`。`ui:package` 将应用资源交付到 `dashboard_runtime/web/dist`，供 MCP、npm 与 Python 包使用；容器在独立 Node 阶段构建。`ui:package:design` 更新设计系统组件 bundle。
+构建输出为 `runtime-ui/dist`，由 GitHub Actions 保存为产物，不提交 Git。本地仅在明确需要预览或安装时通过 `ui:prepare` 核对并复用已有产物。`ui:package` 将应用资源交付到 `dashboard_runtime/web/dist`，供 MCP、npm 与 Python 包使用；容器在独立 Node 阶段构建。`ui:package:design` 更新设计系统组件 bundle。
 
 ## 业务资产与临时文件
 
@@ -44,17 +47,17 @@ Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原
 
 | 内容 | 负责正文 | 更新条件 |
 | --- | --- | --- |
-| 产品使用者、目标、边界与强约束 | `docs/PRODUCT.md` | 已确认的产品决定改变 |
-| 视觉、交互、组件复用与保真要求 | `docs/DESIGN.md` | 已确认的通用设计要求改变 |
-| Runtime 架构、配置和接口入口 | `docs/dashboard-runtime.md` | 模块职责、运行方式或接口入口改变 |
-| 项目存储、草稿、历史和渐进数据 | `docs/project-runtime.md` | 持久化、路由、计算或加载行为改变 |
-| 看板/报告写作与源文约定 | `docs/generation-tracks.md` | 生成方式、报告语法或文档类型改变 |
-| UI 组件的接口、能力与接入状态 | `docs/ui-component-inventory.md` | 组件接口、实现能力或宿主验证状态改变 |
+| 产品使用者、目标、边界与强约束 | `docs/agent/PRODUCT.md` | 已确认的产品决定改变 |
+| 视觉、交互、组件复用与保真要求 | `docs/reference/DESIGN.md` | 已确认的通用设计要求改变 |
+| Runtime 架构、配置和接口入口 | `docs/implementation/dashboard-runtime.md` | 模块职责、运行方式或接口入口改变 |
+| 项目存储、草稿、历史和渐进数据 | `docs/implementation/project-runtime.md` | 持久化、路由、计算或加载行为改变 |
+| 看板/报告写作与源文约定 | `docs/implementation/generation-tracks.md` | 生成方式、报告语法或文档类型改变 |
+| UI 组件的接口、能力与接入状态 | `docs/implementation/ui-component-inventory.md` | 组件接口、实现能力或宿主验证状态改变 |
 | 标题与绑定、动态编码、自由渲染、统计图、批注 | 各自现有专题正文 | 对应交互或数据约定改变；不在总览另写一份规则 |
-| 本地 MCP 更新和传输诊断 | `docs/local-mcp-update.md`、`docs/mcp-transport-diagnostics.md` | 安装、重连、响应传输或排查方式改变 |
-| 远程 MCP、网页分享、腾讯云存储和过期清理 | `docs/self-hosted-server.md` | 服务部署、鉴权、分享或云端删除流程改变 |
-| 独立静态网页包 | `docs/static-deployment.md` | 资源结构、分片、下载或离线能力改变 |
-| 检查要求与检查入口 | `docs/testing.md` | 验证范围、命令入口或通过条件改变 |
+| 本地 MCP 更新和传输诊断 | `docs/operations/local-mcp-update.md`、`docs/operations/mcp-transport-diagnostics.md` | 安装、重连、响应传输或排查方式改变 |
+| 远程 MCP、网页分享、腾讯云存储和过期清理 | `docs/operations/self-hosted-server.md` | 服务部署、鉴权、分享或云端删除流程改变 |
+| 独立静态网页包 | `docs/operations/static-deployment.md` | 资源结构、分片、下载或离线能力改变 |
+| 检查要求与检查入口 | `docs/operations/testing.md` | 验证范围、命令入口或通过条件改变 |
 | 阶段安排、技术方案与待办 | `docs/plans/` | 对应方案调整；不承载长期规范 |
 | 构建编号、运行环境、当次检查结果与历史事实 | `docs/records/` | 同一轮次证据补全；不反向改写当时事实 |
 

@@ -1,4 +1,4 @@
-# systemd unit for a checkout at /opt/charts-design (see docs/self-hosted-server.md).
+# systemd unit for a checkout at /opt/charts-design (see docs/operations/self-hosted-server.md).
 # Install: sudo cp deploy/charts-design.service /etc/systemd/system/ && sudo systemctl enable --now charts-design
 [Unit]
 Description=Charts Design server (remote MCP + previews)

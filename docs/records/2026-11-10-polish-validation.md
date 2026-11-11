@@ -23,7 +23,7 @@
 | Python ruff、语法、Skill 与文档链接 | 通过 |
 | 指定 LSP 复查 | 18 个文件 passed；0 错误 |
 
-运行命令见 [测试与 CI](../testing.md)。Runtime 有两条 Seaborn 调用 Matplotlib `vert` 参数的弃用提示，LSP 有 Tailwind 指令识别警告。
+运行命令见 [测试与 CI](../operations/testing.md)。Runtime 有两条 Seaborn 调用 Matplotlib `vert` 参数的弃用提示，LSP 有 Tailwind 指令识别警告。
 
 ## 交付边界
 
@@ -81,7 +81,7 @@
 
 - 目标 MCP 宿主内的实际显示、交互、剪贴板、全屏及下载未做验收。本轮保持 MCP 注册和现有安装位置不变；需目标宿主使用此构建后确认。
 - Dockerfile 已增加 UI 构建阶段，CI 在后端协议检查前构建并打包 UI；工作流 YAML 解析通过。本轮未触发 CI，也未运行 Docker 构建、发布或部署。
-- React 位置批注已接入点选、框选、就地输入、编号、回复与解决状态；项目内独立保存及冲突检查已实现。宿主附到对话和离线导出显示仍未接入，运行效果未做 UI 验收。详见 [批注说明](../annotation-composer.md)。
+- React 位置批注已接入点选、框选、就地输入、编号、回复与解决状态；项目内独立保存及冲突检查已实现。宿主附到对话和离线导出显示仍未接入，运行效果未做 UI 验收。详见 [批注说明](../implementation/annotation-composer.md)。
 - 没有运行 UI 测试、浏览器自动化、截图或全量测试。所有代码与文档修改尚未提交。
 
 ### 2026-11-10 预设调整（后续已调整密度与操作色）

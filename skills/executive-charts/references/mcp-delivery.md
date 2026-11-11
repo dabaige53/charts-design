@@ -2,7 +2,7 @@
 
 Use this workflow for executive dashboards and analytical reports. Read current tool schemas before forming calls; capabilities depend on the connected runtime.
 
-One MCP registration can serve multiple projects. Pass the absolute asset directory as `projectRoot` on every project call, including list, diagnostics and chunk reads; never assume a previous call selected a current project. The preview retains its own project for subsequent UI calls. Existing startup `--project-root` remains a default for compatibility. See package-root `docs/project-runtime.md` for the unified entry point and router requirements; do not create per-project MCP registrations.
+One MCP registration can serve multiple projects. Pass the absolute asset directory as `projectRoot` on every project call, including list, diagnostics and chunk reads; never assume a previous call selected a current project. The preview retains its own project for subsequent UI calls. Existing startup `--project-root` remains a default for compatibility. See package-root `docs/implementation/project-runtime.md` for the unified entry point and router requirements; do not create per-project MCP registrations.
 
 ## Preserve the accepted artifact
 
@@ -46,12 +46,12 @@ Paths below are relative to the package root:
 - `dashboard_runtime/web/`: shared data, statistical calculation and local filter modules (pure data and static-query modules).
 - `dashboard_runtime/local_data.py`, `local_view.py`, `bindings.py`: option queries, component calculations and binding validation.
 - `dashboard_runtime/service.py`: MCP operations and diagnostics.
-- `docs/project-runtime.md`: storage, loading and edit lifecycle; `docs/mcp-transport-diagnostics.md`: transport diagnosis; `docs/dynamic-encoding.md`: dynamic bindings.
+- `docs/implementation/project-runtime.md`: storage, loading and edit lifecycle; `docs/operations/mcp-transport-diagnostics.md`: transport diagnosis; `docs/implementation/dynamic-encoding.md`: dynamic bindings.
 
 ## Self-hosted server
 
-`python3 -m dashboard_runtime server` serves Streamable HTTP MCP on `/mcp` with bearer tokens and browser previews of dashboards and reports. `projectRoot` is then a project name inside the server workspace, never an arbitrary server path. Desktop file actions (`dashboard_export_open`) are unavailable remotely; exports return signed `downloadUrl` links instead. See package-root `docs/self-hosted-server.md` for deployment, tokens, share links and limits.
+`python3 -m dashboard_runtime server` serves Streamable HTTP MCP on `/mcp` with bearer tokens and browser previews of dashboards and reports. `projectRoot` is then a project name inside the server workspace, never an arbitrary server path. Desktop file actions (`dashboard_export_open`) are unavailable remotely; exports return signed `downloadUrl` links instead. See package-root `docs/operations/self-hosted-server.md` for deployment, tokens, share links and limits.
 
 ## Standalone hosting
 
-Static website export via `dashboard_export_site` returns the shared React application and used dataset shards as a managed ZIP. See package-root `docs/static-deployment.md`.
+Static website export via `dashboard_export_site` returns the shared React application and used dataset shards as a managed ZIP. See package-root `docs/operations/static-deployment.md`.

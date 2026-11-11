@@ -2,7 +2,7 @@
 
 产品操作组件基于 shadcn/ui 预设 `b4C6dEBLto` 的 `radix-sera` 结构，采用 Stone 中性色、Lucide 和项目紧凑尺寸。组件结构和样式维护在 `runtime-ui/src`。主要操作使用深海蓝 `#123B5D`，焦点使用 `#2C6485`；图表保留原数据色。
 
-当前源码提取的视觉规则、字阶和状态见 [UI 设计记录](../../../../DESIGN.md)。本文维护组件导出、设计映射和构建入口；归档来源与当前运行实现分别判断。
+当前源码提取的视觉规则、字阶和状态见 [UI 设计记录](../../../../reference/DESIGN.md)。本文维护组件导出、设计映射和构建入口；归档来源与当前运行实现分别判断。
 
 ## 实现与预览
 
@@ -21,7 +21,7 @@
 
 可运行预览中的数据来自设计适配入口，仅用于展示。生产入口 `main.tsx` 不导入这些示例。图表和指标卡逐张展示在现有设计画布中；筛选器、表格的附属操作放在各自画板内。
 
-组件 props、事件、数据和宿主依赖见 [组件清单](../../../../ui-component-inventory.md)。完整的 React 类型由 `runtime-ui/dist/types` 构建生成。
+组件 props、事件、数据和宿主依赖见 [组件清单](../../../../implementation/ui-component-inventory.md)。完整的 React 类型由 `runtime-ui/dist/types` 构建生成。
 
 ## 语义变量
 
@@ -46,7 +46,7 @@
 
 Button 的 default、sm、xs、lg 高度为 32、28、24、40px；图表操作使用 24px 的 icon-xs。Input、InputGroup 和默认 Select 高 32px，采用一致的完整边框。Table 正文 12px，表头与内容行最小高度 36px；内容行上下内边距 8px，表头与数字、日期、文字统一居中。ToggleGroup 使用紧凑 sm 变体。
 
-卡片使用 CardHeader、CardTitle、CardDescription、CardAction、CardContent。组件标题、容器缩放、内边距和操作区的当前数值统一见 [UI 设计记录](../../../../DESIGN.md)，不使用旧版 16px 标题基准。保留画板位置、尺寸和已保存的看板网格。
+卡片使用 CardHeader、CardTitle、CardDescription、CardAction、CardContent。组件标题、容器缩放、内边距和操作区的当前数值统一见 [UI 设计记录](../../../../reference/DESIGN.md)，不使用旧版 16px 标题基准。保留画板位置、尺寸和已保存的看板网格。
 
 Inter Variable 和 Lora Variable 随组件资源提供；卡片标题使用 Inter，其他标题可使用 Lora。MCP 应用将字体打入 CSS；设计系统通过 `type.fonts` 加载本地字体文件，不依赖外部字体服务。原 PDF 的字体、尺寸与来源资产仍作为历史参考。
 
@@ -70,7 +70,7 @@ pnpm --dir runtime-ui package:design
 
 筛选栏默认展示前三个非文本条件；应用可通过 `DashboardApp.primaryFilterIds` 指定常用条件及顺序，其余条件集中到“更多筛选”。多选使用 Popover / Command，可搜索、全选、清空并分页读取候选项；日期范围使用 Popover / Calendar，并提供近 7 天、近 30 天、本月、上月和本年快捷范围。文本搜索使用 InputGroup，数值范围在 Popover 内使用 Field / Input；所有条件沿用 MCP 声明的字段及 in、range、contains 操作。已生效条件支持单项移除与重置，无条件时不渲染条件标签行。
 
-`selectionMode=single` 的条件复用可搜索候选列表，每次只保留一项；没有该标记时仍为多选。页头提供位置批注入口；选取、保存及宿主能力边界见 [位置批注](../../../../annotation-composer.md)。
+`selectionMode=single` 的条件复用可搜索候选列表，每次只保留一项；没有该标记时仍为多选。页头提供位置批注入口；选取、保存及宿主能力边界见 [位置批注](../../../../implementation/annotation-composer.md)。
 
 生效条件出现在筛选栏内，空条件时收起；说明弹窗使用该组件实际接收的查看条件，不用已保存条件替代临时筛选。
 

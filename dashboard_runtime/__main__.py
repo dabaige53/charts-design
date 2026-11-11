@@ -81,7 +81,7 @@ def parser():
     )
     server = sub.add_parser(
         "server",
-        help="Self-hosted server: remote Streamable HTTP MCP plus browser previews (see docs/self-hosted-server.md)",
+        help="Self-hosted server: remote Streamable HTTP MCP plus browser previews (see docs/operations/self-hosted-server.md)",
     )
     for target in (server, sub.add_parser("share", help="Print an expiring browser link for one dashboard on a server workspace")):
         target.add_argument("--workspace", help="Directory holding one sub-directory per project (env CHARTS_WORKSPACE)")

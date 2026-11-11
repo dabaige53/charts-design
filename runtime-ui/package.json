@@ -12,7 +12,7 @@
     "./styles.css": "./dist/app.css"
   },
   "scripts": {
-    "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
+    "build": "node scripts/build.mjs && tsc -p tsconfig.build.json && node scripts/build-state.mjs --record",
     "typecheck": "tsc --noEmit",
     "package:runtime": "node scripts/package.mjs",
     "package:design": "node scripts/package-design.mjs",

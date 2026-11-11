@@ -80,8 +80,7 @@ def update(workspace: Path):
         raise ValueError('当前 MCP 直接引用源码，不需要更新安装包')
     def run(*args):
         subprocess.run(list(args), cwd=source, check=True)
-    run('npm', 'run', 'ui:build')
-    run('npm', 'run', 'ui:package')
+    run('npm', 'run', 'ui:prepare')
     run('npm', 'run', 'check')
     version = json.loads((source / 'package.json').read_text())['version']
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')

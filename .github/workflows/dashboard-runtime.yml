@@ -3,19 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    paths:
-      - 'dashboard_runtime/**'
-      - 'runtime-ui/**'
-      - 'tests/**'
-      - 'skills/**'
-      - 'docs/**'
-      - 'bin/**'
-      - 'deploy/**'
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'package.json'
-      - 'pyproject.toml'
-      - '.github/workflows/dashboard-runtime.yml'
   workflow_dispatch:
 concurrency:
   group: dashboard-runtime-${{ github.event.pull_request.number || github.ref }}
@@ -26,9 +13,32 @@ env:
   PYTHONUNBUFFERED: '1'
   FORCE_COLOR: '1'
 
-# Jobs run in parallel so one failing layer never hides the others' results.
-# Layers: static checks, backend/data unit tests, and the deployable container.
+# Documentation checks always run. Executable changes share one UI artifact.
 jobs:
+  changes:
+    name: Select checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tests: ${{ steps.scope.outputs.tests }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] || [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo 'tests=true' >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only -z "$BASE" HEAD | node bin/ci-scope.mjs >> "$GITHUB_OUTPUT"
+          fi
+
   checks:
     name: Static checks
     runs-on: ubuntu-latest
@@ -47,9 +57,53 @@ jobs:
           ruff check --output-format=github
       - name: Syntax, skill links and documentation links/anchors
         run: npm run check
+      - name: Development workflow checks
+        run: node --test tests/development/*.test.mjs tests/deploy/*.test.mjs
+
+  ui:
+    name: Shared UI build
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Locate dependency cache
+        id: pnpm
+        run: echo "store=$(pnpm --dir runtime-ui store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('runtime-ui/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - run: npm run ui:install
+      - run: npm run ui:typecheck
+      - run: npm run ui:build
+      - uses: actions/upload-artifact@v5
+        with:
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: React component and interaction tests
+        working-directory: runtime-ui
+        run: pnpm test:components --reporter=default --reporter=junit --outputFile=reports/components.xml
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: component-reports
+          path: runtime-ui/reports/
+          retention-days: 14
 
   unit:
     name: Unit tests (Python ${{ matrix.python }})
+    needs: [changes, ui]
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -70,14 +124,12 @@ jobs:
       - name: Install backend test dependencies
         run: |
           python -m pip install '.[statistics,mcp,test]'
-      - name: Build shared React resources for backend protocol checks
-        working-directory: runtime-ui
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile
-          pnpm typecheck
-          pnpm build
-          pnpm package:runtime
+      - uses: actions/download-artifact@v5
+        with:
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
+      - name: Package shared UI for backend protocol checks
+        run: node runtime-ui/scripts/package.mjs
       - name: Runtime, MCP protocol and server tests (no browser)
         run: >-
           python -m pytest tests/runtime -q
@@ -111,6 +163,8 @@ jobs:
 
   container:
     name: Container image smoke test
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
