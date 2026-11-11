@@ -48,7 +48,7 @@
 | ComponentView | document、id、grain、tableState | onGrain、onTableChange、onInspect、onExport、onSelect | 加载、空、错误、详情；不调用 MCP | 回调适配 |
 | 指标定义与语义 | semantic_inspect 结果 | 打开／关闭 | 指标、公式、单位、来源、实际绑定和计算语义 | 实际工具结果；无预览文案替代 |
 
-详情维护入口为 `runtime-ui/src/semantic-details.tsx`，通用简图为 `runtime-ui/src/semantic-structure.tsx`。所有组件通过展示配置的 `structureDiagram` 提供 SVG、统一坐标和标注，不依赖 ECharts option 或图表类型适配器。共享组件负责缩放、直角引导线、标签切换和下方定义；指标引用读取当前声明。章节锚点、默认展开的六字段指标口径、明细查询、来源和表格字段保持原入口。SVG 在后端按静态白名单清理，前端再次清理并作为隔离图片展示。声明参数和失效规则见 [Runtime](dashboard-runtime.md#保存的结构简图)。
+详情维护入口为 `runtime-ui/src/semantic-details.tsx`，通用简图为 `runtime-ui/src/semantic-structure.tsx`。所有组件通过展示配置的 `structureDiagram` 提供 SVG、统一坐标和标注，不依赖 ECharts option 或图表类型适配器。简图随容器缩放，结构区域没有内部滚动。共享组件负责缩放、直角引导线、标签切换和下方定义；指标引用读取当前声明。章节锚点、默认展开的六字段指标口径、明细查询、来源和表格字段保持原入口。SVG 在后端按静态白名单清理，前端再次清理并作为隔离图片展示。声明参数和失效规则见 [Runtime](dashboard-runtime.md#保存的结构简图)。
 
 各图表保留独立生成逻辑和对应数据表。生产代码读取 `src/charts`；`runtime-ui/fixtures/charts.json` 仅为画板数据。图表 Tooltip 经 DOMPurify 处理。后端统计图保持独立产物，不改用浏览器重算。
 

@@ -115,6 +115,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise DashboardError('PAYLOAD_TOO_LARGE', 'Body must contain 1 byte to 16 MiB', 413)
             args = json.loads(self.rfile.read(length))
             result = self.runtime.service.call(path.removeprefix('/api/tools/'), args)
+            if path == '/api/tools/dashboard_preview':
+                result['projectRoot'] = str(self.runtime.service.project_root) if self.runtime.service.project_root else None
             self.send(result)
         except Exception as exc:
             self.fail(exc)

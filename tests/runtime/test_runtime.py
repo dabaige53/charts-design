@@ -271,6 +271,30 @@ def test_preview_and_json_export_preserve_source(tmp_path):
     assert saved["snapshot"]["datasetRefs"]["sales"]["rowCount"] == len(doc["snapshot"]["datasets"]["sales"])
 
 
+# @wu-test type=integration | scope=HTTP看板预览 | protects=项目预览缺少项目位置而无法打开
+def test_http_preview_returns_project_root(tmp_path):
+    from dashboard_runtime.demo import executive_document
+
+    project = tmp_path / "project"
+    service = Service(tmp_path / "runtime", project_root=project)
+    service.call("dashboard_create", {"dashboardId": "demo", "document": executive_document("demo")})
+    server = RuntimeHTTPServer(service, 0, token="testing-token")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        request = Request(
+            f"http://127.0.0.1:{server.server_address[1]}/api/tools/dashboard_preview",
+            data=json.dumps({"dashboardId": "demo"}).encode(),
+            headers={"Content-Type": "application/json", "Authorization": "Bearer testing-token"},
+        )
+        with urlopen(request) as response:
+            assert json.load(response)["projectRoot"] == str(project)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 # @wu-test type=boundary | scope=HTTP接口 | protects=未授权跨来源旧版本修改成功
 def test_http_auth_origin_and_conflict(service):
     server = RuntimeHTTPServer(service, 0, token="testing-token")

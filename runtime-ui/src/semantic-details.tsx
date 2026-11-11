@@ -182,7 +182,7 @@ export function SemanticDetails({
       )}
       <section id={`${prefix}-structure`} className="semantic-section">
         <h3>图表结构</h3>
-        <SemanticStructure diagram={presentation.structureDiagram} metrics={document.manifest.metrics} />
+        <SemanticStructure diagram={presentation.structureDiagram} metrics={document.manifest.metrics} compact={component.family === "kpi"} />
       </section>
       {shownMetrics.length > 0 && (
         <section id={`${prefix}-metrics`} className="semantic-section">
