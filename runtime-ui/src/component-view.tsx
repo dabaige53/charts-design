@@ -176,7 +176,8 @@ export function ComponentView({
     [detailOpen, setDetailOpen] = useState(false),
     [detailLoading, setDetailLoading] = useState(false),
     [tableToolbarTarget, setTableToolbarTarget] = useState<HTMLDivElement | null>(null),
-    [actionError, setActionError] = useState("");
+    [actionError, setActionError] = useState(""),
+    [expanded, setExpanded] = useState(false);
   const element = useRef<HTMLDivElement>(null),
     chart = useRef<ECharts | undefined>(undefined);
   useEffect(() => {
@@ -258,13 +259,7 @@ export function ComponentView({
     );
   };
   const localError = detailError;
-  return (
-    <ComponentBoundary
-      title={c.title}
-      resetKey={c.kind === "chart" ? doc.computed?.grouped?.[id] : config}
-      onRetry={onRetry}
-    >
-      <div ref={element} className="flex h-full min-h-0 flex-col">
+  const card = (
         <Card
           className="h-full min-h-0"
           size={family === "kpi" ? "sm" : "default"}
@@ -322,16 +317,8 @@ export function ComponentView({
                           })
                       : undefined
                   }
-                  onFullscreen={
-                    document.fullscreenEnabled
-                      ? () =>
-                          run(async () => {
-                            if (document.fullscreenElement)
-                              await document.exitFullscreen();
-                            else await element.current!.requestFullscreen();
-                          })
-                      : undefined
-                  }
+                  expanded={expanded}
+                  onExpand={() => setExpanded((value) => !value)}
                   onInfo={() => void inspect()}
                 />
               ) : (
@@ -404,6 +391,8 @@ export function ComponentView({
           )}
           </CardContent>
         </Card>
+  );
+  const detailsDialog = (
         <Dialog
           open={detailOpen || !!localError}
           onOpenChange={(open) => {
@@ -416,21 +405,41 @@ export function ComponentView({
         >
           <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden rounded-xl bg-white p-0 text-[#17212B] sm:max-w-[720px] [&>[data-slot=dialog-close]]:top-3 [&>[data-slot=dialog-close]]:right-5 [&>[data-slot=dialog-close]]:bg-transparent">
             <DialogHeader className="h-[52px] shrink-0 flex-row items-center gap-2.5 border-b border-border bg-white px-5 pr-16">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-brand [&>svg]:size-4"><MetricInfoIcon /></span>
-              <DialogTitle className="font-sans text-sm tracking-normal normal-case">{c.title}</DialogTitle>
+                            <DialogTitle className="font-sans text-sm tracking-normal normal-case">{c.title}</DialogTitle>
               <DialogDescription className="sr-only">{family === "table" ? "表格与字段说明" : "图表与指标说明"}</DialogDescription>
             </DialogHeader>
-            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto bg-white px-5 pt-[18px] pb-6">
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto bg-white px-5 pb-6">
               {localError ? (
                 <RecoveryAlert title="指标说明未能加载" message={localError} onRetry={() => void inspect()} busy={detailLoading} retryLabel="重新加载说明" />
               ) : detailLoading ? (
                 <p role="status" className="text-sm text-muted-foreground">正在加载指标说明…</p>
               ) : (
-                <SemanticDetails value={details} component={c} document={doc} componentId={id} filters={filters} onReadData={onReadData} />
+                <SemanticDetails value={details} component={c} document={doc} componentId={id} filters={filters} onReadData={onReadData} chartOption={chart.current?.getOption()} grain={grain} />
               )}
             </div>
           </DialogContent>
         </Dialog>
+  );
+  return (
+    <ComponentBoundary
+      title={c.title}
+      resetKey={c.kind === "chart" ? doc.computed?.grouped?.[id] : config}
+      onRetry={onRetry}
+    >
+      <div ref={element} className="flex h-full min-h-0 flex-col">
+        {!expanded && card}
+        <Dialog open={expanded} onOpenChange={setExpanded}>
+          <DialogContent
+            showCloseButton={false}
+            className="flex h-[calc(100dvh-64px)] max-h-[900px] w-[calc(100vw-48px)] max-w-[1400px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1400px]"
+          >
+            <DialogTitle className="sr-only">{c.title} · 放大图表</DialogTitle>
+            <DialogDescription className="sr-only">查看放大的当前图表，按 Esc 或点击还原图表返回。</DialogDescription>
+            {card}
+            {detailsDialog}
+          </DialogContent>
+        </Dialog>
+        {!expanded && detailsDialog}
       </div>
     </ComponentBoundary>
   );

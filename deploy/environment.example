@@ -16,6 +16,14 @@ CHARTS_DEFAULT_PROJECT=default
 CHARTS_FORWARDED_ALLOW_IPS=127.0.0.1
 # Operator-owned read-only SQLite source aliases (JSON file), optional.
 # CHARTS_SOURCES=/data/sources.json
+# Storage mode: local (default) or cloudbase (PostgreSQL HTTP RPC + private COS).
+# Apply cloudbase/migrations with CloudBase CLI before enabling cloudbase mode.
+# Cloud mode also requires a stable CHARTS_SERVER_SECRET.
+# CHARTS_STORAGE_BACKEND=cloudbase
+# CLOUDBASE_ENV_ID=
+# CLOUDBASE_API_KEY=
+# CHARTS_COS_ASSET_PREFIX=charts-assets/
+# CHARTS_COS_AUTH=cloudbase
 # Tencent cloud publications: private COS bucket and HTTPS gateway.
 # Set these through the deployment environment when cloud sharing is enabled.
 # CHARTS_COS_REGION=

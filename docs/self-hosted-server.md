@@ -114,7 +114,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 - 签名预览使用服务器令牌与签名链接；云端独立副本另用下节的数字密钥。没有用户账号、角色权限、行级权限或 OAuth。持有服务器令牌即可读写全部项目。
 - 分享链接是持有即可用的凭据：转发链接等于转发权限。需要撤销时使用 `dashboard_share_revoke`，或更换签名密钥使全部链接失效。
 - 查询能力仍只限运维方配置的只读 SQLite 别名；本地查询限制不是加固的多租户沙箱。
-- 单进程 SQLite 存储适合团队内部规模，应使用同一主机上的持久磁盘。当前数据库使用 WAL，不能通过网络文件系统共享工作区来支持多主机副本；`--stateless` 只改变 MCP 会话方式，不解决业务数据持久化和多副本协调。部署 CloudBase 云托管前需先适配外部数据库与对象存储，见[云端托管方案](plans/cloud-hosting-and-version-control.md#当前部署目标cloudbase)。
+- 本地模式的 SQLite 使用 WAL，应使用同一主机上的持久磁盘，不能通过网络文件系统共享工作区。CloudBase 模式已接入 PostgreSQL 持久状态和 COS 文件存储，并使用无状态 MCP 会话；SQLite 仅保留为可重建的数据查询缓存。配置与查询边界见[项目存储](project-runtime.md#存储)。
 - 网页部署包（`dashboard_export_site`）仍是独立的只读静态站点，与本服务器互不依赖，见 [静态部署包](static-deployment.md)。
 
 ## 历史验收
@@ -123,13 +123,43 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 2026-11-08，`main` 提交 `ae77261` 的 GitHub Actions 运行 40 六个作业全部通过，包含完整 Docker 多阶段构建、以非 root 用户运行镜像、远程 MCP、预览与下载冒烟检查。详细历史见[验收记录](records/2026-11-07-server-layout-kpi.md)。
 
+## 按版本自动发布到 CloudBase
+
+GitHub Actions 工作流 `.github/workflows/cloudbase-release.yml` 监听 `vX.Y.Z` 标签。根目录 `package.json.version` 是云端发布号；Python 包的版本号独立维护。先提交需要上线的源码和工作流，再运行：
+
+```sh
+npm run release -- 1.2.1
+```
+
+替换为高于当前版本的新版本号。脚本要求工作区干净，更新 `package.json`，创建版本提交和附注标签，然后只推送该标签。不会自动提交其他改动，也不会推送分支触发原有全量测试流程。版本提交仍留在当前本地分支，后续按正常流程合并。加 `--dry-run` 只检查条件和展示步骤，不写文件或推送。
+
+发布任务使用 Node 22 和固定版本的 CloudBase CLI。GitHub 运行发布脚本的局部测试，CloudBase 根据 `deploy/Dockerfile` 构建 React 与 Python 容器，并完成完整发布；不在本机重复构建。工作流中的并发组禁止打断正在执行的部署。推送标签须使用用户或发布机器的 Git 凭据，不使用另一个工作流的默认 `GITHUB_TOKEN`，以免无法触发后续工作流。
+
+仓库 Settings → Secrets and variables → Actions 需要以下配置：
+
+| 类型 | 名称 | 用途 |
+| --- | --- | --- |
+| Secret | `CLOUDBASE_API_KEY` | 当前 CloudBase 环境的服务端 API Key |
+| Variable | `CLOUDBASE_ENV_ID` | 目标环境 ID |
+| Variable | `CLOUDBASE_SERVICE` | 已部署的云托管服务名 |
+| Variable | `CLOUDBASE_REGION` | 服务所在区域 |
+| Variable | `CLOUDBASE_SERVICE_URL` | 服务的 HTTPS 根地址 |
+
+本机复用部署入口时，安装工作流指定版本的 `@cloudbase/cli`，通过项目凭据入口注入上述通用环境变量，并检出目标标签，执行 `npm run deploy:cloudbase -- v1.2.1`。脚本用于更新已有 CloudBase 服务，不负责首次创建 PostgreSQL、COS、API Key 或清理函数。
+
+部署前读取现有环境变量并保留，只更新 `CHARTS_RELEASE_VERSION` 和 `CHARTS_RELEASE_COMMIT`。源码包排除环境文件、密钥文件、依赖缓存、构建产物和设计归档。密钥不写入镜像、仓库、日志或工作流摘要。
+
+若已有云端发布任务未结束，脚本停止，避免 CLI 取消其他任务。已构建完成、健康检查通过并承接 100% 流量的灰度版本会先完成发布状态，再提交新版本；部分流量灰度需要先由维护者完成或撤回。部署命令等待云端任务结束，随后检查 `/health` 的版本号与 Git 提交号，旧实例返回成功不算本次发布通过。
+
+成功结果显示在 GitHub Actions 的 `CloudBase release` 摘要。失败或超时会使任务失败；超时后云端任务可能仍在执行，应先看云托管构建记录再重试。需要重跑已有标签时，在 Actions 中重新运行该任务；工作流合入默认分支后，也可通过 `Run workflow` 输入已有标签。脚本不自动回滚数据库，也不执行 SQL 迁移、更新 SCF 清理函数或覆盖已分享的 COS 静态快照；涉及这些内容的版本需按对应章节部署。
+
 ## 部署确认
 
 真实客户端需提供可访问上述 HTTPS 地址的目标环境，以及对应客户端的远程 MCP 配置入口。按每个目标客户端实际支持的请求头令牌或 URL 令牌方式连接，完成初始化、工具发现、在隔离项目中创建和修改合成看板、打开预览、下载导出、撤销链接与重新连接。Codex、Claude Desktop、Claude Code、claude.ai 的兼容性分别记录，不用官方 Python SDK 的通过结果代替。未实现 OAuth，必须先确认目标客户端支持当前令牌接入方式；只支持 OAuth 的入口不在现有能力内。
 
 ## 腾讯云在线分享与云端清理
 
-状态：源码已接入；目标 COS、HTTPS 网关与 SCF 定时触发尚未完成云端部署验收。
+状态：COS、HTTPS 网关和 SCF 每分钟定时触发已部署；候选版本的密钥访问与撤销已通过云端验收。最终部署与物理删除结果记录在[部署方案](plans/cloud-hosting-and-version-control.md)。
 
 腾讯云分享保存一份独立、只读的看板或分析报告副本。网页、运行资源、使用中的完整数据集分片和访问控制记录保存在私有 COS。访客通过 HTTPS 网关访问，输入 8 位数字访问密钥后阅读；浏览器不会获得公开 COS 地址。
 
@@ -140,19 +170,25 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 先完成编辑批次，再用最新版本发布：
 
 1. `dashboard_get` 读取草稿与版本。
-2. 有修改时按 `dashboard_edit_begin` → 修改 → `dashboard_edit_finish` 完成检查点。
-3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId` 和 `expectedRevision`。
-4. 将返回的 `url` 和 `accessKey` 分别交给指定读者。
+2. 有修改时按 `dashboard_edit_begin` → 修改 → `dashboard_edit_finish` 完成检查点；用 `dashboard_version_publish` 将选定已保存版本设为正式发布版本。
+3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId`；`expectedRevision` 使用当前 `publishedRevision`。草稿可以比发布版本更新。
+4. 将返回的 `accessUrl` 交给指定读者，打开后自动填入密钥，再点击“打开分享”；也可分别发送 `url` 和 `accessKey`。
 
 | 参数 | 说明 |
 | --- | --- |
 | `expiration` | `never` 不过期；`7d` 七天后过期，默认值；`30d` 三十天后过期。时间从发布时开始计算 |
 | `accessKey` | 可选，必须是 8 位 ASCII 数字字符串，可包含前导零；省略时随机生成 |
-| `expectedRevision` | 必须同时等于当前草稿和最近已完成检查点的版本，防止分享未完成编辑 |
+| `expectedRevision` | 项目模式下必须等于当前正式发布版本，防止误分享未发布草稿 |
 
-返回 `shareId`、`url`、`accessKey`、`revision`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。服务只保存加盐哈希，访问密钥不放入 URL、网页数据或日志。
+返回 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。分享路径使用随机十六进制标识。
+
+`url` 不含密钥；`accessUrl` 使用 `url#key=访问密钥`，浏览器读取片段后自动填入并从地址栏移除。片段不发送给服务器；表单仍通过 HTTPS POST 校验密钥。带密钥链接只在新建或替换分享时返回，不写入 COS 控制记录，也不能通过状态接口回读。已有 `url` 可由持有者在本机追加同样的片段使用。
+
+登录页采用居中表单，支持窄屏和键盘操作。表单响应使用 `Referrer-Policy: same-origin`，避免浏览器在 `no-referrer` 下将 POST 来源置为 `null`；服务器继续拒绝 `null` 和其他站点的 Origin。样式及自动填入脚本使用随机 CSP nonce，来源错误和密钥错误均显示在表单内。
 
 `dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
+
+`dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
 
 `dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试。清理完成后，该任务从状态列表消失。此操作也适用于不过期分享。
 
@@ -170,11 +206,11 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 到期即拒绝新的云端读取。SCF 每分钟触发，完成物理删除所需时间由数据量和云端请求决定。清理覆盖当前对象、所有历史版本和删除标记；任何批次删除失败都不能将任务标记为完成。
 
-新发布前会检查 SCF 最近三分钟内是否完成过一次成功清理。没有有效清理状态时返回 `CLOUD_CLEANER_UNAVAILABLE`，不会上传新副本。上传开始前先保存清理任务；中断的上传一小时后由 SCF 回收。发布过程的本地暂存目录位于 `/private/tmp`，上传结束或失败后删除。
+新发布前会检查 SCF 最近三分钟内是否完成过一次成功清理。没有有效清理状态时返回 `CLOUD_CLEANER_UNAVAILABLE`，不会上传新副本。上传开始前先保存清理任务；中断的上传一小时后由 SCF 回收。发布过程使用操作系统临时目录，上传结束或失败后删除，兼容 macOS 与 Linux 容器。
 
 ### 配置
 
-部署环境使用通用环境变量；SCF 使用执行角色注入的临时凭据。网页中不包含云凭据。
+部署环境使用通用环境变量。COS 支持执行角色注入的临时凭据；设置 `CHARTS_COS_AUTH=cloudbase` 时使用服务端 CloudBase API Key 换取临时凭据，并在运行期间刷新。网页中不包含云凭据。
 
 | 环境变量 | 网关/发布进程 | SCF |
 | --- | --- | --- |
@@ -182,7 +218,8 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | `CHARTS_COS_REGION` | 必填，COS 地域 | 必填，同一地域 |
 | `CHARTS_COS_BUCKET` | 必填，专用于分享的私有存储桶 | 必填，同一存储桶 |
 | `CHARTS_COS_SHARE_PREFIX` | 默认 `charts-shares/`，非空独立前缀 | 必须与发布进程相同 |
-| `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY`、`TENCENTCLOUD_SESSIONTOKEN` | 由运行环境提供；临时凭据需包含 Token | 由 SCF 执行角色自动提供，每次调用重新读取 |
+| `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY`、`TENCENTCLOUD_SESSIONTOKEN` | 执行角色方式下由环境提供；临时凭据需包含 Token | 执行角色方式下每次调用重新读取 |
+| `CHARTS_COS_AUTH=cloudbase`、`CLOUDBASE_ENV_ID`、`CLOUDBASE_API_KEY` | 使用服务端环境密钥换取并刷新 COS 临时凭据 | 当前部署使用同一方式，不依赖本地进程 |
 
 从本仓安装发布进程：`python3 -m pip install '.[mcp,cloud]'`。自托管 Docker 镜像包含 COS SDK。
 
@@ -202,7 +239,7 @@ docker buildx build --platform linux/amd64 \
 
 - 运行环境：Python 3.10，x86_64；入口：`index.main_handler`。
 - 配置上表中的 COS 地域、桶和前缀。
-- 绑定已有执行角色，权限限于分享前缀：列举当前对象和历史版本、读取清理任务、删除对象及其历史版本、写入 `cleaner-status.json`。函数不创建或扩大角色权限。
+- 采用已有执行角色或 `CHARTS_COS_AUTH=cloudbase` 服务端凭据方式。执行角色权限应限于分享前缀：列举当前对象和历史版本、读取清理任务、删除对象及其历史版本、写入 `cleaner-status.json`。函数不创建或扩大角色权限。
 - 添加定时触发器。使用 `deploy/tencent-cleaner/timer.json`，Cron 为 `0 * * * * * *`，每分钟一次，并启用触发器。
 - 开启函数失败告警。部分删除失败时函数抛错，任务继续保留，下一次定时触发重试。
 - 等待首次成功调用，再发布分享。发布工具会检查云函数保存的清理状态。

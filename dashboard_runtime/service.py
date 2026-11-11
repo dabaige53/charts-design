@@ -18,7 +18,13 @@ class Service:
 
     def __init__(self, root, sources_file=None, project_root=None):
         from .project import ProjectStore
-        self.store: Any = ProjectStore(project_root, root) if project_root else Store(root)
+        from .cloud_database import cloud_enabled
+        if cloud_enabled():
+            from .cloud_project import CloudProjectStore
+            require(project_root is not None, 'Cloud storage requires a named project', 'PROJECT_REQUIRED')
+            self.store: Any = CloudProjectStore(project_root, root)
+        else:
+            self.store = ProjectStore(project_root, root) if project_root else Store(root)
         self.queries = QueryRunner(sources_file)
         self.project_root = project_root
         self.doctor_reports = {}
@@ -48,6 +54,17 @@ class Service:
     def _execute(self, tool, args):
         started = time.perf_counter()
         result = self._call(tool, args)
+        from .cloud_database import cloud_enabled
+        if cloud_enabled() and isinstance(result.get('export'), dict):
+            from .cloud_files import CloudFiles
+            files = CloudFiles()
+            assert self.project_root is not None
+            project = Path(self.project_root).resolve()
+            for key in ('path', 'siteArchive'):
+                if isinstance(result['export'].get(key), str):
+                    target = Path(result['export'][key]).resolve()
+                    require(target.is_relative_to(project), 'Export must remain in its project', 'INVALID_PATH')
+                    files.save(project.name, target.relative_to(project).as_posix(), target)
         if "document" in result and self.project_root and tool != "dashboard_view":
             from .doctor import data_version
             doc = result['document']
@@ -115,7 +132,7 @@ class Service:
             self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
-        if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status'):
+        if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
             from .cloud_shares import CloudShares
             shares = CloudShares.from_environment()
             from qcloud_cos.cos_exception import CosClientError, CosServiceError
@@ -123,6 +140,9 @@ class Service:
                 if tool == 'dashboard_share_publish':
                     return shares.publish(self, board, args['expectedRevision'],
                                           args.get('expiration', '7d'), args.get('accessKey'))
+                if tool == 'dashboard_share_replace':
+                    return shares.replace(self, board, args['shareId'], args['expectedRevision'],
+                                          args.get('expiration', '7d'))
                 if tool == 'dashboard_share_status':
                     return shares.status(self, board, args.get('shareId'))
                 return shares.revoke(self, board, args.get('shareId'))
@@ -130,6 +150,15 @@ class Service:
                 raise DashboardError('CLOUD_STORAGE_FAILED',
                     'Tencent COS request failed. Check cloud service permissions and dashboard_share_status before retrying a publish.',
                     503) from error
+        if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish'):
+            require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
+            from .versions import Versions
+            versions = Versions(self.store)
+            if tool == 'dashboard_version_status':
+                return versions.status(board)
+            if tool == 'dashboard_version_get':
+                return {'version': versions.read(board, args['revision'])}
+            return versions.publish(board, args['expectedRevision'], args['revision'])
         if tool == 'dashboard_version_label':
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             return self.store.label_checkpoint(board,args['expectedRevision'],args['revision'],args.get('name',''),args.get('published',False))

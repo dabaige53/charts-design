@@ -26,7 +26,7 @@ dashboard_runtime = ["examples/*.md", "web/*.mjs", "web/dist/*"]
 skills = ["executive-charts/SKILL.md", "executive-charts/references/*.json", "executive-charts/references/*.md", "executive-charts/scripts/*.py", "executive-charts/scripts/core/*.py", "executive-charts/scripts/README.md", "analytical-reports/SKILL.md", "analytical-reports/references/*.md"]
 
 [tool.pyright]
-extraPaths = [".mcp-test-deps", "skills/executive-charts/scripts"]
+extraPaths = [".", ".mcp-test-deps", "skills/executive-charts/scripts"]
 
 [tool.ruff]
 target-version = "py310"

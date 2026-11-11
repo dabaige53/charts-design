@@ -42,6 +42,7 @@ class MemoryStorage:
 def publication(tmp_path, expiration='7d'):
     service = Service(tmp_path / 'runtime', project_root=tmp_path / 'source')
     service.call('dashboard_create', {'dashboardId': 'board', 'document': executive_document('board')})
+    service.call('dashboard_version_publish', {'dashboardId': 'board', 'expectedRevision': 1, 'revision': 1})
     storage = MemoryStorage()
     shares = CloudShares(storage, 'https://charts.example.com')
     result = shares.publish(service, 'board', 1, expiration, '01234567')
@@ -54,6 +55,7 @@ def test_publication_expiry_removes_only_its_remote_copy(tmp_path, monkeypatch, 
     service, storage, shares, result = publication(tmp_path, expiration)
     share_id = result['shareId']
     assert result['accessKey'] == '01234567'
+    assert result['accessUrl'] == result['url'] + '#key=01234567'
     assert result['cleanupExecutor'] == 'tencent-scf'
     control = shares.authenticate(share_id, '01234567')
     source_title = service.store.get('board')['manifest']['title']
@@ -61,6 +63,7 @@ def test_publication_expiry_removes_only_its_remote_copy(tmp_path, monkeypatch, 
     saved_control = storage.get('shares/' + share_id + '/control.json')
     assert saved_control is not None
     assert '01234567' not in saved_control.decode()
+    assert 'accessUrl' not in shares.status(service, 'board')['shares'][0]
     assert json.loads(shares.content(share_id, 'document.json'))['manifest']['title'] == source_title
     with pytest.raises(DashboardError, match='访问密钥错误'):
         shares.authenticate(share_id, '01234568')
@@ -99,7 +102,7 @@ def test_never_expiring_share_revocation_and_failed_cleanup_retry(tmp_path):
     assert shares.status(service, 'board')['shares'] == []
 
 
-# @wu-test type=boundary | scope=云分享发布前置条件 | protects=密钥格式错误或未保存草稿或无云清理进程仍发布
+# @wu-test type=boundary | scope=云分享发布前置条件 | protects=密钥格式错误或未正式发布草稿或无云清理进程仍发布
 def test_publication_requires_valid_key_checkpoint_and_cloud_heartbeat(tmp_path):
     service, storage, shares, _ = publication(tmp_path)
     for key in ('1234567', '１２３４５６７８', '1234567x', 12345678):
@@ -119,6 +122,68 @@ def test_publication_requires_valid_key_checkpoint_and_cloud_heartbeat(tmp_path)
     with pytest.raises(DashboardError) as error:
         shares.publish(service, 'board', 2)
     assert error.value.code == 'REVISION_CONFLICT'
+
+
+# @wu-test type=integration | scope=分享与发布版本 | protects=编辑草稿悄悄改变新分享或已有分享的发布内容
+def test_share_uses_published_version_while_draft_changes(tmp_path):
+    service, storage, shares, first = publication(tmp_path)
+    title = service.store.get('board')['manifest']['title']
+    service.store.mutate('board', 1, [{'op': 'set_title', 'value': 'Unpublished draft'}])
+    second = shares.publish(service, 'board', 1)
+    assert json.loads(shares.content(second['shareId'], 'document.json'))['manifest']['title'] == title
+    service.store.checkpoint('board', 2)
+    service.call('dashboard_version_publish', {'dashboardId': 'board', 'expectedRevision': 2, 'revision': 2})
+    third = shares.publish(service, 'board', 2)
+    assert json.loads(shares.content(third['shareId'], 'document.json'))['manifest']['title'] == 'Unpublished draft'
+    assert json.loads(shares.content(first['shareId'], 'document.json'))['manifest']['title'] == title
+
+
+# @wu-test type=behavior | scope=CloudShares.replace | protects=替换分享未更换密钥或旧链接仍可访问
+def test_replace_rotates_key_and_revokes_only_selected_share(tmp_path):
+    service, storage, shares, old = publication(tmp_path)
+    other = shares.publish(service, 'board', 1, 'never')
+    new = shares.replace(service, 'board', old['shareId'], 1, '30d')
+    assert new['previousRevoked'] and new['shareId'] != old['shareId']
+    assert new['accessKey'] != old['accessKey']
+    assert shares.authenticate(new['shareId'], new['accessKey'])['revision'] == 1
+    with pytest.raises(DashboardError) as expired:
+        shares.authenticate(old['shareId'], old['accessKey'])
+    assert expired.value.code == 'SHARE_EXPIRED'
+    assert shares.authenticate(other['shareId'], other['accessKey'])['expiresAt'] is None
+
+
+# @wu-test type=boundary | scope=CloudShares.replace | protects=上传新副本失败时提前撤销旧分享
+def test_failed_replacement_upload_preserves_old_share(tmp_path, monkeypatch):
+    service, storage, shares, old = publication(tmp_path)
+    put = storage.put
+
+    def fail_site(key, content, content_type='application/octet-stream'):
+        if '/site/' in key:
+            raise OSError('simulated upload failure')
+        put(key, content, content_type)
+
+    monkeypatch.setattr(storage, 'put', fail_site)
+    with pytest.raises(OSError):
+        shares.replace(service, 'board', old['shareId'], 1)
+    assert shares.authenticate(old['shareId'], old['accessKey'])['state'] == 'active'
+
+
+# @wu-test type=boundary | scope=CloudShares.replace | protects=旧分享撤销失败导致新凭据丢失或误报旧链接已失效
+def test_partial_replacement_returns_new_credentials(tmp_path, monkeypatch):
+    service, storage, shares, old = publication(tmp_path)
+    put = storage.put
+
+    def fail_revoke(key, content, content_type='application/octet-stream'):
+        if key == 'shares/' + old['shareId'] + '/control.json':
+            raise OSError('simulated revoke failure')
+        put(key, content, content_type)
+
+    monkeypatch.setattr(storage, 'put', fail_revoke)
+    new = shares.replace(service, 'board', old['shareId'], 1)
+    assert new['previousRevoked'] is False
+    assert new['followUp'] == 'dashboard_share_delete'
+    assert shares.authenticate(new['shareId'], new['accessKey'])['state'] == 'active'
+    assert shares.authenticate(old['shareId'], old['accessKey'])['state'] == 'active'
 
 
 # @wu-test type=boundary | scope=云分享读取和删除归属 | protects=跨项目访问密钥记录或路径穿越读取控制记录及删除其他项目副本
@@ -265,6 +330,41 @@ def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeyp
         assert client.get(root + 'app.js').status_code == 410
         assert cleanup_due(storage, deadline)['removed'] == 1
         assert client.get(root).status_code == 410
+
+
+# @wu-test type=regression | scope=分享登录表单来源 | protects=CLOUD-SHARE-ORIGIN-001浏览器提交因no-referrer失败或修复时放开跨站来源
+@pytest.mark.parametrize('origin, expected_status', [
+    ('https://charts.example.com', 303),
+    ('null', 403),
+    ('https://other.example.com', 403),
+])
+def test_share_form_preserves_browser_origin_and_rejects_foreign_origins(tmp_path, origin, expected_status):
+    pytest.importorskip('mcp')
+    from starlette.testclient import TestClient
+    from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
+
+    _, _, shares, published = publication(tmp_path)
+    server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'gateway-cache',
+                                        tokens=('gateway-admin-token-0123456789',),
+                                        public_url='https://charts.example.com'))
+    server.cloud_shares = shares
+    root = '/s/' + published['shareId'] + '/'
+    with TestClient(create_app(server), base_url='https://charts.example.com') as client:
+        form = client.get(root)
+        assert form.headers['referrer-policy'] == 'same-origin'
+        nonce = form.text.split('<style nonce="')[1].split('"')[0]
+        assert "'nonce-" + nonce + "'" in form.headers['content-security-policy']
+        assert "'unsafe-inline'" not in form.headers['content-security-policy']
+        response = client.post(root, data={'accessKey': '01234567'},
+                               headers={'Origin': origin}, follow_redirects=False)
+        assert response.status_code == expected_status
+        if expected_status == 303:
+            assert client.get(root + 'document.json').status_code == 200
+        else:
+            assert 'text/html' in response.headers['content-type']
+            assert '重新打开分享' in response.text
+            assert 'set-cookie' not in response.headers
+            assert client.get(root + 'document.json').status_code == 401
 
 
 # @wu-test type=boundary | scope=8位密钥在线尝试限制 | protects=短数字密钥可被无限在线枚举

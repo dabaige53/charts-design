@@ -107,7 +107,8 @@ function Root() {
   const [doc, setDoc] = useState<Document | null>(boot.document || null),
     [error, setError] = useState(""),
     [attempt, setAttempt] = useState(0),
-    [fullscreen, setFullscreen] = useState(false);
+    [fullscreen, setFullscreen] = useState(false),
+    [hostFullscreen, setHostFullscreen] = useState(false);
   useEffect(() => {
     if (boot.mode === "snapshot" || boot.mode === "static") return;
     setError("");
@@ -143,21 +144,25 @@ function Root() {
         live = false;
         return {};
       };
-      app.onhostcontextchanged = () =>
+      app.onhostcontextchanged = () => {
+        setHostFullscreen(app?.getHostContext()?.displayMode === "fullscreen");
         setFullscreen(
           !!app
             ?.getHostContext()
             ?.availableDisplayModes?.includes("fullscreen"),
         );
+      };
       void app
         .connect()
         .then(() => {
-          if (live)
+          if (live) {
+            setHostFullscreen(app?.getHostContext()?.displayMode === "fullscreen");
             setFullscreen(
               !!app
                 ?.getHostContext()
                 ?.availableDisplayModes?.includes("fullscreen"),
             );
+          }
         })
         .catch((e) => {
           if (live) setError(String(e));
@@ -251,6 +256,7 @@ function Root() {
       download={download}
       readOnly={!!boot.readOnly}
       onFullscreen={full}
+      pageFullscreen={hostFullscreen}
       primaryFilterIds={boot.primaryFilterIds}
       projectRoot={context.projectRoot}
     />

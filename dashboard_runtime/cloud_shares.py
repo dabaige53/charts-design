@@ -63,9 +63,15 @@ class CloudShares:
         access_key = access_key if access_key is not None else f'{secrets.randbelow(100000000):08d}'
         require(isinstance(access_key, str) and bool(ACCESS_KEY.fullmatch(access_key)),
                 'accessKey must contain exactly eight ASCII digits', 'INVALID_ARGUMENT')
-        doc = service.store.readable(board) if service.project_root else service.store.get(board, hydrate=False)
-        require(doc['revision'] == expected_revision == service.store.revision(board),
-                'Complete the current edit batch and read its latest revision before publishing', 'REVISION_CONFLICT')
+        if service.project_root:
+            from .versions import Versions
+            versions = Versions(service.store)
+            require(versions.status(board)['publishedRevision'] == expected_revision,
+                    'Publish the saved version before sharing it', 'REVISION_CONFLICT')
+            doc = versions.read(board, expected_revision)
+        else:
+            doc = service.store.get(board, hydrate=False)
+            require(doc['revision'] == expected_revision, 'Reload before sharing', 'REVISION_CONFLICT')
         heartbeat = self.storage.get('cleaner-status.json')
         require(heartbeat is not None and time.time() - json.loads(heartbeat)['completedAt'] < 180,
                 'Deploy the SCF minute timer and confirm a successful cloud cleanup invocation before publishing',
@@ -80,9 +86,9 @@ class CloudShares:
         self._put_json('jobs/' + share_id + '.json', job)
         # Only SCF deletes remote content. The upload staging directory is
         # local temporary data and is removed even if export/upload fails.
-        with tempfile.TemporaryDirectory(prefix='charts-share-', dir='/private/tmp') as temporary:
+        with tempfile.TemporaryDirectory(prefix='charts-share-') as temporary:
             from .deployment import export_site
-            exported = export_site(service.store, board, output_root=Path(temporary))['export']
+            exported = export_site(service.store, board, output_root=Path(temporary), document=doc)['export']
             site = Path(exported['directory'])
             files = []
             for path in sorted(site.rglob('*')):
@@ -99,7 +105,8 @@ class CloudShares:
                        'files': files}
             self._put_json('shares/' + share_id + '/control.json', control)
             self._put_json('jobs/' + share_id + '.json', {**job, 'state': 'active', 'cleanupAfter': expires})
-        return {'shareId': share_id, 'url': self.public_url + '/s/' + share_id + '/',
+        url = self.public_url + '/s/' + share_id + '/'
+        return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
                 'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
                 'revision': doc['revision'], 'cleanupExecutor': 'tencent-scf'}
 
@@ -109,6 +116,31 @@ class CloudShares:
                 hmac.compare_digest(key_digest(key, control['salt']), control['keyHash']),
                 '访问密钥错误', 'INVALID_ACCESS_KEY')
         return control
+
+    def replace(self, service, board, share_id, expected_revision, expiration='7d'):
+        """Finish the new publication before revoking the selected old link."""
+        previous = self.control(share_id)
+        owner = hashlib.sha256(str(Path(service.project_root or service.store.root).resolve()).encode()).hexdigest()
+        require(previous['owner'] == owner and previous['dashboardId'] == board,
+                'Share belongs to another project/dashboard', 'FORBIDDEN')
+        access_key = f'{secrets.randbelow(100000000):08d}'
+        while hmac.compare_digest(key_digest(access_key, previous['salt']), previous['keyHash']):
+            access_key = f'{secrets.randbelow(100000000):08d}'
+        result = self.publish(service, board, expected_revision, expiration, access_key)
+        try:
+            job_key = 'jobs/' + result['shareId'] + '.json'
+            raw = self.storage.get(job_key)
+            require(raw is not None, 'New share job is missing', 'NOT_FOUND')
+            assert raw is not None
+            self._put_json(job_key, {**json.loads(raw), 'replacesShareId': share_id})
+            self.revoke(service, board, share_id)
+        except Exception as error:
+            # Return the new credentials even if revocation fails; retry only
+            # the old ID rather than creating another publication.
+            return {**result, 'previousShareId': share_id, 'previousRevoked': False,
+                    'followUp': 'dashboard_share_delete',
+                    'warning': {'code': 'PREVIOUS_SHARE_REVOKE_FAILED', 'type': type(error).__name__}}
+        return {**result, 'previousShareId': share_id, 'previousRevoked': True}
 
     def content(self, share_id, name, *, control=None):
         # The gateway may reuse the control checked earlier in this request.
@@ -150,6 +182,7 @@ class CloudShares:
             due = job['cleanupAfter'] is not None and time.time() >= job['cleanupAfter']
             shares.append({'shareId': job['shareId'], 'state': 'expired' if due and job['state'] == 'active' else job['state'],
                            'revision': job['revision'], 'expiresAt': job['expiresAt'],
+                           'replacesShareId': job.get('replacesShareId'),
                            'cleanupState': 'pending' if due else 'scheduled' if job['cleanupAfter'] else 'not_scheduled',
                            'url': self.public_url + '/s/' + job['shareId'] + '/'})
         return {'shares': shares, 'cleanupExecutor': 'tencent-scf'}

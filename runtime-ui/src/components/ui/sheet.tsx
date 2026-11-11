@@ -4,6 +4,7 @@ import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
+import { useFullscreenElement } from "../../fullscreen"
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -24,7 +25,8 @@ function SheetClose({
 function SheetPortal({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
-  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+  const fullscreenElement = useFullscreenElement()
+  return <SheetPrimitive.Portal container={fullscreenElement} data-slot="sheet-portal" {...props} />
 }
 
 function SheetOverlay({

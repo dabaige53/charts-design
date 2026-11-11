@@ -44,6 +44,7 @@
 
 ## 历史记录与附件
 
+- [CloudBase 存储与版本管理部署](records/2026-11-11-cloudbase-deployment.md)：本轮存储适配、局部检查、云端部署与验收边界。
 - [早期问题清单](records/ISSUES.md)、[治理复盘](records/ISSUES_AND_POSTMORTEM.md)：旧实现的缺陷与治理事实，不作为现行规则。
 - [动态编码验收](records/dynamic-encoding-validation.md)、[迭代复盘](records/retro-20261028.md)、[MCP 优化交付](records/mcp-improvements-20261028.md)：2026-10-28 的对象、测量、改动与验证边界。
 - [自托管、构图与指标卡验收](records/2026-11-07-server-layout-kpi.md)：对应轮次的性能与部署检查。

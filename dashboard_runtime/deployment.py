@@ -27,9 +27,10 @@ def _write_shards(site, key, rows):
     return files, count
 
 
-def export_site(store, board, output_root=None):
+def export_site(store, board, output_root=None, document=None):
     require_preview()
-    doc = store.compact(store.readable(board) if getattr(store, 'project_root', None) else store.get(board, hydrate=False))
+    doc = store.compact(document if document is not None else
+                        store.readable(board) if getattr(store, 'project_root', None) else store.get(board, hydrate=False))
     doc = copy.deepcopy(doc)
     from .statistical import statistical_artifacts
     doc['statisticalArtifacts'] = {key: {field: value for field, value in artifact.items() if field != 'provenance'}

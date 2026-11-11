@@ -64,6 +64,8 @@ EDIT_TOOLS = VIEW_TOOLS | frozenset({
     'dashboard_patch', 'dashboard_edit_begin', 'dashboard_edit_finish', 'dashboard_checkpoint',
     'dashboard_validate', 'dashboard_doctor', 'dashboard_history', 'dashboard_history_diff',
     'dashboard_restore', 'dashboard_version_label', 'runtime_diagnostics', 'dashboard_export_site',
+    'dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish',
+    'dashboard_share_status', 'dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_replace',
 })
 # Acts on the server's desktop session; meaningless and unsafe remotely.
 HIDDEN_TOOLS = frozenset({'dashboard_export_open'})
@@ -120,6 +122,10 @@ class ServerSettings:
             require(len(token) >= MIN_TOKEN_LENGTH, f'Bearer tokens need at least {MIN_TOKEN_LENGTH} characters', 'INVALID_CONFIG')
         if self.insecure_no_auth:
             require(self.host in ('127.0.0.1', 'localhost', '::1'), '--insecure-no-auth is only allowed on a loopback address', 'INVALID_CONFIG')
+        from .cloud_database import cloud_enabled
+        if cloud_enabled():
+            require(bool(self.secret), 'Cloud storage requires a stable CHARTS_SERVER_SECRET', 'INVALID_CONFIG')
+            self.stateless = True
         if not self.secret:
             self.secret = load_secret(self.runtime / 'server-secret')
         require(len(self.secret) >= 32, 'The signing secret needs at least 32 bytes', 'INVALID_CONFIG')
@@ -197,17 +203,25 @@ class ShareState:
     """Per-dashboard link generations; revoking bumps the generation."""
 
     def __init__(self, path: Path):
+        from .cloud_database import CloudDatabase, cloud_enabled
+        self.database = CloudDatabase() if cloud_enabled() else None
+        if self.database is not None:
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._db = sqlite3.connect(str(path), timeout=10, isolation_level=None, check_same_thread=False)
         self._db.execute('CREATE TABLE IF NOT EXISTS share_generations (project TEXT, dashboard TEXT, generation INTEGER, PRIMARY KEY(project, dashboard))')
 
     def generation(self, project, dashboard) -> int:
+        if self.database is not None:
+            return self.database.call('generation', project, board=dashboard)
         with self._lock:
             row = self._db.execute('SELECT generation FROM share_generations WHERE project=? AND dashboard=?', (project, dashboard)).fetchone()
         return row[0] if row else 0
 
     def revoke(self, project, dashboard) -> int:
+        if self.database is not None:
+            return self.database.call('revoke', project, board=dashboard)
         with self._lock:
             self._db.execute('INSERT INTO share_generations VALUES(?,?,1) ON CONFLICT(project, dashboard) DO UPDATE SET generation=generation+1', (project, dashboard))
             return self._db.execute('SELECT generation FROM share_generations WHERE project=? AND dashboard=?', (project, dashboard)).fetchone()[0]
@@ -238,9 +252,15 @@ class WorkspaceProjects:
         return value
 
     def exists(self, name: str) -> bool:
+        from .cloud_database import CloudDatabase, cloud_enabled
+        if cloud_enabled():
+            return name in CloudDatabase().call('projects')
         return PROJECT_NAME.fullmatch(name or '') is not None and (self.settings.workspace / name / 'charts-project.json').is_file()
 
     def names(self) -> list[str]:
+        from .cloud_database import CloudDatabase, cloud_enabled
+        if cloud_enabled():
+            return CloudDatabase().call('projects')
         return sorted(path.name for path in self.settings.workspace.iterdir()
                       if path.is_dir() and PROJECT_NAME.fullmatch(path.name) and (path / 'charts-project.json').is_file())
 
@@ -448,7 +468,14 @@ class RemoteServer:
         root = (self.settings.workspace / payload['p']).resolve()
         target = (root / str(payload.get('f', ''))).resolve()
         allowed = [(root / 'dashboards' / 'exports').resolve(), (root / 'deployments').resolve()]
-        if not any(target.is_relative_to(base) for base in allowed) or not target.is_file():
+        if not any(target.is_relative_to(base) for base in allowed):
+            return None
+        from .cloud_database import cloud_enabled
+        if cloud_enabled() and not target.is_file():
+            from .cloud_files import CloudFiles
+            if not CloudFiles().restore(payload['p'], target.relative_to(root).as_posix(), target):
+                return None
+        if not target.is_file():
             return None
         return target
 
@@ -533,7 +560,13 @@ def create_app(server: RemoteServer):
             await manager.handle_request(scope, receive, send)
 
     async def health(request: Request):
-        return JSONResponse({'ok': True, 'version': __version__}, headers={'Cache-Control': 'no-store'})
+        payload: dict[str, object] = {'ok': True, 'version': __version__}
+        if os.environ.get('CHARTS_RELEASE_VERSION'):
+            payload['release'] = {
+                'version': os.environ['CHARTS_RELEASE_VERSION'],
+                'commit': os.environ.get('CHARTS_RELEASE_COMMIT', ''),
+            }
+        return JSONResponse(payload, headers={'Cache-Control': 'no-store'})
 
     async def viewer(request: Request):
         from .assets import render_html
@@ -620,17 +653,68 @@ def create_app(server: RemoteServer):
         from starlette.responses import RedirectResponse
 
         def access_form(path, message='', status=200):
+            nonce = secrets.token_urlsafe(18)
+            error = ('<p id="key-error" class="error" role="alert">' + html.escape(message) + '</p>') if message else ''
+            described_by = 'key-hint key-error' if message else 'key-hint'
+            invalid = ' aria-invalid="true"' if status == 401 else ''
             page = ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
                     '<meta name="viewport" content="width=device-width,initial-scale=1">'
-                    '<title>访问分享</title></head><body><main><h1>访问分享</h1>'
-                    + ('<p role="alert">' + html.escape(message) + '</p>' if message else '') +
+                    '<title>访问分享 · Charts Design</title><style nonce="' + nonce + '">' + """
+                :root{color-scheme:light;--canvas:#f5f5f4;--surface:#fff;--ink:#1c1917;
+                    --muted:#57534e;--border:#d6d3d1;--primary:#123b5d;--focus:#2c6485;--error:#b42318}
+                *{box-sizing:border-box}
+                body{margin:0;background:var(--canvas);color:var(--ink);
+                    font:400 14px/1.6 'Inter Variable',Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+                ::selection{background:var(--primary);color:#fff}
+                main{min-height:100vh;min-height:100svh;display:grid;place-items:center;padding:32px 20px}
+                .access{width:100%;max-width:420px;padding:36px;background:var(--surface);
+                    border:1px solid var(--border);border-radius:8px}
+                h1{font-size:20px;line-height:1.4;font-weight:600;margin:0 0 8px;text-wrap:balance}
+                .intro{margin:0 0 28px;color:var(--muted)}
+                label{display:block;font-size:13px;font-weight:600;margin-bottom:8px}
+                input{width:100%;height:48px;padding:10px 14px;border:1px solid var(--border);
+                    border-radius:0;background:var(--surface);color:var(--ink);font:inherit;font-size:16px;
+                    font-variant-numeric:tabular-nums;letter-spacing:.2em;caret-color:var(--primary)}
+                input:hover{border-color:var(--muted)}
+                input[aria-invalid=true]{border-color:var(--error)}
+                input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+                .hint{margin:8px 0 24px;color:var(--muted);font-size:12px}
+                .error{margin:0 0 20px;padding:12px;background:var(--canvas);color:var(--error);overflow-wrap:anywhere}
+                button{width:100%;min-height:44px;padding:10px 16px;border:0;border-radius:0;
+                    background:var(--primary);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+                button:hover{background:var(--focus)}button:active{background:#051c2c}
+                .footer{margin:24px 0 0;color:var(--muted);font-size:12px;text-align:center}
+                .retry{display:block;margin:16px 0 0;text-align:center;color:var(--primary);text-underline-offset:3px}
+                @media(max-width:480px){main{padding:20px 16px}.access{padding:28px 24px}}
+                """ + '</style></head><body><main><section class="access" aria-labelledby="access-title">'
+                    '<h1 id="access-title">访问分享</h1>'
+                    '<p class="intro">输入分享者提供的密钥，即可查看页面。</p>' + error +
                     '<form method="post" action="' + html.escape(path, quote=True) + '">'
                     '<label for="access-key">8 位数字访问密钥</label>'
                     '<input id="access-key" name="accessKey" type="password" inputmode="numeric" '
-                    'pattern="[0-9]{8}" minlength="8" maxlength="8" required autocomplete="off">'
-                    '<button type="submit">打开分享</button></form></main></body></html>')
+                    'pattern="[0-9]{8}" minlength="8" maxlength="8" required autocomplete="off" '
+                    'aria-describedby="' + described_by + '"' + invalid + '>'
+                    '<p class="hint" id="key-hint" aria-live="polite">可直接粘贴密钥，包含开头的 0。</p>'
+                    '<button type="submit">打开分享</button></form>' +
+                    ('<a class="retry" href="' + html.escape(path, quote=True) + '">重新打开分享</a>' if status == 403 else '') +
+                    '<p class="footer">Charts Design · 私密分享</p></section></main>'
+                    '<script nonce="' + nonce + '">' + """
+                const key = new URLSearchParams(location.hash.slice(1)).get('key');
+                if (key !== null) {
+                    history.replaceState(null, '', location.pathname + location.search);
+                    if (/^[0-9]{8}$/.test(key)) {
+                        document.getElementById('access-key').value = key;
+                        document.getElementById('key-hint').textContent = '密钥已从分享链接填入，点击下方按钮即可查看。';
+                    }
+                }
+                """ + '</script></body></html>')
             headers = {**SECURITY_HEADERS, 'Cache-Control': 'no-store',
-                       'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'"}
+                       # no-referrer makes a browser's native form POST send Origin: null.
+                       # Keep the same-origin form identifiable without leaking cross-site referrers.
+                       'Referrer-Policy': 'same-origin',
+                       'Content-Security-Policy': "default-src 'none'; style-src 'nonce-" + nonce +
+                           "'; script-src 'nonce-" + nonce +
+                           "'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}
             if status == 429:
                 headers['Retry-After'] = '900'
             return Response(page, status_code=status, media_type='text/html', headers=headers)
@@ -678,8 +762,9 @@ def create_app(server: RemoteServer):
             status = {'INVALID_ACCESS_KEY': 401, 'SHARE_RATE_LIMITED': 429,
                       'SHARE_EXPIRED': 410, 'SHARE_UNAVAILABLE': 410, 'NOT_FOUND': 404,
                       'FORBIDDEN': 403}.get(error.code, 400)
-            if request.method == 'POST' and error.code in ('INVALID_ACCESS_KEY', 'SHARE_RATE_LIMITED'):
-                return access_form(base + '/s/' + request.path_params['share_id'] + '/', str(error), status)
+            if request.method == 'POST' and error.code in ('INVALID_ACCESS_KEY', 'SHARE_RATE_LIMITED', 'FORBIDDEN'):
+                message = '无法验证本次访问来源。请重新打开分享后输入密钥。' if error.code == 'FORBIDDEN' else str(error)
+                return access_form(base + '/s/' + request.path_params['share_id'] + '/', message, status)
             return JSONResponse(error.as_dict(), status_code=status,
                                 headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store'})
         except Exception as error:

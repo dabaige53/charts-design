@@ -145,8 +145,6 @@ class ProjectStore(Store):
             stored['manifest'].pop('annotations', None)
             if expected_annotations is None:
                 db.execute('UPDATE boards SET revision=?,document=? WHERE id=?', (doc['revision'], json_bytes(stored).decode(), board_id))
-            if restore_revision is not None:
-                db.execute('INSERT OR REPLACE INTO revisions VALUES(?,?,?,?,?)', (board_id, doc['revision'], utcnow(), f'restore:{restore_revision}', json_bytes(stored).decode()))
         self._files(board_id)
         return self.get(board_id)
 

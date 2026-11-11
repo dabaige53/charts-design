@@ -7,6 +7,8 @@
     "charts-design-runtime": "./bin/dashboard-runtime.js"
   },
   "scripts": {
+    "release": "node bin/release.mjs",
+    "deploy:cloudbase": "node bin/cloudbase-deploy.mjs",
     "ui:install": "pnpm --dir runtime-ui install --frozen-lockfile",
     "ui:build": "pnpm --dir runtime-ui build",
     "ui:typecheck": "pnpm --dir runtime-ui typecheck",
@@ -59,6 +61,7 @@
     "deploy/charts-design.service",
     "deploy/nginx.conf",
     "deploy/environment.example",
+    "cloudbase/migrations/",
     "docs/testing.md"
   ],
   "keywords": [

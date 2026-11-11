@@ -16,15 +16,25 @@ class CosShareStorage:
 
     @classmethod
     def from_environment(cls):
-        names = ('CHARTS_COS_REGION', 'CHARTS_COS_BUCKET',
-                 'TENCENTCLOUD_SECRETID', 'TENCENTCLOUD_SECRETKEY')
+        names = ('CHARTS_COS_REGION', 'CHARTS_COS_BUCKET')
         require(all(os.environ.get(name) for name in names),
-                'Configure CHARTS_COS_REGION, CHARTS_COS_BUCKET and Tencent runtime credentials',
+                'Configure CHARTS_COS_REGION and CHARTS_COS_BUCKET',
                 'CLOUD_SHARE_NOT_CONFIGURED')
         try:
             from qcloud_cos import CosConfig, CosS3Client
         except ImportError as error:
             raise DashboardError('COS_NOT_INSTALLED', 'Install charts-design-runtime[cloud]') from error
+        if os.environ.get('CLOUDBASE_API_KEY') and (
+                not os.environ.get('TENCENTCLOUD_SECRETID') or os.environ.get('CHARTS_COS_AUTH') == 'cloudbase'):
+            from .cloud_credentials import cloudbase_cos_client
+            return cls(cloudbase_cos_client(os.environ['CHARTS_COS_REGION'],
+                       os.environ.get('CLOUDBASE_ENV_ID', ''), os.environ['CLOUDBASE_API_KEY'],
+                       os.environ.get('CLOUDBASE_REGION', os.environ['CHARTS_COS_REGION'])),
+                       os.environ['CHARTS_COS_BUCKET'],
+                       os.environ.get('CHARTS_COS_SHARE_PREFIX', 'charts-shares/'))
+        require(os.environ.get('TENCENTCLOUD_SECRETID') and os.environ.get('TENCENTCLOUD_SECRETKEY'),
+                'Configure Tencent runtime credentials or CloudBase service credentials',
+                'CLOUD_SHARE_NOT_CONFIGURED')
         config = CosConfig(Region=os.environ['CHARTS_COS_REGION'],
                            SecretId=os.environ['TENCENTCLOUD_SECRETID'],
                            SecretKey=os.environ['TENCENTCLOUD_SECRETKEY'],

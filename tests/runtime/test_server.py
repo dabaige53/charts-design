@@ -23,6 +23,24 @@ def settings(tmp_path, **extra):
     return ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'ws' / '.runtime', tokens=(TOKEN,), port=8000, **extra)
 
 
+# @wu-test type=integration | scope=服务器发布健康检查 | protects=云端发布返回旧版本标记或本地运行要求云端发布参数
+def test_health_reports_release_identity_only_when_configured(tmp_path, monkeypatch):
+    from starlette.testclient import TestClient
+
+    monkeypatch.delenv('CHARTS_RELEASE_VERSION', raising=False)
+    monkeypatch.delenv('CHARTS_RELEASE_COMMIT', raising=False)
+    with TestClient(create_app(RemoteServer(settings(tmp_path)))) as client:
+        response = client.get('/health')
+        assert response.status_code == 200
+        assert response.json()['ok'] is True
+        assert 'release' not in response.json()
+        monkeypatch.setenv('CHARTS_RELEASE_VERSION', '1.2.1')
+        monkeypatch.setenv('CHARTS_RELEASE_COMMIT', 'a' * 40)
+        response = client.get('/health')
+        assert response.json()['release'] == {'version': '1.2.1', 'commit': 'a' * 40}
+        assert response.headers['cache-control'] == 'no-store'
+
+
 # @wu-test type=boundary | scope=分享链接签名 | protects=篡改过期或错类型令牌被接受
 def test_signer_rejects_tampering_kind_and_expiry():
     signer = Signer(b'k' * 32)

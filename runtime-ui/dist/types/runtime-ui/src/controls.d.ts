@@ -60,7 +60,7 @@ export declare function IconAction({ label, onClick, disabled, children, unavail
     variant?: "ghost" | "outline" | "default";
     pressed?: boolean;
 }): import("react").JSX.Element;
-export declare function ChartToolbar({ chartType, onChartType, grain, onGrain, showTable, onToggle, onExport, onCopy, onImage, onFullscreen, onInfo, }: {
+export declare function ChartToolbar({ chartType, onChartType, grain, onGrain, showTable, onToggle, onExport, onCopy, onImage, onExpand, expanded, onInfo, }: {
     chartType?: string;
     onChartType?: (value: string) => void;
     grain?: string;
@@ -70,7 +70,8 @@ export declare function ChartToolbar({ chartType, onChartType, grain, onGrain, s
     onExport?: () => void;
     onCopy?: () => void;
     onImage?: () => void;
-    onFullscreen?: () => void;
+    onExpand?: () => void;
+    expanded?: boolean;
     onInfo?: () => void;
 }): import("react").JSX.Element;
 export declare function TableToolbar({ query, onQuery, onColumns, onExport, }: {

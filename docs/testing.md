@@ -23,6 +23,8 @@
 
 ## CI 产物与排查
 
+版本发布由 `.github/workflows/cloudbase-release.yml` 单独执行。发布脚本的局部检查为 `node --test tests/deploy/cloudbase-release.test.mjs`；健康检查字段的局部验证为 `node bin/python-runtime.js -m pytest tests/runtime/test_server.py -k health_reports_release_identity -q`。发布工作流运行前者并在 CloudBase 构建容器，部署后核对线上版本和提交号，不启动上表的全量测试。
+
 - 每个快速测试作业上传 `unit-reports-py<版本>`：JUnit 报告与 `coverage.xml`；作业摘要列出覆盖率最低的模块。
 - 失败时先看对应作业的报错日志与 JUnit 报告。
 

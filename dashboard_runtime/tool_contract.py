@@ -142,6 +142,7 @@ READ_ONLY = {
     'dashboard_data_inspect', 'dashboard_filter_options', 'runtime_result_chunk',
     'runtime_diagnostics', 'dashboard_export_read', 'dashboard_doctor', 'dashboard_history_diff',
     'dashboard_share_status',
+    'dashboard_version_status', 'dashboard_version_get',
 }
 APP_ONLY = {'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open'}
 DESTRUCTIVE = {
@@ -150,6 +151,8 @@ DESTRUCTIVE = {
     'dashboard_checkpoint', 'dashboard_edit_finish', 'dashboard_version_label',
     'dashboard_share_revoke',
     'dashboard_share_delete',
+    'dashboard_share_replace',
+    'dashboard_version_publish',
 }
 
 
@@ -168,16 +171,21 @@ TOOLS = {
             'Optional shareId from dashboard_share_publish; omit to list this dashboard’s publications.'),
     }, ('dashboardId',))),
     'dashboard_share_publish': ('Publish a separate read-only static copy to configured private Tencent COS storage behind the HTTPS cloud gateway. '
-        'Requires a completed checkpoint at expectedRevision, cloud credentials and a deployed SCF cleanup timer. '
-        'Returns shareId/url/accessKey/expiresAt (UTC Unix seconds, null for never); communicate the URL and eight-digit key separately. '
+        'Project mode requires the current formal publication at expectedRevision: save with dashboard_checkpoint, then dashboard_version_publish. Also requires cloud credentials and a deployed SCF cleanup timer. '
+        'Returns shareId/url/accessUrl/accessKey/expiresAt (UTC Unix seconds, null for never). accessUrl carries the eight-digit key in a #key fragment for automatic form filling; give this link only to intended readers, or send url and accessKey separately. '
         'expiration defaults to 7d; never means no automatic expiry. At expiry the gateway rejects access immediately and cloud SCF deletes the copy, historical object versions and key records. '
         'Does not delete the source project or other shares. Does not deploy cloud infrastructure. On an uncertain response call dashboard_share_status before publishing another copy.', schema({
-        **BOARD, 'expectedRevision': EXPECTED,
+        **BOARD, 'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status; drafts may be newer without changing this share.'),
         'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'},
             'Lifetime from publication: never, seven days, or thirty days. Choose the period requested by the user.'),
         'accessKey': described({'type': 'string', 'pattern': '^[0-9]{8}$'},
             'Optional exactly eight ASCII digits, including leading zeros. Omit to generate a random key. Only a salted hash is stored remotely.'),
     }, ('dashboardId', 'expectedRevision'))),
+    'dashboard_share_replace': ('Replace one selected share with the current formally published version. Creates a new URL and random eight-digit key, then revokes the old link and its sessions; other shares stay unchanged. Upload failure leaves the old share usable. Returns new share credentials and previousRevoked. If previousRevoked=false, retain the returned new credentials and retry dashboard_share_delete for previousShareId; do not republish. Cloud SCF physically removes the old copy.', schema({
+        **BOARD, 'shareId': described({'type': 'string', 'pattern': '^[0-9a-f]{32}$'}, 'Active share to replace; obtain from dashboard_share_status.'),
+        'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status.'),
+        'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'}, 'New share lifetime measured from replacement.'),
+    }, ('dashboardId', 'shareId', 'expectedRevision'))),
     'dashboard_share_delete': ('Revoke one Tencent cloud publication immediately and queue physical deletion by cloud SCF, including never-expiring shares. '
         'Returns revoked=true, cleanupState=pending and cleanupExecutor=tencent-scf; pending is not proof of completed deletion. '
         'Deletes only this publication copy and its access records; preserves the source project and other shares. '
@@ -205,7 +213,7 @@ TOOLS = {
         **BOARD, 'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based checkpoint offset, project mode only.'),
         'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 50}, 'Maximum checkpoints per page, project mode only. A full page may require another call.'),
     }, ('dashboardId',))),
-    'dashboard_restore': ('Restore a retained checkpoint as a new revision; preserves existing history and project annotations. By default restores its data references too. Returns restored document; inspect it then dashboard_preview. Does not restore deleted/pruned checkpoints.' , schema({
+    'dashboard_restore': ('Restore a retained checkpoint as a new draft revision; preserves history, project annotations and the current formal publication. By default restores its data references too. Returns the draft; inspect and save with dashboard_checkpoint before dashboard_preview. Does not restore deleted/pruned checkpoints.' , schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'revision': described(INT, 'Retained checkpoint revision from dashboard_history, not the current draft revision.'),
         'useCurrentData': described({'type': 'boolean', 'default': False}, 'Project mode only: retain current data snapshot instead of historical data; restored definitions must remain compatible.'),
@@ -344,6 +352,14 @@ TOOLS = {
         **BOARD, 'fromRevision': described(INT, 'Earlier comparison checkpoint from dashboard_history.'),
         'toRevision': described(INT, 'Other retained checkpoint from dashboard_history.'),
     }, ('dashboardId', 'fromRevision', 'toRevision'))),
+    'dashboard_version_status': ('Read the draft revision, latest saved revision, current published revision and release timeline. Publishing is separate from saving a checkpoint and from updating a remote share. Use before publishing or inspecting version state.', schema(BOARD, ('dashboardId',))),
+    'dashboard_version_get': ('Read one saved or previously published version without changing the draft or publication. Returns version, including immutable dataset references; use for historical inspection.', schema({
+        **BOARD, 'revision': described(INT, 'Saved revision from dashboard_history or a release revision from dashboard_version_status.'),
+    }, ('dashboardId', 'revision'))),
+    'dashboard_version_publish': ('Make one saved version the current formal publication and append a release record. Requires the latest draft expectedRevision to reject stale actions. Repeating the current publication does not append a duplicate. Preserves the draft and existing independent shares; explicitly create or update a share afterward.', schema({
+        **BOARD, 'expectedRevision': EXPECTED,
+        'revision': described(INT, 'Saved revision to publish; may be an older version for a release rollback.'),
+    }, ('dashboardId', 'expectedRevision', 'revision'))),
     'dashboard_version_label': ('Project mode: replace the label/retention marker of an existing checkpoint without a new design revision. Returns revision/name/published; requires a non-empty name or published=true. This does not share or deploy the page.', schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'revision': described(INT, 'Existing checkpoint from dashboard_history to label.'),

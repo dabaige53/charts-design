@@ -123,7 +123,10 @@ export function StaticSite() {
       onFullscreen={
         document.fullscreenEnabled
           ? () => {
-              void document.documentElement.requestFullscreen();
+              const action = document.fullscreenElement
+                ? document.exitFullscreen()
+                : document.documentElement.requestFullscreen();
+              void action.catch((error) => setError(String(error)));
             }
           : undefined
       }

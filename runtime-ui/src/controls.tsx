@@ -27,6 +27,7 @@ import {
   Download,
   FileDown,
   Maximize2,
+  Minimize2,
   PanelRight,
   Table2,
   Copy,
@@ -639,7 +640,8 @@ export function ChartToolbar({
   onExport,
   onCopy,
   onImage,
-  onFullscreen,
+  onExpand,
+  expanded = false,
   onInfo,
 }: {
   chartType?: string;
@@ -651,7 +653,8 @@ export function ChartToolbar({
   onExport?: () => void;
   onCopy?: () => void;
   onImage?: () => void;
-  onFullscreen?: () => void;
+  onExpand?: () => void;
+  expanded?: boolean;
   onInfo?: () => void;
 }) {
   return (
@@ -700,6 +703,9 @@ export function ChartToolbar({
       <IconAction label="业务口径" onClick={onInfo}>
         <MetricInfoIcon />
       </IconAction>
+      <IconAction label={expanded ? "还原图表" : "放大图表"} onClick={onExpand} pressed={expanded}>
+        {expanded ? <Minimize2 /> : <Maximize2 />}
+      </IconAction>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-xs" aria-label="更多图表操作" title="更多图表操作">
@@ -710,7 +716,6 @@ export function ChartToolbar({
           <DropdownMenuItem disabled={!onExport} onSelect={onExport}><FileDown />导出 CSV</DropdownMenuItem>
           <DropdownMenuItem disabled={!onImage} onSelect={onImage}><ImageDown />下载图片</DropdownMenuItem>
           <DropdownMenuItem disabled={!onCopy} onSelect={onCopy}><Copy />复制图表</DropdownMenuItem>
-          <DropdownMenuItem disabled={!onFullscreen} onSelect={onFullscreen}><Maximize2 />全屏</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

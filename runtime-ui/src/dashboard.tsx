@@ -5,6 +5,7 @@ import {
   Save,
   X,
   Maximize2,
+  Minimize2,
   History,
   FileDown,
   SlidersHorizontal,
@@ -14,13 +15,9 @@ import {
   MousePointer2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFullscreenElement } from "./fullscreen";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
 } from "./ui";
 import { Input } from "./components/ui/input";
 import { Field, FieldLabel } from "./components/ui/field";
@@ -44,6 +41,7 @@ import { useDashboardRuntime, layoutOperations } from "./runtime";
 import { browserDownload, deliverExport, type Download } from "./host";
 import { RecoveryAlert } from "./recovery-alert";
 import { PositionComments } from "./position-comments";
+import { VersionCenter } from "./version-center";
 import type { Config, Document, Filter, Position, ToolCall } from "./types";
 function VisibleComponent({
   id,
@@ -79,6 +77,7 @@ export function DashboardApp({
   initial,
   call,
   onFullscreen,
+  pageFullscreen = false,
   download = browserDownload,
   readOnly = false,
   staticMode = false,
@@ -89,6 +88,7 @@ export function DashboardApp({
   initial: Document;
   call: ToolCall;
   onFullscreen?: () => void;
+  pageFullscreen?: boolean;
   download?: Download;
   readOnly?: boolean;
   staticMode?: boolean;
@@ -98,10 +98,13 @@ export function DashboardApp({
 }) {
   const runtime = useDashboardRuntime(initial, call),
     doc = runtime.document;
+  const fullscreenElement = useFullscreenElement();
+  const isPageFullscreen = pageFullscreen || fullscreenElement === document.documentElement;
+  const editUnavailable = "此链接为查看预览，请使用编辑预览链接操作";
   const [editing, setEditing] = useState(false),
     [title, setTitle] = useState(initial.manifest.title),
     [boards, setBoards] = useState<Config[]>([]),
-    [history, setHistory] = useState<Config[] | null>(null),
+    [versionsOpen, setVersionsOpen] = useState(false),
     [switchingId, setSwitchingId] = useState<string | null>(null),
     [notesOpen, setNotesOpen] = useState(false),
     [annotationBusy, setAnnotationBusy] = useState(false),
@@ -356,39 +359,36 @@ export function DashboardApp({
           >
             <RefreshCw />
           </IconAction>
-          <IconAction label="全屏查看" onClick={onFullscreen}>
-            <Maximize2 />
+          <IconAction label={isPageFullscreen ? "退出页面全屏" : "页面全屏"} onClick={onFullscreen} pressed={isPageFullscreen}>
+            {isPageFullscreen ? <Minimize2 /> : <Maximize2 />}
           </IconAction>
-          {!staticMode && (
+          {(
             <IconAction
               label={notesOpen ? "退出位置批注" : readOnly ? "查看批注" : "添加位置批注"}
               pressed={notesOpen}
               variant={notesOpen ? "default" : "ghost"}
-              disabled={editing || runtime.saving}
+              disabled={staticMode || editing || runtime.saving}
+              unavailable={staticMode ? editUnavailable : "请先完成当前编辑"}
               onClick={() => setNotesOpen((value) => !value)}
             >
               {notesOpen && !readOnly ? <MousePointer2 /> : <MessageSquareText />}
             </IconAction>
           )}
-          {!readOnly && (
+          {(
             <IconAction
-              label="历史与恢复"
-              disabled={annotationBusy || notesOpen}
-              onClick={() =>
-                guard(async () => {
-                  const result = await call("dashboard_history", {
-                    dashboardId: doc.id,
-                  });
-                  setHistory(result.history);
-                })
-              }
+              label="版本与分享"
+              disabled={readOnly || editing || runtime.saving || annotationBusy || notesOpen}
+              unavailable={readOnly ? editUnavailable : "请先完成当前编辑"}
+              onClick={() => setVersionsOpen(true)}
             >
               <History />
             </IconAction>
           )}
-          {!staticMode && (
+          {(
             <IconAction
               label="导出 HTML"
+              disabled={staticMode}
+              unavailable="请在编辑预览页导出 HTML"
               onClick={() =>
                 guard(async () => {
                   const result = await call("dashboard_export", {
@@ -405,8 +405,7 @@ export function DashboardApp({
               <FileDown />
             </IconAction>
           )}
-          {!readOnly &&
-            (editing ? (
+          {(editing ? (
               <>
                 <IconAction
                   label="取消布局编辑"
@@ -443,8 +442,8 @@ export function DashboardApp({
             ) : (
               <IconAction
                 label="编辑布局"
-                disabled={runtime.saving || annotationBusy || notesOpen}
-                unavailable="正在保存，请稍候"
+                disabled={readOnly || runtime.saving || annotationBusy || notesOpen}
+                unavailable={readOnly ? editUnavailable : "请先完成当前操作"}
                 onClick={() => setEditing(true)}
               >
                 <Pencil />
@@ -513,46 +512,17 @@ export function DashboardApp({
           onNotesChange={runtime.setAnnotations}
         />
       )}
-      <Dialog
-        open={history !== null}
-        onOpenChange={(open) => {
-          if (!open) setHistory(null);
+      {!readOnly && <VersionCenter
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+        document={doc}
+        call={call}
+        onSaved={async () => { await runtime.reload(); }}
+        onRestore={async (revision) => {
+          await runtime.restore(revision);
+          setLayoutKey((value) => value + 1);
         }}
-      >
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>历史与恢复</DialogTitle>
-            <DialogDescription>
-              恢复会创建新版本，已有批注继续保留。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            {history?.map((item) => (
-              <div
-                key={item.revision}
-                className="flex items-center justify-between gap-3"
-              >
-                <span>
-                  版本 {item.revision} {item.name || ""}
-                </span>
-                <Button
-                  variant="outline"
-                  disabled={runtime.saving || item.revision === doc.revision}
-                  onClick={() =>
-                    guard(async () => {
-                      await runtime.restore(item.revision);
-                      setHistory(null);
-                      setLayoutKey((v) => v + 1);
-                    })
-                  }
-                >
-                  恢复
-                </Button>
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      />}
     </div>
   );
 }

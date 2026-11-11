@@ -1,8 +1,8 @@
-"""Tencent SCF timer entry point; credentials come from its execution role."""
+"""Tencent SCF timer entry point; credentials come from the cloud environment."""
 
 
 def main_handler(event, context):
-    # SCF refreshes its execution-role credentials between invocations.
+    # Use refreshed execution-role credentials or CloudBase credential exchange.
     import json
     import os
     import time

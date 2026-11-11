@@ -2,9 +2,27 @@
 
 ## 存储
 
+默认 `CHARTS_STORAGE_BACKEND=local`，保留下面的 SQLite 和本地文件行为。
+
+`CHARTS_STORAGE_BACKEND=cloudbase` 使用 `CloudProjectStore`，以服务端 `CLOUDBASE_ENV_ID` 和 `CLOUDBASE_API_KEY` 调用 PostgreSQL HTTP RPC；适用于没有 TCP 直连入口的共享 PostgreSQL。先通过 CLI 应用 `cloudbase/migrations/` 中的迁移。RPC 在函数内部检查 `service_role`，不能只依赖函数执行授权；客户端和网页仍使用 MCP 自己的访问令牌。
+
+云端的项目配置、草稿、检查点、批注、编辑批次、链接撤销代次，以及不可变数据的元数据和有序行分块保存在 PostgreSQL。项目变更在一个 PostgreSQL 事务中校验修订号和批注状态，再提交；并发的过期编辑返回冲突。
+
+第一阶段保留现有 SQLite 查询引擎作为可重建缓存，以保留缺失字段、筛选、排序、时间分组和汇总语义。首次查询某个数据版本时，从 PostgreSQL 分块读取该版本，在本地重新校验内容哈希后查询。该阶段不是 PostgreSQL 原生分析查询，大数据冷启动需要读取完整的被查询版本；原始数据的持久副本在 PostgreSQL，缓存清空不会删除它。
+
+远程导出下载使用 COS 保存字节、PostgreSQL 保存文件引用；签名下载在新实例上可恢复文件。`CHARTS_COS_ASSET_PREFIX` 默认为 `charts-assets/`，不能与可过期分享的 `CHARTS_COS_SHARE_PREFIX` 重叠。项目资产不参与分享过期清理。本地 JSON 镜像不作为云端状态源。
+
 项目内 `charts-project.json` 管理历史和加载参数；`dashboards/dashboards.sqlite3` 是事务索引与权威状态，`dashboards/<id>/draft.json`、`checkpoints/*.json`、`annotations.json` 和 `annotation-history.json` 是自动生成的可读镜像，不能另行手工维护。检查点写入后不再变化，其镜像只在首次出现时写出；迁移改写检查点时整体重写镜像。`data/data.sqlite3` 保存不可变数据版本。运行目录仅用于传输缓存及诊断；删除新运行缓存不删除项目资产。既有集中目录不自动清理。
 
 项目默认配置由 `dashboard_runtime/project.py` 的 `DEFAULTS` 维护。`loading.pageSize` 是后端未显式提供表格状态时的缺省值，不等同于 UI 明确传入的表格页大小。命名检查点及设置 published 保留标记的检查点受到历史清理保护。数据不自动清理，避免删除仍被历史或批注引用的数据。设计JSON和数据内容不应作为含敏感数据的公共仓库产物提交。
+
+## 保存、发布与恢复
+
+项目草稿、已保存检查点与正式发布版本分别记录。`dashboard_checkpoint`／`dashboard_edit_finish` 保存检查点；`dashboard_version_publish` 选择一个已保存版本作为正式发布版本，重复发布当前版本不会重复写入发布事件。`dashboard_version_status` 返回三种修订号和发布记录，`dashboard_version_get` 只读查看保存或发布过的内容。
+
+`dashboard_restore` 只生成新草稿，保留现有批注，不自动保存检查点或改变正式发布。检查点中的旧 `published` 字段仍表示历史保留保护，不能当成正式发布状态。发布记录保存不可变内容与数据引用，检查点清理后仍可查看和回退到发布过的版本。
+
+共享编辑器在“版本与分享”侧栏提供保存、内容摘要、恢复为草稿、发布记录和独立分享。现阶段内容摘要不是历史图表的完整交互预览。替换选定分享会先生成新链接和不同的新密钥，再撤销旧链接与旧会话；其他独立分享保留。若新副本上传失败，旧分享保留；若新副本成功但旧分享撤销失败，操作返回新凭据与明确的待撤销状态，只重试撤销旧分享。
 
 ## 单入口多项目
 

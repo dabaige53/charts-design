@@ -15,6 +15,16 @@
 
 “真实 Runtime 数据”表示组件的数据入口已连接本项目工具；协议验证使用临时项目和明确标注的合成数据，通过实际 stdio MCP 调用，不读取业务项目。所有 UI 运行效果、剪贴板、全屏及宿主下载尚未在目标宿主确认。
 
+## 版本与分享
+
+维护入口：`runtime-ui/src/version-center.tsx`；由 `dashboard.tsx` 接入。输入为当前文档、工具调用函数及状态刷新回调，编辑未完成或操作繁忙时禁用入口。
+
+| 功能 | 当前能力 | 验证边界 |
+| --- | --- | --- |
+| 版本 | 命名保存、历史摘要、恢复草稿、正式发布、发布记录 | 后端局部检查与候选 MCP 验收通过；完整图表预览和差异比较未实现 |
+| 分享 | 不过期 / 7 天 / 30 天、创建、替换为当前发布版本、撤销 | 替换生成新链接和密钥；不自动影响其他分享 |
+| 状态 | 草稿、已保存、当前发布、过期与待清理 | 读取工具结果；构建通过，未执行浏览器或宿主交互验收 |
+
 ## 筛选与联动
 
 维护入口：`runtime-ui/src/controls.tsx`。应用适配：`dashboard.tsx`、`runtime.ts`。
@@ -34,9 +44,11 @@
 | 组件 | 输入参数 | 输出事件 | 状态与数据 | 宿主依赖 |
 | --- | --- | --- | --- | --- |
 | EChartSurface | option、label、className | onReady(chart)、onSelect(point) | 自适应、完整图例和原始 Formatter | ECharts；无 MCP 依赖 |
-| ChartToolbar | showTable、grain、操作 callbacks | 图／表、月／季、CSV、图片、复制、全屏、说明 | 不支持的操作禁用并说明原因 | 父组件提供下载、剪贴板和全屏 |
+| ChartToolbar | showTable、grain、expanded、操作 callbacks | 图／表、月／季、CSV、图片、复制、放大图表、说明 | 放大按钮直接展示并切换还原图标；不支持的操作禁用并说明原因 | 父组件提供下载、剪贴板和放大弹窗；浏览器全屏下浮层跟随全屏元素 |
 | ComponentView | document、id、grain、tableState | onGrain、onTableChange、onInspect、onExport、onSelect | 加载、空、错误、详情；不调用 MCP | 回调适配 |
 | 指标定义与语义 | semantic_inspect 结果 | 打开／关闭 | 指标、公式、单位、来源、实际绑定和计算语义 | 实际工具结果；无预览文案替代 |
+
+详情维护入口为 `runtime-ui/src/semantic-details.tsx`，图形结构为 `runtime-ui/src/semantic-structure.tsx`。当前接入章节锚点及上下滚动、默认展开的统一六字段指标口径、直角引导线和点击定义。组件传入当前 ECharts option；纵向柱形与折线组合生成结构示意，其他 ECharts 类型使用当前图形预览。自由 HTML 组件没有 ECharts option 时只展示可用的语义声明。明细查询仍由宿主提供，保留当前筛选、加载、错误重试和十行预览；来源与表格字段说明保留。此次未运行交互测试或浏览器验证。
 
 各图表保留独立生成逻辑和对应数据表。生产代码读取 `src/charts`；`runtime-ui/fixtures/charts.json` 仅为画板数据。图表 Tooltip 经 DOMPurify 处理。后端统计图保持独立产物，不改用浏览器重算。
 

@@ -4,6 +4,7 @@ import * as React from "react"
 import { cn } from "cn"
 import { Select as SelectPrimitive } from "radix-ui"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
+import { useFullscreenElement } from "../../fullscreen"
 
 function Select({
   ...props
@@ -63,8 +64,9 @@ function SelectContent({
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  const fullscreenElement = useFullscreenElement()
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={fullscreenElement}>
       <SelectPrimitive.Content
         data-slot="select-content"
         data-align-trigger={position === "item-aligned"}

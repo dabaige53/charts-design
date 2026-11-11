@@ -20,6 +20,11 @@ def export_path(root, board, export_id, format):
     require(format in FORMATS, 'Invalid export format')
     base = (Path(root) / 'exports').resolve()
     path = (base / export_id / (board + '.' + format)).resolve()
+    from .cloud_database import cloud_enabled
+    if cloud_enabled() and path.is_relative_to(base) and not path.is_file():
+        from .cloud_files import CloudFiles
+        project = Path(root).resolve().parent
+        CloudFiles().restore(project.name, path.relative_to(project).as_posix(), path)
     require(path.is_relative_to(base) and path.is_file(), 'Export file not found')
     return path
 

@@ -6,6 +6,7 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
+import { useFullscreenElement } from "../../fullscreen"
 
 function Dialog({
   ...props
@@ -22,7 +23,8 @@ function DialogTrigger({
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  const fullscreenElement = useFullscreenElement()
+  return <DialogPrimitive.Portal container={fullscreenElement} data-slot="dialog-portal" {...props} />
 }
 
 function DialogClose({

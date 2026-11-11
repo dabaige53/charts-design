@@ -3,6 +3,7 @@
 import * as React from "react"
 import { cn } from "cn"
 import { Drawer as DrawerPrimitive } from "vaul"
+import { useFullscreenElement } from "../../fullscreen"
 
 function Drawer({
   ...props
@@ -19,7 +20,8 @@ function DrawerTrigger({
 function DrawerPortal({
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Portal>) {
-  return <DrawerPrimitive.Portal data-slot="drawer-portal" {...props} />
+  const fullscreenElement = useFullscreenElement()
+  return <DrawerPrimitive.Portal container={fullscreenElement} data-slot="drawer-portal" {...props} />
 }
 
 function DrawerClose({
