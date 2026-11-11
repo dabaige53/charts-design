@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';
+import { test } from 'bun:test';import assert from 'node:assert/strict';
 import {visibleRows,aggregate} from '../../dashboard_runtime/web/engine.mjs';
 const document=rows=>({dataVersion:'v1',manifest:{components:{a:{datasetId:'sales'},b:{datasetId:'sales'}},metrics:{},datasets:{},filters:[{field:'carrier',op:'in',values:['HO'],componentIds:['a','b']}]},snapshot:{datasets:{sales:rows},componentData:{}}});
 // @wu-test type=behavior | scope=filtered row cache | protects=筛选或数据变化后使用过期结果 | debt=D6

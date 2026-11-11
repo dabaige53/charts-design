@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {createStaticClient,staticPartitionScope} from '../../dashboard_runtime/web/static-client.mjs';
+import { test } from 'bun:test';import assert from 'node:assert/strict';import {createStaticClient,staticPartitionScope} from '../../dashboard_runtime/web/static-client.mjs';
 const month=value=>({id:'period',label:'月份',field:'month',op:'in',required:true,values:[value]});
 const doc={manifest:{filters:[month('2026-09')]},staticPartitions:{sales:{field:'month'}},computed:{components:{}}};
 // @wu-test type=boundary | scope=static partition selection | protects=必选分区查询全部或多个分区

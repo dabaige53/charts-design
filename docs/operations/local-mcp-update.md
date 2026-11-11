@@ -8,14 +8,14 @@
 
 在 charts-design 本项目的 Codex 本地环境中执行“更新 charts-design MCP”。analyst-workspace 是更新目标，不放置该操作按钮。
 
-该操作先通过 `ui:prepare` 核对已有资源，输入和产物相符时复用，否则构建一次，再打包到本机 Documents 的现有工具目录，验证 MCP 启动和预览资源后，仅替换 analyst-workspace 的 `mcp_servers.charts-design.args[0]`。此入口用于已有项目配置的兼容更新；统一注册与多项目路由由 Magpie 管理，不为各业务项目新增注册。
+该操作先通过 `ui:prepare` 核对已有资源，输入和产物相符时复用，否则构建一次，再打包到本机 Documents 的现有工具目录。验证 MCP 启动和预览资源后，将 analyst-workspace 的 `mcp_servers.charts-design.command` 切换为 Bun，并替换 `args[0]`。安装包记录本次使用的 uv 虚拟环境解释器绝对路径，不复制旧的独立依赖目录。此入口用于已有项目配置的兼容更新；统一注册与多项目路由由 Magpie 管理，不为各业务项目新增注册。
 
 ```sh
-node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace
+bun bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace
 ```
 
 - 更新脚本读取 Codex 的 TOML 配置，需要 Python 3.11 及以上（标准库 `tomllib`）；Runtime 本身支持 Python 3.10。
-- 保留原 Node 命令、其余启动参数、启用状态和看板数据目录。
+- 启动命令切换为 Bun；保留其余启动参数、启用状态和看板数据目录。
 - 构建或启动检查失败时不切换配置；配置在构建期间变化时停止。
 - 配置采用临时文件原子替换，完成后不保留临时配置。
 - 已运行的宿主会话需重新连接 MCP 并重新打开预览；脚本不强行重启宿主。
@@ -28,7 +28,7 @@ node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/ana
 
 脚本检查目标包身份和全部源文件，然后复制清单内文件，最后原子写入 `.runtime-generation`。后端源文件更新也必须逐项列入清单。只复制前端产物不会更新后端。依赖变化需另行完成依赖安装或选择完整打包更新；此脚本只复制指定文件。
 
-支持该标记的常驻 Node 入口在收到后续请求时，停止向旧 Python 进程派发新请求；等待已派发请求返回后，关闭旧进程输入、启动新进程、恢复初始化并执行排队请求。已经执行的写操作不重试。首次部署此 Node 入口时，宿主仍需重新建立 MCP 连接；入口自身和工具定义的变化不由此机制热更新。
+支持该标记的常驻 Bun 入口在收到后续请求时，停止向旧 Python 进程派发新请求；等待已派发请求返回后，关闭旧进程输入、启动新进程、恢复初始化并执行排队请求。已经执行的写操作不重试。首次部署此 Bun 入口时，宿主仍需重新建立 MCP 连接；入口自身和工具定义的变化不由此机制热更新。
 
 ## 确认更新生效
 
@@ -43,9 +43,9 @@ node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/ana
 完整打包配置更新：
 
 ```sh
-node bin/python-runtime.js -m pytest tests/test_local_mcp_update.py -q
+bun bin/python-runtime.js -m pytest tests/test_local_mcp_update.py -q
 ```
 
-该检查覆盖单行与多行 TOML 参数、仅替换入口并保留其他配置，以及拒绝未知入口。安装包实际启动与预览资源仍按完整更新脚本检查。
+该检查覆盖单行与多行 TOML 参数、切换 Bun 命令及入口并保留其他配置，以及拒绝未知入口。安装包实际启动与预览资源仍按完整更新脚本检查。
 
 源码或自动检查通过后，仍需确认连接状态。维护时机：构建、安装更新入口、进程切换或重连方式变化时更新本文。

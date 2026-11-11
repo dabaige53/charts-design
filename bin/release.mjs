@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -22,7 +22,7 @@ export function releaseVersion(input, current) {
 export function release(root, args) {
   const dryRun = args.includes('--dry-run');
   const positional = args.filter(arg => arg !== '--dry-run');
-  if (positional.length !== 1) throw new Error('用法：npm run release -- 1.2.1 [--dry-run]');
+  if (positional.length !== 1) throw new Error('用法：bun run release -- 1.2.1 [--dry-run]');
   const git = (...argv) => execFileSync('git', argv, { cwd: root, encoding: 'utf8' }).trim();
   const packagePath = resolve(root, 'package.json');
   const pkg = JSON.parse(readFileSync(packagePath, 'utf8'));

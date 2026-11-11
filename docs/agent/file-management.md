@@ -20,6 +20,7 @@
 | `deploy/` | 自托管服务器的 Dockerfile、compose、systemd 与 nginx 示例 | 服务器参数或运行方式变化时同步 `docs/operations/self-hosted-server.md`；不存放令牌、密钥或 `charts.env` |
 | `dashboard_runtime/examples/academic-report.md` | 分析报告案例的唯一 Markdown 母稿 | MCP 案例直接读取，避免独立副本 |
 | `tests/`、`.github/workflows/` | 静态检查、后端单元测试与部署镜像冒烟检查 | 检查入口以 `docs/operations/testing.md` 为准，不含浏览器验收 |
+| `.bun-version`、`.python-version`、`pyproject.toml`、`uv.lock`、两级 `package.json` 与 `bun.lock` | 运行工具版本、依赖声明和锁定结果 | 环境入口统一见开发检查；声明和锁文件同批提交 |
 
 Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原位。项目级文档正文放在 `docs/`，不为工具发现另建根目录正文、链接入口或符号链接。适配 Skill 或插件要求时优先改用已有正文；自动发现失败时直接读取实际路径。
 
@@ -27,7 +28,7 @@ Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原
 
 `runtime-ui/src` 维护 React 组件、应用和宿主适配。`runtime-ui/fixtures` 仅保存设计预览数据，生产构建禁止引用该目录及 `docs`。40 个图表定义维护在 `runtime-ui/src/charts`，不再在构建时提取归档源码。
 
-构建输出为 `runtime-ui/dist`，由 GitHub Actions 保存为产物，不提交 Git。本地仅在明确需要预览或安装时通过 `ui:prepare` 核对并复用已有产物。`ui:package` 将应用资源交付到 `dashboard_runtime/web/dist`，供 MCP、npm 与 Python 包使用；容器在独立 Node 阶段构建。`ui:package:design` 更新设计系统组件 bundle。
+构建输出为 `runtime-ui/dist`，由 GitHub Actions 保存为产物，不提交 Git。本地仅在明确需要预览或安装时通过 `ui:prepare` 核对并复用已有产物。`ui:package` 将应用资源交付到 `dashboard_runtime/web/dist`，供 MCP、npm 与 Python 包使用；容器在独立 Bun 阶段构建。`ui:package:design` 更新设计系统组件 bundle。
 
 ## 业务资产与临时文件
 

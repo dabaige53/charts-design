@@ -6,7 +6,7 @@
 
 文档总览见 [docs/README.md](docs/README.md)，开发与维护的按任务阅读入口见 [AGENTS.md](AGENTS.md)。
 
-开发默认提交分支与 PR，由 GitHub Actions 执行测试和构建。本地仅在需要预览或更新安装时运行 `npm run ui:prepare`；源码与产物相符时复用，不重复构建。操作与检查范围见 [开发检查与 CI](docs/operations/testing.md)。设计系统资源通过 `npm run ui:package:design` 单独更新。
+环境统一使用 uv 与 Bun；首次在仓库执行 `bun run setup` 安装锁定依赖。开发默认提交分支与 PR，由 GitHub Actions 执行测试和构建。本地仅在需要预览或更新安装时运行 `bun run ui:prepare`；源码与产物相符时复用，不重复构建。操作与检查范围见 [开发检查与 CI](docs/operations/testing.md)。设计系统资源通过 `bun run ui:package:design` 单独更新。
 
 ## 当前真实可用入口
 
@@ -32,7 +32,7 @@
    - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/operations/self-hosted-server.md)。
 
 5. **Seaborn 统计图后端（可选）**：
-   - 统计图后端独立于旧 UI，数据与统计计算能力继续完整支持。安装 `pip install ".[statistics]"` 后，可基于原始观测数据声明直方图、箱线图、回归散点图，输出纯图产物（SVG/PNG）供嵌入报告。
+   - 统计图后端独立于旧 UI，数据与统计计算能力继续完整支持。运行 `uv sync --locked --extra statistics --no-install-project` 后，可基于原始观测数据声明直方图、箱线图、回归散点图，输出纯图产物（SVG/PNG）供嵌入报告。
    - 规范见 [Seaborn 后端说明](docs/implementation/seaborn-backend.md)。
 
 ## CLI 工作区使用 (Workspace Flow)
@@ -87,7 +87,7 @@ charts-design/
 │   ├── executive-charts/               # 看板设计规范、指标卡、布局模板与 workspace 脚本
 │   └── analytical-reports/             # 分析报告 Skill 与学术规范
 ├── tests/                              # 静态检查、数据与后端单元测试、容器冒烟测试
-├── package.json                        # Node CLI 入口与检查脚本
+├── package.json                        # Bun CLI 入口与检查脚本
 └── pyproject.toml                      # Python 依赖与包配置
 ```
 

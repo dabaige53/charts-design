@@ -1,0 +1,15 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "charts-design",
+      "devDependencies": {
+        "@cloudbase/cli": "3.9.1",
+      },
+    },
+  },
+  "packages": {
+    "@cloudbase/cli": ["@cloudbase/cli@3.9.1", "", { "bin": { "tcb": "bin/tcb", "cloudbase": "bin/cloudbase", "cloudbase-mcp": "bin/cloudbase-mcp" } }, "sha512-uk4AMWYR6CBjMu5XwDCkez1+DaMFLt3QsYvlZyCRvFK5OSJNkvIJiVoUDqglpEPOEBLRazwf6yBDooKqT52Glg=="],
+  }
+}

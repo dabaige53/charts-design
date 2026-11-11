@@ -27,10 +27,10 @@ ZIP 保存于运行目录 `exports/<id>/<dashboardId>.zip`。MCP 内使用 `dash
 已安装的交付包包含 UI 资源，直接导出。仅从源码本地运行且需要准备资源时执行：
 
 ```sh
-pnpm --dir runtime-ui install --frozen-lockfile
-npm run ui:prepare
+bun install --cwd runtime-ui --frozen-lockfile
+bun run ui:prepare
 ```
 
-然后导出 ZIP，解压并把内容放入普通静态 HTTP 服务。通过 `index.html` 访问；`file://` 无法读取 Worker 和 JSON 分片。导出包已包含运行资源，部署时无需安装 Node、Python 或原始仓库。
+然后导出 ZIP，解压并把内容放入普通静态 HTTP 服务。通过 `index.html` 访问；`file://` 无法读取 Worker 和 JSON 分片。导出包已包含运行资源，部署时无需安装 Bun、Python 或原始仓库。
 
 HTML 快照与静态网页用途不同：`dashboard_export` 的 HTML 仅保存当前计算视图；静态网页保存使用中的完整数据集，可以继续在浏览器中筛选。

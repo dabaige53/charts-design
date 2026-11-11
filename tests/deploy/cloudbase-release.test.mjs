@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test, afterEach } from 'bun:test';
+const temporaryDirectories = [];
+afterEach(() => { for (const dir of temporaryDirectories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,7 +32,7 @@ test('source package excludes private configuration and generated files', () => 
     '.git/config', 'boards/data.csv', 'dashboard_runtime/__pycache__/a.pyc']) {
     assert.equal(includeSource(name), false, name);
   }
-  for (const name of ['runtime-ui/pnpm-lock.yaml', 'runtime-ui/src/main.tsx',
+  for (const name of ['runtime-ui/bun.lock', 'runtime-ui/src/main.tsx',
     'dashboard_runtime/server.py', 'package.json', 'skills/executive-charts/SKILL.md']) {
     assert.equal(includeSource(name), true, name);
   }
@@ -87,9 +89,9 @@ test('full deployment selects the noninteractive CLI path', () => {
   assert.ok(args.includes('--wait'));
 });
 
-function repository(t) {
+function repository() {
   const base = mkdtempSync(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'charts-release-test-'));
-  t.after(() => rmSync(base, { recursive: true, force: true }));
+  temporaryDirectories.push(base);
   const root = join(base, 'work');
   const remote = join(base, 'remote.git');
   mkdirSync(root);
@@ -114,8 +116,8 @@ function repository(t) {
 }
 
 // @wu-test type=integration | scope=版本发布脚本 | protects=发布遗漏版本提交或误推分支触发全量测试
-test('release publishes a tag pointing to the version commit, without pushing a branch', t => {
-  const { root, git } = repository(t);
+test('release publishes a tag pointing to the version commit, without pushing a branch', () => {
+  const { root, git } = repository();
   release(root, ['1.2.1']);
   assert.equal(JSON.parse(readFileSync(join(root, 'package.json'))).version, '1.2.1');
   assert.equal(git('rev-parse', 'v1.2.1^{commit}'), git('rev-parse', 'HEAD'));
@@ -125,8 +127,8 @@ test('release publishes a tag pointing to the version commit, without pushing a 
 });
 
 // @wu-test type=boundary | scope=版本发布脚本 | protects=预览修改仓库或未提交代码被静默遗漏
-test('dry run leaves Git unchanged and dirty worktree blocks release', t => {
-  const { root, git } = repository(t);
+test('dry run leaves Git unchanged and dirty worktree blocks release', () => {
+  const { root, git } = repository();
   const initial = git('rev-parse', 'HEAD');
   release(root, ['1.2.1', '--dry-run']);
   assert.equal(git('rev-parse', 'HEAD'), initial);

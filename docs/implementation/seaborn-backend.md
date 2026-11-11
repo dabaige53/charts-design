@@ -1,6 +1,6 @@
 # Optional statistical charts (Seaborn)
 
-Install `python -m pip install '.[statistics]'`. The ECharts dashboard remains the
+Install `uv sync --locked --extra statistics --no-install-project`. The ECharts dashboard remains the
 interactive backend. Statistical components produce headless SVG or PNG and can
 be embedded in the same canonical Markdown report using a `chart` fence.
 Python 3.10+ is supported; dependency ranges are in `pyproject.toml`.

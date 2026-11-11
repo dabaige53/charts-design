@@ -55,10 +55,10 @@ Inter Variable 和 Lora Variable 随组件资源提供；卡片标题使用 Inte
 在项目根目录运行：
 
 ```sh
-pnpm --dir runtime-ui typecheck
-pnpm --dir runtime-ui build
-pnpm --dir runtime-ui package:runtime
-pnpm --dir runtime-ui package:design
+bun run --cwd runtime-ui typecheck
+bun run --cwd runtime-ui build
+bun run --cwd runtime-ui package:runtime
+bun run --cwd runtime-ui package:design
 ```
 
 构建只写 `runtime-ui/dist`。`ui:package` 将应用资源复制到后端发布目录；`ui:package:design` 将同一组件实现的设计 bundle 复制到本系统。画板资源通过 claude-design 的资源更新步骤单独维护，修改前读取当前文件并保留用户编辑。

@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';
+import { test } from 'bun:test';import assert from 'node:assert/strict';
 import {staticFilterPage} from '../../dashboard_runtime/web/local-filter.mjs';
 // @wu-test type=behavior | scope=static filter options | protects=搜索分页遗漏选项或清空搜索后结果错误
 test('static filter supports search, later pages and clearing search with no server',()=>{

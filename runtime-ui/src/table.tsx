@@ -4,6 +4,7 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
+  type CellContext,
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
@@ -45,6 +46,11 @@ import {
   TableToolbar,
 } from "./controls";
 import type { Config, TableState } from "./types";
+
+function TableValue(info: CellContext<Config, unknown>) {
+  const value = info.getValue();
+  return value == null ? "—" : String(value);
+}
 
 // Rows are already searched, sorted and paged by the runtime (or the design adapter).
 export function DataTable({
@@ -88,7 +94,7 @@ export function DataTable({
       specs.map((c) => ({
         id: String(c.key),
         accessorFn: (row) => row[c.key],
-        header: () =>
+        header:
           onChange ? (
             <SortControl
               label={c.title || c.label || c.key}
@@ -108,8 +114,7 @@ export function DataTable({
           ) : (
             c.title || c.label || c.key
           ),
-        cell: (info) =>
-          info.getValue() == null ? "—" : String(info.getValue()),
+        cell: TableValue,
       })),
     [specs, onChange, state],
   );

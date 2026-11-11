@@ -50,7 +50,7 @@ Paths below are relative to the package root:
 
 ## Self-hosted server
 
-`python3 -m dashboard_runtime server` serves Streamable HTTP MCP on `/mcp` with bearer tokens and browser previews of dashboards and reports. `projectRoot` is then a project name inside the server workspace, never an arbitrary server path. Desktop file actions (`dashboard_export_open`) are unavailable remotely; exports return signed `downloadUrl` links instead. See package-root `docs/operations/self-hosted-server.md` for deployment, tokens, share links and limits.
+`bun bin/python-runtime.js -m dashboard_runtime server` serves Streamable HTTP MCP on `/mcp` with bearer tokens and browser previews of dashboards and reports. `projectRoot` is then a project name inside the server workspace, never an arbitrary server path. Desktop file actions (`dashboard_export_open`) are unavailable remotely; exports return signed `downloadUrl` links instead. See package-root `docs/operations/self-hosted-server.md` for deployment, tokens, share links and limits.
 
 ## Standalone hosting
 

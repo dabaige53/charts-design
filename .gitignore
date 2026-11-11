@@ -1,6 +1,8 @@
 # Ignore all dotfiles and dot directories
 .*
 !.gitignore
+!.python-version
+!.bun-version
 !.github/
 !.github/**
 !docs/.impeccable/

@@ -12,7 +12,7 @@ updater = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(updater)
 
 
-# @wu-test type=behavior | scope=MCP配置更新 | protects=目标路径未更新或其他配置被改动 | debt=D1,D7
+# @wu-test type=behavior | scope=MCP配置更新 | protects=Bun入口未切换或其他服务器配置被改动
 @pytest.mark.parametrize('multiline', [False, True])
 def test_only_chart_entry_changes(multiline):
     text = '''# Preserve comments and other servers
@@ -28,13 +28,15 @@ command = "keep-me"
         text = text.replace('args = [', 'args = [\n').replace(', "--root"', ',\n"--root"')
     result = updater.replace_entry(text, Path('/new folder/package/bin/dashboard-runtime.js'))
     old, new = tomllib.loads(text), tomllib.loads(result)
+    assert new['mcp_servers']['charts-design']['command'] == 'bun'
+    new['mcp_servers']['charts-design']['command'] = old['mcp_servers']['charts-design']['command']
     new['mcp_servers']['charts-design']['args'][0] = old['mcp_servers']['charts-design']['args'][0]
     assert old == new
     assert result.startswith('# Preserve comments')
     assert '/data/看板' in result
 
 
-# @wu-test type=boundary | scope=MCP配置更新 | protects=未识别入口被覆盖 | debt=D1
+# @wu-test type=boundary | scope=MCP配置更新 | protects=未识别入口被覆盖
 def test_unknown_entry_is_rejected():
     with pytest.raises(ValueError):
         updater.replace_entry('[mcp_servers.charts-design]\nargs=["other.js"]\n', Path('/new/bin/dashboard-runtime.js'))

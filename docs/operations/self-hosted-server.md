@@ -1,6 +1,6 @@
 # 自托管服务器：远程 MCP 与网页预览
 
-`python3 -m dashboard_runtime server` 在一台服务器上同时提供远程 MCP（Streamable HTTP）和看板、分析报告的网页预览。它复用本地 Runtime 的同一套 `Service`、项目存储、Doctor 与前端构建；区别在于长期运行、按项目名隔离存储、用令牌和签名链接控制访问。本地 stdio MCP（`mcp` 命令）和本机编辑器（`serve` 命令）保持不变。
+`bun bin/python-runtime.js -m dashboard_runtime server` 在一台服务器上同时提供远程 MCP（Streamable HTTP）和看板、分析报告的网页预览。它复用本地 Runtime 的同一套 `Service`、项目存储、Doctor 与前端构建；区别在于长期运行、按项目名隔离存储、用令牌和签名链接控制访问。本地 stdio MCP（`mcp` 命令）和本机编辑器（`serve` 命令）保持不变。
 
 ## 提供的入口
 
@@ -24,15 +24,15 @@
 本机试用：
 
 ```sh
-python3 -m pip install 'mcp>=1.28,<2'
-TOKEN=$(python3 -c "import secrets;print(secrets.token_urlsafe(32))")
-python3 -m dashboard_runtime server --workspace ./charts-workspace --port 8000 --token "$TOKEN"
+uv sync --locked --extra mcp --no-install-project
+TOKEN=$(bun bin/python-runtime.js -c "import secrets;print(secrets.token_urlsafe(32))")
+bun bin/python-runtime.js -m dashboard_runtime server --workspace ./charts-workspace --port 8000 --token "$TOKEN"
 ```
 
 启动后打印 MCP 地址与管理入口。生产部署放在 HTTPS 反向代理之后，并设置对外地址：
 
 ```sh
-python3 -m dashboard_runtime server --workspace /data/projects --host 127.0.0.1 --port 8000 \
+bun bin/python-runtime.js -m dashboard_runtime server --workspace /data/projects --host 127.0.0.1 --port 8000 \
   --public-url https://charts.example.com --token-file /etc/charts-design/tokens
 ```
 
@@ -97,7 +97,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 - `dashboard_preview`：除 MCP App 所需文档外，结果附带 `previewUrl` 与 `previewExpiresAt`。不能显示 MCP Apps 的宿主（例如终端中的 Claude Code）把链接交给用户即可。仍按“批次完成后预览一次”的流程调用。
 - `dashboard_share`：`access` 为 `view`（只读）或 `edit`，`expiresInHours` 为 1–8784 小时。
 - `dashboard_share_revoke`：使该看板此前签发的全部链接立即失效。
-- 命令行：`python3 -m dashboard_runtime share <项目> <看板> --workspace ... --public-url ... [--access edit] [--hours 24]`，只需能读取签名密钥。
+- 命令行：`bun bin/python-runtime.js -m dashboard_runtime share <项目> <看板> --workspace ... --public-url ... [--access edit] [--hours 24]`，只需能读取签名密钥。
 - 管理入口 `/`：输入服务器令牌后列出项目与看板，点击生成 12 小时有效的预览或编辑链接。
 
 | 权限 | 可用操作 |
@@ -128,12 +128,12 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 GitHub Actions 工作流 `.github/workflows/cloudbase-release.yml` 监听 `vX.Y.Z` 标签。根目录 `package.json.version` 是云端发布号；Python 包的版本号独立维护。先提交需要上线的源码和工作流，再运行：
 
 ```sh
-npm run release -- 1.2.1
+bun run release -- 1.2.1
 ```
 
 替换为高于当前版本的新版本号。脚本要求工作区干净，更新 `package.json`，创建版本提交和附注标签，然后只推送该标签。不会自动提交其他改动，也不会推送分支触发原有全量测试流程。版本提交仍留在当前本地分支，后续按正常流程合并。加 `--dry-run` 只检查条件和展示步骤，不写文件或推送。
 
-发布任务使用 Node 22 和固定版本的 CloudBase CLI。GitHub 运行发布脚本的局部测试，CloudBase 根据 `deploy/Dockerfile` 构建 React 与 Python 容器，并完成完整发布；不在本机重复构建。工作流中的并发组禁止打断正在执行的部署。推送标签须使用用户或发布机器的 Git 凭据，不使用另一个工作流的默认 `GITHUB_TOKEN`，以免无法触发后续工作流。
+发布任务使用项目固定版本的 Bun 和固定版本的 CloudBase CLI。GitHub 运行发布脚本的局部测试，CloudBase 根据 `deploy/Dockerfile` 构建 React 与 Python 容器，并完成完整发布；不在本机重复构建。工作流中的并发组禁止打断正在执行的部署。推送标签须使用用户或发布机器的 Git 凭据，不使用另一个工作流的默认 `GITHUB_TOKEN`，以免无法触发后续工作流。
 
 仓库 Settings → Secrets and variables → Actions 需要以下配置：
 
@@ -145,7 +145,7 @@ npm run release -- 1.2.1
 | Variable | `CLOUDBASE_REGION` | 服务所在区域 |
 | Variable | `CLOUDBASE_SERVICE_URL` | 服务的 HTTPS 根地址 |
 
-本机复用部署入口时，安装工作流指定版本的 `@cloudbase/cli`，通过项目凭据入口注入上述通用环境变量，并检出目标标签，执行 `npm run deploy:cloudbase -- v1.2.1`。脚本用于更新已有 CloudBase 服务，不负责首次创建 PostgreSQL、COS、API Key 或清理函数。
+本机复用部署入口时，使用 `bun install --frozen-lockfile` 安装项目锁定的 `@cloudbase/cli`，通过项目凭据入口注入上述通用环境变量，并检出目标标签，执行 `bun run deploy:cloudbase -- v1.2.1`。脚本用于更新已有 CloudBase 服务，不负责首次创建 PostgreSQL、COS、API Key 或清理函数。
 
 部署前读取现有环境变量并保留，只更新 `CHARTS_RELEASE_VERSION` 和 `CHARTS_RELEASE_COMMIT`。源码包排除环境文件、密钥文件、依赖缓存、构建产物和设计归档。密钥不写入镜像、仓库、日志或工作流摘要。
 
@@ -221,7 +221,7 @@ npm run release -- 1.2.1
 | `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY`、`TENCENTCLOUD_SESSIONTOKEN` | 执行角色方式下由环境提供；临时凭据需包含 Token | 执行角色方式下每次调用重新读取 |
 | `CHARTS_COS_AUTH=cloudbase`、`CLOUDBASE_ENV_ID`、`CLOUDBASE_API_KEY` | 使用服务端环境密钥换取并刷新 COS 临时凭据 | 当前部署使用同一方式，不依赖本地进程 |
 
-从本仓安装发布进程：`python3 -m pip install '.[mcp,cloud]'`。自托管 Docker 镜像包含 COS SDK。
+从本仓安装发布进程：`uv sync --locked --extra mcp --extra cloud --no-install-project`。自托管 Docker 镜像包含 COS SDK。
 
 存储桶必须私有；禁止匿名访问，分享前缀禁用额外复制、备份和 CDN 缓存。发布前检查桶 ACL 和匿名访问策略。桶权限由部署人员配置；清理程序删除配置存储桶中的分享对象。
 

@@ -26,10 +26,10 @@
 
 ```sh
 # 空白报告，不插入业务数据。
-python3 -m dashboard_runtime --root ./boards init analysis --mode report --title "我的分析报告"
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards init analysis --mode report --title "我的分析报告"
 
 # 显式合成案例，含正文与图表。
-python3 -m dashboard_runtime --root ./boards init report-demo --mode report --demo
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards init report-demo --mode report --demo
 ```
 
 ### 正文、图号与阅读顺序
@@ -93,8 +93,8 @@ schema-v2 文档通过 `manifest.viewMode` 保存 `dashboard` 或 `report`；旧
 先读取最新版本，再将源文装入操作：
 
 ```sh
-python3 -m dashboard_runtime --root ./boards get report-demo
-python3 - <<'PYCODE'
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards get report-demo
+bun bin/python-runtime.js - <<'PYCODE'
 import json
 from pathlib import Path
 operations = [
@@ -104,7 +104,7 @@ operations = [
 Path("report-patch.json").write_text(json.dumps(operations, ensure_ascii=False))
 PYCODE
 # expected 使用 get 返回的最新 revision；此处演示值为 1。
-python3 -m dashboard_runtime --root ./boards patch report-demo --expected 1 --file report-patch.json
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards patch report-demo --expected 1 --file report-patch.json
 ```
 
 MCP 用同样的 `set_report_markdown` 操作，传入项目、看板和最新版本，并完成编辑批次。JSON 导入导出保留精确源文；整份 HTML 导出用共享渲染器保存只读报告。单组件导出按独立看板卡片呈现，不带其他组件和报告元信息。

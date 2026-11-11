@@ -1,6 +1,5 @@
-// @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, mock } from "bun:test";
 import { useDashboardRuntime } from "./runtime";
 import type { Config, Document } from "./types";
 
@@ -32,7 +31,7 @@ function patch(id: string, value = 100): Config {
 // @wu-test type=integration | scope=useDashboardRuntime.setFilter | protects=局部筛选重新查询未关联图表或清空已显示数值
 it("updates only filter consumers and retains the displayed value while waiting", async () => {
   let complete: ((result: Config) => void) | undefined;
-  const call = vi.fn(async (_name: string, args: Config = {}) => {
+  const call = mock(async (_name: string, args: Config = {}) => {
     if (args.filters[0].values.length) return new Promise<Config>((resolve) => { complete = resolve; });
     return patch(args.componentIds[0]);
   });
@@ -52,7 +51,7 @@ it("updates only filter consumers and retains the displayed value while waiting"
 // @wu-test type=integration | scope=useDashboardRuntime.request | protects=快速筛选时旧查询覆盖新结果或提前清除加载状态
 it("discards an older response that finishes after the newest selection", async () => {
   const responses: ((result: Config) => void)[] = [];
-  const call = vi.fn(() => new Promise<Config>((resolve) => { responses.push(resolve); }));
+  const call = mock(() => new Promise<Config>((resolve) => { responses.push(resolve); }));
   const initial = document();
   const { result } = renderHook(() => useDashboardRuntime(initial, call));
   act(() => result.current.activate("total"));
@@ -67,7 +66,7 @@ it("discards an older response that finishes after the newest selection", async 
 
 // @wu-test type=integration | scope=useDashboardRuntime.setTable | protects=表格翻页导致全部指标和图表重复查询
 it("queries only the table when its page changes", async () => {
-  const call = vi.fn(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));
+  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));
   const initial = document();
   const { result } = renderHook(() => useDashboardRuntime(initial, call));
   act(() => { result.current.activate("source"); result.current.activate("total"); result.current.activate("details"); });
@@ -82,7 +81,7 @@ it("queries only the table when its page changes", async () => {
 
 // @wu-test type=integration | scope=useDashboardRuntime.link | protects=柱图联动把来源图本身过滤成单根柱子或刷新无关组件
 it("preserves the source chart when applying linkage to other components", async () => {
-  const call = vi.fn(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));
+  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));
   const initial = document();
   const { result } = renderHook(() => useDashboardRuntime(initial, call));
   act(() => { result.current.activate("source"); result.current.activate("total"); result.current.activate("details"); });

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Restore local Codex skill links without copying skill implementations.
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -10,12 +10,11 @@ const commonDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '-
   cwd: root, encoding: 'utf8',
 }).trim();
 const primaryRoot = path.dirname(commonDir);
-const source = path.join(primaryRoot, '.agents', 'skills');
+const hostSkills = path.join(primaryRoot, '.agents', 'skills');
+const source = fs.existsSync(hostSkills) ? hostSkills : path.join(root, 'skills');
 const destination = path.join(root, '.agents', 'skills');
 
-if (!fs.existsSync(source)) {
-  throw new Error(`主工作区没有项目技能目录：${source}`);
-}
+if (source !== hostSkills) console.log('首次检出：从仓库 skills/ 建立项目技能入口。');
 
 const links = [];
 for (const entry of fs.readdirSync(source, {withFileTypes: true})) {

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {resolveOriginal} from '../../dashboard_runtime/web/bindings.mjs';
 import {formatComparison} from '../../dashboard_runtime/web/engine.mjs';

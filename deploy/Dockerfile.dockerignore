@@ -16,6 +16,7 @@
 !docs/**
 !package.json
 !pyproject.toml
+!uv.lock
 !README.md
 **/node_modules
 runtime-ui/dist

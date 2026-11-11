@@ -46,7 +46,7 @@ def test_same_host_session_survives_worker_idle_shutdown(tmp_path):
     worker_log = tmp_path / 'worker.log'
 
     async def check():
-        params = StdioServerParameters(command='node', args=[str(root / 'bin/dashboard-runtime.js'),
+        params = StdioServerParameters(command='bun', args=[str(root / 'bin/dashboard-runtime.js'),
             '--project-root', str(tmp_path/'project'), '--runtime-root', str(tmp_path/'runtime'), 'mcp', '--idle-timeout', '0.2'], env=dict(os.environ))
         async with stdio_client(params, errlog=errlog) as (read, write):
             async with ClientSession(read, write) as session:

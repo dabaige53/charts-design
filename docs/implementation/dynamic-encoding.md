@@ -43,11 +43,11 @@
 
 ## 复验入口
 
-- `node --test tests/runtime/encoding.test.mjs`：固定点、比例、空结果、描述字段冲突、动态系列及零售分组。
-- `node bin/python-runtime.js -m pytest tests/runtime/test_encoding.py -q`：SQL 聚合、字段校验和工具发现。
-- `node bin/python-runtime.js -m pytest tests/runtime/test_encoding_browser.py -q`：零售场景真实浏览器渲染、筛选后系列减少、明细同步、跨数据集下钻及清除。
-- `npm run runtime:test`：现有运行时兼容回归。测试使用项目登记的 Python 依赖和 Chromium；macOS 沙盒可能需要允许启动无界面浏览器。
-- `npm pack --pack-destination /private/tmp`：按项目正式入口生成安装包。安装包中的 `runtime_info.uiBuildId` 用于区分开发构建；本次不发布新版本。
+- `bun test ./tests/runtime/encoding.test.mjs`：固定点、比例、空结果、描述字段冲突、动态系列及零售分组。
+- `bun bin/python-runtime.js -m pytest tests/runtime/test_encoding.py -q`：SQL 聚合、字段校验和工具发现。
+- `bun bin/python-runtime.js -m pytest tests/runtime/test_encoding_browser.py -q`：零售场景真实浏览器渲染、筛选后系列减少、明细同步、跨数据集下钻及清除。
+- `bun run runtime:test`：现有运行时兼容回归。测试使用项目登记的 Python 依赖和 Chromium；macOS 沙盒可能需要允许启动无界面浏览器。
+- `bun pm pack --destination /private/tmp`：按项目正式入口生成安装包。安装包中的 `runtime_info.uiBuildId` 用于区分开发构建；本次不发布新版本。
 
 ![零售通用场景验收](../images/dynamic-encoding-retail.png)
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Workspace data management; shared React preview is available through the runtime.
 const {execFileSync} = require('node:child_process');
 const fs = require('node:fs');
@@ -32,7 +32,7 @@ function main() {
     const uiBuild = path.resolve(__dirname, '../dashboard_runtime/web/dist/build.json');
     const build = fs.existsSync(uiBuild) ? JSON.parse(fs.readFileSync(uiBuild, 'utf8')) : null;
     const result = {ok: fs.existsSync(workspaceTool), version: JSON.parse(fs.readFileSync(packageFile, 'utf8')).version,
-      runtime: {node: process.version, python: runtime.python, uiStatus: build ? 'built' : 'unavailable', uiBuildId: build?.id, offlineGeneration: false},
+      runtime: {bun: process.versions.bun, python: runtime.python, uiStatus: build ? 'built' : 'unavailable', uiBuildId: build?.id, offlineGeneration: false},
       paths: {workspaceTool}};
     console.log(args.includes('--json') ? JSON.stringify(result) : `charts-design ${result.version}\nWorkspace: ${result.ok ? 'ready' : 'missing'}\nUI: ${result.runtime.uiStatus}${build ? ' (' + build.id + ')' : ''}`);
     process.exitCode = result.ok ? 0 : 1;

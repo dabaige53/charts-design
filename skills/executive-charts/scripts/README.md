@@ -3,12 +3,12 @@
 本目录负责业务配置的创建、导入、检查和校验。页面通过共享 React Runtime 渲染。
 
 ```bash
-python3 skills/executive-charts/scripts/dashboard_workspace.py init ./sales-board --title "销售经营看板"
-python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./sales-board regional-sales \
+bun bin/python-runtime.js skills/executive-charts/scripts/dashboard_workspace.py init ./sales-board --title "销售经营看板"
+bun bin/python-runtime.js skills/executive-charts/scripts/dashboard_workspace.py add chart ./sales-board regional-sales \
   --from skills/executive-charts/references/quickstart/regional-sales.chart.json
-python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./sales-board --json
-python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./sales-board --strict --json
-python3 skills/executive-charts/scripts/dashboard_workspace.py import-csv ./csv-board --csv ./data.csv
+bun bin/python-runtime.js skills/executive-charts/scripts/dashboard_workspace.py inspect ./sales-board --json
+bun bin/python-runtime.js skills/executive-charts/scripts/dashboard_workspace.py validate ./sales-board --strict --json
+bun bin/python-runtime.js skills/executive-charts/scripts/dashboard_workspace.py import-csv ./csv-board --csv ./data.csv
 ```
 
 `meta set`、`add kpi`、`add filter`、`table set` 维护独立 JSON 资产。

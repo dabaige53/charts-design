@@ -2,10 +2,10 @@ version = 1
 name = "charts-design"
 
 [setup]
-script = "node bin/setup-worktree-skills.mjs"
+script = "bun run setup && bun bin/setup-worktree-skills.mjs"
 
 [[actions]]
 name = "更新 charts-design MCP"
 icon = "tool"
-command = "node bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace"
+command = "bun bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace"
 platform = "darwin"

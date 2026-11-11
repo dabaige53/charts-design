@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {supportsAnnotationContext,createAnnotationContext} from '../../dashboard_runtime/web/annotation-context.mjs';
 const doc={id:'board',revision:29,manifest:{title:'看板',components:{chart:{title:'区域'}},filters:[{field:'month',values:['2026-10']}]}};

@@ -18,11 +18,11 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 
 ## 启动与依赖
 
-Python 版本和可选依赖以 `pyproject.toml` 为准。使用项目选定的解释器；下列 `python3` 表示该解释器。
+Python 依赖由 `pyproject.toml` 声明、`uv.lock` 锁定；开发环境使用 uv 创建的 `.venv`。首次使用在仓库根目录执行 `bun run setup`，统一准备 Python 与 Bun 依赖。具体条件见 [开发环境](../operations/testing.md#统一开发环境)。
 
 ```sh
-python3 -m dashboard_runtime --root ./boards init demo
-python3 -m dashboard_runtime --root ./boards serve
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards init demo
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards serve
 ```
 
 普通 `init` 创建空白文档，只有显式 `--demo` 才插入合成数据。业务目录包含数据快照、来源 SQL 与参数，不提交到公共仓库。报告创建和源文约定见 [生成路径](generation-tracks.md)。
@@ -30,31 +30,30 @@ python3 -m dashboard_runtime --root ./boards serve
 仅在需要本地预览或导出且未使用已打包安装时准备共享应用；有效资源会复用：
 
 ```sh
-npm run ui:prepare
+bun run ui:prepare
 ```
 
 缺少资源时预览返回 `UI_UNAVAILABLE`。构建与打包命令维护在 `package.json` 和 `runtime-ui/package.json`；设计组件包通过独立入口更新，不隐式改写画布。
 
-Node 启动器读取项目根目录忽略的 `.charts-runtime-env.json`：
+Bun 启动器读取项目根目录忽略的 `.charts-runtime-env.json`：
 
 ```json
 {
-  "python": "/absolute/path/to/python",
-  "isolated": true,
-  "dependencies": ".mcp-test-deps",
+  "python": ".venv/bin/python",
+  "isolated": false,
   "cache": ".runtime-cache",
   "browsers": ".browser-cache"
 }
 ```
 
-用同一解释器安装 `pyproject.toml` 声明的依赖。`isolated` 与依赖目录同时配置时，启动器不加载共享 Python site-packages；`PYTHON` 可显式覆盖解释器。`PYTHONPATH`、缓存与浏览器路径的构造由 `bin/python-runtime.js` 维护，不另开一套环境加载方式。
+解释器选择顺序：显式 `PYTHON` → 本机配置的 `python` → 项目 `.venv`。相对路径按仓库根目录解析；缺少环境时提示运行安装入口，不回退系统 Python。显式 `PYTHON` 不混入旧依赖目录。`dependencies` 与 `isolated` 仅兼容旧安装；`bun run setup` 会移除旧依赖目录配置。缓存与浏览器路径继续由启动器传递。
 
-本地 Python 工作进程和网页服务器在没有请求或可见预览时按配置空闲退出；请求执行期间不计空闲。Node MCP 启动器保留 stdio 连接，并在下次请求恢复工作进程与初始化；直接 Python MCP 退出后需重连。App 仅在可见时保活，不增加后台轮询。超时参数与默认值以 `__main__.py`、`lifecycle.py` 为准。
+本地 Python 工作进程和网页服务器在没有请求或可见预览时按配置空闲退出；请求执行期间不计空闲。Bun MCP 启动器保留 stdio 连接，并在下次请求恢复工作进程与初始化；直接 Python MCP 退出后需重连。App 仅在可见时保活，不增加后台轮询。超时参数与默认值以 `__main__.py`、`lifecycle.py` 为准。
 
 ## MCP 发现与项目选择
 
 ```sh
-node /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolute/path/runtime-cache mcp
+bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolute/path/runtime-cache mcp
 ```
 
 单入口服务多个项目。每次项目请求显式传入 `projectRoot`；本地使用资产目录绝对路径，远程使用工作区内项目名。请求不会选中一个供后续调用沿用的“当前项目”。默认项目、旧集中存储及 Router 转发约定统一见 [项目资产与加载](project-runtime.md)。
@@ -92,7 +91,7 @@ MCP 中，创建、patch、恢复、数据导入/挂接/查询和数据迁移这
 组件声明保存稳定 ID、来源、数据集与指标引用、渲染配置和断点布局。预设、完整 ECharts 与自由 HTML/JavaScript 均通过明确声明进入；执行隔离、原生覆盖与绑定限制见 [渲染与覆盖](echarts-options.md)。历史 `kind=chart` 保留兼容读取，新组件遵循当前声明要求。
 
 ```sh
-python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
 ```
 
 工作区导入保留原图表、指标卡和表格声明。历史已丢失字段需要从原资产恢复。
@@ -100,7 +99,7 @@ python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./
 ## 数据导入与查询来源
 
 ```sh
-python3 -m dashboard_runtime --root ./boards call dataset_import --json-file import.json
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards call dataset_import --json-file import.json
 ```
 
 `dataset_import` 必须提供 `rows` 或 `csvText` 中的一种。目标数据集存在时替换其数据与元信息。推断得到的数值指标采用默认求和；业务定义、单位和粒度需确认。需要保留数字标识或前导零时，用 JSON 字符串明确类型。整份 schema-v2 文档可通过 `import NEW_ID --file artifact.json` 创建新看板。
@@ -112,7 +111,7 @@ SQL 执行只连接运维配置的 SQLite 来源别名。别名配置为：
 ```
 
 ```sh
-python3 -m dashboard_runtime --root ./boards --sources ./sources.json call query_execute --json-file query.json
+bun bin/python-runtime.js -m dashboard_runtime --root ./boards --sources ./sources.json call query_execute --json-file query.json
 ```
 
 ```json

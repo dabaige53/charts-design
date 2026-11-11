@@ -17,7 +17,7 @@ export function sourceId(repository) {
   const ui = path.join(repository, 'runtime-ui');
   const inputs = [
     ...['src', 'scripts', 'fixtures'].flatMap(dir => files(path.join(ui, dir))),
-    ...readdirSync(ui).filter(name => /\.(json|yaml|[cm]?js|ts)$/.test(name)).map(name => path.join(ui, name)),
+    ...readdirSync(ui).filter(name => /\.(json|lock|toml|[cm]?js|ts)$/.test(name)).map(name => path.join(ui, name)),
     ...files(path.join(repository, 'dashboard_runtime/web')).filter(name => name.endsWith('.mjs') && !name.includes(`${path.sep}dist${path.sep}`)),
   ].sort();
   const hash = createHash('sha256');

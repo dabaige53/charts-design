@@ -29,7 +29,7 @@
 报表资产归属于项目，但 MCP 进程不需要固定绑定一个项目。统一入口不带 `--project-root`；在包根目录启动：
 
 ```sh
-node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
+bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 ```
 
 每次项目工具调用都传 `projectRoot`，值是报表资产目录的绝对路径，不是 Agent 工作目录。示例：
@@ -99,7 +99,7 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 百万行本地数据的独立合成验收：
 
 ```sh
-node bin/python-runtime.js tests/runtime/benchmark_local.py --rows 1000000 --output /private/tmp/charts-performance.json
+bun bin/python-runtime.js tests/runtime/benchmark_local.py --rows 1000000 --output /private/tmp/charts-performance.json
 ```
 
 该命令创建独立临时 SQLite 数据，以两张指标卡、一个分类图和一张明细表检查导入、打开、筛选、聚合、翻页、排序、搜索和完整 CSV 导出，并记录响应体积、进程峰值内存及磁盘大小。结果核对独立计算的行数与合计，测量范围为后端查询和数据导出。首次全字段子串搜索需扫描完整数据；自然字符串排序、多列排序及随机深页使用 OFFSET。缓存绑定不可变数据版本。

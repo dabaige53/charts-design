@@ -29,6 +29,6 @@
 
 ## 构建与检查
 
-前端源码位于 `runtime-ui/src`。类型检查、构建和测试默认由 GitHub CI 执行。仅在需要本地预览或安装时运行 `npm run ui:prepare`，复用与源码相符的产物，否则构建一次并打包 Runtime。设计系统资源通过 `npm run ui:package:design` 单独更新。
+前端源码位于 `runtime-ui/src`。类型检查、构建和测试默认由 GitHub CI 执行。仅在需要本地预览或安装时运行 `bun run ui:prepare`，复用与源码相符的产物，否则构建一次并打包 Runtime。设计系统资源通过 `bun run ui:package:design` 单独更新。
 
 交付前检查声明校验、数据单位、筛选范围和所需动作；测试范围遵循 [项目测试规则](../../../docs/operations/testing.md)。
