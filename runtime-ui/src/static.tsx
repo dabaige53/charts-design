@@ -34,32 +34,57 @@ export function StaticSite() {
     [error, setError] = useState("");
   useEffect(() => {
     let live = true,
-      client: ReturnType<typeof createStaticClient> | undefined;
+      clients: ReturnType<typeof createStaticClient>[] = [];
     void fetch(new URL("document.json", location.href))
       .then(async (response) => {
         if (!response.ok) throw Error(`网页数据加载失败（${response.status}）`);
         const doc = (await response.json()) as Document;
-        client = createStaticClient(doc, location.href, "static-worker.js");
-        const query = client;
+        const pages: { id: string; title: string; path: string }[] = doc.staticPages || [{ id: doc.id, title: doc.manifest.title, path: "document.json" }];
+        const documents = new Map<string, Document>([[doc.id, doc]]);
+        const queries = new Map<string, ReturnType<typeof createStaticClient>>();
+        const load = async (id: string) => {
+          const page = pages.find((item) => item.id === id);
+          if (!page) throw Error("页面不在此分享中");
+          let value = documents.get(id);
+          if (!value) {
+            const response = await fetch(new URL(page.path, location.href));
+            if (!response.ok) throw Error(`网页数据加载失败（${response.status}）`);
+            value = await response.json() as Document;
+            documents.set(id, value);
+          }
+          return value;
+        };
+        const queryFor = async (id: string) => {
+          const current = await load(id);
+          let query = queries.get(id);
+          if (!query) {
+            const page = pages.find((item) => item.id === id)!;
+            query = createStaticClient(current, new URL(page.path, location.href).href, new URL("static-worker.js", location.href).href);
+            queries.set(id, query);
+            clients.push(query);
+          }
+          return { current, query };
+        };
         const call: ToolCall = async (name, args = {}) => {
           if (name === "dashboard_list")
-            return { dashboards: [{ id: doc.id, title: doc.manifest.title }] };
+            return { dashboards: pages };
           if (name === "dashboard_get" || name === "dashboard_preview")
-            return { document: doc };
+            return { document: await load(args.dashboardId || doc.id) };
+          const { current, query } = await queryFor(args.dashboardId || doc.id);
           if (name === "runtime_info")
-            return { dashboardRevision: doc.revision };
+            return { dashboardRevision: current.revision };
           if (name === "dashboard_view") return query.query(args);
           if (name === "dashboard_filter_options")
             return query.query({ ...args, filters: [] });
           if (name === "semantic_inspect") {
-            const component = doc.manifest.components[args.componentId],
+            const component = current.manifest.components[args.componentId],
               ids = component.binding
                 ? Object.values(component.binding.measures)
                 : component.measures || [];
             return {
               component,
               metrics: Object.fromEntries(
-                ids.map((id: any) => [id, doc.manifest.metrics[id]]),
+                ids.map((id: any) => [id, current.manifest.metrics[id]]),
               ),
             };
           }
@@ -99,7 +124,7 @@ export function StaticSite() {
       });
     return () => {
       live = false;
-      client?.destroy();
+      clients.forEach((client) => client.destroy());
     };
   }, []);
   if (error)

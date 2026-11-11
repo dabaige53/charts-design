@@ -332,7 +332,7 @@ def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeyp
         assert client.get(root).status_code == 410
 
 
-# @wu-test type=regression | scope=分享登录表单来源 | protects=CLOUD-SHARE-ORIGIN-001浏览器提交因no-referrer失败或修复时放开跨站来源
+# @wu-test type=boundary | scope=分享登录表单来源 | protects=浏览器提交失败或跨站来源绕过限制
 @pytest.mark.parametrize('origin, expected_status', [
     ('https://charts.example.com', 303),
     ('null', 403),
@@ -383,3 +383,21 @@ def test_gateway_limits_key_guesses(tmp_path):
         for _ in range(5):
             assert client.post(root, data={'accessKey': '00000000'}).status_code == 401
         assert client.post(root, data={'accessKey': '01234567'}).status_code == 429
+
+# @wu-test type=integration | scope=多页面云分享 | protects=分享遗漏选中页面或替换时丢失页面和发布版本
+def test_multi_page_publication_and_replace(tmp_path):
+    service, storage, shares, _ = publication(tmp_path)
+    service.call('dashboard_create', {'dashboardId': 'second', 'document': executive_document('second')})
+    with pytest.raises(DashboardError):
+        shares.publish(service, 'board', 1, pages=[{'dashboardId': 'second', 'expectedRevision': 1}])
+    service.call('dashboard_version_publish', {'dashboardId': 'second', 'expectedRevision': 1, 'revision': 1})
+    result = shares.publish(service, 'board', 1, pages=[{'dashboardId': 'second', 'expectedRevision': 1}])
+    root = json.loads(shares.content(result['shareId'], 'document.json'))
+    assert [page['id'] for page in root['staticPages']] == ['board', 'second']
+    second = json.loads(shares.content(result['shareId'], root['staticPages'][1]['path']))
+    assert second['id'] == 'second'
+    assert len(shares.status(service, 'board', result['shareId'])['shares'][0]['pages']) == 2
+    replaced = shares.replace(service, 'board', result['shareId'], 1)
+    assert replaced['previousRevoked']
+    assert [page['id'] for page in replaced['pages']] == ['board', 'second']
+    assert json.loads(shares.content(replaced['shareId'], 'pages/second/document.json'))['id'] == 'second'

@@ -285,13 +285,16 @@ class Links:
     def __init__(self, settings: ServerSettings, signer: Signer, state: ShareState):
         self.settings, self.signer, self.state = settings, signer, state
 
-    def share(self, project: str, dashboard: str, access: str = 'view', hours: float | None = None) -> dict:
+    def share(self, project: str, dashboard: str, access: str = 'view', hours: float | None = None, dashboards=None) -> dict:
         require(access in ('view', 'edit'), 'access must be view or edit')
         hours = self.settings.share_hours if hours is None else hours
         require(isinstance(hours, (int, float)) and not isinstance(hours, bool) and 0 < hours <= 24 * 366, 'expiresInHours must be between 1 and 8784')
         expires = int(time.time() + hours * 3600)
+        included = [dashboard] + (dashboards or [])
         token = self.signer.sign({'k': 'share', 'p': project, 'd': dashboard, 'a': access, 'exp': expires,
-                                  'g': self.state.generation(project, dashboard), 'n': secrets.token_hex(4)})
+                                  'g': self.state.generation(project, dashboard),
+                                  'pages': {item: self.state.generation(project, item) for item in included},
+                                  'n': secrets.token_hex(4)})
         url = f'{self.settings.public_url}/{access}/{quote(project)}/{quote(dashboard)}#token={token}'
         return {'url': url, 'access': access, 'expiresAt': _iso(expires)}
 
@@ -318,6 +321,7 @@ class ServerProfile(McpProfile):
                                 'view permits reading; edit also permits the supported viewer edits. Repeated calls issue new links. '
                                 'For eight-digit visitor keys, never/7d/30d and physical expiry deletion use dashboard_share_publish instead; this signed-link tool does not delete stored data.',
                                 tool_schema({'dashboardId': BOARD['dashboardId'],
+                                    'dashboardIds': described({'type': 'array', 'items': BOARD['dashboardId'], 'uniqueItems': True}, 'Additional pages to include in this link.'),
                                     'access': described({'enum': ['view', 'edit'], 'default': 'view'},
                                         'Permission granted by this link; use edit only when the user requested editing access.'),
                                     'expiresInHours': described({'type': 'number', 'minimum': 1, 'maximum': 8784},
@@ -346,7 +350,12 @@ class ServerProfile(McpProfile):
         if name == 'dashboard_share':
             board = request.get('dashboardId')
             selected.store.revision(board)  # NOT_FOUND for unknown dashboards
-            link = self.links.share(selected.project_name, board, request.get('access', 'view'), request.get('expiresInHours'))
+            pages = request.get('dashboardIds', [])
+            require(isinstance(pages, list) and all(isinstance(page, str) and page != board for page in pages)
+                    and len(pages) == len(set(pages)), 'Invalid additional pages', 'INVALID_ARGUMENT')
+            for page in pages:
+                selected.store.revision(page)
+            link = self.links.share(selected.project_name, board, request.get('access', 'view'), request.get('expiresInHours'), pages)
             return {'dashboardId': board, **link}
         if name == 'dashboard_share_revoke':
             board = request.get('dashboardId')
@@ -372,6 +381,7 @@ class Principal:
     admin: bool
     access: str
     dashboard: str | None = None
+    dashboards: tuple = ()
 
 
 class RemoteServer:
@@ -432,7 +442,11 @@ class RemoteServer:
             return None
         if payload.get('g') != self.state.generation(project, payload.get('d')):
             return None
-        return Principal(admin=False, access=payload.get('a', 'view'), dashboard=payload.get('d'))
+        pages = payload.get('pages', {payload.get('d'): payload.get('g')})
+        if not isinstance(pages, dict) or payload.get('d') not in pages or any(
+                generation != self.state.generation(project, page) for page, generation in pages.items()):
+            return None
+        return Principal(admin=False, access=payload.get('a', 'view'), dashboard=payload.get('d'), dashboards=tuple(pages))
 
     # Viewer API ---------------------------------------------------------
     def call_viewer(self, project: str, name: str, args, principal: Principal):
@@ -443,14 +457,23 @@ class RemoteServer:
         args = {key: value for key, value in args.items() if key != 'projectRoot'}
         service = self.projects.service(project)
         if principal.dashboard:
+            if name == 'dashboard_share_publish':
+                pages = args.get('pages', [])
+                require(isinstance(pages, list) and all(isinstance(page, dict) and page.get('dashboardId') in principal.dashboards for page in pages),
+                        'This link cannot share pages outside its scope', 'FORBIDDEN')
+            if name == 'dashboard_share_replace':
+                from .cloud_shares import CloudShares
+                control = CloudShares.from_environment().control(args.get('shareId'))
+                require(all(page['id'] in principal.dashboards for page in control.get('pages', [])),
+                        'This link cannot replace a share containing other pages', 'FORBIDDEN')
             if name == 'dashboard_list':
-                return {'dashboards': [item for item in service.call('dashboard_list', {})['dashboards'] if item['id'] == principal.dashboard], 'projectRoot': project}
+                return {'dashboards': [item for item in service.call('dashboard_list', {})['dashboards'] if item['id'] in principal.dashboards], 'projectRoot': project}
             properties = TOOLS.get(name, ('', {}))[1].get('properties', {})
             if 'dashboardId' in properties or 'dashboardId' in args:
                 requested = args.get('dashboardId', principal.dashboard)
-                if requested != principal.dashboard:
+                if requested not in principal.dashboards:
                     raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
-                args['dashboardId'] = principal.dashboard
+                args['dashboardId'] = requested
         result = self.profile.decorate(name, args, service.call(name, args), service)
         if name == 'runtime_info' and not principal.admin:
             result = {key: result[key] for key in SANITIZED_INFO if key in result} | {'projectRoot': project}

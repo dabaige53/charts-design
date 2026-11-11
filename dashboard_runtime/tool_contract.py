@@ -176,6 +176,7 @@ TOOLS = {
         'expiration defaults to 7d; never means no automatic expiry. At expiry the gateway rejects access immediately and cloud SCF deletes the copy, historical object versions and key records. '
         'Does not delete the source project or other shares. Does not deploy cloud infrastructure. On an uncertain response call dashboard_share_status before publishing another copy.', schema({
         **BOARD, 'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status; drafts may be newer without changing this share.'),
+        'pages': described({'type': 'array', 'items': {'type': 'object', 'properties': {'dashboardId': ID, 'expectedRevision': INT}, 'required': ['dashboardId', 'expectedRevision'], 'additionalProperties': False}}, 'Additional published pages to include; omit the main dashboard. Each revision must match its current published revision.'),
         'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'},
             'Lifetime from publication: never, seven days, or thirty days. Choose the period requested by the user.'),
         'accessKey': described({'type': 'string', 'pattern': '^[0-9]{8}$'},

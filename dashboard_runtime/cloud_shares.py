@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
-from .model import require
+from .model import identifier, require
 
 SHARE_ID = re.compile(r'^[0-9a-f]{32}$')
 ACCESS_KEY = re.compile(r'^[0-9]{8}$')
@@ -58,7 +58,7 @@ class CloudShares:
                 '分享已过期或已撤销', 'SHARE_EXPIRED')
         return control
 
-    def publish(self, service, board, expected_revision, expiration='7d', access_key=None):
+    def publish(self, service, board, expected_revision, expiration='7d', access_key=None, pages=None):
         require(expiration in EXPIRATIONS, 'expiration must be never, 7d or 30d', 'INVALID_ARGUMENT')
         access_key = access_key if access_key is not None else f'{secrets.randbelow(100000000):08d}'
         require(isinstance(access_key, str) and bool(ACCESS_KEY.fullmatch(access_key)),
@@ -72,6 +72,21 @@ class CloudShares:
         else:
             doc = service.store.get(board, hydrate=False)
             require(doc['revision'] == expected_revision, 'Reload before sharing', 'REVISION_CONFLICT')
+        documents = [(board, doc)]
+        if pages is not None:
+            require(service.project_root is not None and isinstance(pages, list),
+                    'Multiple pages require a project and a page list', 'INVALID_ARGUMENT')
+            seen = {board}
+            for page in pages:
+                require(isinstance(page, dict) and isinstance(page.get('dashboardId'), str)
+                        and type(page.get('expectedRevision')) is int,
+                        'Each page requires dashboardId and expectedRevision', 'INVALID_ARGUMENT')
+                page_id, revision = identifier(page['dashboardId']), page['expectedRevision']
+                require(page_id not in seen, 'Duplicate page', 'INVALID_ARGUMENT')
+                require(versions.status(page_id)['publishedRevision'] == revision,
+                        'Publish each selected page before sharing it', 'REVISION_CONFLICT')
+                documents.append((page_id, versions.read(page_id, revision)))
+                seen.add(page_id)
         heartbeat = self.storage.get('cleaner-status.json')
         require(heartbeat is not None and time.time() - json.loads(heartbeat)['completedAt'] < 180,
                 'Deploy the SCF minute timer and confirm a successful cloud cleanup invocation before publishing',
@@ -90,6 +105,22 @@ class CloudShares:
             from .deployment import export_site
             exported = export_site(service.store, board, output_root=Path(temporary), document=doc)['export']
             site = Path(exported['directory'])
+            if len(documents) > 1:
+                import shutil
+                entries = [{'id': board, 'title': doc['manifest']['title'], 'path': 'document.json', 'revision': doc['revision']}]
+                for page_id, page_doc in documents[1:]:
+                    page_export = export_site(service.store, page_id, output_root=Path(temporary), document=page_doc)['export']
+                    target = site / 'pages' / page_id
+                    target.mkdir(parents=True)
+                    shutil.copyfile(Path(page_export['directory']) / 'document.json', target / 'document.json')
+                    shutil.copytree(Path(page_export['directory']) / 'data', target / 'data')
+                    entries.append({'id': page_id, 'title': page_doc['manifest']['title'],
+                                    'path': 'pages/' + page_id + '/document.json', 'revision': page_doc['revision']})
+                root_doc = json.loads((site / 'document.json').read_bytes())
+                root_doc['staticPages'] = entries
+                (site / 'document.json').write_text(json.dumps(root_doc, ensure_ascii=False), encoding='utf-8')
+            else:
+                entries = [{'id': board, 'title': doc['manifest']['title'], 'path': 'document.json', 'revision': doc['revision']}]
             files = []
             for path in sorted(site.rglob('*')):
                 if not path.is_file():
@@ -102,13 +133,13 @@ class CloudShares:
             control = {'shareId': share_id, 'state': 'active', 'dashboardId': board,
                        'revision': doc['revision'], 'owner': owner, 'createdAt': now,
                        'expiresAt': expires, 'salt': salt, 'keyHash': key_digest(access_key, salt),
-                       'files': files}
+                       'files': files, 'pages': entries}
             self._put_json('shares/' + share_id + '/control.json', control)
-            self._put_json('jobs/' + share_id + '.json', {**job, 'state': 'active', 'cleanupAfter': expires})
+            self._put_json('jobs/' + share_id + '.json', {**job, 'state': 'active', 'cleanupAfter': expires, 'pages': entries})
         url = self.public_url + '/s/' + share_id + '/'
         return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
                 'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
-                'revision': doc['revision'], 'cleanupExecutor': 'tencent-scf'}
+                'revision': doc['revision'], 'pages': entries, 'cleanupExecutor': 'tencent-scf'}
 
     def authenticate(self, share_id, key):
         control = self.control(share_id)
@@ -126,7 +157,15 @@ class CloudShares:
         access_key = f'{secrets.randbelow(100000000):08d}'
         while hmac.compare_digest(key_digest(access_key, previous['salt']), previous['keyHash']):
             access_key = f'{secrets.randbelow(100000000):08d}'
-        result = self.publish(service, board, expected_revision, expiration, access_key)
+        pages = []
+        if len(previous.get('pages', [])) > 1:
+            from .versions import Versions
+            versions = Versions(service.store)
+            for page in previous['pages'][1:]:
+                revision = versions.status(page['id'])['publishedRevision']
+                require(revision is not None, 'Publish each selected page before sharing it', 'REVISION_CONFLICT')
+                pages.append({'dashboardId': page['id'], 'expectedRevision': revision})
+        result = self.publish(service, board, expected_revision, expiration, access_key, pages)
         try:
             job_key = 'jobs/' + result['shareId'] + '.json'
             raw = self.storage.get(job_key)
@@ -181,7 +220,7 @@ class CloudShares:
                 continue
             due = job['cleanupAfter'] is not None and time.time() >= job['cleanupAfter']
             shares.append({'shareId': job['shareId'], 'state': 'expired' if due and job['state'] == 'active' else job['state'],
-                           'revision': job['revision'], 'expiresAt': job['expiresAt'],
+                           'revision': job['revision'], 'expiresAt': job['expiresAt'], 'pages': job.get('pages', []),
                            'replacesShareId': job.get('replacesShareId'),
                            'cleanupState': 'pending' if due else 'scheduled' if job['cleanupAfter'] else 'not_scheduled',
                            'url': self.public_url + '/s/' + job['shareId'] + '/'})

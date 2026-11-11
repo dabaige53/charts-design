@@ -105,7 +105,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | 只读链接 | 阅读看板或报告、筛选、表格分页与搜索、图表切换为表、查看指标定义与来源、导出文件、查看已有批注 |
 | 编辑链接 | 另可拖动布局、修改标题与说明、编辑报告 Markdown、版本历史与恢复、运行诊断、生成网页部署包 |
 
-链接只对签发时的项目与看板有效，访问其他看板返回 403，页面切换只列出该看板。导入数据、执行查询、新建看板等操作只通过 MCP 完成。报告在浏览器中按学术单栏排版，图表滚动到可见区域时加载。
+签名链接默认只包含签发时的看板；调用 `dashboard_share` 时可通过 `dashboardIds` 指定同一项目的其他页面。页面切换只列出获准页面，访问其他页面返回 403。撤销其中任一页面的签名分享会使包含它的链接失效。导入数据、执行查询、新建看板等操作只通过 MCP 完成。报告在浏览器中按学术单栏排版，图表滚动到可见区域时加载。
 
 页面以内容哈希引用 `app.<构建号>.js/css`，设置长期不可变缓存并以 gzip 压缩。响应头包含 CSP（仅允许本站脚本与经哈希固定的启动脚本）、`Referrer-Policy: no-referrer`、`X-Frame-Options: DENY`。
 
@@ -131,7 +131,7 @@ GitHub Actions 工作流 `.github/workflows/cloudbase-release.yml` 监听 `vX.Y.
 bun run release -- 1.2.1
 ```
 
-替换为高于当前版本的新版本号。脚本要求工作区干净，更新 `package.json`，创建版本提交和附注标签，然后只推送该标签。不会自动提交其他改动，也不会推送分支触发原有全量测试流程。版本提交仍留在当前本地分支，后续按正常流程合并。加 `--dry-run` 只检查条件和展示步骤，不写文件或推送。
+替换为高于当前版本的新版本号。脚本要求工作区干净，更新 `package.json`，创建版本提交和附注标签，然后只推送该标签。其他改动须提前提交；脚本只推送标签，分支与原有全量测试流程保持原状。版本提交仍留在当前本地分支，后续按正常流程合并。加 `--dry-run` 只检查条件和展示步骤，不写文件或推送。
 
 发布任务使用项目固定版本的 Bun 和固定版本的 CloudBase CLI。GitHub 运行发布脚本的局部测试，CloudBase 根据 `deploy/Dockerfile` 构建 React 与 Python 容器，并完成完整发布；不在本机重复构建。工作流中的并发组禁止打断正在执行的部署。推送标签须使用用户或发布机器的 Git 凭据，不使用另一个工作流的默认 `GITHUB_TOKEN`，以免无法触发后续工作流。
 
@@ -151,7 +151,7 @@ bun run release -- 1.2.1
 
 若已有云端发布任务未结束，脚本停止，避免 CLI 取消其他任务。已构建完成、健康检查通过并承接 100% 流量的灰度版本会先完成发布状态，再提交新版本；部分流量灰度需要先由维护者完成或撤回。部署命令等待云端任务结束，随后检查 `/health` 的版本号与 Git 提交号，旧实例返回成功不算本次发布通过。
 
-成功结果显示在 GitHub Actions 的 `CloudBase release` 摘要。失败或超时会使任务失败；超时后云端任务可能仍在执行，应先看云托管构建记录再重试。需要重跑已有标签时，在 Actions 中重新运行该任务；工作流合入默认分支后，也可通过 `Run workflow` 输入已有标签。脚本不自动回滚数据库，也不执行 SQL 迁移、更新 SCF 清理函数或覆盖已分享的 COS 静态快照；涉及这些内容的版本需按对应章节部署。
+成功结果显示在 GitHub Actions 的 `CloudBase release` 摘要。失败或超时会使任务失败；超时后云端任务可能仍在执行，应先看云托管构建记录再重试。需要重跑已有标签时，在 Actions 中重新运行该任务；工作流合入默认分支后，也可通过 `Run workflow` 输入已有标签。数据库回滚、SQL 迁移、SCF 清理函数更新和已分享的 COS 静态快照更新须按对应章节单独处理。
 
 ## 部署确认
 
@@ -161,7 +161,7 @@ bun run release -- 1.2.1
 
 状态：COS、HTTPS 网关和 SCF 每分钟定时触发已部署；候选版本的密钥访问与撤销已通过云端验收。最终部署与物理删除结果记录在[部署方案](../plans/cloud-hosting-and-version-control.md)。
 
-腾讯云分享保存一份独立、只读的看板或分析报告副本。网页、运行资源、使用中的完整数据集分片和访问控制记录保存在私有 COS。访客通过 HTTPS 网关访问，输入 8 位数字访问密钥后阅读；浏览器不会获得公开 COS 地址。
+腾讯云分享保存一份独立、只读的看板或分析报告副本，也可以将同一项目中选定的多个页面打包到同一链接。网页、运行资源、使用中的完整数据集分片和访问控制记录保存在私有 COS。访客通过 HTTPS 网关访问，输入 8 位数字访问密钥后阅读；浏览器不会获得公开 COS 地址。
 
 清理任务由腾讯云 SCF 定时触发执行，不由本地 MCP、用户电脑或网页网关进程执行。删除范围包括该分享副本的对象历史版本、删除标记、密钥哈希与清理任务记录。本地项目原稿和其他分享副本保留。
 
@@ -171,7 +171,7 @@ bun run release -- 1.2.1
 
 1. `dashboard_get` 读取草稿与版本。
 2. 有修改时按 `dashboard_edit_begin` → 修改 → `dashboard_edit_finish` 完成检查点；用 `dashboard_version_publish` 将选定已保存版本设为正式发布版本。
-3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId`；`expectedRevision` 使用当前 `publishedRevision`。草稿可以比发布版本更新。
+3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId`；`expectedRevision` 使用当前 `publishedRevision`。可通过 `pages` 指定其他页面及其当前正式发布版本，每页都需先发布。草稿可以比发布版本更新。
 4. 将返回的 `accessUrl` 交给指定读者，打开后自动填入密钥，再点击“打开分享”；也可分别发送 `url` 和 `accessKey`。
 
 | 参数 | 说明 |
@@ -182,13 +182,13 @@ bun run release -- 1.2.1
 
 返回 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。分享路径使用随机十六进制标识。
 
-`url` 不含密钥；`accessUrl` 使用 `url#key=访问密钥`，浏览器读取片段后自动填入并从地址栏移除。片段不发送给服务器；表单仍通过 HTTPS POST 校验密钥。带密钥链接只在新建或替换分享时返回，不写入 COS 控制记录，也不能通过状态接口回读。已有 `url` 可由持有者在本机追加同样的片段使用。
+`url` 不含密钥；`accessUrl` 使用 `url#key=访问密钥`，浏览器读取片段后自动填入并从地址栏移除。片段不发送给服务器；表单仍通过 HTTPS POST 校验密钥。带密钥链接只在新建或替换分享时返回；COS 控制记录和状态接口只保留不含密钥的信息。已有 `url` 可由持有者在本机追加同样的片段使用。
 
 登录页采用居中表单，支持窄屏和键盘操作。表单响应使用 `Referrer-Policy: same-origin`，避免浏览器在 `no-referrer` 下将 POST 来源置为 `null`；服务器继续拒绝 `null` 和其他站点的 Origin。样式及自动填入脚本使用随机 CSP nonce，来源错误和密钥错误均显示在表单内。
 
 `dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
 
-`dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
+`dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；多页面分享替换时保留页面范围，并使用各页面当前正式发布版本。其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
 
 `dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试。清理完成后，该任务从状态列表消失。此操作也适用于不过期分享。
 

@@ -139,7 +139,7 @@ class Service:
             try:
                 if tool == 'dashboard_share_publish':
                     return shares.publish(self, board, args['expectedRevision'],
-                                          args.get('expiration', '7d'), args.get('accessKey'))
+                                          args.get('expiration', '7d'), args.get('accessKey'), args.get('pages'))
                 if tool == 'dashboard_share_replace':
                     return shares.replace(self, board, args['shareId'], args['expectedRevision'],
                                           args.get('expiration', '7d'))
