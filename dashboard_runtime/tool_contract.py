@@ -168,8 +168,8 @@ TOOLS = {
     'dataset_transfer_chunk': ('Stage one ordered chunk in private COS; repeat the same upload ID and part to resume. This does not modify a dashboard.', schema({
         'uploadId': described({'type': 'string', 'pattern': '^[0-9a-f]{64}$'}, 'Random transfer identifier, distinct from the data version.'),
         'ref': described({'type': 'object'}, 'Exact immutable local dataset reference including field order, row count and version.'),
-        'part': described({'type': 'integer', 'minimum': 0}, 'Zero-based chunk number; chunks contain exactly 500 rows except the last.'),
-        'rows': described({'type': 'array', 'maxItems': 500, 'items': {'type': 'object'}}, 'Typed rows; JSON payload limited to 2 MiB.'),
+        'part': described({'type': 'integer', 'minimum': 0}, 'Zero-based chunk number; chunks contain exactly 250 rows except the last.'),
+        'rows': described({'type': 'array', 'maxItems': 250, 'items': {'type': 'object'}}, 'Typed rows; JSON payload limited to 2 MiB.'),
     }, ('uploadId', 'ref', 'part', 'rows'))),
     'dataset_transfer_finish': ('Start or resume background verification and durable import. Poll dataset_transfer_status; do not create dashboard references before complete. Successful completion removes the COS staging prefix.', schema({
         'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),

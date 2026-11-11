@@ -79,7 +79,7 @@ def batches(root, ref):
         cursor = db.execute(f'SELECT {columns}, _missing FROM d_{version} ORDER BY rowid')
         count = 0
         while True:
-            values = cursor.fetchmany(500)
+            values = cursor.fetchmany(250)
             if not values:
                 break
             count += len(values)
@@ -168,7 +168,7 @@ async def run(args):
                         if result['complete']:
                             break
                         if (part + 1) % 50 == 0:
-                            print(f'  {min((part + 1) * 500, ref["rowCount"])} rows staged', flush=True)
+                            print(f'  {min((part + 1) * 250, ref["rowCount"])} rows staged', flush=True)
                     result = await call('dataset_transfer_finish', {'uploadId': upload, 'ref': ref})
                     while result['state'] != 'complete':
                         if result['state'] == 'failed':

@@ -256,7 +256,7 @@ docker buildx build --platform linux/amd64 \
 
 ### 从本地项目迁移选定数据
 
-云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。每个数据版本分成最多 500 行、JSON 不超过 2 MiB 的批次；相同传输 ID 和批次重试时内容必须一致。批次先放在私有 COS，服务端重算原始数据版本并写入 PostgreSQL 后才可引用。完成后删除该传输的 COS 暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 指定该传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 也重新调用 finish 完成清理。迁移需要现有服务凭据对分享桶执行读取、写入、列举对象版本和删除该暂存前缀的权限；不会自动更改权限。
+云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。每个数据版本分成最多 250 行、JSON 不超过 2 MiB 的批次；相同传输 ID 和批次重试时内容必须一致。批次先放在私有 COS，服务端重算原始数据版本并写入 PostgreSQL 后才可引用。完成后删除该传输的 COS 暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 指定该传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 也重新调用 finish 完成清理。迁移需要现有服务凭据对分享桶执行读取、写入、列举对象版本和删除该暂存前缀的权限；不会自动更改权限。
 
 `bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具顺序传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
 

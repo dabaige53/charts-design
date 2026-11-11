@@ -61,14 +61,15 @@ def test_transfer_resume_verification_and_cleanup(tmp_path):
     data = CloudData(tmp_path / 'remote', MemoryDatabase(), 'fixture')
     data.transfer_storage = MemoryStorage()
     upload = 'a' * 64
-    data.transfer_chunk(upload, ref, 0, rows[:500])
-    data.transfer_chunk(upload, ref, 0, rows[:500])
+    data.transfer_chunk(upload, ref, 0, rows[:250])
+    data.transfer_chunk(upload, ref, 0, rows[:250])
     with pytest.raises(DashboardError):
-        data.transfer_chunk(upload, ref, 0, [rows[1]] * 500)
+        data.transfer_chunk(upload, ref, 0, [rows[1]] * 250)
     data.transfer_finish(upload, ref)
     assert wait(data, upload, ref)['code'] == 'DATA_INCOMPLETE'
     assert data.database.call('data_get', 'fixture', version=ref['version']) is None
-    data.transfer_chunk(upload, ref, 1, rows[500:])
+    data.transfer_chunk(upload, ref, 1, rows[250:500])
+    data.transfer_chunk(upload, ref, 2, rows[500:])
     data.transfer_finish(upload, ref)
     assert wait(data, upload, ref)['state'] == 'complete'
     assert not data.transfer_storage.objects

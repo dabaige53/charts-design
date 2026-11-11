@@ -14,6 +14,7 @@ from .local_data import LocalData
 from .model import json_bytes, require
 
 CHUNK_ROWS = 500
+TRANSFER_ROWS = 250
 
 
 class CloudData(LocalData):
@@ -57,9 +58,9 @@ class CloudData(LocalData):
         version, count = self.transfer_ref(ref)
         require(isinstance(upload, str) and re.fullmatch('[0-9a-f]{64}', upload)
                 and upload != version, 'Invalid upload ID')
-        require(type(part) is int and 0 <= part < (count + CHUNK_ROWS - 1) // CHUNK_ROWS,
+        require(type(part) is int and 0 <= part < (count + TRANSFER_ROWS - 1) // TRANSFER_ROWS,
                 'Invalid chunk number')
-        expected = min(CHUNK_ROWS, count - part * CHUNK_ROWS)
+        expected = min(TRANSFER_ROWS, count - part * TRANSFER_ROWS)
         require(isinstance(rows, list) and len(rows) == expected, 'Invalid chunk row count')
         require(len(json_bytes(rows)) <= 2 * 1024 * 1024, 'Chunk exceeds 2 MiB')
         saved = self.database.call('data_get', self.project, version=version)
@@ -95,10 +96,10 @@ class CloudData(LocalData):
         def finish():
             try:
                 def rows():
-                    for part in range((count + CHUNK_ROWS - 1) // CHUNK_ROWS):
+                    for part in range((count + TRANSFER_ROWS - 1) // TRANSFER_ROWS):
                         raw = self._transfer_storage().get(self._transfer_prefix(upload) + str(part))
                         chunk = json.loads(gzip.decompress(raw)) if raw is not None else None
-                        expected = min(CHUNK_ROWS, count - part * CHUNK_ROWS)
+                        expected = min(TRANSFER_ROWS, count - part * TRANSFER_ROWS)
                         require(isinstance(chunk, list) and len(chunk) == expected,
                                 'A transfer chunk is missing', 'DATA_INCOMPLETE')
                         yield from chunk
