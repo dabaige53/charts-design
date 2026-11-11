@@ -132,6 +132,22 @@ class Service:
             self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
+        if tool in ('dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
+            from .cloud_data import CloudData
+            require(isinstance(self.store.data, CloudData), 'Transfer requires cloud project storage', 'UNSUPPORTED_OPERATION')
+            from qcloud_cos.cos_exception import CosClientError, CosServiceError
+            data = self.store.data
+            try:
+                if tool == 'dataset_transfer_chunk':
+                    return data.transfer_chunk(args['uploadId'], args['ref'], args['part'], args['rows'])
+                if tool == 'dataset_transfer_finish':
+                    return data.transfer_finish(args['uploadId'], args['ref'])
+                if tool == 'dataset_transfer_status':
+                    return data.transfer_status(args['uploadId'], args['ref'])
+                data.transfer_cleanup(args['uploadId'])
+                return {'ok': True}
+            except (CosClientError, CosServiceError) as error:
+                raise DashboardError('CLOUD_STORAGE_FAILED', 'Transfer storage request failed; check the configured COS permissions.', 503) from error
         if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
             from .cloud_shares import CloudShares
             shares = CloudShares.from_environment()

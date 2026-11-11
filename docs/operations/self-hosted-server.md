@@ -253,3 +253,19 @@ docker buildx build --platform linux/amd64 \
 上线时须在目标账号验证一次发布、密钥访问、到期删除和重试，并确认云端触发器在本地进程退出后仍执行。
 
 维护时机：服务器配置、鉴权、分享、存储或云端清理方式改变时更新；历史验收结论不替代目标部署确认。
+
+### 从本地项目迁移选定数据
+
+云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。每个数据版本分成最多 500 行、JSON 不超过 2 MiB 的批次；相同传输 ID 和批次重试时内容必须一致。批次先放在私有 COS，服务端重算原始数据版本并写入 PostgreSQL 后才可引用。完成后删除该传输的 COS 暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 指定该传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 也重新调用 finish 完成清理。迁移需要现有服务凭据对分享桶执行读取、写入、列举对象版本和删除该暂存前缀的权限；不会自动更改权限。
+
+`bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具顺序传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
+
+通过项目 1Password 入口注入 `CHARTS_MCP_URL`（HTTPS MCP 地址）和 `CHARTS_SERVER_TOKEN`（该服务令牌），不要将值写入命令、文件或仓库。使用专门的状态文件记录可续传 ID，不包含令牌：
+
+```sh
+project-run <项目目录名> -- bun run python -- bin/transfer-project.py \
+  --manifest /absolute/path/online-migration-manifest.json \
+  --project <远程项目名> --state /private/tmp/charts-transfer-state.json
+```
+
+迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过，再运行 `dashboard_version_publish`；之后才能通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。

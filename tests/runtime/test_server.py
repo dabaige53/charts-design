@@ -235,7 +235,8 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
         assert status == 200 and '/edit/sales/exec#token=' in edit['url']
         edit_token = edit['url'].split('#token=')[1]
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Edited by link'}]}, edit_token)[0] == 200
-        for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open'):
+        for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open',
+                     'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
             status, denied = post(api + tool, {'dashboardId': 'exec'}, edit_token)
             assert status == 403 and denied['error']['code'] == 'FORBIDDEN', (tool, denied)
         server.state.revoke('sales', 'exec')

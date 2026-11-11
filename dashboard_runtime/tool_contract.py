@@ -143,6 +143,7 @@ READ_ONLY = {
     'runtime_diagnostics', 'dashboard_export_read', 'dashboard_doctor', 'dashboard_history_diff',
     'dashboard_share_status',
     'dashboard_version_status', 'dashboard_version_get',
+    'dataset_transfer_status',
 }
 APP_ONLY = {'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open'}
 DESTRUCTIVE = {
@@ -153,6 +154,7 @@ DESTRUCTIVE = {
     'dashboard_share_delete',
     'dashboard_share_replace',
     'dashboard_version_publish',
+    'dataset_transfer_cleanup',
 }
 
 
@@ -163,6 +165,21 @@ def tool_annotations(name):
 
 WRITE_FLOW = ' In project mode this saves a draft: finish the edit batch before previewing. On REVISION_CONFLICT read dashboard_get, reconcile, and use its latest revision.'
 TOOLS = {
+    'dataset_transfer_chunk': ('Stage one ordered chunk in private COS; repeat the same upload ID and part to resume. This does not modify a dashboard.', schema({
+        'uploadId': described({'type': 'string', 'pattern': '^[0-9a-f]{64}$'}, 'Random transfer identifier, distinct from the data version.'),
+        'ref': described({'type': 'object'}, 'Exact immutable local dataset reference including field order, row count and version.'),
+        'part': described({'type': 'integer', 'minimum': 0}, 'Zero-based chunk number; chunks contain exactly 500 rows except the last.'),
+        'rows': described({'type': 'array', 'maxItems': 500, 'items': {'type': 'object'}}, 'Typed rows; JSON payload limited to 2 MiB.'),
+    }, ('uploadId', 'ref', 'part', 'rows'))),
+    'dataset_transfer_finish': ('Start or resume background verification and durable import. Poll dataset_transfer_status; do not create dashboard references before complete. Successful completion removes the COS staging prefix.', schema({
+        'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
+    }, ('uploadId', 'ref'))),
+    'dataset_transfer_status': ('Check durable completion of a transfer. If unknown after a server restart, call dataset_transfer_finish again; if failed, correct the error and resume.', schema({
+        'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
+    }, ('uploadId', 'ref'))),
+    'dataset_transfer_cleanup': ('Remove only this transfer staging prefix and all object versions; do not call while uploading or finalizing.', schema({
+        'uploadId': described(STR, 'Exact transfer ID to remove.'),
+    }, ('uploadId',))),
     'dashboard_share_status': ('List this dashboard’s Tencent publication jobs, or inspect one shareId, without returning visitor keys. '
         'Returns shares with revision/expiry/state/cleanupState. Use after an uncertain publish response before retrying. '
         'pending means cloud deletion is due or retrying, not complete; successfully cleaned jobs disappear. '
