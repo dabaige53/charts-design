@@ -92,9 +92,16 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 ## 网页预览与分享
 
-腾讯云独立分享副本见下文“腾讯云在线分享与云端清理”；本节签名链接不创建 COS 副本。
+访问方式的名称见[看板交付术语](../agent/GLOSSARY.md)。在线链接连接服务端项目；腾讯云独立分享链接访问发布时生成的 COS 副本。
 
-- `dashboard_preview`：除 MCP App 所需文档外，结果附带 `previewUrl` 与 `previewExpiresAt`。不能显示 MCP Apps 的宿主（例如终端中的 Claude Code）把链接交给用户即可。仍按“批次完成后预览一次”的流程调用。
+| 访问方式 | 创建方式 | 数据来源及更新 | 凭据与有效期 |
+| --- | --- | --- | --- |
+| 在线只读链接 | `dashboard_share`，`access=view` | 服务端项目的已保存检查点及其数据；CloudBase 存储在 PG，通过服务端 SQLite 缓存计算 | 链接包含访问令牌；按 `expiresInHours` 或服务器默认值过期，可撤销 |
+| 在线编辑链接 | `dashboard_share`，`access=edit` | 同一服务端项目；支持网页提供的编辑、版本管理和恢复 | 同在线只读链接，权限包含网页支持的编辑操作 |
+| 独立分享链接 | 正式发布后调用 `dashboard_share_publish` | 独立 COS 副本含发布时的网页和完整数据分片；浏览器加载后计算筛选等操作，项目更新不会自动更新该副本 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
+
+`dashboard_preview` 在支持 MCP Apps 的宿主中打开已保存检查点；需要浏览器链接时使用 `dashboard_share`。
+
 - `dashboard_share`：`access` 为 `view`（只读）或 `edit`，`expiresInHours` 为 1–8784 小时。
 - `dashboard_share_revoke`：使该看板此前签发的全部链接立即失效。
 - 命令行：`bun bin/python-runtime.js -m dashboard_runtime share <项目> <看板> --workspace ... --public-url ... [--access edit] [--hours 24]`，只需能读取签名密钥。

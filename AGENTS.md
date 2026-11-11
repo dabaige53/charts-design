@@ -23,6 +23,7 @@
 3. 判断产品目标、能力边界或新增功能时读 [产品上下文](docs/agent/PRODUCT.md)；修改视觉和交互前读 [设计规范](docs/reference/DESIGN.md)。
 4. 新增、移动、合并或删除文件前读 [文件管理](docs/agent/file-management.md)，确定现有负责正文和目标位置。
 5. 查历史记录时读 [文档总览](docs/README.md)。
+6. 讨论看板交付、访问链接和项目业务术语时读 [看板交付术语](docs/agent/GLOSSARY.md)。
 
 ## 按任务阅读
 

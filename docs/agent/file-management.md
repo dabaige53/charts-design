@@ -49,6 +49,7 @@ Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原
 | 内容 | 负责正文 | 更新条件 |
 | --- | --- | --- |
 | 产品使用者、目标、边界与强约束 | `docs/agent/PRODUCT.md` | 已确认的产品决定改变 |
+| 看板交付与访问方式的领域术语 | `docs/agent/GLOSSARY.md` | 领域概念或称呼确定、改变 |
 | 视觉、交互、组件复用与保真要求 | `docs/reference/DESIGN.md` | 已确认的通用设计要求改变 |
 | Runtime 架构、配置和接口入口 | `docs/implementation/dashboard-runtime.md` | 模块职责、运行方式或接口入口改变 |
 | 项目存储、草稿、历史和渐进数据 | `docs/implementation/project-runtime.md` | 持久化、路由、计算或加载行为改变 |
