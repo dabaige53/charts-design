@@ -271,10 +271,7 @@ function DetailData({ fields, onReadData, sectionId }: {
   const keys = Object.keys(fields).length ? Object.keys(fields) : Object.keys(result?.rows?.[0] || {});
   return (
     <section id={sectionId} className="semantic-section" aria-label="明细数据" aria-busy={loading}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h3>明细数据</h3>
-        <span className="text-xs text-muted-foreground">最多 10 行</span>
-      </div>
+      <h3>明细数据</h3>
       {error ? (
         <RecoveryAlert title="明细数据未能加载" message={error} onRetry={() => setAttempt((count) => count + 1)} busy={loading} />
       ) : (
@@ -295,7 +292,6 @@ function DetailData({ fields, onReadData, sectionId }: {
               )) : <TableRow><TableCell colSpan={Math.max(1, keys.length)} className="py-6 text-center text-xs text-muted-foreground">{loading ? "正在读取明细数据…" : "当前筛选范围暂无数据"}</TableCell></TableRow>}
             </TableBody>
           </Table>
-          {result && <p className="mt-2 text-xs text-muted-foreground">展示 {result.rows?.length ?? 0} 行，当前筛选共 {Number(result.totalRows ?? 0).toLocaleString()} 行</p>}
         </div>
       )}
     </section>
