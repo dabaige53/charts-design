@@ -5,8 +5,6 @@ import importlib.util
 import json
 from pathlib import Path
 import sqlite3
-import re
-import subprocess
 
 import pytest
 
@@ -17,23 +15,6 @@ spec = importlib.util.spec_from_file_location('local_acceptance_benchmark', Path
 assert spec is not None and spec.loader is not None
 benchmark = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(benchmark)
-
-
-# @wu-test type=integration | scope=PDF表格导出 | protects=多批次导出漏行乱序
-def test_pdf_exports_every_sorted_row_across_batches(tmp_path):
-    service, _, _, _, _ = benchmark.attach(tmp_path, 1005)
-    doc = service.store.get('acceptance', hydrate=False)
-    component = copy.deepcopy(doc['manifest']['components']['details'])
-    component['presentation'] = {'columns': [{'key': 'rowId', 'title': 'rowId'}, {'key': 'agent', 'title': 'agent'}]}
-    service.call('dashboard_patch', {'dashboardId': 'acceptance', 'expectedRevision': doc['revision'],
-        'operations': [{'op': 'put_component', 'id': 'details', 'value': component}]})
-    result = service.call('dashboard_export', {'dashboardId': 'acceptance', 'format': 'pdf',
-        'tableStates': {'details': {'page': 2, 'pageSize': 10, 'sortCol': 'rowId', 'sortDir': 'desc'}}})['export']
-    assert result['tableRows'] == {'details': 1005}
-    text = subprocess.check_output(['pdftotext', '-layout', result['path'], '-'], text=True)
-    ids = [int(x) for x in re.findall(r'^\s*(\d+)\s+Agent-\d+', text, re.MULTILINE)]
-    assert ids == list(range(1004, -1, -1))
-    assert '搜索明细' not in text and '当前页快照' not in text
 
 
 @pytest.fixture

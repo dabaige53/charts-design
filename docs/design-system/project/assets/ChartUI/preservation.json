@@ -1,0 +1,395 @@
+{
+  "createdAt": "2026-11-10T01:27:50.945383+00:00",
+  "repository": "/Users/w/.codex/worktrees/b832/charts-design",
+  "sourceCommit": "aefb7e857663a42a6bb426f8b5ba3eca48cb950e",
+  "chartCount": 40,
+  "chartCodes": [
+    "c01",
+    "c02",
+    "c03",
+    "c04",
+    "c05",
+    "c06",
+    "c07",
+    "c08",
+    "d01",
+    "d02",
+    "d03",
+    "d04",
+    "f01",
+    "f02",
+    "f03",
+    "fn01",
+    "fn02",
+    "fn03",
+    "fn04",
+    "k01",
+    "k02",
+    "k03",
+    "k04",
+    "k05",
+    "k06",
+    "m01",
+    "m02",
+    "m03",
+    "m04",
+    "r01",
+    "r02",
+    "r03",
+    "r04",
+    "r05",
+    "t01",
+    "t02",
+    "t03",
+    "t04",
+    "t05",
+    "t06"
+  ],
+  "preservation": "Isolated reference copy from Git HEAD; main workspace untouched; source files stored as text",
+  "files": [
+    {
+      "sourcePath": "skills/executive-charts/scripts/core/chart_builders.py",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/scripts/core/chart_builders.py.txt",
+      "bytes": 29246
+    },
+    {
+      "sourcePath": "skills/executive-charts/scripts/core/chart_catalog.py",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/scripts/core/chart_catalog.py.txt",
+      "bytes": 270870
+    },
+    {
+      "sourcePath": "skills/executive-charts/scripts/core/chart_interactions.py",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/scripts/core/chart_interactions.py.txt",
+      "bytes": 2673
+    },
+    {
+      "sourcePath": "skills/executive-charts/scripts/core/palette.py",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/scripts/core/palette.py.txt",
+      "bytes": 2647
+    },
+    {
+      "sourcePath": "skills/executive-charts/scripts/core/dashboard_template.py",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/scripts/core/dashboard_template.py.txt",
+      "bytes": 193024
+    },
+    {
+      "sourcePath": "skills/executive-charts/scripts/core/component_schemas.py",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/scripts/core/component_schemas.py.txt",
+      "bytes": 33644
+    },
+    {
+      "sourcePath": "skills/executive-charts/references/chart_options.js",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/references/chart_options.js.txt",
+      "bytes": 12449
+    },
+    {
+      "sourcePath": "skills/executive-charts/references/chart_catalog.json",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/references/chart_catalog.json.txt",
+      "bytes": 21309
+    },
+    {
+      "sourcePath": "skills/executive-charts/references/chart_explanations.json",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/references/chart_explanations.json.txt",
+      "bytes": 67007
+    },
+    {
+      "sourcePath": "skills/executive-charts/references/design_standards.md",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/references/design_standards.md.txt",
+      "bytes": 10801
+    },
+    {
+      "sourcePath": "skills/executive-charts/references/data_formatting_standards.md",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/references/data_formatting_standards.md.txt",
+      "bytes": 3801
+    },
+    {
+      "sourcePath": "skills/executive-charts/references/kpi-cards.md",
+      "savedPath": "assets/ChartUI/source/skills/executive-charts/references/kpi-cards.md.txt",
+      "bytes": 3724
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/original.mjs",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/original.mjs.txt",
+      "bytes": 26074
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/adaptive.mjs",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/adaptive.mjs.txt",
+      "bytes": 4610
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/echarts-options.mjs",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/echarts-options.mjs.txt",
+      "bytes": 1933
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/encoding.mjs",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/encoding.mjs.txt",
+      "bytes": 14033
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/engine.mjs",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/engine.mjs.txt",
+      "bytes": 10349
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/statistical.mjs",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/statistical.mjs.txt",
+      "bytes": 2292
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/kpi-layout.css",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/kpi-layout.css.txt",
+      "bytes": 1505
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/original-adapter.css",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/original-adapter.css.txt",
+      "bytes": 10666
+    },
+    {
+      "sourcePath": "dashboard_runtime/web/original-global.css",
+      "savedPath": "assets/ChartUI/source/dashboard_runtime/web/original-global.css.txt",
+      "bytes": 114
+    },
+    {
+      "sourcePath": "runtime-ui/extract-original.py",
+      "savedPath": "assets/ChartUI/source/runtime-ui/extract-original.py.txt",
+      "bytes": 3331
+    },
+    {
+      "sourcePath": "runtime-ui/build.mjs",
+      "savedPath": "assets/ChartUI/source/runtime-ui/build.mjs.txt",
+      "bytes": 3080
+    },
+    {
+      "sourcePath": "examples/gallery.html",
+      "savedPath": "assets/ChartUI/source/examples/gallery.html.txt",
+      "bytes": 353814
+    },
+    {
+      "sourcePath": "examples/executive_report.html",
+      "savedPath": "assets/ChartUI/source/examples/executive_report.html.txt",
+      "bytes": 342046
+    },
+    {
+      "sourcePath": "examples/sample_executive_monthly.html",
+      "savedPath": "assets/ChartUI/source/examples/sample_executive_monthly.html.txt",
+      "bytes": 316299
+    },
+    {
+      "sourcePath": "examples/sample_financial_attribution.html",
+      "savedPath": "assets/ChartUI/source/examples/sample_financial_attribution.html.txt",
+      "bytes": 340273
+    },
+    {
+      "sourcePath": "examples/sample_saas_product_analytics.html",
+      "savedPath": "assets/ChartUI/source/examples/sample_saas_product_analytics.html.txt",
+      "bytes": 346588
+    },
+    {
+      "sourcePath": "examples/sample_strategic_matrix_portfolio.html",
+      "savedPath": "assets/ChartUI/source/examples/sample_strategic_matrix_portfolio.html.txt",
+      "bytes": 339164
+    },
+    {
+      "sourcePath": "examples/sample_comprehensive_taxonomy_showcase.html",
+      "savedPath": "assets/ChartUI/source/examples/sample_comprehensive_taxonomy_showcase.html.txt",
+      "bytes": 364206
+    }
+  ],
+  "styleMap": {
+    "axes-grid": [
+      "t06",
+      "c01",
+      "c02",
+      "r01",
+      "fn01",
+      "fn03",
+      "c08",
+      "c05",
+      "c07",
+      "t01",
+      "t03",
+      "k05",
+      "d02",
+      "r03",
+      "c03",
+      "fn02",
+      "f02",
+      "c04",
+      "m03",
+      "fn04",
+      "d01",
+      "d03",
+      "t04",
+      "t02",
+      "k02",
+      "r02",
+      "f03",
+      "m01",
+      "d04",
+      "r04",
+      "c06",
+      "t05",
+      "k04",
+      "k03",
+      "k06",
+      "m02",
+      "r05",
+      "m04"
+    ],
+    "legend": [
+      "t06",
+      "fn03",
+      "c08",
+      "c07",
+      "c03",
+      "fn02",
+      "fn04",
+      "t04",
+      "t02",
+      "k02",
+      "c06",
+      "k04",
+      "m02",
+      "r05"
+    ],
+    "tooltip": [
+      "t06",
+      "c01",
+      "c02",
+      "r01",
+      "fn01",
+      "f01",
+      "fn03",
+      "c08",
+      "c05",
+      "c07",
+      "t01",
+      "t03",
+      "k05",
+      "d02",
+      "r03",
+      "c03",
+      "fn02",
+      "f02",
+      "c04",
+      "m03",
+      "fn04",
+      "d01",
+      "d03",
+      "t04",
+      "t02",
+      "k02",
+      "r02",
+      "f03",
+      "m01",
+      "d04",
+      "r04",
+      "c06",
+      "t05",
+      "k01",
+      "k04",
+      "k03",
+      "k06",
+      "m02",
+      "r05",
+      "m04"
+    ],
+    "labels": [
+      "t06",
+      "c01",
+      "c02",
+      "r01",
+      "fn01",
+      "f01",
+      "fn03",
+      "c08",
+      "c05",
+      "c07",
+      "t01",
+      "t03",
+      "k05",
+      "d02",
+      "r03",
+      "c03",
+      "fn02",
+      "f02",
+      "c04",
+      "m03",
+      "fn04",
+      "d01",
+      "d03",
+      "t04",
+      "t02",
+      "k02",
+      "r02",
+      "f03",
+      "m01",
+      "d04",
+      "r04",
+      "c06",
+      "t05",
+      "k01",
+      "k04",
+      "k03",
+      "k06",
+      "m02",
+      "r05",
+      "m04"
+    ],
+    "geometry": [
+      "t06",
+      "c01",
+      "c02",
+      "r01",
+      "fn01",
+      "f01",
+      "fn03",
+      "c08",
+      "c05",
+      "c07",
+      "t01",
+      "t03",
+      "k05",
+      "d02",
+      "r03",
+      "c03",
+      "fn02",
+      "f02",
+      "c04",
+      "m03",
+      "fn04",
+      "d01",
+      "d03",
+      "t04",
+      "t02",
+      "k02",
+      "r02",
+      "f03",
+      "m01",
+      "d04",
+      "r04",
+      "c06",
+      "t05",
+      "k01",
+      "k04",
+      "k03",
+      "k06",
+      "m02",
+      "r05",
+      "m04"
+    ],
+    "zoom-interaction": [
+      "c02",
+      "f02"
+    ]
+  },
+  "limitations": [
+    "The preserved options contain their original synthetic example data.",
+    "No browser render was executed in this preservation task.",
+    "Original source includes old constraints; preservation does not endorse their use in the new UI.",
+    "dashboard_template and example HTML are mixed reference sources, not replacement application shells."
+  ]
+}

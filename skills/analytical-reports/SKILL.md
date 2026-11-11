@@ -5,13 +5,16 @@ description: Generate evidence-based analytical reports as canonical Markdown wi
 
 # Analytical reports
 
-Use the approved academic reading master, not a dashboard grid or an always-open split editor. Preserve Markdown as the portable source. The reader sees a quiet, single-column paper; Edit opens authoring separately.
+Use the approved academic reading structure. Preserve Markdown as the portable canonical source. Reports use the same React chart components through the single-column Markdown adapter.
+
+> **Current status (2026-11-10)**
+> The shared React component library and MCP application use separate adapters and explicit build/package steps. Preview, JSON/CSV, HTML snapshots and static site exports use the new resources. Missing builds return `UI_UNAVAILABLE`. Current completion and host acceptance are tracked in package-root `docs/ui-refactor-plan.md`.
 
 ## Discover before generating
 
 1. Read `charts://examples` or call `generation_examples` with no arguments. The two tracks remain separate: `executive-dashboard` and `academic-report`.
 2. Call `generation_examples` with `{"caseId":"academic-report"}` (equivalently read `charts://examples/academic-report`). This returns the actual master Markdown, synthetic data and a complete atomic declaration batch. The packaged source is `dashboard_runtime/examples/academic-report.md`.
-3. Call `chart_declarations` for the compact index, then select a registered code such as `{"code":"c01"}` for its requirements and available example. The complete reference is `charts://declarations`; consult `chart_catalog` for visual discovery. New interactive charts use original registered codes with explicit data, presentation and supported dataset/metric bindings. `chartType` authoring is rejected; historical generic charts retain compatibility reading. Do not guess a component’s configuration or filtering support.
+3. Call `chart_declarations` for the compact index, then select a preset code such as `{"code":"c01"}` for its requirements and available example. The complete reference is `charts://declarations`; consult `chart_catalog` for visual discovery. Presets use explicit data, presentation and supported dataset/metric bindings. Custom ECharts and HTML/JavaScript declarations are described in [component rendering](../executive-charts/references/component-html-generation.md).
 4. Read `charts://contract` for current mutation rules. All examples are synthetic. Never silently reuse their facts or label them as real user data.
 
 ## Compose the report
@@ -36,13 +39,12 @@ Read [the shared MCP delivery workflow](../executive-charts/references/mcp-deliv
 
 - Pass the absolute asset directory as `projectRoot` on every project call (on the self-hosted server, the project name). Create an empty artifact with `dashboard_create`, or inspect the existing document and referenced component IDs. Begin an edit batch with the latest revision. Preserve accepted Markdown, captions, notes and sources outside the requested change.
 - Adapt the case's declarations: replace sources, data, metrics, chart IDs, captions and every numeric statement. Apply declarations, `set_report_markdown` and `set_view_mode`=`report` together so references resolve after the batch.
-- Finish the edit batch and resolve its Doctor errors before one preview. Re-read after a revision conflict.
-- On the self-hosted server, the preview result includes `previewUrl`: an expiring read-only browser link that renders the same single-column paper with numbered figures. Give it to the reader; figures load as they scroll into view.
-- Inspect actual rendering: prose–figure–prose order, units/legends, caption numbering, source notes, figure links, and reading-mode controls. Check save/reload when authoring. Report host acceptance as pending if only tool output was observed.
+- Finish the edit batch and resolve Doctor errors. Re-read with `dashboard_get` after a revision conflict.
+- Finish the edit batch, verify Markdown references and metric definitions, then open the saved report with `dashboard_preview`. Host display acceptance is separate from protocol and build checks.
 - Data or filter changes update charts, not authored claims. Recompute each affected numeric statement against the same data version and filter scope, or explicitly keep the narrative tied to its original snapshot. Record unresolved statements rather than reusing stale values.
 
 Dashboard layouts and report source coexist. Route dashboard-first requests to `../executive-charts/SKILL.md`; retain their examples and interactive controls.
 
 ## Optional Seaborn statistical figures
 
-For distributions and raw-observation comparisons, read the statistical section of `charts://declarations`. With `.[statistics]` installed, declare `kind=statistical` with histogram, boxplot or regression `plot`, typed dataset, and explicit `analysis.definition`/`unit`. These do not consume aggregated metrics. Use the same Markdown chart fences; previews and offline HTML embed static SVG with source, grain and missing-row captions. `statistical_render` also returns PNG. Do not add an internal chart title in the paper. No interactive filter targets, confidence-interval claims or causal interpretation; see `docs/seaborn-backend.md`.
+For distributions and raw-observation comparisons, read the statistical section of `charts://declarations`. With `.[statistics]` installed, declare `kind=statistical` with histogram, boxplot or regression `plot`, typed dataset, and explicit `analysis.definition`/`unit`. These do not consume aggregated metrics. In the Markdown source, use standard chart fences; statistical calculations produce static SVG/PNG artifacts through the statistical renderer. Do not add an internal chart title in the paper. No interactive filter targets, confidence-interval claims or causal interpretation; see `docs/seaborn-backend.md`.

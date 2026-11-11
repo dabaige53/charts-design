@@ -2,6 +2,9 @@
 
 `python3 -m dashboard_runtime server` 在一台服务器上同时提供远程 MCP（Streamable HTTP）和看板、分析报告的网页预览。它复用本地 Runtime 的同一套 `Service`、项目存储、Doctor 与前端构建；区别在于长期运行、按项目名隔离存储、用令牌和签名链接控制访问。本地 stdio MCP（`mcp` 命令）和本机编辑器（`serve` 命令）保持不变。
 
+> **当前状态（2026-11-10）**
+> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/ui-refactor-plan.md`。
+
 ## 提供的入口
 
 | 路径 | 用途 | 鉴权 |
@@ -9,16 +12,16 @@
 | `/mcp` | Streamable HTTP MCP 端点，供 Claude Code、Claude Desktop、IDE 等客户端连接 | `Authorization: Bearer <服务器令牌>` |
 | `/mcp/<令牌>` | 同上，供无法设置请求头的客户端使用 | 路径中的服务器令牌 |
 | `/view/<项目>/<看板>` | 只读预览：看板网格或学术单栏报告 | URL 片段 `#token=` 中的签名分享令牌 |
-| `/edit/<项目>/<看板>` | 浏览器编辑：拖动布局、改标题与说明、版本历史 | 编辑权限的签名分享令牌 |
-| `/` | 管理入口：输入服务器令牌后浏览全部项目，为任一看板生成预览或编辑链接 | 服务器令牌（只保存在当前标签页） |
-| `/files/<令牌>` | 导出文件下载（PDF、HTML、JSON、CSV、网页部署包） | 24 小时有效的签名链接 |
+| `/edit/<项目>/<看板>` | 浏览器编辑：拖动与缩放布局、修改标题、版本历史 | 编辑权限的签名分享令牌 |
+| `/` | 默认项目预览入口；跨项目管理通过 API／CLI | 服务器令牌（只保存在当前标签页） |
+| `/files/<令牌>` | 导出文件下载（JSON、CSV、HTML、静态 ZIP） | 24 小时有效的签名链接 |
 | `/health` | 存活检查，返回版本 | 无 |
 
 页面外壳不含业务数据；数据只经由带令牌的接口读取。分享令牌放在 URL 片段中，浏览器不会把片段发送给服务器、代理或 Referer；页面加载后从地址栏移除，只保留在当前标签页的 sessionStorage。
 
 ## 快速开始
 
-先构建前端：`npm --prefix runtime-ui ci && npm --prefix runtime-ui run build`。服务器依赖只有 `mcp>=1.28,<2`（随附 Starlette 与 uvicorn）；Seaborn 统计图需要另装 `.[statistics]`。
+服务器依赖只有 `mcp>=1.28,<2`（随附 Starlette 与 uvicorn）；Seaborn 统计图独立于旧 UI，需要另装 `.[statistics]`。
 
 本机试用：
 
@@ -37,7 +40,7 @@ python3 -m dashboard_runtime server --workspace /data/projects --host 127.0.0.1 
 
 `deploy/` 提供可直接改用的文件：
 
-- `deploy/Dockerfile`、`deploy/docker-compose.yml`：两阶段构建（Node 构建前端，Python 运行），以非 root 用户运行，数据卷挂载 `/data`。在仓库根目录执行 `docker compose -f deploy/docker-compose.yml up -d --build`，配置写入 `deploy/charts.env`（从 `deploy/environment.example` 复制，不提交 Git）。
+- `deploy/Dockerfile`、`deploy/docker-compose.yml`：纯 Python 后端镜像，以非 root 用户运行，数据卷挂载 `/data`。在仓库根目录执行 `docker compose -f deploy/docker-compose.yml up -d --build`，配置写入 `deploy/charts.env`（从 `deploy/environment.example` 复制，不提交 Git）。
 - `deploy/charts-design.service`：systemd 单元，假设代码位于 `/opt/charts-design` 并使用其中的虚拟环境。
 - `deploy/nginx.conf`：TLS 反向代理示例；`/mcp` 关闭缓冲以支持 SSE，`/mcp` 与 `/files/` 关闭访问日志，避免令牌进入日志。
 
@@ -89,7 +92,6 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 远程模式隐藏 `dashboard_export_open`（它会在服务器桌面上打开文件）；导出结果改为附带 `downloadUrl`，网页部署包另带 `siteDownloadUrl`。其余工具、操作合同、编辑批次与 Doctor 规则与本地相同，见 [Runtime 说明](dashboard-runtime.md) 与 [项目资产与加载](project-runtime.md)。
 
-自动签名密钥先在运行目录内写完临时文件，再以原子硬链接发布为 `server-secret`，权限为 600。多个副本同时首次启动时使用同一个已写完的密钥，不读取半成品，也不覆盖先完成的副本。共享运行目录需要支持原子硬链接；也可为全部副本统一设置 `CHARTS_SERVER_SECRET`。
 
 ## 网页预览与分享
 
@@ -106,13 +108,12 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 链接只对签发时的项目与看板有效，访问其他看板返回 403，页面切换只列出该看板。导入数据、执行查询、新建看板等操作只通过 MCP 完成。报告在浏览器中按学术单栏排版，图表滚动到可见区域时加载。
 
-页面以内容哈希引用 `app.<构建号>.js/css`，设置长期不可变缓存并以 gzip 压缩，不再像离线快照那样把约 2.5 MB 的界面内联到每个页面。响应头包含 CSP（仅允许本站脚本与经哈希固定的启动脚本）、`Referrer-Policy: no-referrer`、`X-Frame-Options: DENY`。
+页面以内容哈希引用 `app.<构建号>.js/css`，设置长期不可变缓存并以 gzip 压缩。响应头包含 CSP（仅允许本站脚本与经哈希固定的启动脚本）、`Referrer-Policy: no-referrer`、`X-Frame-Options: DENY`。
 
 ## 边界
 
 - 访问控制只有服务器令牌与签名链接两层；没有用户账号、角色权限、行级权限或 OAuth。持有服务器令牌即可读写全部项目。
 - 分享链接是持有即可用的凭据：转发链接等于转发权限。需要撤销时使用 `dashboard_share_revoke`，或更换签名密钥使全部链接失效。
-- 只读链接与本地查看语义一致：可查看指标定义、来源说明与 SQL 文本，可分页浏览并导出该看板所用数据集的明细。不要把链接发给不应看到这些内容的人；需要去除来源与 SQL 的公开发布，使用网页部署包。
 - 查询能力仍只限运维方配置的只读 SQLite 别名；本地查询限制不是加固的多租户沙箱。
 - 单进程 SQLite 存储适合团队内部规模；多副本部署需要共享同一工作区存储并使用 `--stateless`，未做并发压测。
 - 网页部署包（`dashboard_export_site`）仍是独立的只读静态站点，与本服务器互不依赖，见 [静态部署包](static-deployment.md)。
@@ -125,6 +126,5 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 ## 实际部署与客户端验收待办
 
-CI 和本地协议客户端通过不代表已经完成线上或真实宿主验收。上线还需要确定服务器、持久化卷、对外 HTTPS 域名与证书，设置运行时令牌、签名密钥和 `CHARTS_PUBLIC_URL`，并检查代理后的健康、MCP 长连接、分享撤销、下载、重启和备份恢复。nginx 代理及多副本负载下的并发压测尚未完成。
 
 真实客户端需提供可访问上述 HTTPS 地址的目标环境，以及对应客户端的远程 MCP 配置入口。按每个目标客户端实际支持的请求头令牌或 URL 令牌方式连接，完成初始化、工具发现、在隔离项目中创建和修改合成看板、打开预览、下载导出、撤销链接与重新连接。Codex、Claude Desktop、Claude Code、claude.ai 的兼容性分别记录，不用官方 Python SDK 的通过结果代替。未实现 OAuth，必须先确认目标客户端支持当前令牌接入方式；只支持 OAuth 的入口不在现有能力内。

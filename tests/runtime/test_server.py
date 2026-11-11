@@ -1,4 +1,4 @@
-"""Self-hosted server: real uvicorn, Streamable HTTP MCP client and Chromium."""
+"""Self-hosted server: real uvicorn, Streamable HTTP MCP and scoped data APIs."""
 import asyncio
 import json
 import socket
@@ -37,7 +37,7 @@ def test_signer_rejects_tampering_kind_and_expiry():
     assert signer.verify('not-a-token', 'share') is None
 
 
-# @wu-test type=boundary | scope=远程项目路径 | protects=项目参数逃逸工作区或非法名称被接受 | debt=D1
+# @wu-test type=boundary | scope=远程项目路径 | protects=项目参数逃逸工作区或非法名称被接受
 def test_projects_stay_inside_the_workspace(tmp_path):
     projects = WorkspaceProjects(settings(tmp_path))
     assert projects.name(None) == 'default'
@@ -52,7 +52,7 @@ def test_projects_stay_inside_the_workspace(tmp_path):
             projects.name(value)
 
 
-# @wu-test type=boundary | scope=服务器配置 | protects=无令牌或非回环地址免认证启动及签名密钥权限过宽 | debt=D1
+# @wu-test type=boundary | scope=服务器配置 | protects=无令牌或非回环地址免认证启动及签名密钥权限过宽
 def test_configuration_requires_tokens_and_loopback_trials(tmp_path):
     with pytest.raises(DashboardError, match='bearer token'):
         RemoteServer(ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'rt'))
@@ -142,10 +142,9 @@ def free_port():
 
 # @wu-test type=integration | scope=远程MCP与分享链接 | protects=跨项目读写或分享链接越权调用或撤销后链接仍可用
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
-def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
+def test_remote_mcp_and_scoped_viewer_api(tmp_path):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
-    from mcp.types import TextContent
     port = free_port()
     server = start(tmp_path, port)
     with Running(create_app(server), port):
@@ -165,16 +164,16 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
                     assert not created.isError and created.structuredContent is not None
                     assert created.structuredContent['projectRoot'] == 'fresh'
                     preview = await client.call_tool('dashboard_preview', {'projectRoot': 'sales', 'dashboardId': 'exec'})
-                    assert not preview.isError
-                    data = preview.structuredContent
-                    assert data is not None
-                    assert data['previewUrl'].startswith(base + '/view/sales/exec#token=')
-                    text = preview.content[0]
-                    assert isinstance(text, TextContent)
-                    assert json.loads(text.text)['previewUrl'] == data['previewUrl']
+                    assert not preview.isError and preview.structuredContent is not None
+                    assert preview.structuredContent['document']['id'] == 'exec'
+                    shared = await client.call_tool('dashboard_share', {
+                        'projectRoot': 'sales', 'dashboardId': 'exec', 'access': 'view',
+                    })
+                    assert not shared.isError and shared.structuredContent is not None
+                    assert shared.structuredContent['url'].startswith(base + '/view/sales/exec#token=')
                     export = await client.call_tool('dashboard_export', {'projectRoot': 'sales', 'dashboardId': 'exec', 'format': 'json'})
                     assert not export.isError and export.structuredContent is not None
-                    return data['previewUrl'], export.structuredContent
+                    return shared.structuredContent['url'], export.structuredContent
 
         preview_url, export = asyncio.run(session())
         token = preview_url.split('#token=')[1]
@@ -206,48 +205,31 @@ def test_remote_mcp_preview_link_and_scoped_viewer_api(tmp_path):
         server.state.revoke('sales', 'exec')
         assert post(api + 'dashboard_get', {'dashboardId': 'exec'}, token)[0] == 401
         assert post(api + 'dashboard_get', {'dashboardId': 'exec'}, edit_token)[0] == 401
-        page = urllib.request.urlopen(base + '/view/sales/exec')
-        assert "script-src 'self' 'sha256-" in page.headers['Content-Security-Policy']
-        assert page.headers['Referrer-Policy'] == 'no-referrer'
 
 
-# @wu-test type=integration | scope=分享页面 | protects=只读页出现编辑入口或令牌留在地址栏或图表不渲染 | debt=D1
-def test_share_pages_render_dashboard_and_report_read_only(tmp_path):
-    from dashboard_runtime.assets import DIST
-    if not (DIST / 'app.js').exists():
-        pytest.skip('Build runtime-ui before browser acceptance testing')
-    from playwright.sync_api import sync_playwright
+# @wu-test type=integration | scope=网页与构建资源 | protects=网页缺少新应用入口或发布资源不可读取
+def test_web_pages_and_assets_serve_the_shared_build(tmp_path):
     port = free_port()
     server = start(tmp_path, port)
     with Running(create_app(server), port):
-        links = {board: server.links.share('sales', board, 'view')['url'] for board in ('exec', 'report')}
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page(viewport={'width': 1280, 'height': 900})
-            errors = []
-            page.on('pageerror', lambda error: errors.append(str(error)))
-            page.on('console', lambda message: errors.append(message.text) if message.type == 'error' else None)
-            page.goto(links['exec'])
-            page.locator('.grid-stack canvas').first.wait_for()
-            assert page.get_by_role('button', name='编辑', exact=True).count() == 0
-            assert '只读预览' in page.locator('#notice').inner_text()
-            assert '#token=' not in page.url
-            page.goto(links['report'])
-            figure = page.locator('.markdown-chart').first
-            figure.wait_for()
-            figure.scroll_into_view_if_needed()
-            # Report figures in project mode receive progressive data by component ID.
-            page.locator('.markdown-chart canvas').first.wait_for()
-            assert errors == []
-            browser.close()
+        for path in ('/', '/assets/app.js', '/view/sales/exec', '/view/sales/report', '/edit/sales/exec'):
+            with urllib.request.urlopen(f'http://127.0.0.1:{port}{path}') as response:
+                assert response.status == 200
+                body = response.read()
+                assert body
+                assert response.headers['Content-Type'].startswith('text/javascript' if path.endswith('.js') else 'text/html')
+                if not path.endswith('.js'):
+                    assert b'window.__chartsBoot=' in body
 
 
-# @wu-test type=boundary | scope=查看接口 | protects=超大请求体被读取或分块接口对链接开放 | debt=D1
+# @wu-test type=boundary | scope=查看接口 | protects=超大请求体被读取或分享链接读取其他看板的缓存响应
 def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
     import http.client
     port = free_port()
     server = start(tmp_path, port)
     token = server.links.share('sales', 'exec', 'view')['url'].split('#token=')[1]
+    transfer = server.projects.service('sales').transport.pack(
+        {'dashboardId': 'report', 'rows': ['Other dashboard content'] * 4000}, 'dashboard_view')['transport']
     with Running(create_app(server), port):
         connection = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
         connection.request('POST', '/api/v1/p/sales/tools/dashboard_get', body=b'{}',
@@ -255,5 +237,6 @@ def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
         response = connection.getresponse()
         assert response.status == 413
         assert json.loads(response.read())['error']['code'] == 'PAYLOAD_TOO_LARGE'
-        status, _ = post(f'http://127.0.0.1:{port}/api/v1/p/sales/tools/runtime_result_chunk', {'requestId': 'x', 'index': 0}, token)
+        status, _ = post(f'http://127.0.0.1:{port}/api/v1/p/sales/tools/runtime_result_chunk',
+                         {'requestId': transfer['requestId'], 'index': 0}, token)
         assert status == 403

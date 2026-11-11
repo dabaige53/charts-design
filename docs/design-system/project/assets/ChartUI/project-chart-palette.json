@@ -1,0 +1,32 @@
+{
+  "sourceCommit": "aefb7e857663a42a6bb426f8b5ba3eca48cb950e",
+  "provenance": "Previous charts-design implementation; not the McKinsey PDF palette",
+  "palette": {
+    "primary": "#123B5D",
+    "primaryStrong": "#0B2A42",
+    "primarySoft": "#DCE8F0",
+    "secondary": "#2C6485",
+    "tertiary": "#628EA8",
+    "slate": "#8C9DAE",
+    "ink": "#17212B",
+    "inkMuted": "#52606D",
+    "inkSubtle": "#7B8794",
+    "positive": "#A4453C",
+    "negative": "#2F6B55",
+    "attention": "#9A6A18",
+    "canvas": "#FFFFFF",
+    "surfaceGround": "#F8FAFC",
+    "gridline": "#E6EAED",
+    "rule": "#C9D1D8"
+  },
+  "categorical": [
+    "#123B5D",
+    "#2C6485",
+    "#628EA8",
+    "#8C9DAE",
+    "#9A6A18",
+    "#7867AD",
+    "#634B36",
+    "#BDD0DC"
+  ]
+}

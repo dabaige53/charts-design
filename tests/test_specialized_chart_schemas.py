@@ -1,8 +1,6 @@
 # ruff: noqa: E402 -- imports follow the shared generator search path.
 from copy import deepcopy
-import json
 from pathlib import Path
-import subprocess
 import sys
 
 
@@ -10,7 +8,6 @@ SCRIPTS = Path(__file__).parents[1] / "skills" / "executive-charts" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from dashboard_workspace import validate_resolved
-from generate_dashboard import CHARTS_MAP
 
 
 PRESENTATIONS = {
@@ -62,15 +59,15 @@ DATA = {
     "t05": {
         "stages": ["Before", "After"],
         "lines": [
-            {"name": "Widebody", "data": [45.2, 38.1], "color": "#123B5D"},
-            {"name": "Narrowbody", "data": [36.5, 31.2], "color": "#0B2A42"},
+            {"name": "Widebody", "data": [45.2, 38.1]},
+            {"name": "Narrowbody", "data": [36.5, 31.2]},
         ],
     },
     "c04": {"fleets": ["Widebody", "Narrowbody"], "deviations": [18.2, -5.8]},
     "k01": {
         "demographics": [
-            {"value": 60, "name": "Business", "itemStyle": {"color": "#123B5D"}},
-            {"value": 40, "name": "Leisure", "itemStyle": {"color": "#8EA4B8"}},
+            {"value": 60, "name": "Business"},
+            {"value": 40, "name": "Leisure"},
         ]
     },
     "r01": {"routes": [[35.2, 68.5, "Route A"], [-4.8, 42.0, "Route B"]]},
@@ -139,7 +136,7 @@ def test_strict_mode_rejects_specialized_chart_wrong_value_types() -> None:
     mutations = {
         "t06": lambda data: data["month"]["revenue"].__setitem__(0, "1"),
         "c02": lambda data: data["categories"].__setitem__(0, 1),
-        "t05": lambda data: data["lines"][0].__setitem__("color", 123),
+        "t05": lambda data: data["lines"][0].__setitem__("name", 123),
         "c04": lambda data: data["deviations"].__setitem__(0, True),
         "k01": lambda data: data["demographics"][0].__setitem__("value", "60"),
         "r01": lambda data: data["routes"][0].__setitem__(2, 123),
@@ -177,49 +174,3 @@ def test_non_strict_mode_keeps_legacy_compatibility() -> None:
     del legacy["charts"][0]["presentation"]
     errors, _ = validate_resolved(legacy, strict=True)
     assert any(error["code"] == "CHART_PRESENTATION_MISSING" for error in errors)
-
-
-def _render_specialized_contract(code: str) -> dict:
-    chart = _resolved(code)["charts"][0]
-    program = "\n".join([
-        "const echarts = { graphic: { LinearGradient: (...args) => ({ args }) } };",
-        "const tokens = {",
-        "  commonOption: {}, axisTitleStyleX: {}, axisTitleStyleY: {},",
-        "  palette: { rule: '#ddd', gridline: '#eee', primary: '#123', primarySoft: '#abc', ink: '#111', inkMuted: '#777', positive: '#080', negative: '#c00' }",
-        "};",
-        f"const cfg = {json.dumps(chart, ensure_ascii=False)};",
-        f"const component = {{ ...({CHARTS_MAP[code]}), ...cfg }};",
-        "const option = component.optionBuilder(component.data, 'month', tokens, component);",
-        "const table = component.tableDataExtractor(component.data, 'month', component);",
-        "const tooltip = option.tooltip?.formatter;",
-        "let tooltipText = '';",
-        "if (typeof tooltip === 'function') {",
-        "  if (component.code === 'k01') tooltipText = tooltip({ name: 'Business', value: 60 });",
-        "  if (component.code === 'r01') tooltipText = tooltip({ data: component.data.routes[0] });",
-        "}",
-        "console.log(JSON.stringify({ option, table, tooltipText }));",
-    ])
-    completed = subprocess.run(["node", "-"], input=program, check=True, capture_output=True, text=True)
-    return json.loads(completed.stdout)
-
-
-# @wu-test type=integration | scope=专用图表渲染 | protects=业务轴系列提示标签被示例标签替代
-def test_specialized_renderers_consume_business_presentation_instead_of_catalog_labels() -> None:
-    rendered = {code: _render_specialized_contract(code) for code in DATA}
-
-    assert rendered["t06"]["option"]["xAxis"]["name"] == "Period"
-    assert [axis["name"] for axis in rendered["t06"]["option"]["yAxis"]] == ["Revenue", "Growth"]
-    assert [series["name"] for series in rendered["t06"]["option"]["series"]] == ["Revenue", "Growth"]
-
-    for code in ("c02", "c04"):
-        option = rendered[code]["option"]
-        assert option["xAxis"]["name"] == PRESENTATIONS[code]["axisLabels"]["x"]
-        assert option["yAxis"]["name"] == PRESENTATIONS[code]["axisLabels"]["y"]
-        assert option["series"][0]["name"] == PRESENTATIONS[code]["seriesLabels"][0]
-
-    assert [series["name"] for series in rendered["t05"]["option"]["series"]] == ["Widebody", "Narrowbody"]
-    assert rendered["k01"]["tooltipText"] == "Business<br>Share: 60 %"
-    assert rendered["r01"]["option"]["series"][0]["markLine"]["data"] == [{"xAxis": 15}, {"yAxis": 50}]
-    assert "Growth" in rendered["r01"]["tooltipText"] and "Margin" in rendered["r01"]["tooltipText"]
-    assert rendered["k02"]["option"]["legend"]["data"] == ["App", "Corporate", "OTA"]
-    assert rendered["k02"]["table"]["headers"] == ["Hub", "App", "Corporate", "OTA"]

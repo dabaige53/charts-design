@@ -98,12 +98,16 @@ class LocalView:
                 sort = [{'field': state['sortCol'], 'direction': state.get('sortDir', 'asc')}] if state.get('sortCol') else []
                 search = state.get('keyword', '')
                 require(isinstance(search, str) and len(search) <= 1000, 'Table search must contain at most 1000 characters')
-                request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', [])) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
+                request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', []), raw.get('calculatedColumns')) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
                 total = request['totalRows']
                 last_page = max(1, (total+size-1)//size)
                 if page > last_page:
                     page = last_page
-                    request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', [])) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
+                    request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', []), raw.get('calculatedColumns')) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
+                for row in request['rows']:
+                    for target, spec in raw.get('calculatedColumns', {}).items():
+                        value, unit = row.get(target), row.get(spec['unitField'])
+                        row[target] = '—' if value is None else (f'{value * 100:.{spec.get("decimals", 1)}f}%' if unit == '%' else f'{value:.{spec.get("decimals", 1)}f} {unit}'.rstrip())
                 raw.update({'rows': request['rows'], 'columns': columns})
                 computed['tables'][key] = {'page': page, 'pageSize': size, 'totalRows': total, 'sortCol': state.get('sortCol'), 'sortDir': state.get('sortDir', 'asc'), 'keyword': search, 'durationMs': request['durationMs']}
                 computed['components'][key] = raw

@@ -3,11 +3,9 @@
     python3 tests/deploy/container_smoke.py --image charts-design:ci
     python3 tests/deploy/container_smoke.py --url http://127.0.0.1:8000 --token <token>
 
-Exercises the deployment surface end to end with the standard library only:
-health, bearer enforcement, MCP over Streamable HTTP (initialize, tools/list,
-authoring a dashboard through an edit batch, preview), the preview page and
-its cached bundle, the scoped viewer API and a signed export download. With
---image it also checks the container runs as a non-root user.
+Exercises health, bearer enforcement, MCP authoring, scoped viewer APIs and
+signed JSON downloads. With --image it also checks the non-root user and
+excludes private build inputs. Presentation endpoints are unavailable.
 """
 from __future__ import annotations
 
@@ -103,7 +101,7 @@ def wait_healthy(base, seconds=90):
     raise AssertionError(f'{base}/health did not become healthy within {seconds}s')
 
 
-# @wu-test type=integration | scope=部署镜像 | protects=部署后鉴权失效或编辑批次失败或只读链接可写或部署包缺源码
+# @wu-test type=integration | scope=部署镜像 | protects=部署后鉴权失效或编辑批次失败或只读令牌可写或JSON下载失败
 def run_checks(base, token):
     wait_healthy(base)
     status, _, _ = http('POST', base + '/mcp', {}, {'Content-Type': 'application/json'})
@@ -128,22 +126,12 @@ def run_checks(base, token):
     revision = client.tool('dashboard_patch', {'dashboardId': BOARD, 'expectedRevision': revision, 'operations': operations})['document']['revision']
     finished = client.tool('dashboard_edit_finish', {'dashboardId': BOARD, 'expectedRevision': revision, 'batchId': batch['batch_id']})
     check(finished.get('ok'), f'edit batch failed Doctor checks: {finished.get("doctor")}')
-    preview = client.tool('dashboard_preview', {'dashboardId': BOARD})
-    check(len(preview['document']['manifest']['components']) == 10, 'authored dashboard is incomplete')
+    saved = client.tool('dashboard_get', {'dashboardId': BOARD})
+    check(len(saved['document']['manifest']['components']) == 10, 'authored dashboard is incomplete')
     print(f'ok  authored {BOARD!r} through an edit batch (revision {revision})')
 
-    link = preview['previewUrl']
-    page_url, share = link.split('#token=')
-    path = urlparse(page_url).path
-    status, headers, page = http('GET', base + path)
-    check(status == 200 and b'/assets/app.' in page, f'preview page returned {status}')
-    check("script-src 'self' 'sha256-" in (headers.get('content-security-policy') or ''), 'preview page has no CSP')
-    asset = page.decode().split('src="')[-1].split('"')[0]
-    status, headers, _ = http('GET', base + asset, headers={'Accept-Encoding': 'gzip'})
-    check(status == 200 and headers.get('content-encoding') == 'gzip' and 'immutable' in (headers.get('cache-control') or ''),
-          'bundle is not served compressed and immutable')
-    print('ok  preview page, CSP and cached bundle')
-
+    link = client.tool('dashboard_share', {'dashboardId': BOARD, 'access': 'view'})['url']
+    _, share = link.split('#token=')
     api = f'{base}/api/v1/p/{PROJECT}/tools/'
     viewer = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + share}
     status, _, raw = http('POST', api + 'dashboard_view', {'dashboardId': BOARD}, viewer)
@@ -154,10 +142,7 @@ def run_checks(base, token):
     status, _, raw = http('GET', export['downloadUrl'].replace(urlparse(export['downloadUrl']).netloc, urlparse(base).netloc))
     check(status == 200 and json.loads(raw)['id'] == BOARD, f'signed download returned {status}')
     print('ok  scoped viewer API and signed download')
-    site = client.tool('dashboard_export_site', {'dashboardId': BOARD})['export']
-    status, _, raw = http('GET', site['siteDownloadUrl'])
-    check(status == 200 and raw.startswith(b'PK'), 'standalone site export is missing runtime build inputs')
-    print('ok  standalone site export')
+
 
 
 # @wu-test type=boundary | scope=Docker镜像内容 | protects=构建上下文中的令牌配置或业务目录被带入运行镜像

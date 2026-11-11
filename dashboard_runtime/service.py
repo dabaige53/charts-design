@@ -136,7 +136,7 @@ class Service:
             from .semantic_diff import semantic_diff
             changes = semantic_diff(self.store.readable(board), self.store.get(board, hydrate=False))
             checkpoint = self.store.checkpoint(board, args['expectedRevision'], args.get('name', ''), args.get('published', False), args.get('batchId'))
-            return {'ok': True, 'checkpoint': checkpoint, 'doctor': report, 'semanticChanges': changes, 'nextAction': 'dashboard_preview', 'displayPolicy': 'once-after-finish'}
+            return {'ok': True, 'checkpoint': checkpoint, 'doctor': report, 'semanticChanges': changes, 'nextAction': 'dashboard_preview', 'displayPolicy': 'saved-dashboard-ui'}
         if tool == 'runtime_info':
             from .assets import ui_build_id
             from . import __version__
@@ -186,6 +186,9 @@ class Service:
         if tool == 'dashboard_export_open':
             from .exports import open_export
             return open_export(self.store.root, board, args.get('exportId'), args.get('format'), args.get('action'))
+        if tool == 'dashboard_export_read':
+            from .exports import read_export
+            return read_export(self.store.root, board, args.get('exportId'), args.get('format'), args.get('offset', 0), args.get('limit', 262144))
         if tool == 'dashboard_export_site':
             from .deployment import export_site
             return export_site(self.store, board)
@@ -193,6 +196,9 @@ class Service:
             from .exports import export_dashboard
             doc = self.store.compact(self.store.get(board, hydrate=False))
             view = self.views.prepare(doc, args.get('filters'), args.get('tableStates'), args.get('granularities'))
+            if args.get('format') == 'html':
+                from .statistical import statistical_artifacts
+                view['statisticalArtifacts'] = statistical_artifacts(self.store.statistical_document(view))
             return export_dashboard(self.store.root, view, args.get('format'), self.store.data)
         if tool == 'dashboard_view':
             doc = self.store.get(board, hydrate=False)
@@ -282,15 +288,19 @@ class Service:
             active = [f for f in checked['manifest']['filters'] if f['values'] and (key in f['componentIds'] if key else any(doc['manifest']['components'][cid].get('datasetId') == ds for cid in f['componentIds']))]
             export_dir = self.store.root / 'exports'
             export_dir.mkdir(mode=0o700, exist_ok=True)
-            path = export_dir / (str(board) + '-' + uuid.uuid4().hex + '.csv')
-            presentation = component.get('presentation', {}) if component else {}
+            export_id = uuid.uuid4().hex
+            directory = export_dir / export_id
+            directory.mkdir(mode=0o700)
+            path = directory / (str(board) + '.csv')
+            presentation = {**component.get('presentation', {}), **component.get('config', {})} if component else {}
             columns = args.get('columns')
             if presentation.get('groupBy') and columns is None:
                 columns = [col['key'] for col in presentation['columns']]
-            return {'export': self.store.data.export_csv(ref, path, active, columns, args.get('sort'), search=args.get('search', ''), group_by=presentation.get('groupBy'), sum_fields=presentation.get('sumFields'))}
+            result = self.store.data.export_csv(ref, path, active, columns, args.get('sort'), search=args.get('search', ''), group_by=presentation.get('groupBy'), sum_fields=presentation.get('sumFields'), calculated=presentation.get('calculatedColumns'))
+            return {'export': {**result, 'id': export_id, 'filename': path.name, 'format': 'csv', 'mimeType': 'text/csv'}}
         if tool == 'dashboard_create':
             if args.get('document'):
-                require(not any(c.get('kind') == 'chart' for c in args['document'].get('manifest', {}).get('components', {}).values()), 'New charts must use the original 40 codes (kind=legacy, family=chart)', 'UNSUPPORTED_CHART_FAMILY')
+                require(not any(c.get('kind') == 'chart' for c in args['document'].get('manifest', {}).get('components', {}).values()), 'Use kind=legacy, family=chart with a preset code or config.renderer=echarts/html', 'UNSUPPORTED_CHART_FAMILY')
             doc = args.get('document')
             if doc is not None:
                 doc = copy.deepcopy(doc)
@@ -316,22 +326,14 @@ class Service:
                     target['sourcePath'] = 'manifest.report.markdown' if manifest.get('viewMode') == 'report' else 'manifest'
                 targets[note['id']] = target
             return {'dashboardId': doc['id'], 'title': manifest['title'], 'revision': doc['revision'],
-                    'annotations': notes, 'targets': targets, 'count': len(notes)}
-        if tool == 'dashboard_preview' and self.project_root:
-            from .doctor import data_version
-            from .assets import ui_build_id
-            doc = self.store.get(board, hydrate=False)
-            report = self.doctor_reports.get(board, {})
-            cache = self.transport.path.parent / 'doctor' / (board+'.json')
-            if not report and cache.exists():
-                import json
-                report = json.loads(cache.read_text())
-            if (report.get('revision'), report.get('dataVersion'), report.get('uiBuildId'), report.get('backendBuildId')) != (doc['revision'], data_version(doc), ui_build_id(), BACKEND_BUILD_ID):
-                report = self._call('dashboard_doctor', {'dashboardId': board, 'mode': 'quick'})
-            require(report['passed'], 'Doctor failed; query dashboard_doctor for component diagnostics', 'DOCTOR_FAILED')
-            return {'document': doc, 'doctor': report}
-        if tool in ('dashboard_get', 'dashboard_preview'):
-            return {'document': self.store.get(board, hydrate=not (tool == 'dashboard_preview' or args.get('dataMode') == 'local'))}
+                    'annotations': notes, 'targets': targets, 'count': len(notes),
+                    'independentSave': self.project_root is not None}
+        if tool == 'dashboard_preview':
+            from .assets import require_preview
+            require_preview()
+            return {'document': self.store.readable(board) if self.project_root else self.store.get(board, hydrate=False)}
+        if tool == 'dashboard_get':
+            return {'document': self.store.get(board, hydrate=args.get('dataMode') != 'local')}
         if tool == 'dashboard_validate':
             return {'valid': bool(validate(args.get('document') or self.store.get(board, hydrate=False)))}
         if tool == 'dashboard_patch':
@@ -343,10 +345,15 @@ class Service:
                     require(False, 'Use set_original_chart with an original code', 'UNSUPPORTED_CHART_FAMILY')
                 if isinstance(op, dict) and op.get('op') == 'put_component' and isinstance(op.get('value'), dict) and op['value'].get('kind') == 'chart':
                     old = current['manifest']['components'].get(op.get('id'), {})
-                    require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'New charts must use the original 40 codes', 'UNSUPPORTED_CHART_FAMILY')
+                    require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'Use kind=legacy, family=chart with a preset code or config.renderer=echarts/html for custom charts', 'UNSUPPORTED_CHART_FAMILY')
                 if isinstance(op, dict) and op.get('op') == 'put_source' and isinstance(op.get('value'), dict):
                     op['value']['verification'] = 'supplied'
-            updated = self.store.mutate(board, args.get('expectedRevision'), ops)
+            note_options = {}
+            if 'expectedAnnotations' in args:
+                require(self.project_root is not None, 'Independent annotation saves require a project', 'PROJECT_REQUIRED')
+                require(isinstance(args['expectedAnnotations'], list), 'expectedAnnotations must be an array')
+                note_options['expected_annotations'] = args['expectedAnnotations']
+            updated = self.store.mutate(board, args.get('expectedRevision'), ops, **note_options)
             from .semantic_diff import semantic_diff
             return {'document': updated, 'semanticChanges': semantic_diff(current, updated)}
         if tool == 'dashboard_history':
@@ -440,9 +447,9 @@ TOOLS = {
     'dashboard_create': ('Create a dashboard with an optional reviewed artifact', schema({**BOARD, 'title': STR, 'document': {'type': 'object'}}, ('dashboardId',))),
     'dashboard_annotations': ('Read saved comments and selection anchors without loading chart data. Returns revision, annotations and target component identities. When asked to act on comments, read dashboard_get for canonical content, then use dashboard_patch with its latest expectedRevision. Preserve comments unless asked to edit or remove them. Anchors are relative geometry/text references, not screenshots; verify ambiguous visual targets in the rendered page.', schema({'dashboardId': STR}, ('dashboardId',))),
     'dashboard_get': ('Read current canonical state including manifest.annotations before editing', schema(BOARD, ('dashboardId',))),
-    'dashboard_preview': ('Open an interactive MCP App; non-UI hosts receive the canonical artifact', schema(BOARD, ('dashboardId',))),
+    'dashboard_preview': ('Open this saved dashboard with the shared React chart, KPI, table and GridStack UI in this MCP', schema(BOARD, ('dashboardId',))),
     'dashboard_validate': ('Validate a stored dashboard or supplied artifact', schema({**BOARD, 'document': {'type': 'object'}})),
-    'dashboard_patch': ('Apply atomic typed operations with optimistic concurrency', schema({**BOARD, 'expectedRevision': INT, 'operations': {'type': 'array', 'minItems': 1, 'maxItems': 200, 'items': {'type': 'object'}}}, ('dashboardId', 'expectedRevision', 'operations'))),
+    'dashboard_patch': ('Apply atomic typed operations with optimistic concurrency; expectedAnnotations enables independent, conflict-checked project annotation saves', schema({**BOARD, 'expectedRevision': INT, 'expectedAnnotations': {'type': 'array', 'maxItems': 100, 'items': {'type': 'object'}}, 'operations': {'type': 'array', 'minItems': 1, 'maxItems': 200, 'items': {'type': 'object'}}}, ('dashboardId', 'expectedRevision', 'operations'))),
     'dashboard_history': ('List the last 100 revisions', schema(BOARD, ('dashboardId',))),
     'dashboard_restore': ('Restore a revision as a new revision; never overwrite history', schema({**BOARD, 'expectedRevision': INT, 'revision': INT}, ('dashboardId', 'expectedRevision', 'revision'))),
     'chart_catalog': ('List the 40 installed original chart codes and component catalog', schema(TARGET)),
@@ -455,7 +462,7 @@ READ_ONLY = {'dashboard_annotations', 'component_data', 'dashboard_list', 'dashb
 READ_ONLY.add('runtime_keepalive')
 TOOLS.update({
     'dataset_import': ('Import explicit JSON rows or CSV; inferred measures remain unverified', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'rows': {'type':'array', 'items':{'type':'object'}}, 'csvText':STR, 'name':STR}, ('dashboardId','expectedRevision','datasetId'))),
-    'legacy_render': ('Export one original component with the shared bundled UI and only its required data sources', schema(TARGET, ('dashboardId','componentId')))
+    'legacy_render': ('Read-only original component HTML snapshot using the shared React UI', schema(TARGET, ('dashboardId','componentId')))
 })
 READ_ONLY.add('legacy_render')
 
@@ -489,17 +496,19 @@ TOOLS.update({
     'dashboard_migration_rollback': ('Restore backed-up pre-migration content as a new revision, preserving subsequent history', schema({**BOARD, 'expectedRevision': INT, 'backupId': STR}, ('dashboardId', 'expectedRevision', 'backupId'))),
 })
 READ_ONLY.update({'dashboard_view', 'dashboard_data_inspect', 'dashboard_filter_options'})
-TOOLS['dashboard_export'] = ('Export the current view as a local PDF or self-contained HTML, or JSON configuration with immutable local data references; never exports full detail rows', schema({**VIEW, 'format': {'enum': ['pdf', 'html', 'json']}}, ('dashboardId', 'format')))
+TOOLS['dashboard_export'] = ('Export JSON configuration or an HTML snapshot of the current computed view', schema({**VIEW, 'format': {'enum': ['html', 'json']}}, ('dashboardId', 'format')))
 READ_ONLY.add('dashboard_export')
 TOOLS['runtime_result_chunk'] = ('Read one complete base64 page of a large MCP response. Decode all pages in index order as UTF-8 JSON; never sample or truncate.', schema({'requestId': STR, 'index': {'type': 'integer', 'minimum': 0}}, ('requestId', 'index')))
 TOOLS['runtime_diagnostics'] = ('Query metadata-only preview transport logs by requestId; no business rows, arguments or credentials are logged.', schema({'requestId': STR, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100}}))
 TOOLS['runtime_report_error'] = ('Record a client preview decoding failure without sending response contents.', schema({'requestId': STR, 'code': {'enum': ['CLIENT_DECODE_FAILED', 'CHUNK_MISMATCH', 'RESULT_EXPIRED']}}, ('code',)))
 READ_ONLY.update({'runtime_result_chunk', 'runtime_diagnostics'})
-TOOLS['dashboard_export_open'] = ('Open a previously generated managed export or reveal it in Finder, only after a user file-action click', schema({**BOARD, 'exportId': STR, 'format': {'enum': ['pdf', 'html', 'json']}, 'action': {'enum': ['open', 'reveal']}}, ('dashboardId', 'exportId', 'format', 'action')))
+TOOLS['dashboard_export_open'] = ('Open a previously generated managed export or reveal it in Finder, only after a user file-action click', schema({**BOARD, 'exportId': STR, 'format': {'enum': ['html', 'json', 'csv', 'zip']}, 'action': {'enum': ['open', 'reveal']}}, ('dashboardId', 'exportId', 'format', 'action')))
+TOOLS['dashboard_export_read'] = ('Read a bounded chunk of an existing managed export for MCP host download', schema({**BOARD, 'exportId': STR, 'format': {'enum': ['html', 'json', 'csv', 'zip']}, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 262144}}, ('dashboardId', 'exportId', 'format')))
+READ_ONLY.add('dashboard_export_read')
 
 TOOLS['dashboard_doctor'] = ('Check project data and component calculations without opening a page', schema({**BOARD, 'mode': {'enum': ['quick','full']}}, ('dashboardId',)))
 TOOLS['dashboard_edit_begin'] = ('Begin or resume one edit batch; all patches save draft only', schema({**BOARD, 'expectedRevision': INT}, ('dashboardId','expectedRevision')))
-TOOLS['dashboard_edit_finish'] = ('Run doctor and create one checkpoint; on success call dashboard_preview exactly once, never preview intermediate patches', schema({**BOARD, 'expectedRevision': INT, 'batchId': STR, 'name': STR, 'published': {'type':'boolean'}}, ('dashboardId','expectedRevision','batchId')))
+TOOLS['dashboard_edit_finish'] = ('Run doctor and create one checkpoint; call dashboard_preview to open the saved UI', schema({**BOARD, 'expectedRevision': INT, 'batchId': STR, 'name': STR, 'published': {'type':'boolean'}}, ('dashboardId','expectedRevision','batchId')))
 TOOLS['dashboard_checkpoint'] = ('Validate and checkpoint current draft, optionally name or publish it', schema({**BOARD,'expectedRevision':INT,'name':STR,'published':{'type':'boolean'}}, ('dashboardId','expectedRevision')))
 TOOLS['dashboard_history_diff'] = ('Compare two retained design checkpoints', schema({**BOARD,'fromRevision':INT,'toRevision':INT}, ('dashboardId','fromRevision','toRevision')))
 TOOLS['dashboard_history'][1]['properties'].update({'offset':{'type':'integer','minimum':0}, 'limit':{'type':'integer','minimum':1,'maximum':100}})
@@ -519,5 +528,5 @@ TOOLS['runtime_report_error'][1]['properties']['code']['enum'].extend(['CLIENT_D
 
 TOOLS['dashboard_view'][1]['properties']['compactRecords'] = {'type': 'boolean'}
 
-TOOLS['dashboard_export_site'] = ('Generate a standalone static website, complete attached data, and rebuildable JavaScript source ZIP in the project. No hosting upload. Returns file paths only.', schema({**BOARD}, ('dashboardId',)))
+TOOLS['dashboard_export_site'] = ('Build an independent static React site with versioned data shards; returns a managed ZIP export', schema({**BOARD}, ('dashboardId',)))
 READ_ONLY.add('dashboard_export_site')

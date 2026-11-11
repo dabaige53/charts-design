@@ -8,7 +8,6 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
-from dashboard_runtime import assets
 from dashboard_runtime.demo import document
 from dashboard_runtime.http_server import RuntimeHTTPServer
 from dashboard_runtime.model import DashboardError, apply_operations, validate
@@ -243,16 +242,21 @@ def test_query_saved_atomically(tmp_path, runner):
     assert source["query"]["sql"] == "SELECT * FROM sales"
 
 
-# @wu-test type=boundary | scope=HTML导出 | protects=标题脚本结束标签执行注入
-def test_export_escapes_script_in_data(tmp_path, monkeypatch):
-    tmp_path.joinpath("app.js").write_text("window.loaded=true;")
-    tmp_path.joinpath("app.css").write_text("body{}")
-    monkeypatch.setattr(assets, "DIST", tmp_path)
+# @wu-test type=boundary | scope=预览与JSON导出 | protects=预览丢失文档或JSON导出丢失数据引用
+def test_preview_and_json_export_preserve_source(tmp_path):
     doc = document()
     doc["manifest"]["title"] = "</script><script>alert(1)</script>"
-    text = assets.export_document(doc)
-    assert "<script>alert(1)</script>" not in text
-    assert "\\u003c/script\\u003e" in text
+    service = Service(tmp_path)
+    service.store.create("demo", doc["manifest"]["title"], doc)
+    preview = service.call("dashboard_preview", {"dashboardId": "demo"})
+    assert preview['document']['manifest']['title'] == doc["manifest"]["title"]
+    result = service.call("dashboard_export", {"dashboardId": "demo", "format": "json"})["export"]
+    with open(result["path"], encoding="utf-8") as exported:
+        saved = json.load(exported)
+    assert saved["id"] == "demo"
+    assert saved["manifest"] == service.store.get("demo")["manifest"]
+    assert saved["snapshot"]["datasets"] == {}
+    assert saved["snapshot"]["datasetRefs"]["sales"]["rowCount"] == len(doc["snapshot"]["datasets"]["sales"])
 
 
 # @wu-test type=boundary | scope=HTTP接口 | protects=未授权跨来源旧版本修改成功

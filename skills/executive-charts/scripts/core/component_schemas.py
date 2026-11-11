@@ -9,6 +9,18 @@ import re
 KPI_TYPES = frozenset(f"mc{index:02d}" for index in range(1, 17))
 # Cards whose shape needs a trend series (labels + finite values of equal length).
 KPI_SERIES_TYPES = frozenset(("mc03", "mc12"))
+KPI_DESCRIPTION_FIELDS = frozenset((
+    "subtitle", "description", "desc", "note", "detail", "rankSub", "trendLabel", "gaugeSub",
+))
+
+
+def validate_kpi_content(kpi: dict[str, Any], path: str) -> list[dict[str, str]]:
+    """KPI surfaces contain values and labels, never prose descriptions."""
+    return [
+        {"code": "KPI_DESCRIPTION_NOT_ALLOWED", "path": f"{path}.{key}",
+         "message": "KPI descriptions are not allowed; put explanations in metric definitions or a separate text component"}
+        for key in sorted(KPI_DESCRIPTION_FIELDS) if kpi.get(key) not in (None, "")
+    ]
 
 
 def validate_kpi_comparisons(kpi: dict[str, Any], path: str) -> list[dict[str, str]]:
@@ -129,8 +141,6 @@ def validate_kpi_presentation(kpi: dict[str, Any], path: str) -> list[dict[str, 
     if card_type == "mc16":
         if kpi.get("value") in (None, ""):
             error("value", "Declare the headline value")
-        if kpi.get("note") is not None and (not isinstance(kpi["note"], str) or len(kpi["note"]) > 120):
-            error("note", "The takeaway note is text of at most 120 characters")
     return errors
 
 
@@ -145,6 +155,37 @@ CHART_SCHEMA_REGISTRY = {
     code: f"{''.join(character for character in code if character.isalpha())}-family-data-v1"
     for code in CHART_CODES
 }
+
+def validate_chart_renderer(config: dict[str, Any], path: str) -> list[dict[str, str]]:
+    """All chart entry points share the same explicit renderer contract."""
+    errors = []
+    def error(field, message):
+        errors.append({"code": "CHART_RENDERER_INVALID", "path": f"{path}.{field}", "message": message})
+    renderer = config.get("renderer", "preset")
+    if renderer not in ("preset", "echarts", "html"):
+        error("renderer", "Choose preset, echarts or html")
+        return errors
+    code = config.get("code")
+    if not isinstance(code, str) or not code.strip():
+        error("code", "Declare a non-empty chart code; custom renderers may use any business code")
+    elif renderer == "preset" and code not in CHART_CODES:
+        error("code", "Unknown preset code; use renderer=echarts with echarts options, or renderer=html with html content")
+    if renderer == "echarts" and not (isinstance(config.get("echarts"), dict) and config["echarts"]):
+        error("echarts", "A native chart requires a non-empty ECharts option object")
+    if renderer == "html" and not (isinstance(config.get("html"), str) and config["html"].strip()):
+        error("html", "A custom component requires HTML content, optionally including CSS and JavaScript")
+    if renderer != "preset":
+        if "encoding" in config:
+            error("encoding", "Preset encoding is not a custom renderer data transform")
+        if "data" in config and not isinstance(config["data"], dict):
+            error("data", "Custom component data must be an object")
+        table = config.get("table")
+        if table is not None:
+            if not isinstance(table, dict) or not isinstance(table.get("headers"), list) or not table["headers"] or not all(isinstance(h, str) for h in table["headers"]):
+                error("table", "Supply table headers as a non-empty string array")
+            elif not isinstance(table.get("rows"), list) or not all(isinstance(r, list) and len(r) == len(table["headers"]) for r in table["rows"]):
+                error("table.rows", "Each table row must have the same length as headers")
+    return errors
 
 
 SPECIALIZED_DATA_VALIDATOR_CODES = frozenset(("t06", "c02", "t05", "c04", "k01", "r01", "k02"))
@@ -385,10 +426,9 @@ def _validate_strict_data(
             if not isinstance(line, dict):
                 continue
             line_path = f"{path}.lines[{index}]"
-            for key in ("name", "color"):
-                value = _required(line, key, line_path, errors)
-                if value is not None and (not isinstance(value, str) or not value):
-                    _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{line_path}.{key}", f"Line {key} must be a string")
+            name = _required(line, "name", line_path, errors)
+            if name is not None and (not isinstance(name, str) or not name):
+                _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{line_path}.name", "Line name must be a string")
             line_data = _array(line, "data", line_path, errors, "number")
             _equal_lengths([("stages", stages), ("data", line_data)], line_path, errors)
         return
@@ -407,10 +447,6 @@ def _validate_strict_data(
             name = _required(item, "name", item_path, errors)
             if name is not None and (not isinstance(name, str) or not name):
                 _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{item_path}.name", "Demographic name must be a string")
-            style = _required(item, "itemStyle", item_path, errors)
-            color = style.get("color") if isinstance(style, dict) else None
-            if not isinstance(style, dict) or not isinstance(color, str) or not color:
-                _append_error(errors, "CHART_DATA_TYPE_INVALID", f"{item_path}.itemStyle.color", "Demographic color must be a string")
         return
 
     routes = _array(data, "routes", path, errors, "array")

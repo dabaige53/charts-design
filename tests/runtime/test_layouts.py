@@ -59,8 +59,9 @@ def test_templates_produce_distinct_desktop_compositions():
     narrative = {p['id']: p for p in compute_layout(doc['manifest'], 'narrative', order)['desktop']}
     assert (narrative['trend']['w'], narrative['note']['x']) == (8, 8)
     scorecard = compute_layout(doc['manifest'], 'scorecard', order)
-    assert sum(1 for p in scorecard['desktop'] if p['y'] == 0 and p['id'] in order[:6]) == 6
-    assert {p['w'] for p in scorecard['mobile'] if p['id'] in order[:6]} == {2}
+    assert sum(1 for p in scorecard['desktop'] if p['y'] == 0 and p['id'] in order[:6]) == 3
+    assert {p['w'] for p in scorecard['mobile'] if p['id'] in order[:6]} == {4}
+    assert all(p['h'] == 6 for p in scorecard['desktop'] if p['id'].startswith('chart'))
 
 
 # @wu-test type=behavior | scope=编辑批次布局 | protects=同批次后创建的组件未进入模板布局

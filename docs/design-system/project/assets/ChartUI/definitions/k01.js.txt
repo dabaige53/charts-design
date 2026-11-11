@@ -1,0 +1,49 @@
+{
+        id: 'chart-k01',
+        code: 'k01',
+        title: '旅客舱位等级与出行客群构成分布',
+        subtitle: '反映公商务出行、休闲度假、探亲求学与团队政务等不同客群的构成占比',
+        explainKey: 'k01',
+        data: {
+            demographics: [
+                { value: 42, name: '公商务高频出行 (42%)', itemStyle: { color: '#0B2A42' } },
+                { value: 30, name: '休闲旅游度假 (30%)', itemStyle: { color: '#123B5D' } },
+                { value: 18, name: '探亲求学探访 (18%)', itemStyle: { color: '#4A6B8A' } },
+                { value: 10, name: '政务团队出行 (10%)', itemStyle: { color: '#8EA4B8' } }
+            ]
+        },
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const tooltipLabel = (presentation.tooltipValueLabels || ['占比'])[0];
+            const unit = (presentation.units || [cfg.unit || '%'])[0];
+            return ({
+            tooltip: {
+                trigger: 'item',
+                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                borderColor: tokens.palette.rule,
+                borderWidth: 1,
+                padding: [8, 12],
+                extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
+                formatter: params => `${params.name}<br>${tooltipLabel}: ${params.value}${unit ? ` ${unit}` : ''}`
+            },
+            series: [{
+                type: 'pie',
+                radius: ['45%', '70%'],
+                center: ['50%', '52%'],
+                avoidLabelOverlap: false,
+                label: { show: true, position: 'outside', formatter: '{b}', fontSize: 10, color: tokens.palette.ink },
+                labelLine: { length: 10, length2: 10 },
+                data: d.demographics
+            }]
+        });
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const tooltipLabel = (presentation.tooltipValueLabels || ['占比'])[0];
+            const unit = (presentation.units || [cfg.unit || '%'])[0];
+            return {
+                headers: presentation.tableHeaders || ['类别', `${tooltipLabel}${unit ? ` (${unit})` : ''}`],
+                rows: d.demographics.map(segment => [segment.name, `${segment.value}${unit ? ` ${unit}` : ''}`])
+            };
+        }
+    }

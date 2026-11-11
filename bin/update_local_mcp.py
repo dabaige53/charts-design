@@ -56,11 +56,15 @@ async def smoke(entry: Path):
             if not {'dashboard_preview', 'dashboard_export'} <= names:
                 raise ValueError('新安装包缺少必要的 MCP 工具')
             resources = await session.list_resources()
-            app = next(item for item in resources.resources if str(item.uri).startswith('ui://'))
-            contents = await session.read_resource(app.uri)
+            contract = next(item for item in resources.resources if str(item.uri) == 'charts://contract')
+            contents = await session.read_resource(contract.uri)
             if not contents.contents:
-                raise ValueError('新安装包没有预览资源')
-            return {'toolCount': len(names), 'resourceUri': str(app.uri)}
+                raise ValueError('新安装包没有 Runtime 协议资源')
+            ui = next(item for item in resources.resources if str(item.uri).startswith('ui://charts-design/'))
+            page = await session.read_resource(ui.uri)
+            if not page.contents:
+                raise ValueError('新安装包没有可读取的 React UI 资源')
+            return {'toolCount': len(names), 'resourceUri': str(ui.uri), 'uiStatus': 'resource-readable'}
 
 
 def update(workspace: Path):
@@ -76,8 +80,9 @@ def update(workspace: Path):
         raise ValueError('当前 MCP 直接引用源码，不需要更新安装包')
     def run(*args):
         subprocess.run(list(args), cwd=source, check=True)
+    run('npm', 'run', 'ui:build')
+    run('npm', 'run', 'ui:package')
     run('npm', 'run', 'check')
-    run('npm', '--prefix', 'runtime-ui', 'run', 'build')
     version = json.loads((source / 'package.json').read_text())['version']
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     release = old_package.parent.parent / ('charts-design-' + version + '-' + stamp)
@@ -107,7 +112,7 @@ def update(workspace: Path):
         temporary.unlink(missing_ok=True)
     receipt = {'workspace': str(workspace.resolve()), 'oldEntry': str(old_entry), 'newEntry': str(entry),
                'mcpSmokeTest': result,
-               'hostReload': 'pending; reconnect MCP and reopen preview'}
+               'hostReload': 'pending; reconnect MCP and open dashboard_preview; host rendering is not verified by the package check'}
     (release / 'install-receipt.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps(receipt, ensure_ascii=False, indent=2))
 

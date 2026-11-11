@@ -1,4 +1,4 @@
-"""Local web editor. Bearer token + Origin/Host checks, no permissive CORS."""
+"""Local React preview and data API with bearer, Origin and Host checks."""
 from __future__ import annotations
 import hmac
 import json
@@ -89,7 +89,8 @@ class Handler(BaseHTTPRequestHandler):
             path = urlparse(self.path).path
             self.check(authenticated=path.startswith('/api/'))
             if path == '/':
-                self.send(render_html('web', idle_timeout=self.runtime.lifetime.timeout), content_type='text/html')
+                self.send(render_html('web', idle_timeout=self.runtime.lifetime.timeout,
+                                      boot_state={'projectRoot': str(self.runtime.service.project_root) if self.runtime.service.project_root else None}), content_type='text/html')
             elif path == '/health':
                 self.send({'ok': True})
             elif path.startswith('/api/export/'):

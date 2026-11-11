@@ -235,3 +235,18 @@ def test_older_metadata_without_field_order_still_maps_original_columns(tmp_path
     assert reopened.rows(old)['rows'] == [{'alpha': 11, 'zulu': 'old'}]
     assert list(reopened.iter_rows(old)) == [{'alpha': 11, 'zulu': 'old'}]
     assert reopened.import_rows([{'alpha': 11, 'zulu': 'old'}], fields) == old
+
+# @wu-test type=integration | scope=calculated grouped table | protects=原生表比例未加工或分页导出使用行比例平均
+def test_calculated_grouped_ratio_and_export(tmp_path):
+    data = LocalData(tmp_path)
+    fields = {k:{'type':'string' if k in ('name','unit') else 'number'} for k in ('name','unit','n','d','rate')}
+    ref = data.import_rows(iter([{'name':'A','unit':'%','n':1,'d':2,'rate':None},{'name':'A','unit':'%','n':2,'d':8,'rate':None},{'name':'B','unit':'%','n':0,'d':0,'rate':None}]), fields)
+    specs = {'rate': {'numerator':'n','denominator':'d','unitField':'unit'}}
+    result = data.grouped_rows(ref,[],list(fields),[],0,10,'',['name','unit'],['n','d','rate'],specs)
+    assert result['rows'][0]['rate'] == .3
+    assert result['rows'][1]['rate'] is None
+    report = data.export_csv(ref,tmp_path/'group.csv',columns=list(fields),group_by=['name','unit'],sum_fields=['n','d','rate'],calculated=specs)
+    with open(report['path'],encoding='utf-8-sig') as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]['rate'] == '0.3'
+    assert rows[1]['rate'] == ''

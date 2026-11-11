@@ -1,6 +1,6 @@
 # 看板布局模板与选型规范 (Layout Templates)
 
-布局按内容选择，不把每个看板都排成“四卡一行 + 双列图表 + 通栏表格”。MCP 运行时提供 7 个命名模板，用一条 `apply_layout_template` 操作同时计算桌面 12 列、平板 8 列、手机 4 列网格；模板只排列和设定尺寸，不改动组件内容。`layout_templates` 工具与 `charts://layouts` 资源返回同一份清单。标题排版与卡片宽度遵循 [设计规范](design_standards.md)，指标卡选型见 [指标卡选型指南](kpi-cards.md)。
+布局按内容选择。MCP 运行时提供 7 个命名模板，用一条 `apply_layout_template` 操作同时计算桌面 12 列、平板 8 列、手机 4 列网格；模板只排列和设定尺寸，不改动组件内容。`layout_templates` 工具与 `charts://layouts` 资源返回同一份清单。标题排版与卡片宽度遵循 [设计规范](design_standards.md)，指标卡选型见 [指标卡选型指南](kpi-cards.md)。
 
 ## 模板一览
 
@@ -12,7 +12,7 @@
 | `sidebar` 侧栏指标 | KPI 竖排在左 3 列，图表在右 9 列 | 监控页面，指标需要常驻可见 |
 | `grid3` 三列小多图 | 图表三列并排 | 同一指标按区域/产品拆分的小多图 |
 | `narrative` 图文叙事 | 自上而下阅读；图后紧跟的文字组件并排在右侧（8+4） | 每张图配一句结论的简报 |
-| `scorecard` 指标墙 | 桌面每行最多 6 张 KPI，手机每行 2 张 | 6–12 个运营指标、少量图表 |
+| `scorecard` 指标墙 | 桌面每行最多 4 张 KPI，手机每行 2 张 | 6–12 个运营指标、少量图表 |
 
 ```json
 {"op": "apply_layout_template", "template": "bento", "order": ["revenue", "trend", "regions", "details"]}
@@ -35,8 +35,4 @@
 
 - 栅格行高 48px：KPI 4 行（清单卡、大字主指标卡 5 行，同一行取最高）、图表 8 行、主图 10 行、表格 8 行、文字 5 行。
 - 手机端：双值、区间、环形、对比、清单、主指标等宽形态独占一行，其余 KPI 在 `scorecard` 中两两并排。
-- 表格须包裹在可横向滚动的容器中；文本左对齐，数值等宽右对齐，状态居中。
-
-## 独立 HTML 生成器
-
-`scripts/dashboard_workspace.py build` 与 `generate_dashboard.py` 生成的单页仍使用固定三段式（KPI `grid-cols-2 lg:grid-cols-4`、图表 `grid-cols-1 md:grid-cols-2`、表格通栏），相当于 `executive`；多模板构图由 MCP 运行时提供。单页图表容器高度建议：柱/线/复合图 280–320px，环形/饼图/仪表盘 260–280px，散点/四象限/桑基图 300–340px；卡片内边距 `p-5`–`p-6`。
+- 表格须包裹在可横向滚动的容器中；表头和内容默认居中，同列对齐方式一致，数值使用等宽数字。

@@ -1,43 +1,51 @@
 # charts-design 文档
 
-本项目提供经营看板与分析报告的共享组件、生成脚本和本地 Runtime。使用者通过 CLI 或 MCP 声明数据、指标和组件，产出可保存的看板、Markdown 报告、离线快照或独立网页部署包。
+> **当前状态（2026-11-10）**
+> React 组件、设计画布和 MCP 应用已使用独立适配入口。构建与运行资源通过显式打包同步，历史原生生成器继续下线。实际完成情况与检查结果以 [UI 整改计划](ui-refactor-plan.md) 和 [组件清单](ui-component-inventory.md) 为准。
 
 ## 开始使用
 
 快速开始见根目录 [README](../README.md)。选择生成方式时读 [生成路径](generation-tracks.md)；开发与运行步骤见 [Runtime 说明](dashboard-runtime.md)。Agent 按根目录 [AGENTS.md](../AGENTS.md) 的任务条件读取文档。
 
-## 现行规范
+## 现行规范与设计参考
 
 | 文档 | 用途与查阅时机 | 更新时机 |
 | --- | --- | --- |
+| [当前 UI 设计记录](DESIGN.md) | 从 React 源码提取的颜色、字阶、布局、组件与动效规则；配套预览说明位于 `docs/.impeccable/design.json` | 当前实现的视觉规则变化后同步 |
+| [产品上下文](PRODUCT.md) | 产品定位、主要用户、MCP 使用流程与长期边界；产品或设计工作开始时查阅 | 已确认的用户、用途或产品边界变化 |
+| [图表 UI 与设计系统](design-system/project/chart-ui.md) | 重构前查阅保留的 40 个图表定义、视觉、配色与交互参考；PDF 数据色盘与旧项目配色分开 | 图表视觉迁移或来源规范变化 |
 | [文件管理](agent/file-management.md) | 新增、移动或清理文件前，确定位置和维护入口 | 目录职责或保留规则变化 |
-| [标题区与绑定](icon-header-and-bindings.md) | 修改 Runtime 操作区、图标或绑定前，确认适用规则 | 界面约定或绑定范围变化 |
-| [设计规范](../skills/executive-charts/references/design_standards.md) | 修改组件配色、排版、几何或表格时查阅 | 设计要求变化 |
 | [指标定义](../skills/executive-charts/references/metric-definitions.md) | 撰写业务说明与统计口径时查阅 | 指标说明要求变化 |
-| [MCP 共享交付流程](../skills/executive-charts/references/mcp-delivery.md) | 创建、编辑、替换数据或诊断 MCP 页面时查阅 | 交付流程变化 |
+| [数据格式标准](../skills/executive-charts/references/data_formatting_standards.md) | 处理指标数值、百分比与单位格式化时查阅 | 格式化标准变化 |
+| [标题区与绑定](icon-header-and-bindings.md) | 组件操作区、Lucide 图标与筛选绑定规范；新 UI 的设计与绑定准则 | 界面约定或绑定范围变化 |
+| [设计规范](../skills/executive-charts/references/design_standards.md) | 组件配色、排版、几何与红涨绿跌准则；新 UI 的设计参考 | 设计要求变化 |
 | [指标卡选型](../skills/executive-charts/references/kpi-cards.md) 与 [布局模板](../skills/executive-charts/references/layout_templates.md) | 选择指标卡形态与看板构图时查阅 | 卡片类型、模板或选型规则变化 |
+| [MCP 共享交付流程](../skills/executive-charts/references/mcp-delivery.md) | 数据资产保存、编辑批次与合同检查；协议与宿主显示分别确认 | 交付流程变化 |
 
 ## 当前实现与操作
 
-| 文档 | 用途与查阅时机 | 更新时机 |
+- [UI 整改计划](ui-refactor-plan.md)：范围、阶段、构建路径和完成条件。
+- [UI 组件清单](ui-component-inventory.md)：实际输入、事件、状态、数据与宿主依赖。
+- [产品组件规则盘点](ui-design-rule-audit.md)：代码硬限制、产品强约定、选型建议、库外图表入口与当前规则缺口。
+- [产品 React 组件](design-system/project/react-ui.md)：设计系统与运行变量映射、可运行预览。
+
+| 文档 | 用途与查阅时机 | 当前状态 / 维护说明 |
 | --- | --- | --- |
-| [Runtime 说明](dashboard-runtime.md) | 运行 CLI、本地网页、MCP 或编辑报告时查阅 | 运行方式、接口或兼容行为变化 |
-| [生成路径](generation-tracks.md) | 从空白创建 Dashboard 或分析报告时查阅 | 案例、声明或编辑流程变化 |
-| [项目资产与加载](project-runtime.md) | 处理多项目、历史、数据存储和渐进加载时查阅 | 存储、路由或加载行为变化 |
-| [原版组件保真](original-component-fidelity.md) | 修改原组件提取、导入或构建时查阅 | 迁移与组件保留行为变化 |
-| [动态编码](dynamic-encoding.md) | 声明动态系列、散点、比较或下钻时查阅 | 编码能力或绑定规则变化 |
-| [ECharts 配置覆盖](echarts-options.md) | 调整原生显示配置时查阅 | 合并或覆盖行为变化 |
-| [Seaborn 后端](seaborn-backend.md) | 使用原始观测生成统计图时查阅 | 统计声明、依赖或限制变化 |
-| [位置引用与批注](annotation-composer.md) | 使用或修改位置批注、对话附件时查阅 | 宿主能力与批注行为变化 |
-| [本地 MCP 更新](local-mcp-update.md) | 更新安装包、判断重连或重开页面时查阅 | 更新入口和进程行为变化 |
-| [传输与诊断](mcp-transport-diagnostics.md) | 排查大响应、旧预览或日志时查阅 | 传输与诊断行为变化 |
-| [静态部署包](static-deployment.md) | 导出、重建或发布独立网页时查阅；末节为当次验收 | 导出与重建方式变化 |
-| [自托管服务器](self-hosted-server.md) | 部署远程 MCP、网页预览与分享链接时查阅；末节为当次验收 | 入口、鉴权、项目隔离或链接权限变化 |
-| [测试与 CI](testing.md) | 运行或修改测试、CI 与检查脚本时查阅 | 测试分层、命令、CI 作业或产物变化 |
+| [Runtime 说明](dashboard-runtime.md) | 状态存储、数据模式、SQLite 与 MCP 协议说明 | 组件与数据协议已接入，宿主显示单独确认 |
+| [生成路径](generation-tracks.md) | 从空白创建数据资产或分析报告源文时查阅 | 数据声明、Markdown 与新 React 预览 |
+| [项目资产与加载](project-runtime.md) | 处理多项目、历史、数据存储和渐进加载时查阅 | 存储、路由与分片协议继续正常维护 |
+| [动态编码](dynamic-encoding.md) | 声明动态系列、散点、比较或下钻时查阅 | 编码能力与绑定规则继续维护 |
+| [ECharts 配置覆盖](echarts-options.md) | 调整原生显示配置时查阅 | 合并与覆盖规则继续维护 |
+| [Seaborn 后端](seaborn-backend.md) | 独立于旧 UI；使用原始观测生成统计图时查阅 | 统计声明、依赖与绘图产物完整可用 |
+| [自托管服务器](self-hosted-server.md) | 部署远程 HTTP MCP 与项目隔离时查阅 | 远程协议与新应用资源路由 |
+| [本地 MCP 更新](local-mcp-update.md) | 更新本地安装包与连接检查时查阅 | 独立构建、资源打包和连接检查 |
+| [传输与诊断](mcp-transport-diagnostics.md) | 排查响应分块、请求日志与性能时查阅 | 诊断接口继续正常维护 |
+| [测试与 CI](testing.md) | 静态检查、后端单元测试与容器镜像冒烟测试 | 仅三层检查；无浏览器验收；全量需授权 |
+| [位置引用与批注](annotation-composer.md) | 批注数据模型与坐标系规范（新 UI 规范） | 数据模型保留；前端宿主实现待新 UI 接入 |
+| [原版组件保真](original-component-fidelity.md) | 历史原版组件提取与保真准则（历史参考） | 旧提取脚本已移除；作为设计保真准则参考 |
+| [静态部署包](static-deployment.md) | 静态网站部署包结构与数据范围 | 共享 React 资源与数据分片 ZIP |
 
-## 历史记录与证据
-
-以下记录保存当时的现象、计划和结果。记录中的安装路径、构建标识、测试数量和未完成项须按需重新检查；不能据此认定当前安装或宿主已经通过验收。
+## 历史记录与证据（已移除旧实现）
 
 - [早期问题清单](ISSUES.md)：原始缺陷现象。
 - [早期治理复盘](ISSUES_AND_POSTMORTEM.md)：v1.0.3 治理方案与结果；末节为当时的规范。

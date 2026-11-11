@@ -1,6 +1,5 @@
 # 麦肯锡高管商业图表套件：核心问题集与架构治理复盘报告
 
-> 历史记录。本文保存早期治理方案及 v1.0.3 的历史结果。下文“工程规范”是当时的规则，不作为现行要求；其中正绿负红、52 款图表、强制代码标签及禁止阅读案例等表述已被后续流程替代。现行色彩采用红涨绿跌，具体见 [设计规范](../skills/executive-charts/references/design_standards.md)；Runtime 标题区与绑定见 [交互约定](icon-header-and-bindings.md)，案例使用与生成方式见 [executive-charts](../skills/executive-charts/SKILL.md)。历史结果不代表当前版本或实际宿主已经验收。
 > Executive Charts Governance, Defect Postmortem & Architectural Evolution
 
 ---

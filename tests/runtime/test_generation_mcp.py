@@ -122,10 +122,9 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 assert doc['snapshot']['datasets'] == {}
                 assert doc['snapshot']['datasetRefs']['fresh-data']['rowCount'] == len(rows)
                 assert (await call('dashboard_validate', {'dashboardId': 'fresh-report'}))['valid']
-                for tool in ('dashboard_get', 'dashboard_preview'):
-                    loaded = (await call(tool, {'dashboardId': 'fresh-report'}))['document']
-                    assert {k: v for k, v in loaded.items() if k != 'computed'} == {k: v for k, v in doc.items() if k != 'computed'}
-                    assert loaded['computed']['components'] == {}
+                loaded = (await call('dashboard_get', {'dashboardId': 'fresh-report'}))['document']
+                assert {k: v for k, v in loaded.items() if k != 'computed'} == {k: v for k, v in doc.items() if k != 'computed'}
+                assert loaded['computed']['components'] == {}
                 view = await call('dashboard_view', {'dashboardId':'fresh-report','responseMode':'patch','componentIds':['trend']})
                 assert view['computed']['components']['trend']['data']['values'] == [10,15]
                 semantics = await call('semantic_inspect', {'dashboardId': 'fresh-report', 'componentId': 'trend'})
@@ -136,10 +135,4 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 assert invalid.isError
                 unchanged = (await call('dashboard_get', {'dashboardId': 'fresh-report'}))['document']
                 assert {k: v for k, v in unchanged.items() if k != 'computed'} == {k: v for k, v in doc.items() if k != 'computed'}
-                assert tools['dashboard_preview'].meta is not None
-                preview_uri = tools['dashboard_preview'].meta['ui']['resourceUri']
-                preview_resource = await session.read_resource(AnyUrl(preview_uri))
-                assert preview_resource.contents[0].mimeType == 'text/html;profile=mcp-app'
-                assert isinstance(preview_resource.contents[0], TextResourceContents)
-                assert '<html' in preview_resource.contents[0].text.lower()
     asyncio.run(check())

@@ -1,4 +1,4 @@
-"""Declarative table-to-component bindings and their generated runtime."""
+"""Declarative table-to-component binding validation."""
 from __future__ import annotations
 
 import math
@@ -100,40 +100,3 @@ def validate_filter_bindings(resolved):
                 for key, value in series.items():
                     metric(value, f"{path}.series.{key}")
     return errors
-
-
-FILTER_BINDINGS_JS = r"""
-        const ComponentBindings = {
-            aggregate(rows, binding) {
-                const values = rows.map(row => row[binding.field]).filter(value => value != null);
-                if (binding.aggregate === 'count') return values.length;
-                if (binding.aggregate === 'sum') return values.reduce((sum, value) => sum + value, 0);
-                if (!values.length) return null;
-                if (binding.aggregate === 'mean') return values.reduce((sum, value) => sum + value, 0) / values.length;
-                if (binding.aggregate === 'min') return values.reduce((a, b) => Math.min(a, b));
-                if (binding.aggregate === 'max') return values.reduce((a, b) => Math.max(a, b));
-                throw new Error('Unknown aggregation: ' + binding.aggregate);
-            },
-            kpiValue(rows, kpi) {
-                const value = this.aggregate(rows, kpi.binding);
-                if (value === null) return '—';
-                const precision = kpi.binding.precision ?? 0;
-                const formatted = value.toLocaleString('zh-CN', {minimumFractionDigits: precision, maximumFractionDigits: precision});
-                return formatted + (kpi.unit ? (kpi.unit === '%' ? '' : ' ') + kpi.unit : '');
-            },
-            chartData(rows, chart) {
-                const binding = chart.binding;
-                const groups = new Map();
-                rows.forEach(row => {
-                    const category = String(row[binding.groupBy] ?? '—');
-                    if (!groups.has(category)) groups.set(category, []);
-                    groups.get(category).push(row);
-                });
-                const data = {...chart.data, [binding.category]: [...groups.keys()]};
-                Object.entries(binding.series).forEach(([key, metric]) => {
-                    data[key] = [...groups.values()].map(group => this.aggregate(group, metric));
-                });
-                return data;
-            }
-        };
-"""

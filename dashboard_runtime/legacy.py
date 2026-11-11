@@ -1,12 +1,10 @@
 """Read-only adapter for the existing executive-charts catalog and workspace v1."""
 from __future__ import annotations
-import html
 import importlib
-import importlib.util
 import json
 import sys
 from pathlib import Path
-from .model import DashboardError, apply_operations, identifier, new_document, require
+from .model import apply_operations, identifier, new_document, require
 
 REPO = Path(__file__).resolve().parent.parent
 SKILL = REPO / 'skills' / 'executive-charts'
@@ -27,39 +25,6 @@ def catalog():
     if not path.exists():
         return []
     return json.loads(path.read_text())
-
-def render(config):
-    """Reuse registered JS builders and the original shell, without example data fallback."""
-    path = SKILL / 'scripts' / 'generate_chart.py'
-    require(path.exists(), 'Legacy renderer requires the original charts-design repository', 'LEGACY_UNAVAILABLE')
-    sys.path.insert(0, str(path.parent)) if str(path.parent) not in sys.path else None
-    spec = importlib.util.spec_from_file_location('_charts_legacy', path)
-    if spec is None or spec.loader is None:
-        raise DashboardError('LEGACY_UNAVAILABLE', 'Cannot load the original chart renderer')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    code = config.get('code')
-    require(code in module.ALL_CHART_BUILDERS, 'Unknown legacy chart code')
-    errors = module.validate_chart_data(config.get('data'), 'chart.data', code=code, strict=True, presentation=config.get('presentation'))
-    require(not errors, 'Legacy contract failed: ' + json.dumps(errors, ensure_ascii=False))
-    safe_json = json.dumps(config, ensure_ascii=True).replace('<', '\\u003c').replace('>', '\\u003e')
-    values = {
-        '__CODE__': html.escape(code.upper()), '__TITLE__': html.escape(config.get('title', code)),
-        '__SUBTITLE__': html.escape(config.get('subtitle', 'Legacy chart; metric definitions are in the inspector.')),
-        '__CARD_WIDTH__': '100%', '__CHART_HEIGHT__': '320', '__GRANULARITY_TABS__': ('<div id="granularityTabs"><button type="button" onclick="setGranularity(\'month\', this)">\u6708\u5ea6</button><button type="button" onclick="setGranularity(\'quarter\', this)">\u5b63\u5ea6</button></div>' if config.get('hasGranularity', 'hasGranularity: true' in module.ALL_CHART_BUILDERS[code]) else ''),
-        '__CHART_CONFIG_JS__': '{ ...(' + module.ALL_CHART_BUILDERS[code] + '), ...' + safe_json + ' }',
-        '__EXPLANATION_DIALOG_CSS__': module.EXPLANATION_DIALOG_CSS,
-        '__EXPLANATION_DIALOG_SHELL__': module.EXPLANATION_DIALOG_SHELL,
-        '__EXPLANATION_DIALOG_RENDERER_JS__': module.EXPLANATION_DIALOG_RENDERER_JS,
-        '__EXPLANATION_TRIGGER_ICON__': module.EXPLANATION_TRIGGER_ICON,
-        '__EXPLANATION_JSON__': json.dumps(config.get('explanation') or module.CHART_EXPLANATIONS.get(config.get('explainKey', code), {}), ensure_ascii=True).replace('<', '\\u003c')
-    }
-    result = module.STANDALONE_CHART_TEMPLATE
-    for key, value in values.items():
-        result = result.replace(key, value)
-    result = result.replace('echarts@5.5.0/', 'echarts@6.1.0/')
-    policy = "default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'"
-    return result.replace('<head>', '<head><meta http-equiv="Content-Security-Policy" content="' + html.escape(policy, quote=True) + '">', 1)
 
 def import_workspace(path, board_id):
     root = Path(path).expanduser().resolve(strict=True)
@@ -129,7 +94,13 @@ def validate_original(component):
     require(family in ('chart', 'kpi', 'table'), 'Unknown original component family')
     schemas = component_schemas()
     if family == 'chart':
+        errors = schemas.validate_chart_renderer(config, 'config')
+        require(not errors, 'Chart renderer contract: ' + json.dumps(errors, ensure_ascii=False), 'CHART_RENDERER_INVALID')
         require('echarts' not in config or isinstance(config['echarts'], dict), 'config.echarts must be an ECharts option object')
+        if config.get('renderer', 'preset') != 'preset':
+            require(not component.get('binding'), 'Custom renderers use explicit data; preset bindings require renderer=preset', 'CUSTOM_BINDING_UNSUPPORTED')
+            require(not component.get('datasetId') and not component.get('measures'), 'Custom renderers require explicit config.data and config.table; dataset computation is not inferred', 'CUSTOM_BINDING_UNSUPPORTED')
+            return
         require(isinstance(config.get('data'), dict) and isinstance(config.get('presentation'), dict), 'Original charts need explicit data and presentation')
         if 'encoding' in config:
             from .encoding import validate_encoding

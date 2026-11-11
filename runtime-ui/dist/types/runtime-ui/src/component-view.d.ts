@@ -1,0 +1,25 @@
+import React from "react";
+import { type Download } from "./host";
+import type { Config, Document, Filter, TableState } from "./types";
+export declare function ComponentView({ document: doc, id, grain, tableState, onTableChange, editing, onGrain, onInspect, onReadData, onExport, onSelect, selectedName, download, loading, error, onError, onSaveTable, onChartType, onRetry, filters, }: {
+    document: Document;
+    id: string;
+    grain?: string;
+    tableState?: TableState;
+    onTableChange?: (s: TableState) => void;
+    editing?: boolean;
+    onGrain?: (g: string) => void;
+    onInspect?: () => Promise<Config>;
+    onReadData?: (state: TableState) => Promise<Config>;
+    onExport?: () => Promise<void>;
+    onSelect?: (point: Config) => void;
+    selectedName?: string;
+    download?: Download;
+    loading?: boolean;
+    error?: string;
+    onSaveTable?: () => void;
+    onChartType?: (code: string) => Promise<void>;
+    onRetry?: () => void;
+    filters?: Filter[];
+    onError?: (message: string) => void;
+}): React.JSX.Element;

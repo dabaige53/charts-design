@@ -32,6 +32,5 @@
 
 安装在仓库 `.runtime-installs/dynamic-encoding-20261028/package`。analyst-workspace 主目录及指定工作树的 `.codex/config.toml` 已更新入口。新安装包的本地浏览器预览已验证营业部、直飞筛选和服务表空结果，未记录浏览器运行错误。
 
-已存在的 Codex MCP 连接不会自动替换已加载的 Python 模块和前端资源。重新连接项目的 charts-design MCP，再调用 `dashboard_preview`，参数为 `{"dashboardId":"transfer-od-prototype-20261028"}`。用 `runtime_info` 确认构建为 `658a26e67aec`、看板版本为 33；关闭旧预览，打开新返回的预览。不能把旧宿主页面视为已升级。
 
 能力边界与可复用声明见 [动态图表声明](dynamic-encoding.md)。工程跟踪：[INS-221](https://linear.app/insightal/issue/INS-221)。

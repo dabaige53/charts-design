@@ -1,0 +1,2 @@
+/* Original utility CSS uses rem units against a 16px document root. */
+:root{font-size:16px}body{font-size:13px}

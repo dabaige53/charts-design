@@ -31,7 +31,7 @@ def document(board_id='demo'):
         doc = apply_operations(doc, [{'op':'set_layout','breakpoint':bp,'value':[
             {'id':'total','x':0,'y':0,'w':half,'h':4}, {'id':'load','x':half,'y':0,'w':half,'h':4},
             {'id':'trend','x':0,'y':4,'w':half,'h':7}, {'id':'regions','x':half,'y':4,'w':half,'h':7},
-            {'id':'details','x':0,'y':11,'w':cols,'h':7}]}])
+            {'id':'details','x':0,'y':11,'w':cols,'h':11}]}])
     return doc
 
 def report_document(board_id='report-demo'):
@@ -91,7 +91,7 @@ def executive_document(board_id='executive-demo'):
             config.update({'sparkMonths': ['2026-07', '2026-08', '2026-09'], 'sparkData': [117, 133, 126]})
             binding['timeField'] = 'month'
         if card_type == 'mc04':
-            config.update({'percent': 100 * totals['revenue'] / totals['budget'], 'subLabel': '预算收入', 'subVal': '', 'trendLabel': '按所选范围重算'})
+            config.update({'percent': 100 * totals['revenue'] / totals['budget'], 'subLabel': '预算收入', 'subVal': ''})
             binding['measures']['percent'] = metric
             binding['scale'] = {'percent': 100}
         ops.append({'op': 'put_component', 'id': key, 'value': {'kind': 'legacy', 'family': 'kpi', 'title': label, 'sourceId': 'fixture', 'datasetId': 'sales', 'config': config, 'binding': binding}})
@@ -110,9 +110,9 @@ def executive_document(board_id='executive-demo'):
         positions = [{'id': key, 'x': (index % (cols // card_cols)) * card_cols, 'y': (index // (cols // card_cols)) * 4, 'w': card_cols, 'h': 4} for index, key in enumerate(ids)]
         y = card_rows * 4
         if bp == 'desktop':
-            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': 6, 'h': 9}, {'id': 'regions', 'x': 6, 'y': y, 'w': 6, 'h': 9}, {'id': 'details', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}]
+            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': 6, 'h': 9}, {'id': 'regions', 'x': 6, 'y': y, 'w': 6, 'h': 9}, {'id': 'details', 'x': 0, 'y': y + 9, 'w': cols, 'h': 11}]
         else:
-            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': cols, 'h': 9}, {'id': 'regions', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}, {'id': 'details', 'x': 0, 'y': y + 16, 'w': cols, 'h': 7}]
+            positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': cols, 'h': 9}, {'id': 'regions', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}, {'id': 'details', 'x': 0, 'y': y + 16, 'w': cols, 'h': 11}]
         ops.append({'op': 'set_layout', 'breakpoint': bp, 'value': positions})
     return apply_operations(doc, ops)
 
@@ -131,9 +131,9 @@ def operations_document(board_id='operations-demo'):
     def kpi(key, title, config, measures, **binding):
         ops.append({'op': 'put_component', 'id': key, 'value': {'kind': 'legacy', 'family': 'kpi', 'title': title, 'sourceId': 'fixture',
                     'config': {'label': title, **config}, 'binding': {'datasetId': 'sales', 'measures': measures, **binding}}})
-    kpi('north-star', '营业收入', {'type': 'mc16', 'value': '484 万元', 'yoy': '+24.1%', 'note': '收入高于基期；9 月较 8 月小幅回落，需结合更长周期复核。', 'subLabel': '预算收入', 'subVal': '525 万元'},
+    kpi('north-star', '营业收入', {'type': 'mc16', 'value': '484 万元', 'yoy': '+24.1%', 'subLabel': '预算收入', 'subVal': '525 万元'},
         {'value': 'revenue', 'yoy': 'yield-growth', 'subVal': 'budget'})
-    kpi('budget-ring', '预算完成度', {'type': 'mc11', 'value': '484 万元', 'percent': 92.19, 'trendLabel': '按所选范围', 'subLabel': '预算收入', 'subVal': '525 万元'},
+    kpi('budget-ring', '预算完成度', {'type': 'mc11', 'value': '484 万元', 'percent': 92.19, 'subLabel': '预算收入', 'subVal': '525 万元'},
         {'value': 'revenue', 'percent': 'attainment', 'subVal': 'budget'}, scale={'percent': 100})
     kpi('budget-bullet', '收入对预算', {'type': 'mc13', 'value': '484 万元', 'actual': 484, 'target': 525, 'ranges': [0.8, 1.0], 'rangeBasis': 'target', 'unit': '万元', 'subLabel': '预算收入', 'subVal': '525 万元'},
         {'value': 'revenue', 'actual': 'revenue', 'target': 'budget', 'subVal': 'budget'})
@@ -141,7 +141,7 @@ def operations_document(board_id='operations-demo'):
         {'value': 'revenue', 'currentValue': 'revenue', 'priorValue': 'baseline-revenue', 'yoy': 'yield-growth'})
     kpi('passenger-bars', '旅客运输量', {'type': 'mc12', 'value': '376 万人次', 'sparkMonths': ['2026-07-01', '2026-08-01', '2026-09-01'], 'sparkData': [117, 133, 126], 'subLabel': '可用座位', 'subVal': '450 万座'},
         {'value': 'passengers', 'subVal': 'seats'}, timeField='month')
-    kpi('load-gauge', '客座率', {'type': 'mc05', 'value': '83.56%', 'percent': 83.56, 'gaugeSub': '运力利用', 'subLabel': '可用座位', 'subVal': '450 万座'},
+    kpi('load-gauge', '客座率', {'type': 'mc05', 'value': '83.56%', 'percent': 83.56, 'subLabel': '可用座位', 'subVal': '450 万座'},
         {'value': 'load-factor', 'percent': 'load-factor', 'subVal': 'seats'}, scale={'percent': 100})
     def chart(key, title, subtitle, config, binding):
         ops.append({'op': 'put_component', 'id': key, 'value': {'kind': 'legacy', 'family': 'chart', 'title': title, 'subtitle': subtitle,

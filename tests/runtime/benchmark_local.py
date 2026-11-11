@@ -114,8 +114,6 @@ def run_benchmark(root, count):
         return result
     opened = measured('open', 'dashboard_get', dataMode='local')
     assert_compact(opened, count)
-    preview = measured('preview', 'dashboard_preview')
-    assert_compact(preview, count)
     selected = measured('filter', 'dashboard_view', filters=filters(True))
     assert_compact(selected, count)
     metrics = service.store.get('acceptance', hydrate=False)['manifest']['metrics']

@@ -1,0 +1,510 @@
+{
+  "v": 3,
+  "assetGroups": {
+    "Artboards": {
+      "files": {
+        "detail-28.jpg": {
+          "blob": "638823059db1d644cc943fb93ea3abd0",
+          "name": "detail-28.jpg",
+          "size": 129959,
+          "type": "image/jpeg"
+        },
+        "detail-29.jpg": {
+          "blob": "2063ebbd895a579414eb62a7d94b3014",
+          "name": "detail-29.jpg",
+          "size": 367350,
+          "type": "image/jpeg"
+        },
+        "detail-30.jpg": {
+          "blob": "130ade3e880ec4f51a7561c64e27c362",
+          "name": "detail-30.jpg",
+          "size": 185365,
+          "type": "image/jpeg"
+        },
+        "detail-31.jpg": {
+          "blob": "b6f3db5ea099f1a7b9b30cb311081018",
+          "name": "detail-31.jpg",
+          "size": 158521,
+          "type": "image/jpeg"
+        },
+        "detail-32.jpg": {
+          "blob": "a62fbb318fc9add89c253c3b4c346ac3",
+          "name": "detail-32.jpg",
+          "size": 496612,
+          "type": "image/jpeg"
+        },
+        "detail-33.jpg": {
+          "blob": "2288a16cbfce5b4784bb251726fd3f9f",
+          "name": "detail-33.jpg",
+          "size": 290923,
+          "type": "image/jpeg"
+        },
+        "detail-34.jpg": {
+          "blob": "fcb137b6abe3c01be61f36a1ea857c5d",
+          "name": "detail-34.jpg",
+          "size": 228249,
+          "type": "image/jpeg"
+        },
+        "detail-35.jpg": {
+          "blob": "0aaabafa29ea6bf9ee8dfdc058c56403",
+          "name": "detail-35.jpg",
+          "size": 261372,
+          "type": "image/jpeg"
+        },
+        "detail-36.jpg": {
+          "blob": "0139f0cb56c500485af1b80d792674c3",
+          "name": "detail-36.jpg",
+          "size": 928744,
+          "type": "image/jpeg"
+        },
+        "detail-37.jpg": {
+          "blob": "05e57557de2c131ea027227637d8564e",
+          "name": "detail-37.jpg",
+          "size": 497657,
+          "type": "image/jpeg"
+        },
+        "detail-38.jpg": {
+          "blob": "54539508868310dd17415c781badd2ee",
+          "name": "detail-38.jpg",
+          "size": 293255,
+          "type": "image/jpeg"
+        },
+        "detail-39.jpg": {
+          "blob": "5c41c58b3378f7722c147c02c77afd9a",
+          "name": "detail-39.jpg",
+          "size": 433773,
+          "type": "image/jpeg"
+        },
+        "detail-40.jpg": {
+          "blob": "ce715b7b2cfcb261ffee4fca578145c3",
+          "name": "detail-40.jpg",
+          "size": 237562,
+          "type": "image/jpeg"
+        },
+        "detail-41.jpg": {
+          "blob": "f61a95a0ff279cca252b39a291be4555",
+          "name": "detail-41.jpg",
+          "size": 228028,
+          "type": "image/jpeg"
+        },
+        "detail-42.jpg": {
+          "blob": "530f76dedb96b256a99dff709df8aab6",
+          "name": "detail-42.jpg",
+          "size": 183085,
+          "type": "image/jpeg"
+        },
+        "detail-43.jpg": {
+          "blob": "d611c24bb55f6ee6d7e5d286c0de901c",
+          "name": "detail-43.jpg",
+          "size": 276731,
+          "type": "image/jpeg"
+        },
+        "detail-44.jpg": {
+          "blob": "93e7a9a141c1e7f2b805c2e035e49292",
+          "name": "detail-44.jpg",
+          "size": 205871,
+          "type": "image/jpeg"
+        },
+        "detail-45.jpg": {
+          "blob": "57c107a5c137482b1987638c8ec67bc7",
+          "name": "detail-45.jpg",
+          "size": 344715,
+          "type": "image/jpeg"
+        },
+        "detail-46.jpg": {
+          "blob": "3643a03c69096f0bb63b146053091df0",
+          "name": "detail-46.jpg",
+          "size": 125694,
+          "type": "image/jpeg"
+        },
+        "detail-47.jpg": {
+          "blob": "9bb70e6adcaef17714f39d39daaa067a",
+          "name": "detail-47.jpg",
+          "size": 134749,
+          "type": "image/jpeg"
+        },
+        "detail-48.jpg": {
+          "blob": "1d7820d7bcb69a6db80b60031f92fc55",
+          "name": "detail-48.jpg",
+          "size": 94364,
+          "type": "image/jpeg"
+        },
+        "detail-49.jpg": {
+          "blob": "7a5984d946c0cbec95deb3166a5749a0",
+          "name": "detail-49.jpg",
+          "size": 105527,
+          "type": "image/jpeg"
+        },
+        "detail-50.jpg": {
+          "blob": "79d69a4e1da1b58eebbd6b21e996527f",
+          "name": "detail-50.jpg",
+          "size": 163816,
+          "type": "image/jpeg"
+        },
+        "detail-51.jpg": {
+          "blob": "be4acc0986091d6d0c52b1cbdfa55f14",
+          "name": "detail-51.jpg",
+          "size": 602881,
+          "type": "image/jpeg"
+        },
+        "detail-52.jpg": {
+          "blob": "45c64b3f4db08f34d3e6f356816cd307",
+          "name": "detail-52.jpg",
+          "size": 453206,
+          "type": "image/jpeg"
+        },
+        "detail-53.jpg": {
+          "blob": "c1c439832de92ae5a64d9623115ea457",
+          "name": "detail-53.jpg",
+          "size": 186762,
+          "type": "image/jpeg"
+        },
+        "detail-54.jpg": {
+          "blob": "c3b3e7c428df55ef92a646825f52f650",
+          "name": "detail-54.jpg",
+          "size": 258452,
+          "type": "image/jpeg"
+        },
+        "detail-55.jpg": {
+          "blob": "c65d5930be7ed2dd7c8ac872e8b78a84",
+          "name": "detail-55.jpg",
+          "size": 324328,
+          "type": "image/jpeg"
+        },
+        "detail-56.jpg": {
+          "blob": "a5d7cfb43bf044a4ba2846c4b309f161",
+          "name": "detail-56.jpg",
+          "size": 138041,
+          "type": "image/jpeg"
+        },
+        "detail-57.jpg": {
+          "blob": "da1aa4cfdaf07411a72e948c1c47d393",
+          "name": "detail-57.jpg",
+          "size": 111577,
+          "type": "image/jpeg"
+        },
+        "detail-58.jpg": {
+          "blob": "caa35c0b66e463b3da7f6712707be492",
+          "name": "detail-58.jpg",
+          "size": 144148,
+          "type": "image/jpeg"
+        },
+        "detail-59.jpg": {
+          "blob": "cf7faf6b7fc77043d19da9de0c744692",
+          "name": "detail-59.jpg",
+          "size": 222655,
+          "type": "image/jpeg"
+        },
+        "page-01.jpg": {
+          "blob": "bcabeed2fc0aec87764fe59afa86c240",
+          "name": "page-01.jpg",
+          "size": 110708,
+          "type": "image/jpeg"
+        },
+        "page-02.jpg": {
+          "blob": "55df1b4bed64069398ffd5d191db52e2",
+          "name": "page-02.jpg",
+          "size": 143879,
+          "type": "image/jpeg"
+        },
+        "page-03.jpg": {
+          "blob": "87e6b3fd9d354453903ceb9b0806a415",
+          "name": "page-03.jpg",
+          "size": 75556,
+          "type": "image/jpeg"
+        },
+        "page-04.jpg": {
+          "blob": "44a768065bbf7bb7a2404e3432dbfdcd",
+          "name": "page-04.jpg",
+          "size": 67965,
+          "type": "image/jpeg"
+        },
+        "page-05.jpg": {
+          "blob": "a168497b44cb3c5fb94b03d319f99ebe",
+          "name": "page-05.jpg",
+          "size": 62838,
+          "type": "image/jpeg"
+        },
+        "page-06.jpg": {
+          "blob": "8588ee75f64c1228f256d09b88b39c06",
+          "name": "page-06.jpg",
+          "size": 40859,
+          "type": "image/jpeg"
+        },
+        "page-07.jpg": {
+          "blob": "4230eb226972defa7039c7fa2499ddc8",
+          "name": "page-07.jpg",
+          "size": 97382,
+          "type": "image/jpeg"
+        },
+        "page-08.jpg": {
+          "blob": "08321a111b5e1361146ddfd672e3e92f",
+          "name": "page-08.jpg",
+          "size": 57024,
+          "type": "image/jpeg"
+        },
+        "page-09.jpg": {
+          "blob": "922c233ff1a378ca8ae1e5d9964b573d",
+          "name": "page-09.jpg",
+          "size": 151722,
+          "type": "image/jpeg"
+        },
+        "page-10.jpg": {
+          "blob": "4b8ac34f7161d54e36dab34d66e277de",
+          "name": "page-10.jpg",
+          "size": 23547,
+          "type": "image/jpeg"
+        },
+        "page-11.jpg": {
+          "blob": "5acc5308421e7d627ac4a8da9531b9fa",
+          "name": "page-11.jpg",
+          "size": 53007,
+          "type": "image/jpeg"
+        },
+        "page-12.jpg": {
+          "blob": "447574bc337946c501fcf4330384426f",
+          "name": "page-12.jpg",
+          "size": 28494,
+          "type": "image/jpeg"
+        },
+        "page-13.jpg": {
+          "blob": "4a00a95632b54bedb82b319e4da60fb4",
+          "name": "page-13.jpg",
+          "size": 35627,
+          "type": "image/jpeg"
+        },
+        "page-14.jpg": {
+          "blob": "5bb9d304e007951422b23eb588ebf867",
+          "name": "page-14.jpg",
+          "size": 26239,
+          "type": "image/jpeg"
+        },
+        "page-15.jpg": {
+          "blob": "a30d1833a7ee6cc85aedf3bd7e18e538",
+          "name": "page-15.jpg",
+          "size": 23630,
+          "type": "image/jpeg"
+        },
+        "page-16.jpg": {
+          "blob": "a22a900f9c9f747fe8a2a790fe5d4992",
+          "name": "page-16.jpg",
+          "size": 36571,
+          "type": "image/jpeg"
+        },
+        "page-17.jpg": {
+          "blob": "0a721e0c5426873b48815e1d5794c4eb",
+          "name": "page-17.jpg",
+          "size": 53871,
+          "type": "image/jpeg"
+        },
+        "page-18.jpg": {
+          "blob": "5b8e5c19eb08c6a3b8c23587adaf40b4",
+          "name": "page-18.jpg",
+          "size": 36044,
+          "type": "image/jpeg"
+        },
+        "page-19.jpg": {
+          "blob": "2bd800b9533dd4dd590ccf855e2c37a6",
+          "name": "page-19.jpg",
+          "size": 32780,
+          "type": "image/jpeg"
+        },
+        "page-20.jpg": {
+          "blob": "460498336a79b7af29193af91298b09f",
+          "name": "page-20.jpg",
+          "size": 28242,
+          "type": "image/jpeg"
+        },
+        "page-21.jpg": {
+          "blob": "5d902d4052e8dadfb5b6a0c05e493885",
+          "name": "page-21.jpg",
+          "size": 26303,
+          "type": "image/jpeg"
+        },
+        "page-22.jpg": {
+          "blob": "c6b37eeb4983f1beada0476deba78ac5",
+          "name": "page-22.jpg",
+          "size": 37640,
+          "type": "image/jpeg"
+        },
+        "page-23.jpg": {
+          "blob": "fef039b293ee8021be4a5dda0ddf25ff",
+          "name": "page-23.jpg",
+          "size": 53932,
+          "type": "image/jpeg"
+        },
+        "page-24.jpg": {
+          "blob": "6c5c1729ef6325cd13bb5c3ff10c4a82",
+          "name": "page-24.jpg",
+          "size": 45354,
+          "type": "image/jpeg"
+        },
+        "page-25.jpg": {
+          "blob": "8c285e9dc4da212f11f120128cf37ddb",
+          "name": "page-25.jpg",
+          "size": 32732,
+          "type": "image/jpeg"
+        },
+        "page-26.jpg": {
+          "blob": "c9caf874cf735f07c883e3b220bdeeb5",
+          "name": "page-26.jpg",
+          "size": 30045,
+          "type": "image/jpeg"
+        },
+        "page-27.jpg": {
+          "blob": "8206b30d378d8e356cf15a4ea087e30f",
+          "name": "page-27.jpg",
+          "size": 27135,
+          "type": "image/jpeg"
+        }
+      },
+      "name": "Artboards",
+      "order": [
+        "page-01.jpg",
+        "page-02.jpg",
+        "page-03.jpg",
+        "page-04.jpg",
+        "page-05.jpg",
+        "page-06.jpg",
+        "page-07.jpg",
+        "page-08.jpg",
+        "page-09.jpg",
+        "page-10.jpg",
+        "page-11.jpg",
+        "page-12.jpg",
+        "page-13.jpg",
+        "page-14.jpg",
+        "page-15.jpg",
+        "page-16.jpg",
+        "page-17.jpg",
+        "page-18.jpg",
+        "page-19.jpg",
+        "page-20.jpg",
+        "page-21.jpg",
+        "page-22.jpg",
+        "page-23.jpg",
+        "page-24.jpg",
+        "page-25.jpg",
+        "page-26.jpg",
+        "page-27.jpg",
+        "detail-28.jpg",
+        "detail-29.jpg",
+        "detail-30.jpg",
+        "detail-31.jpg",
+        "detail-32.jpg",
+        "detail-33.jpg",
+        "detail-34.jpg",
+        "detail-35.jpg",
+        "detail-36.jpg",
+        "detail-37.jpg",
+        "detail-38.jpg",
+        "detail-39.jpg",
+        "detail-40.jpg",
+        "detail-41.jpg",
+        "detail-42.jpg",
+        "detail-43.jpg",
+        "detail-44.jpg",
+        "detail-45.jpg",
+        "detail-46.jpg",
+        "detail-47.jpg",
+        "detail-48.jpg",
+        "detail-49.jpg",
+        "detail-50.jpg",
+        "detail-51.jpg",
+        "detail-52.jpg",
+        "detail-53.jpg",
+        "detail-54.jpg",
+        "detail-55.jpg",
+        "detail-56.jpg",
+        "detail-57.jpg",
+        "detail-58.jpg",
+        "detail-59.jpg"
+      ]
+    },
+    "ChartUI": {
+      "files": {},
+      "name": "ChartUI",
+      "order": []
+    },
+    "ScriptMarks": {
+      "files": {
+        "script-mark-black.png": {
+          "blob": "878f99b2338e80c67146707eb5702c89",
+          "name": "script-mark-black.png",
+          "size": 399,
+          "type": "image/png"
+        },
+        "script-mark-deep-blue.png": {
+          "blob": "2341a2055f275d98dd38a44c7bcaa0dc",
+          "name": "script-mark-deep-blue.png",
+          "size": 3970,
+          "type": "image/png"
+        },
+        "script-mark-white.png": {
+          "blob": "29745c9d631020629092ebeb04381182",
+          "name": "script-mark-white.png",
+          "size": 387,
+          "type": "image/png"
+        }
+      },
+      "name": "ScriptMarks",
+      "order": [
+        "script-mark-deep-blue.png",
+        "script-mark-black.png",
+        "script-mark-white.png"
+      ]
+    },
+    "Sources": {
+      "files": {
+        "McK_DS_core_Artboards.pdf": {
+          "blob": "699fa1f14639234c0e962f22d6dedd10",
+          "name": "McK_DS_core_Artboards.pdf",
+          "size": 9646958,
+          "type": "application/pdf"
+        }
+      },
+      "name": "Sources",
+      "order": [
+        "McK_DS_core_Artboards.pdf"
+      ]
+    }
+  },
+  "blobs": {},
+  "createdOnFiles": {
+    "at": "2026-11-10T01:21:03.761472Z",
+    "v": 1
+  },
+  "docs": {
+    "readme": "project/README.md",
+    "sections": [
+      "project/chart-ui.md",
+      "project/react-ui.md"
+    ]
+  },
+  "groups": [
+    "ChartUI",
+    "Sources",
+    "ScriptMarks",
+    "Artboards"
+  ],
+  "lastChange": {
+    "by": "Wu",
+    "at": "2026-11-10T08:33:43Z",
+    "via": "Codex",
+    "note": "同步产品组件资源、表格居中对齐、图表操作栏及当前筛选和详情说明。"
+  },
+  "layout": "files",
+  "libraries": [
+    {
+      "name": "react",
+      "version": "18"
+    },
+    {
+      "name": "react-dom",
+      "version": "18"
+    }
+  ],
+  "namespace": "McKinseyMDS",
+  "sections": {},
+  "title": "McKinsey MDS"
+}

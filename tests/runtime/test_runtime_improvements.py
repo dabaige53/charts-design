@@ -1,5 +1,6 @@
 import copy
 import json
+from typing import Any
 from dashboard_runtime.service import Service
 from dashboard_runtime.semantic_diff import semantic_diff
 from dashboard_runtime.wire import compact_records
@@ -18,10 +19,10 @@ def test_removed_binding_and_definition_are_reported_without_rows():
     assert 'Definition' not in json.dumps(result)
 
 
-# @wu-test type=behavior | scope=响应压缩 | protects=压缩丢数据或体积未降 | debt=D11
+# @wu-test type=behavior | scope=compact_records | protects=列压缩丢失中文或数值及失去响应体积收益
 def test_wire_is_lossless_and_smaller():
     rows=[{'category':str(i),'series':'HO','values':{'value':-i,'name':'西安'}} for i in range(100)]
-    result={'computed':{'components':{'c':{'data':{'records':copy.deepcopy(rows)}}}}}
+    result: dict[str, Any] = {'computed':{'components':{'c':{'data':{'records':copy.deepcopy(rows)}}}}}
     original=len(json.dumps(result))
     compact_records(result)
     packed=result['computed']['components']['c']['data']['packedRecords']
@@ -42,21 +43,31 @@ def test_diagnostics_duration_and_build(tmp_path):
 # @wu-test type=integration | scope=MCP启动路径 | protects=同名模块劫持启动或相对项目路径错误
 def test_mcp_ignores_shadow_module_and_keeps_relative_project(tmp_path):
     import asyncio
+    import os
+    import sys
     from pathlib import Path
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
+    from mcp.types import TextContent
     root=Path(__file__).resolve().parents[2]
     shadow=tmp_path/'dashboard_runtime'
     shadow.mkdir()
     (shadow/'__init__.py').write_text('raise RuntimeError("wrong module")')
     async def check():
-        params=StdioServerParameters(command='node',args=[str(root/'bin/dashboard-runtime.js'),'--project-root','project','--runtime-root','runtime','mcp'],cwd=str(tmp_path))
+        params=StdioServerParameters(command='node',args=[str(root/'bin/dashboard-runtime.js'),'--project-root','project','--runtime-root','runtime','mcp'],cwd=str(tmp_path),
+                                    env={**os.environ, 'PYTHON': sys.executable,
+                                         'PYTHONPATH': os.pathsep.join(str(Path(entry).resolve()) for entry in sys.path if entry)})
         async with stdio_client(params) as (read,write):
             async with ClientSession(read,write) as session:
                 await session.initialize()
                 result=await session.call_tool('runtime_info',{})
                 assert not result.isError
-                value=result.structuredContent or json.loads(result.content[0].text)
+                if result.structuredContent is not None:
+                    value = result.structuredContent
+                else:
+                    content = result.content[0]
+                    assert isinstance(content, TextContent)
+                    value = json.loads(content.text)
                 assert value['moduleRoot']==str(root/'dashboard_runtime')
     asyncio.run(check())
     assert (tmp_path/'project/charts-project.json').exists()

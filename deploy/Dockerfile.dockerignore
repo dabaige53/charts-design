@@ -1,10 +1,10 @@
 # BuildKit reads this file for `docker build -f deploy/Dockerfile .`.
-# Only maintained runtime and build inputs enter either image stage.
+# Only maintained application and backend inputs enter the build.
 **
-!runtime-ui/
-!runtime-ui/**
 !dashboard_runtime/
 !dashboard_runtime/**
+!runtime-ui/
+!runtime-ui/**
 !skills/
 !skills/executive-charts/
 !skills/executive-charts/**
@@ -18,6 +18,8 @@
 !pyproject.toml
 !README.md
 **/node_modules
+runtime-ui/dist
+runtime-ui/generated
 **/__pycache__
 **/.env
 **/.env.*
@@ -28,4 +30,3 @@
 **/*.pfx
 **/server-secret
 dashboard_runtime/web/dist
-runtime-ui/generated

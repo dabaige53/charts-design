@@ -15,37 +15,34 @@ board/
 └── table.json
 ```
 
-`dashboard.json` contains metadata and component paths. The CLI resolves those paths only during validation and build.
+`dashboard.json` contains metadata and component paths. The CLI resolves those paths only during validation.
 
 ## Commands
 
 ```bash
-WORKSPACE_SCRIPT="skills/executive-charts/scripts/dashboard_workspace.py"
+charts-design dashboard init ./board --title "经营决策看板" --org "经营分析部"
 
-python3 "$WORKSPACE_SCRIPT" init ./board --title "经营决策看板" --org "经营分析部"
+charts-design dashboard import-csv ./board --csv ./data.csv --title "渠道经营看板"
 
-python3 "$WORKSPACE_SCRIPT" import-csv ./board --csv ./data.csv --title "渠道经营看板"
+charts-design dashboard meta set ./board --subtitle "2026 年 7 月" --system "月度经营复盘"
 
-python3 "$WORKSPACE_SCRIPT" meta set ./board --subtitle "2026 年 7 月" --system "月度经营复盘"
-
-python3 "$WORKSPACE_SCRIPT" add kpi ./board revenue \
+charts-design dashboard add kpi ./board revenue \
   --label "营业收入" --value 224 --unit "万元" --yoy "+12.6% YoY"
 
-python3 "$WORKSPACE_SCRIPT" add kpi ./board gross-margin --from ./gross-margin.json
+charts-design dashboard add kpi ./board gross-margin --from ./gross-margin.json
 
-python3 "$WORKSPACE_SCRIPT" add chart ./board regional-sales \
+charts-design dashboard add chart ./board regional-sales \
   --from ./regional-sales.chart.json
 
-python3 "$WORKSPACE_SCRIPT" add chart ./board revenue-trend --from ./revenue-trend.json
+charts-design dashboard add chart ./board revenue-trend --from ./revenue-trend.json
 
-python3 "$WORKSPACE_SCRIPT" table set ./board --from ./store-table.json
+charts-design dashboard table set ./board --from ./store-table.json
 
-python3 "$WORKSPACE_SCRIPT" inspect ./board --json
-python3 "$WORKSPACE_SCRIPT" validate ./board --strict --json
-python3 "$WORKSPACE_SCRIPT" build ./board --output ./dist/board.html --json
+charts-design dashboard inspect ./board --json
+charts-design dashboard validate ./board --strict --json
 ```
 
-When the skill is installed outside this repository, set `WORKSPACE_SCRIPT` to the `scripts/dashboard_workspace.py` beside the active `SKILL.md`.
+When calling the Python script directly, invoke `skills/executive-charts/scripts/dashboard_workspace.py`.
 
 Use `--replace` for an intentional replacement of an existing KPI or chart with the same id.
 
@@ -64,7 +61,7 @@ Use `--replace` for an intentional replacement of an existing KPI or chart with 
 }
 ```
 
-Keep the display value and unit consistent. Optional comparisons render as a dash when omitted. Comparison fields `yoy`, `mom`, `leftYoy` and `rightYoy` accept finite numbers or signed display text. Numbers carry their direction and the renderer adds `+` to positive values; use a metric binding to retain units and precision during filtering. Legacy text must preserve its sign (`+12.4%`, `-1%`). Strict validation rejects nonzero unsigned comparison text instead of silently delivering grey badges. Zero, missing values and status text stay neutral. Do not infer a business direction from an ambiguous unsigned string. Strict mode also checks the primary visual data of specialized cards:
+Keep the display value and unit consistent. Optional comparisons render as a dash when omitted. Comparison fields `yoy`, `mom`, `leftYoy` and `rightYoy` accept finite numbers or signed display text. Numbers carry their direction and the renderer adds `+` to positive values; use a metric binding to retain units and precision during filtering. Display text must preserve its sign (`+12.4%`, `-1%`). Strict validation rejects nonzero unsigned comparison text instead of silently delivering grey badges. Zero, missing values and status text stay neutral. Do not infer a business direction from an ambiguous unsigned string. Strict mode also checks the primary visual data of specialized cards:
 
 - `mc03`: non-empty `sparkMonths` and finite `sparkData` arrays of equal length;
 - `mc04` / `mc05`: a numeric display value, including zero;
@@ -76,7 +73,7 @@ Keep the display value and unit consistent. Optional comparisons render as a das
 - `mc13`: finite `actual` and `target`; optional up to three ascending `ranges` (`rangeBasis: "target"` makes them fractions of target) and positive `max`;
 - `mc14`: finite `currentValue` and `priorValue`;
 - `mc15`: 1–4 `items`, each with `label`, `value` and an optional signed `delta`;
-- `mc16`: headline `value`; optional `note` of at most 120 characters.
+- `mc16`: headline `value`. KPI descriptions, subtitles and notes are forbidden.
 
 These fields have no sample-data fallback.
 
@@ -104,9 +101,11 @@ These fields have no sample-data fallback.
 }
 ```
 
-The `code` selects the catalog renderer and supplies the visible Badge. The component's `title`, `subtitle`, `data` and `unit` replace catalog preview content during workspace builds.
+The `code` selects the preset renderer. The component's `title`, `subtitle`, `data` and `unit` replace catalog preview content during rendering.
 
 Use a focused component file when a chart needs multiple series. Keep data values in the component; keep formatter and renderer behavior in the chart system.
+
+Custom rendering uses `renderer: "echarts"` or `renderer: "html"` with an explicit `code`. See [component rendering](component-html-generation.md) for configuration and capabilities.
 
 ### Strict chart presentation
 
@@ -208,7 +207,7 @@ For large tables, generate `table.json` from source data with a deterministic sc
 - component ids are unique;
 - filter definitions use the array schema;
 - strict filter fields resolve to table columns and rows; consumers resolve to components with valid aggregation bindings;
-- chart codes exist and each chart provides explicit data;
+- preset chart codes exist; custom renderers declare their ECharts options or HTML content;
 - KPI and chart units are declared;
 - table columns have stable keys and titles;
 - the dashboard has at least one KPI or chart.
@@ -220,25 +219,9 @@ Warnings identify missing units or incomplete executive metadata. Resolve releva
 The workspace contract covers all shipped component families:
 
 - KPI cards: `mc01`–`mc16` (16 types; see the selection guide in [kpi-cards.md](kpi-cards.md));
-- chart renderers: every code returned by `generate_chart.py --list` (currently 40 codes across `c`, `d`, `f`, `fn`, `k`, `m`, `r` and `t` families);
+- chart renderers: 40 preset codes plus native ECharts and HTML/JavaScript declarations;
 - dynamic filters: 0–N `select` or `multi-select` components with explicit fields and consumers;
 - one structured table component with stable column keys and typed units;
 - shared card shell capabilities: chart/table view, export, copy, fullscreen, explanation, resize and destroy lifecycle.
 
 `component.id` is unique and preserved. `component.code` selects the visual renderer and may repeat.
-
-## Generated HTML inspection and migration preservation
-
-`build` always runs strict static inspection. Use the standalone commands for an existing page or CI:
-
-For a migration, first create and review the Preservation Manifest from the baseline, then pass the existing file to `build --manifest`. New dashboards build without this option.
-
-```bash
-python3 "$WORKSPACE_SCRIPT" inventory-html ./before.html --output ./preservation.json --json
-python3 "$WORKSPACE_SCRIPT" inspect-html ./dist/board.html --strict --manifest ./preservation.json --json
-python3 "$WORKSPACE_SCRIPT" compare-html ./before.html ./dist/board.html --manifest ./preservation.json --json
-```
-
-A Preservation Manifest may declare `requiredIds`, `requiredText`, `forbiddenText`, `requiredAssets` and `components`. Inspection checks document metadata, duplicate ids, broken DOM references, missing local assets and manifest requirements. Comparison additionally catches baseline ids, visible text and asset references lost during migration.
-
-Report strict validation, static inspection, generated inline-script syntax, and component behavior test results with the delivery.

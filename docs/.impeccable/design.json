@@ -1,0 +1,318 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-10T16:16:23.366556+08:00",
+  "title": "Design System: charts-design UI",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "深海蓝",
+        "canonical": "#123b5d",
+        "tonalRamp": [
+          "oklch(0.15 0.0249 247.41)",
+          "oklch(0.25 0.0415 247.41)",
+          "oklch(0.35 0.0582 247.41)",
+          "oklch(0.45 0.0748 247.41)",
+          "oklch(0.60 0.0748 247.41)",
+          "oklch(0.75 0.0748 247.41)",
+          "oklch(0.85 0.0561 247.41)",
+          "oklch(0.95 0.0187 247.41)"
+        ]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "焦点蓝",
+        "canonical": "#2c6485",
+        "tonalRamp": [
+          "oklch(0.15 0.0264 237.47)",
+          "oklch(0.25 0.0440 237.47)",
+          "oklch(0.35 0.0616 237.47)",
+          "oklch(0.45 0.0791 237.47)",
+          "oklch(0.60 0.0791 237.47)",
+          "oklch(0.75 0.0791 237.47)",
+          "oklch(0.85 0.0594 237.47)",
+          "oklch(0.95 0.0198 237.47)"
+        ]
+      },
+      "brand-ink": {
+        "role": "neutral",
+        "displayName": "深色标题",
+        "canonical": "#051c2c",
+        "tonalRamp": [
+          "oklch(0.15 0.0143 242.02)",
+          "oklch(0.25 0.0238 242.02)",
+          "oklch(0.35 0.0334 242.02)",
+          "oklch(0.45 0.0429 242.02)",
+          "oklch(0.60 0.0429 242.02)",
+          "oklch(0.75 0.0429 242.02)",
+          "oklch(0.85 0.0322 242.02)",
+          "oklch(0.95 0.0107 242.02)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "淡灰页面",
+        "canonical": "#f5f5f4",
+        "tonalRamp": [
+          "oklch(0.15 0.0004 106.42)",
+          "oklch(0.25 0.0007 106.42)",
+          "oklch(0.35 0.0010 106.42)",
+          "oklch(0.45 0.0013 106.42)",
+          "oklch(0.60 0.0013 106.42)",
+          "oklch(0.75 0.0013 106.42)",
+          "oklch(0.85 0.0010 106.42)",
+          "oklch(0.95 0.0003 106.42)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "白色表面",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": [
+          "oklch(0.15 0.0000 0.00)",
+          "oklch(0.25 0.0000 0.00)",
+          "oklch(0.35 0.0000 0.00)",
+          "oklch(0.45 0.0000 0.00)",
+          "oklch(0.60 0.0000 0.00)",
+          "oklch(0.75 0.0000 0.00)",
+          "oklch(0.85 0.0000 0.00)",
+          "oklch(0.95 0.0000 0.00)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "正文",
+        "canonical": "oklch(0.147 0.004 49.25)",
+        "tonalRamp": [
+          "oklch(0.15 0.0013 49.25)",
+          "oklch(0.25 0.0022 49.25)",
+          "oklch(0.35 0.0031 49.25)",
+          "oklch(0.45 0.0040 49.25)",
+          "oklch(0.60 0.0040 49.25)",
+          "oklch(0.75 0.0040 49.25)",
+          "oklch(0.85 0.0030 49.25)",
+          "oklch(0.95 0.0010 49.25)"
+        ]
+      },
+      "on-primary": {
+        "role": "neutral",
+        "displayName": "主操作反白",
+        "canonical": "oklch(0.985 0.001 106.423)",
+        "tonalRamp": [
+          "oklch(0.15 0.0003 106.42)",
+          "oklch(0.25 0.0006 106.42)",
+          "oklch(0.35 0.0008 106.42)",
+          "oklch(0.45 0.0010 106.42)",
+          "oklch(0.60 0.0010 106.42)",
+          "oklch(0.75 0.0010 106.42)",
+          "oklch(0.85 0.0008 106.42)",
+          "oklch(0.95 0.0003 106.42)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "辅助表面",
+        "canonical": "oklch(0.97 0.001 106.424)",
+        "tonalRamp": [
+          "oklch(0.15 0.0003 106.42)",
+          "oklch(0.25 0.0006 106.42)",
+          "oklch(0.35 0.0008 106.42)",
+          "oklch(0.45 0.0010 106.42)",
+          "oklch(0.60 0.0010 106.42)",
+          "oklch(0.75 0.0010 106.42)",
+          "oklch(0.85 0.0008 106.42)",
+          "oklch(0.95 0.0003 106.42)"
+        ]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "辅助文字",
+        "canonical": "oklch(0.553 0.013 58.071)",
+        "tonalRamp": [
+          "oklch(0.15 0.0043 58.07)",
+          "oklch(0.25 0.0072 58.07)",
+          "oklch(0.35 0.0101 58.07)",
+          "oklch(0.45 0.0130 58.07)",
+          "oklch(0.60 0.0130 58.07)",
+          "oklch(0.75 0.0130 58.07)",
+          "oklch(0.85 0.0098 58.07)",
+          "oklch(0.95 0.0033 58.07)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "分隔与输入边框",
+        "canonical": "oklch(0.923 0.003 48.717)",
+        "tonalRamp": [
+          "oklch(0.15 0.0010 48.72)",
+          "oklch(0.25 0.0017 48.72)",
+          "oklch(0.35 0.0023 48.72)",
+          "oklch(0.45 0.0030 48.72)",
+          "oklch(0.60 0.0030 48.72)",
+          "oklch(0.75 0.0030 48.72)",
+          "oklch(0.85 0.0023 48.72)",
+          "oklch(0.95 0.0008 48.72)"
+        ]
+      },
+      "destructive": {
+        "role": "status",
+        "displayName": "错误与破坏性操作",
+        "canonical": "oklch(0.577 0.245 27.325)",
+        "tonalRamp": [
+          "oklch(0.15 0.0817 27.32)",
+          "oklch(0.25 0.1361 27.32)",
+          "oklch(0.35 0.1906 27.32)",
+          "oklch(0.45 0.2450 27.32)",
+          "oklch(0.60 0.2450 27.32)",
+          "oklch(0.75 0.2450 27.32)",
+          "oklch(0.85 0.1838 27.32)",
+          "oklch(0.95 0.0613 27.32)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "component-title": {
+        "displayName": "组件标题",
+        "purpose": "共享卡片标题；不随主数值一起放大。"
+      },
+      "metric": {
+        "displayName": "指标主数值",
+        "purpose": "指标卡的主要数值，随容器缩放。"
+      }
+    },
+    "motion": [
+      {
+        "name": "data-update",
+        "value": "260ms cubicOut",
+        "purpose": "ECharts 数据与指标卡主数值更新。"
+      },
+      {
+        "name": "metric-progress",
+        "value": "260ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "指标进度条与环形进度更新。"
+      },
+      {
+        "name": "active-filter-layout",
+        "value": "180ms ease-out",
+        "purpose": "生效条件行展开与收起。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "grid-mobile-upper-bound",
+        "value": "600px"
+      },
+      {
+        "name": "grid-tablet-upper-bound",
+        "value": "1000px"
+      }
+    ],
+    "provenance": {
+      "document": "docs/DESIGN.md",
+      "mode": "source-extraction",
+      "sources": [
+        "runtime-ui/src/styles.css",
+        "runtime-ui/src/components/ui/button.tsx",
+        "runtime-ui/src/components/ui/input.tsx",
+        "runtime-ui/src/components/ui/card.tsx",
+        "runtime-ui/src/grid.tsx",
+        "runtime-ui/src/chart.tsx"
+      ],
+      "previewOnly": [
+        "colorMeta.*.tonalRamp",
+        "components.*.html",
+        "components.*.css"
+      ],
+      "notes": [
+        "色阶为面板预览推导值，不是新增的运行变量。",
+        "预览片段表达已提取的视觉，不连接 MCP 或复刻完整 Radix 行为。",
+        "Card 小阴影仍由运行组件的 Tailwind shadow-sm 提供；该独立片段未猜测编译值。",
+        "文档保存在 docs，不假定根目录自动发现或面板加载已接通。",
+        "未运行浏览器验收。"
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "主要按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "默认主要动作；从共享 Button 的默认变体提取。",
+      "html": "<button class=\"ds-button-primary\">保存</button>",
+      "css": ".ds-button-primary{font-family:'Inter Variable',sans-serif;font-size:12px;height:32px;padding:0 12px;border:1px solid transparent;border-radius:0;font-weight:500;cursor:pointer;background:var(--primary,#123b5d);color:var(--primary-foreground,oklch(.985 .001 106.423))}.ds-button-primary:hover{background:color-mix(in oklab,var(--primary,#123b5d) 80%,transparent)}.ds-button-primary:focus-visible{outline:2px solid var(--ring,#2c6485);outline-offset:2px}.ds-button-primary:active{transform:translateY(1px)}.ds-button-primary:disabled{pointer-events:none;opacity:.5}"
+    },
+    {
+      "name": "描边按钮",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "辅助动作，白色表面、完整细边框。",
+      "html": "<button class=\"ds-button-outline\">更多筛选</button>",
+      "css": ".ds-button-outline{font-family:'Inter Variable',sans-serif;font-size:12px;height:32px;padding:0 12px;border:1px solid transparent;border-radius:0;font-weight:500;cursor:pointer;background:var(--background,#fff);color:var(--foreground,oklch(.147 .004 49.25));border-color:var(--border,oklch(.923 .003 48.717))}.ds-button-outline:hover{background:var(--muted,oklch(.97 .001 106.424))}.ds-button-outline:focus-visible{outline:2px solid var(--ring,#2c6485);outline-offset:2px}.ds-button-outline:active{transform:translateY(1px)}.ds-button-outline:disabled{pointer-events:none;opacity:.5}"
+    },
+    {
+      "name": "输入框",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "从共享 Input 提取的文字输入样式。",
+      "html": "<input class=\"ds-input\" aria-label=\"搜索本表\" placeholder=\"搜索本表\" />",
+      "css": ".ds-input{font-family:'Inter Variable',sans-serif;font-size:12px;height:32px;max-width:100%;padding:4px 10px;border:1px solid var(--input,oklch(.923 .003 48.717));border-radius:0;background:var(--background,#fff);color:var(--foreground,oklch(.147 .004 49.25));outline:none;transition:color 150ms,border-color 150ms}.ds-input::placeholder{color:var(--muted-foreground,oklch(.553 .013 58.071))}.ds-input:focus-visible{border-color:var(--ring,#2c6485)}.ds-input:disabled{pointer-events:none;opacity:.5}.ds-input[aria-invalid=true]{border-color:var(--destructive,oklch(.577 .245 27.325))}"
+    },
+    {
+      "name": "图标操作",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "24px 无底色操作；SVG 为 Lucide Download 几何。",
+      "html": "<button class=\"ds-icon\" aria-label=\"导出数据\" title=\"导出数据\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><path d=\"m7 10 5 5 5-5M12 15V3\"/></svg></button>",
+      "css": ".ds-icon{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid transparent;border-radius:0;background:transparent;color:var(--foreground,oklch(.147 .004 49.25));cursor:pointer}.ds-icon:hover{background:var(--muted,oklch(.97 .001 106.424))}.ds-icon:focus-visible{outline:2px solid var(--ring,#2c6485);outline-offset:2px}.ds-icon:disabled{pointer-events:none;opacity:.5}"
+    },
+    {
+      "name": "卡片结构",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "基准缩放系数为 1 的标题、描述和正文；仅展示样式，不执行数据查询。",
+      "html": "<section class=\"ds-card\"><header class=\"ds-card-header\"><h3 class=\"ds-card-title\">经营数据明细</h3><p class=\"ds-card-description\">与指标卡和图表使用同一筛选范围</p></header><div class=\"ds-card-content\">明细数据</div></section>",
+      "css": ".ds-card{font-family:'Inter Variable',sans-serif;font-size:12px;display:flex;flex-direction:column;gap:12px;padding:12px 16px 16px;background:var(--card,#fff);color:var(--card-foreground,oklch(.147 .004 49.25));border-radius:0;outline:1px solid color-mix(in oklab,var(--foreground,#111) 5%,transparent)}.ds-card-header{display:flex;flex-direction:column;gap:4px}.ds-card-title{margin:0;font-size:14px;line-height:1.4;font-weight:600}.ds-card-description{margin:0;font-size:12px;line-height:1.625;color:var(--muted-foreground,oklch(.553 .013 58.071))}.ds-card-content{line-height:1.5}"
+    }
+  ],
+  "narrative": {
+    "northStar": "清晰层级、精确结构与稳定节奏",
+    "overview": "界面用于查看经营数据、比较指标、调整筛选和追溯计算依据。以紧凑密度、稳定布局和清楚的操作反馈组织内容。页面使用淡灰底，数据组件使用白色表面；操作色保持克制，数据色继续承担图表编码。",
+    "keyCharacteristics": [
+      "层级清楚：页面标题、组件标题、主数值和辅助文字各有用途。",
+      "结构精确：共享组件统一尺寸、内容边距与状态。",
+      "节奏稳定：数据更新保留原内容，不让加载提示挤动卡片。",
+      "内容可信：指标定义、公式和明细来自当前组件绑定。"
+    ],
+    "rules": [
+      {
+        "name": "The Source Separation Rule",
+        "body": "操作变量、图表数据色和归档参考分别维护；复制参考页面时不能覆盖当前运行变量。",
+        "section": "colors"
+      },
+      {
+        "name": "The Title Role Rule",
+        "body": "新组件复用组件标题角色，不按图表类型自行添加一套大标题。",
+        "section": "typography"
+      },
+      {
+        "name": "The Stable Update Rule",
+        "body": "查询期间保留已有组件。更新提示不占据卡片正文空间，局部操作只更新相关内容。",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "Do 复用共享组件和当前语义变量，修改后同步设计记录。",
+      "Do 保持标题角色、表头与数据对齐、图标尺寸和边距一致。",
+      "Do 用真实绑定解释指标，保留单位、筛选范围和明细入口。",
+      "Do 在局部更新中保留内容、选择状态和减少动态效果路径。",
+      "Do 分别维护设计资产、运行源码与打包产物。"
+    ],
+    "donts": [
+      "Don't 将归档 PDF 的字体、操作色或尺寸写成当前产品已经使用的值。",
+      "Don't 将讨论、构建成功或静态预览写成 MCP 宿主已完成验收。",
+      "Don't 在数据更新时清空整张卡片，或用加载文字挤动图表。",
+      "Don't 为缺少定义的指标编造公式、阈值或来源。",
+      "Don't 用一套全局圆角或图表大标题覆盖现有组件差异。"
+    ]
+  }
+}

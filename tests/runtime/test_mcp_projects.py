@@ -37,7 +37,7 @@ async def call(session, name, project=None, **args):
     return value
 
 
-# @wu-test type=integration | scope=MCP多项目 | protects=同ID看板批注分块跨项目串数据 | debt=D1
+# @wu-test type=integration | scope=MCP多项目 | protects=同ID看板批注分块跨项目串数据
 def test_one_connection_handles_two_projects_and_restart(tmp_path):
     first, second = tmp_path / 'first', tmp_path / 'second'
 
@@ -87,6 +87,8 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                 done = await call(session, 'dashboard_edit_finish', first, dashboardId='same',
                     expectedRevision=2, batchId=batch['batch_id'])
                 assert done['ok']
+                assert done['nextAction'] == 'dashboard_preview'
+                assert done['displayPolicy'] == 'saved-dashboard-ui'
                 assert (await call(session, 'dashboard_annotations', first, dashboardId='same'))['count'] == 1
                 assert (await call(session, 'dashboard_annotations', second, dashboardId='same'))['count'] == 0
                 assert len((await call(session, 'dashboard_history', first, dashboardId='same'))['history']) == 2
@@ -110,13 +112,8 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                 assert decoded['projectRoot'] == str(first)
                 info_a, info_b = await asyncio.gather(*[call(session, 'runtime_info', project) for project in (first, second)])
                 assert info_a['runtimeRoot'] != info_b['runtimeRoot']
-                preview_tool = next(tool for tool in tools if tool.name.startswith('dashboard_preview_'))
-                preview = await call(session, preview_tool.name, second, dashboardId='same')
-                assert preview['document']['manifest']['title'] == 'Second'
-                assert preview_tool.meta is not None
-                resource = (await session.read_resource(AnyUrl(preview_tool.meta['ui']['resourceUri']))).contents[0]
-                assert isinstance(resource, TextResourceContents)
-                assert str(first) not in resource.text and str(second) not in resource.text
+                loaded = await call(session, 'dashboard_get', second, dashboardId='same')
+                assert loaded['document']['manifest']['title'] == 'Second'
 
         async with stdio_client(parameters(tmp_path)) as (read, write):
             async with ClientSession(read, write) as session:
@@ -133,7 +130,7 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
     asyncio.run(check())
 
 
-# @wu-test type=integration | scope=MCP默认项目 | protects=默认项目或旧存储切换后读错 | debt=D1
+# @wu-test type=integration | scope=MCP默认项目 | protects=默认项目或旧存储切换后读错
 def test_startup_project_and_legacy_store_remain_defaults(tmp_path):
     default, other = tmp_path / 'default', tmp_path / 'other'
     Service(tmp_path / 'runtime', project_root=default).call('dashboard_create', {'dashboardId': 'same', 'title': 'Existing'})

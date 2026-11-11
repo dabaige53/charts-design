@@ -14,7 +14,6 @@
 node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 ```
 
-由 Magpie 管理一次注册和 Agent 分发。Magpie 中的 Node 命令、入口脚本和运行目录应使用本机绝对路径，不依赖调用方工作目录。服务不改写 Agent 配置，也不自动注册项目专用 MCP。
 
 每次项目工具调用都传 `projectRoot`，值是报表资产目录的绝对路径，不是 Agent 工作目录。示例：
 
@@ -26,7 +25,6 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 每个项目使用固定的 `Service` 和资产目录；运行缓存保存在统一运行目录的 `projects/<项目路径标识>/` 下。不存在“当前项目”，一次调用不会改变下一次调用的项目。传输分块与诊断同样按项目隔离，重启后可用原项目参数继续读取尚未过期的分块。数据源别名继续由启动时的 `--sources` 配置，不允许工具请求另设数据源配置。
 
-预览结果和分块描述携带顶层 `projectRoot`，不改写看板文档，也不写入项目的草稿、历史或数据。通用 HTML 资源不绑定项目；每个预览页面在接收首次结果时固定项目，随后自动为筛选、刷新、页面切换、批注、导出、分块读取和后台检查附加该项目。页面收到其他项目的结果时拒绝覆盖，需另开预览。附到对话的批注引用包含项目路径，避免同名看板混淆。多项目预览须使用本版本新生成的预览入口；历史宿主已缓存的旧页面代码不会因服务端更新而自动替换。
 
 ### 自托管服务器中的项目
 
@@ -37,11 +35,10 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 - 原 `--project-root <project> --runtime-root <runtime> mcp` 保留为启动默认项目。不传 `projectRoot` 时仍访问原项目和原运行目录；传入另一个项目时只影响该次调用，不需要迁移已有资产。
 - 原 `--root` 集中存储仍可读取。不带启动默认项目且请求省略 `projectRoot` 时，只访问该旧存储，不沿用最近一次项目选择；新建看板需明确项目。CLI 与本地 HTTP 编辑器继续使用启动时选择的存储，本节多项目请求分发针对 MCP。
 - 可经 Magpie MCP router 转发，仍使用标准 stdio MCP，无需为项目分别注册。Router 必须保留每次工具调用的 `projectRoot`、结构化结果、`_meta.ui.resourceUri`、资源读取与 MCP Apps 的后续工具路由；不能只转发首次预览。若 Router 改写工具名，必须把页面后续调用映射回同一后端。
-- 自动检查覆盖标准 MCP 客户端；不代表已完成 Magpie router 或 Codex 宿主的实际页面验收。配置收敛由 Magpie 管理聊天执行。
 
 ## 编辑与展示
 
-`dashboard_edit_begin` 开始或恢复批次；`dashboard_patch` 只保存草稿并发编号。`dashboard_edit_finish` 完整检查后生成一个检查点，成功返回 `nextAction: dashboard_preview`。调用方只在完成后调用一次预览。所有其他工具不声明 UI 资源，不自动打开新页面。已有页面通过版本检测原位更新；宿主是否复用打开的侧栏由宿主控制。
+`dashboard_edit_begin` 开始或恢复批次；`dashboard_patch` 只保存草稿并发编号。`dashboard_edit_finish` 完整检查后生成一个检查点，成功返回 `nextAction: dashboard_preview`。调用方只在完成后调用一次预览。已有页面通过版本检测原位更新；宿主是否复用打开的侧栏由宿主控制。
 
 `dashboard_history` 分页读取检查点；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建、命名或标记发布当前检查点；`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，不随设计恢复。历史文档中的批注变更保存在独立事件记录。
 

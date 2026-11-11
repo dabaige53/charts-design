@@ -1,0 +1,169 @@
+
+        /* Bulletproof Icon & UI Styling */
+        svg {
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .chart-action-btn svg {
+            width: 13px !important;
+            height: 13px !important;
+            display: block !important;
+            stroke: currentColor !important;
+        }
+        .card-body-wrap {
+            height: 270px;
+            min-height: 270px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        .card-chart-pane {
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 270px;
+        }
+        .card-table-pane {
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 270px;
+        }
+        
+        /* Sticky Glassmorphism Global Filter Bar */
+        .sticky-filter-bar {
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 40 !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border-bottom: 1px solid rgba(203, 213, 225, 0.8) !important;
+            box-shadow: 0 4px 14px rgba(18, 59, 93, 0.05) !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #F1F5F9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        
+        .section-card {
+            background: #FFFFFF;
+            border-radius: 8px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+        .section-card:hover {
+            box-shadow: 0 6px 18px rgba(18, 59, 93, 0.07);
+            border-color: #CBD5E1;
+        }
+        
+        /* Modern Info & Utility Action Buttons */
+        .chart-action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: 1px solid #E2E8F0;
+            background: #F8FAFC;
+            color: #52606D;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            flex-shrink: 0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        .chart-action-btn:hover {
+            background: #123B5D;
+            border-color: #123B5D;
+            color: #FFFFFF;
+            transform: scale(1.08);
+            box-shadow: 0 3px 8px rgba(18, 59, 93, 0.2);
+        }
+        .chart-action-btn:active {
+            transform: scale(0.94);
+        }
+        .chart-action-btn.active-state {
+            background: #123B5D;
+            border-color: #123B5D;
+            color: #FFFFFF;
+        }
+        
+        /* Drag and Drop Column Item Styles */
+        .drag-col-item {
+            user-select: none;
+            transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+        }
+        .drag-col-item.dragging {
+            opacity: 0.45;
+            transform: scale(0.98);
+            border: 1px dashed #123B5D !important;
+            background: #F0F5F9 !important;
+        }
+        .drag-col-item.drag-over {
+            border-top: 2px solid #123B5D !important;
+            background: #EBF3F8 !important;
+        }
+
+__EXPLANATION_DIALOG_CSS__
+
+        /* Fullscreen Focus Mode */
+        @keyframes fullscreenExpand {
+            0% { opacity: 0; transform: scale(0.97) translateY(8px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .card-fullscreen {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 9999 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            border-radius: 0 !important;
+            padding: 1.5rem 2.5rem !important;
+            background: #FFFFFF !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+            overflow: hidden !important;
+            box-shadow: none !important;
+            animation: fullscreenExpand 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .card-fullscreen .card-header-wrap {
+            flex-shrink: 0 !important;
+            margin-bottom: 1rem !important;
+            padding-bottom: 0.75rem !important;
+            border-bottom: 1px solid #E2E8F0 !important;
+        }
+        .card-fullscreen .card-body-wrap {
+            flex: 1 1 0% !important;
+            height: calc(100vh - 120px) !important;
+            min-height: 0 !important;
+            width: 100% !important;
+        }
+        .card-fullscreen .card-chart-pane,
+        .card-fullscreen .card-table-pane {
+            width: 100% !important;
+            height: 100% !important;
+            animation: fadeInPane 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes fadeInPane {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Toast Animation */
+        @keyframes toastSlideUp {
+            from { opacity: 0; transform: translate(-50%, 14px) scale(0.96); }
+            to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+        }
+        .toast-active {
+            animation: toastSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    

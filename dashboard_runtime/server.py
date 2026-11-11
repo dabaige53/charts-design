@@ -22,7 +22,6 @@ import contextlib
 import gzip
 import hashlib
 import hmac
-import html
 import json
 import os
 import re
@@ -52,8 +51,8 @@ FILE_LINK_SECONDS = 24 * 3600
 VIEW_TOOLS = frozenset({
     'dashboard_get', 'dashboard_view', 'dashboard_refresh', 'dashboard_filter_options',
     'component_data', 'query_inspect', 'semantic_inspect', 'statistical_render',
-    'dashboard_annotations', 'dashboard_list', 'runtime_info', 'runtime_keepalive',
-    'runtime_report_error', 'dashboard_export', 'dataset_export', 'legacy_render',
+    'dashboard_annotations', 'dashboard_list', 'dashboard_preview', 'runtime_info', 'runtime_keepalive',
+    'runtime_report_error', 'dashboard_export', 'dashboard_export_read', 'dataset_export', 'legacy_render',
 })
 # An edit link additionally saves layout, titles, descriptions and checkpoints.
 EDIT_TOOLS = VIEW_TOOLS | frozenset({
@@ -301,10 +300,7 @@ class ServerProfile(McpProfile):
         return self.workspace
 
     def describe(self, name, description):
-        if name == 'dashboard_preview':
-            return (description + '. On this self-hosted server the result also contains previewUrl, an expiring read-only '
-                    'browser link for hosts that cannot display MCP Apps; give it to the user after the edit batch finishes.')
-        if name in ('dashboard_export', 'dataset_export', 'dashboard_export_site'):
+        if name in ('dashboard_export', 'dataset_export'):
             return description + '. On this server the export also contains downloadUrl, an expiring signed link.'
         return description
 
@@ -328,9 +324,6 @@ class ServerProfile(McpProfile):
     def decorate(self, name, request, result, selected):
         project = selected.project_name
         result = {**result, 'projectRoot': project}
-        if name == 'dashboard_preview' and isinstance(result.get('document'), dict):
-            link = self.links.share(project, result['document']['id'], 'view')
-            result['previewUrl'], result['previewExpiresAt'] = link['url'], link['expiresAt']
         export = result.get('export')
         if isinstance(export, dict) and isinstance(export.get('path'), str):
             export = dict(export)
@@ -446,51 +439,11 @@ SECURITY_HEADERS = {
 }
 
 
-def _csp(*scripts: str) -> str:
-    hashes = ' '.join("'sha256-" + base64.b64encode(hashlib.sha256(script.encode()).digest()).decode() + "'" for script in scripts)
-    return ("default-src 'self'; script-src 'self' " + hashes + "; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; "
-            "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
-
-
-INDEX_SCRIPT = r"""
-const $=s=>document.querySelector(s),api=(p,b)=>fetch(BASE+p,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(sessionStorage.getItem('charts-admin-token')||'')},body:JSON.stringify(b||{})}).then(async r=>{const v=await r.json();if(!r.ok)throw Error(v.error?.message||r.statusText);return v;});
-const BASE=document.body.dataset.base;
-async function load(){const list=$('#projects');list.replaceChildren();$('#status').textContent='正在读取…';
-  try{const v=await api('/api/v1/catalog');$('#status').textContent=v.projects.length?'':'暂无项目。通过 MCP 创建看板或报告后在此预览。';
-    for(const p of v.projects){const sec=document.createElement('section'),h=document.createElement('h2');h.textContent=p.name;sec.append(h);
-      if(!p.dashboards.length){const e=document.createElement('p');e.className='muted';e.textContent='暂无看板';sec.append(e);}
-      for(const d of p.dashboards){const row=document.createElement('div');row.className='row';const t=document.createElement('span');t.textContent=d.title+'  ·  '+d.id+'  ·  v'+d.revision;row.append(t);
-        for(const [access,label] of [['view','预览'],['edit','编辑']]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{const s=await api('/api/v1/share',{project:p.name,dashboardId:d.id,access,expiresInHours:12});window.open(s.url,'_blank','noopener');}catch(e){$('#status').textContent=e.message;}};row.append(b);}
-        sec.append(row);}
-      list.append(sec);}
-  }catch(e){$('#status').textContent=e.message;}}
-$('#login').onsubmit=e=>{e.preventDefault();sessionStorage.setItem('charts-admin-token',$('#token').value.trim());$('#token').value='';load();};
-if(sessionStorage.getItem('charts-admin-token'))load();
-"""
-
-
-def index_page(base: str) -> str:
-    style = ('body{font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;color:#17212B;background:#F5F7F9;margin:0}'
-             'main{max-width:880px;margin:0 auto;padding:40px 16px}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px;color:#123B5D}'
-             '.muted{color:#7B8794}form{display:flex;gap:8px;margin:20px 0}input{flex:1;padding:8px 10px;border:1px solid #C9D1D8;border-radius:6px}'
-             'button{padding:6px 12px;border:1px solid #123B5D;background:#123B5D;color:#fff;border-radius:6px;cursor:pointer}'
-             '.row button{background:#fff;color:#123B5D;margin-left:8px}.row{display:flex;align-items:center;justify-content:space-between;'
-             'background:#fff;border:1px solid #E6EAED;border-radius:8px;padding:10px 12px;margin:6px 0}code{background:#E6EAED;padding:1px 5px;border-radius:4px}')
-    return ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<meta name="referrer" content="no-referrer"><title>Charts Design Server</title><style>' + style + '</style></head>'
-            f'<body data-base="{html.escape(base)}"><main><h1>Charts Design Server</h1>'
-            f'<p class="muted">v{html.escape(__version__)} · MCP 端点 <code>{html.escape(base)}/mcp</code> · 看板与分析报告的网页预览</p>'
-            '<form id="login"><input id="token" type="password" autocomplete="off" placeholder="输入服务器访问令牌以浏览全部项目" aria-label="访问令牌">'
-            '<button type="submit">进入</button></form><p id="status" class="muted" role="status">预览链接也可由 MCP 工具 dashboard_preview / dashboard_share 生成。</p>'
-            '<div id="projects"></div></main><script>' + INDEX_SCRIPT + '</script></body></html>')
-
-
 def create_app(server: RemoteServer):
     """Starlette ASGI application. Starlette and uvicorn ship with the MCP SDK."""
     from starlette.applications import Starlette
     from starlette.requests import Request
-    from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
+    from starlette.responses import FileResponse, JSONResponse, Response
     from starlette.routing import Route
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
@@ -551,33 +504,31 @@ def create_app(server: RemoteServer):
     async def health(request: Request):
         return JSONResponse({'ok': True, 'version': __version__}, headers={'Cache-Control': 'no-store'})
 
-    async def index(request: Request):
-        return HTMLResponse(index_page(base), headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store', 'Content-Security-Policy': _csp(INDEX_SCRIPT)})
+    async def viewer(request: Request):
+        from .assets import render_html
+        try:
+            project = request.path_params.get('project', settings.default_project)
+            require(PROJECT_NAME.fullmatch(project) is not None, 'Invalid project name')
+            dashboard = request.path_params.get('dashboard')
+            if dashboard:
+                require(re.fullmatch(ID, dashboard) is not None, 'Invalid dashboard ID')
+            boot = {'mode': 'web', 'projectRoot': project, 'dashboardId': dashboard,
+                    'apiBase': base + '/api/v1/p/' + quote(project) + '/tools/',
+                    'readOnly': request.url.path.startswith(base + '/view/'), 'idleTimeout': None}
+            return compressed(request, render_html(boot_state=boot).encode(), 'text/html', {'Cache-Control': 'no-store'})
+        except DashboardError as error:
+            return failure(error)
 
     async def asset(request: Request):
         from .assets import bundle_assets
         name = request.path_params['name']
-        build_id, javascript, styles = bundle_assets()
-        match = re.fullmatch(r'app\.([0-9a-f]{12})\.(js|css)', name)
-        if match is None or match[1] != build_id:
-            return JSONResponse({'ok': False, 'error': {'code': 'NOT_FOUND', 'message': 'Unknown or outdated asset; reload the page'}}, status_code=404)
-        kind = match[2]
-        raw = javascript if kind == 'js' else styles
-        etag = f'"{build_id}-{kind}"'
-        if request.headers.get('if-none-match') == etag:
-            return Response(status_code=304, headers={'ETag': etag})
-        media = 'text/javascript; charset=utf-8' if kind == 'js' else 'text/css; charset=utf-8'
-        return compressed(request, raw, media, {'Cache-Control': 'public, max-age=31536000, immutable', 'ETag': etag}, cache_key=(build_id, kind))
-
-    async def page(request: Request):
-        from .assets import render_shell
-        project, board = request.path_params['project'], request.path_params['dashboard']
-        access = 'edit' if request.url.path.startswith('/edit/') else 'view'
-        if PROJECT_NAME.fullmatch(project) is None or ID.fullmatch(board) is None:
-            return HTMLResponse('<!doctype html><title>Not found</title><p>Unknown page</p>', status_code=404, headers=SECURITY_HEADERS)
-        boot = {'mode': 'web', 'idleTimeout': 3600, 'remote': {'apiBase': f'{base}/api/v1/p/{project}', 'board': board, 'access': access, 'project': project}}
-        markup, script = render_shell(boot, f'{base}/assets')
-        return HTMLResponse(markup, headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store', 'Content-Security-Policy': _csp(script)})
+        if name not in ('app.js', 'app.css'):
+            return JSONResponse({'error': 'not found'}, status_code=404)
+        try:
+            return compressed(request, bundle_assets()[name], 'text/javascript' if name.endswith('.js') else 'text/css',
+                              {'Cache-Control': 'no-cache'})
+        except DashboardError as error:
+            return failure(error)
 
     async def tool(request: Request):
         try:
@@ -639,10 +590,10 @@ def create_app(server: RemoteServer):
 
     routes = [
         Route('/health', health, methods=['GET', 'HEAD']),
-        Route('/', index, methods=['GET']),
+        Route('/', viewer, methods=['GET']),
         Route('/assets/{name}', asset, methods=['GET']),
-        Route('/view/{project}/{dashboard}', page, methods=['GET']),
-        Route('/edit/{project}/{dashboard}', page, methods=['GET']),
+        Route('/view/{project}/{dashboard}', viewer, methods=['GET']),
+        Route('/edit/{project}/{dashboard}', viewer, methods=['GET']),
         Route('/api/v1/p/{project}/tools/{name}', tool, methods=['POST']),
         Route('/api/v1/catalog', admin_catalog, methods=['POST']),
         Route('/api/v1/share', admin_share, methods=['POST']),
@@ -735,11 +686,9 @@ def serve(settings: ServerSettings):
         import uvicorn
     except ImportError as exc:
         raise DashboardError('MCP_NOT_INSTALLED', 'Install the server dependencies: python3 -m pip install "mcp>=1.28,<2"') from exc
-    from .assets import bundle_assets
-    bundle_assets()  # Fail early with the exact build command.
     server = RemoteServer(settings)
     app = create_app(server)
-    print(json.dumps({'mcp': settings.public_url + '/mcp', 'web': settings.public_url + '/', 'workspace': str(settings.workspace),
+    print(json.dumps({'mcp': settings.public_url + '/mcp', 'uiStatus': 'unavailable', 'workspace': str(settings.workspace),
                       'auth': 'disabled (loopback trial)' if settings.insecure_no_auth else 'bearer', 'version': __version__}, ensure_ascii=False), flush=True)
     if settings.public_url.startswith('http://') and settings.host not in ('127.0.0.1', 'localhost', '::1'):
         print('Warning: publish this server through HTTPS (reverse proxy) before sharing links; tokens travel in requests.', file=sys.stderr)

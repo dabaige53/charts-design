@@ -1,26 +1,37 @@
-# 独立网页部署包
+# 独立静态网页导出
 
-在 MCP 页面选择「导出 → 网页部署包」，或调用 `dashboard_export_site`，参数为 `dashboardId`。工具在项目 `deployments/` 下生成目录和 ZIP，返回路径，不将全量业务数据通过 MCP 消息传输，也不自动上传网站。
+调用 `dashboard_export_site`，传入 `projectRoot` 与 `dashboardId`，取得受管 ZIP。网页使用与 MCP 相同的 React 组件和共享查询 Worker，通过普通静态 HTTP 服务提供，不连接 MCP。
 
-交付物：
+## 文件结构
 
-- `dist/`：HTML、打包 JS/CSS、网页设计 JSON、数据分片；可部署到普通静态网站或 Cloudflare Pages。
-- `site.zip`：只含可发布文件。
-- 完整项目 ZIP：包含 dist、source、固定依赖与构建命令。
-- `export-manifest.json`：看板版本、后端构建版本、所用数据集与记录数量。
+| 文件 | 用途 |
+| --- | --- |
+| `index.html` | 静态网页入口 |
+| `app.js`、`app.css` | 已构建的应用与样式 |
+| `static-worker.js` | 筛选、汇总、表格搜索、排序和分页 |
+| `document.json` | 组件、布局、指标和数据分片相对路径 |
+| `data/*.json.gz` | 使用中的数据集，每片最多 5000 条 |
+| `export-manifest.json` | 看板 revision、前后端构建标识、数据集记录数 |
+| `README.txt` | 使用方式和数据范围 |
 
-网页无需 MCP、Codex、Python 或数据库服务。需要随看板版本实时更新、可分享并可撤销的在线预览时，使用 [自托管服务器](self-hosted-server.md)。筛选、同比环比、图表和表格计算沿用共享浏览器实现。数据集按可见组件加载，分片最多 4 个请求并行，同一数据集复用；首次使用一个数据集仍需读取其全部分片，之后筛选在本机计算。大数据集会占用浏览器内存，不等同于服务端按筛选取数。
+ZIP 保存于运行目录 `exports/<id>/<dashboardId>.zip`。MCP 内使用 `dashboard_export_read` 分块读取并核对完整字节数，再交给宿主下载。服务器下载链接沿用受管导出授权，见 [自托管服务器](self-hosted-server.md)。
 
-数据包含页面使用的数据集全部记录，不局限于当前筛选；未使用的数据集不导出。默认移除批注和本机数据引用、来源连接及 SQL 参数。部署是只读设计，不提供在线编辑、批注写回或上游数据刷新。统计 SVG 为导出时结果。
+## 数据和操作
 
-页面保留“打印”按钮，Ctrl/Cmd+P 使用同一入口。打印前等待当前页面所有组件的数据分片、图表、字体和图片，不要求先滚动整页。直接使用浏览器菜单打印时，若数据尚未完成，打印预览只显示准备提示，不输出缺图页面；关闭窗口后使用页面打印按钮即可。
+导出包含页面使用的数据集全部记录；未使用的数据集不导出。来源连接、SQL、本机数据引用和批注会被移除。统计图保留导出时生成的结果。
 
-## 重建与发布
+网页按组件加载所需数据集，同一数据集复用。首次使用一个数据集需要读取它的全部分片，之后在本机计算筛选、图表和表格。读者可以搜索、排序、分页、调整临时列配置和导出 CSV。布局和设计只读；数据更新需重新导出。
 
-解压完整项目后，执行 `npm ci`、`npm run build`；构建只需 Node.js，无需原始 MCP 仓库。修改 `source/` 可更新网页实现，`dist/document.json` 保存设计与数据相对路径。通过 HTTP 服务预览，不能以 file:// 读取 JSON 分片。
+## 构建与使用
 
-上传 `dist/`，或执行 `npm run deploy:cloudflare -- --project-name <已有项目名>`。认证由部署环境提供，导出包不含认证信息。Cloudflare 的 [Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/) 支持预构建静态资源。
+先在本仓执行：
 
-## 本次验收
+```sh
+pnpm --dir runtime-ui install --frozen-lockfile
+npm run ui:build
+npm run ui:package
+```
 
-真实看板 revision 29：独立静态服务下营业部由全部切换到西安，市场净销量从 998,140 更新为 28,629；页面未请求后端 API，无脚本错误。滚动触发下方数据加载。`npm ci` 与包内 `npm run build` 已完成。尚未上传 Cloudflare。
+然后导出 ZIP，解压并把内容放入普通静态 HTTP 服务。通过 `index.html` 访问；`file://` 无法读取 Worker 和 JSON 分片。导出包已包含运行资源，部署时无需安装 Node、Python 或原始仓库。
+
+HTML 快照与静态网页用途不同：`dashboard_export` 的 HTML 仅保存当前计算视图；静态网页保存使用中的完整数据集，可以继续在浏览器中筛选。

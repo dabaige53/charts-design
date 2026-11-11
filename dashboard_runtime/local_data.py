@@ -324,7 +324,7 @@ class LocalData:
                 ordering.append(f'{col} {direction}')
         return keys, selected, ' ORDER BY ' + ','.join(ordering + ['rowid'])
 
-    def _grouped_query(self, db, ref, filters, group_by, sum_fields, search):
+    def _grouped_query(self, db, ref, filters, group_by, sum_fields, search, calculated=None):
         table, metadata = self._version(db, ref)
         fields = metadata['fields']
         if not group_by or set(group_by) & set(sum_fields) or set(group_by + sum_fields) - set(fields):
@@ -336,20 +336,27 @@ class LocalData:
         expressions = []
         for k in fields:
             col = self._column(fields, k)
-            expressions.append((col if k in group_by else f'SUM({col})' if k in sum_fields else 'NULL') + f' AS {col}')
+            if k in (calculated or {}):
+                spec = calculated[k]
+                n = self._column(fields, spec['numerator'])
+                d = self._column(fields, spec['denominator'])
+                expression = f'CASE WHEN SUM({d}) > 0 THEN SUM({n}) * 1.0 / SUM({d}) ELSE NULL END'
+            else:
+                expression = col if k in group_by else f'SUM({col})' if k in sum_fields else 'NULL'
+            expressions.append(expression + f' AS {col}')
         grouped = 'SELECT ' + ','.join(expressions) + ', MIN(rowid) AS rowid, NULL AS _missing FROM ' + table + where
         grouped += ' GROUP BY ' + ','.join(self._column(fields, k) for k in group_by)
         search_where, search_params = self._where(fields, [], search)
         return '(' + grouped + ')', fields, search_where, params + search_params
 
-    def grouped_rows(self, ref, filters, columns, sort, offset, limit, search, group_by, sum_fields):
+    def grouped_rows(self, ref, filters, columns, sort, offset, limit, search, group_by, sum_fields, calculated=None):
         started = time.perf_counter()
         if type(limit) is not int or not 0 < limit <= MAX_RESULT_ROWS or type(offset) is not int or offset < 0:
             raise ValueError('Invalid grouped table pagination')
         if set(columns or []) - set(group_by + sum_fields):
             raise ValueError('Displayed columns must be grouped or summed')
         with self._connect() as db:
-            table, fields, where, params = self._grouped_query(db, ref, filters, group_by, sum_fields, search)
+            table, fields, where, params = self._grouped_query(db, ref, filters, group_by, sum_fields, search, calculated)
             keys, selected, order = self._selection(fields, columns, sort)
             total = db.execute('SELECT COUNT(*) FROM ' + table + where, params).fetchone()[0]
             rows = db.execute('SELECT ' + selected + ' FROM ' + table + where + order + ' LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
@@ -540,7 +547,7 @@ class LocalData:
             for row in db.execute(f'SELECT {selected}, _missing FROM {table}' + where + order, params):
                 yield self._decode(keys, row[:-1], fields, row[-1])
 
-    def export_csv(self, ref, output_path, filters=None, columns=None, sort=None, search='', group_by=None, sum_fields=None):
+    def export_csv(self, ref, output_path, filters=None, columns=None, sort=None, search='', group_by=None, sum_fields=None, calculated=None):
         started = time.perf_counter()
         destination = Path(output_path).expanduser().resolve()
         if destination == self.path.resolve():
@@ -553,7 +560,7 @@ class LocalData:
             where, params = self._where(fields, filters, search)
             keys, selected, order = self._selection(fields, columns, sort)
             if group_by:
-                table, fields, where, params = self._grouped_query(db, ref, filters, group_by, sum_fields or [], search)
+                table, fields, where, params = self._grouped_query(db, ref, filters, group_by, sum_fields or [], search, calculated)
                 if set(keys) - set(group_by + (sum_fields or [])):
                     raise ValueError('Export columns must be grouped or summed')
             cursor = db.execute(f'SELECT {selected} FROM {table}' + where + order, params)

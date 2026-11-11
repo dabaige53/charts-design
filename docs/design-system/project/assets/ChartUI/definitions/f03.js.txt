@@ -1,0 +1,121 @@
+{
+        id: 'chart-f03',
+        code: 'f03',
+        title: '新增常旅客会员批次 M0~M3 乘机复购留存',
+        subtitle: '追踪各季度新入会会员在生命周期前 3 个月的乘机复购留存率演变',
+        explainKey: 'f03',
+        data: {
+            cohorts: ['24Q1 批次', '24Q2 批次', '24Q3 批次', '24Q4 批次'],
+            months: ['M0', 'M1', 'M2', 'M3'],
+            matrix: [
+                [0, 0, 100], [1, 0, 88], [2, 0, 78], [3, 0, 72],
+                [0, 1, 100], [1, 1, 90], [2, 1, 82], [3, 1, 76],
+                [0, 2, 100], [1, 2, 92], [2, 2, 85], [3, 2, 80],
+                [0, 3, 100], [1, 3, 94], [2, 3, 88], [3, 3, 84]
+            ]
+        },
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || [];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const units = presentation.units || [];
+            const labels = presentation.labels || [];
+            const domains = presentation.domains || {};
+            const option = ({
+            tooltip: {
+                position: 'top',
+                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                borderColor: tokens.palette.rule,
+                borderWidth: 1,
+                padding: [8, 12],
+                extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
+                formatter: params => `<div class="font-bold text-primary-strong mb-1">${d.cohorts[params.value[1]]} ➔ ${d.months[params.value[0]]}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">${tooltipLabels[0]}:</span><span class="font-mono font-bold text-primary">${params.value[2]}${units[0] || ''}</span></div>`
+            },
+            grid: { top: 20, bottom: 38, left: 10, right: 18, containLabel: true },
+            xAxis: { type: 'category', data: d.months, axisTick: { show: false } },
+            yAxis: { type: 'category', data: d.cohorts, axisTick: { show: false } },
+            visualMap: { min: 70, max: 100, show: false, inRange: { color: ['#DCE8F0', '#8EA4B8', '#123B5D', '#0B2A42'] } },
+            series: [{
+                type: 'heatmap',
+                data: d.matrix,
+                label: { show: true, formatter: params => params.value[2] + '%', color: '#FFFFFF', fontSize: 11, fontWeight: 600 },
+                itemStyle: { borderColor: '#FFFFFF', borderWidth: 2 }
+            }]
+        });
+            [['x', option.xAxis], ['y', option.yAxis]].forEach(([key, axisOption]) => {
+                const domain = domains[key];
+                [axisOption].flat().filter(Boolean).forEach((axis, index) => {
+                    if (axisLabels[key]) axis.name = axisLabels[key];
+                    delete axis.min;
+                    delete axis.max;
+                    const axisDomain = Array.isArray(domain && domain[0]) ? domain[index] : domain;
+                    if (Array.isArray(axisDomain)) [axis.min, axis.max] = axisDomain;
+                    if (axis.type === 'value') axis.axisLabel = { ...(axis.axisLabel || {}), formatter: value => `${value}${units[index] || units[0] || ''}` };
+                });
+            });
+            if (option.visualMap) {
+                delete option.visualMap.min;
+                delete option.visualMap.max;
+                if (Array.isArray(domains.visualMap)) [option.visualMap.min, option.visualMap.max] = domains.visualMap;
+            }
+            if (option.radar && Array.isArray(option.radar.indicator)) option.radar.indicator = option.radar.indicator.map((indicator, index) => {
+                const configuredDomain = Array.isArray(domains.indicators) ? domains.indicators[index] : domains.value;
+                const { min, max, ...semanticIndicator } = indicator;
+                return { ...semanticIndicator, name: labels[index] || indicator.name, ...(Array.isArray(configuredDomain) ? { min: configuredDomain[0], max: configuredDomain[1] } : {}) };
+            });
+            const thresholdValues = Object.values(presentation.thresholds || {}).filter(value => typeof value === 'number');
+            const optionSeries = Array.isArray(option.series) ? option.series : [];
+            optionSeries.forEach((series, index) => {
+                if (seriesLabels[index]) series.name = seriesLabels[index];
+                if (series.label && units[index]) series.label.formatter = params => `${params.value}${units[index]}`;
+                if (series.type === 'pie' && Array.isArray(series.data)) series.data = series.data.map((item, itemIndex) => ({ ...item, name: labels[itemIndex] || item.name }));
+                if (series.type === 'radar' && Array.isArray(series.data)) series.data = series.data.map((item, itemIndex) => ({ ...item, name: seriesLabels[itemIndex] || item.name }));
+                if (series.type === 'gauge') {
+                    delete series.min;
+                    delete series.max;
+                    if (Array.isArray(domains.value)) [series.min, series.max] = domains.value;
+                    if (series.detail) series.detail.formatter = value => `${value}${units[0] || ''}`;
+                    if (Array.isArray(series.data) && series.data[0]) series.data[0].name = tooltipLabels[0] || seriesLabels[0] || labels[0] || '';
+                }
+                if (series.markLine && thresholdValues.length) series.markLine.data = thresholdValues.map((value, thresholdIndex) => {
+                    const original = series.markLine.data && series.markLine.data[thresholdIndex] || {};
+                    const key = Object.prototype.hasOwnProperty.call(original, 'xAxis') ? 'xAxis' : 'yAxis';
+                    return { ...original, [key]: value, label: { ...(original.label || {}), formatter: labels[thresholdIndex] || `${value}${units[index] || units[0] || ''}` } };
+                });
+                if (!thresholdValues.length && series.markLine) delete series.markLine;
+            });
+            if (option.legend && seriesLabels.length) option.legend.data = seriesLabels;
+            if (option.tooltip && !['d02', 'r02', 'r03', 'd04', 'f02', 'r04', 'f03', 'r05'].includes(cfg.code)) option.tooltip.formatter = params => {
+                const items = Array.isArray(params) ? params : [params];
+                const heading = items[0] && (items[0].axisValueLabel || items[0].name) || '';
+                return `${heading ? `<div class="font-bold text-primary-strong mb-1">${heading}</div>` : ''}${items.map((item, index) => `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">${tooltipLabels[index] || seriesLabels[index] || item.seriesName || '数值'}:</span><span class="font-mono font-bold text-primary">${item.value}${units[index] || units[0] || ''}</span></div>`).join('')}`;
+            };
+            return option;
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || [];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const units = presentation.units || [];
+            const labels = presentation.labels || [];
+            const thresholds = presentation.thresholds || {};
+            const totals = presentation.totals || {};
+            const table = ({
+            headers: ['分组', ...d.months],
+            rows: d.cohorts.map((cohort, rowIndex) => [cohort, ...d.months.map((month, columnIndex) => {
+                const cell = d.matrix.find(item => item[0] === columnIndex && item[1] === rowIndex);
+                return cell ? cell[2] : null;
+            })])
+        });
+            const configuredHeaders = presentation.tableHeaders || [axisLabels.y || axisLabels.x, ...(tooltipLabels.length ? tooltipLabels : seriesLabels)];
+            table.headers = table.headers.map((header, index) => configuredHeaders[index] || header);
+            table.rows = table.rows.map(row => row.map((value, index) => {
+                if (!units[index - 1] || index === 0 || typeof value !== 'string') return value;
+                const numeric = value.match(/[+-]?(?:[0-9]+[.]?[0-9]*|[.][0-9]+)/);
+                return numeric ? `${numeric[0]} ${units[index - 1]}`.trim() : value;
+            }));
+            return table;
+        }
+    }

@@ -1,0 +1,118 @@
+{
+        id: 'chart-m04',
+        code: 'm04',
+        title: '民航年度主营营收预算目标综合达成率',
+        subtitle: '大字直显机队与客货运全网年度预算目标的综合推进完成比例',
+        explainKey: 'm04',
+        data: {
+            rate: 84.5,
+            target: '100.0%'
+        },
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || [];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const units = presentation.units || [];
+            const labels = presentation.labels || [];
+            const domains = presentation.domains || {};
+            const option = ({
+            series: [{
+                type: 'gauge',
+                startAngle: 180,
+                endAngle: 0,
+                min: 0,
+                max: 100,
+                radius: '100%',
+                center: ['50%', '70%'],
+                progress: { show: true, width: 18, itemStyle: { color: tokens.palette.primary } },
+                axisLine: { lineStyle: { width: 18, color: [[1, '#EEF2F5']] } },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                pointer: { show: false },
+                title: { show: true, offsetCenter: [0, '25%'], fontSize: 11, color: tokens.palette.inkSubtle },
+                detail: {
+                    valueAnimation: false,
+                    offsetCenter: [0, '-10%'],
+                    fontSize: 28,
+                    fontWeight: 'bold',
+                    formatter: '{value}%',
+                    color: tokens.palette.ink
+                },
+                data: [{ value: d.rate, name: '年度目标综合完成率' }]
+            }]
+        });
+            [['x', option.xAxis], ['y', option.yAxis]].forEach(([key, axisOption]) => {
+                const domain = domains[key];
+                [axisOption].flat().filter(Boolean).forEach((axis, index) => {
+                    if (axisLabels[key]) axis.name = axisLabels[key];
+                    delete axis.min;
+                    delete axis.max;
+                    const axisDomain = Array.isArray(domain && domain[0]) ? domain[index] : domain;
+                    if (Array.isArray(axisDomain)) [axis.min, axis.max] = axisDomain;
+                    if (axis.type === 'value') axis.axisLabel = { ...(axis.axisLabel || {}), formatter: value => `${value}${units[index] || units[0] || ''}` };
+                });
+            });
+            if (option.visualMap) {
+                delete option.visualMap.min;
+                delete option.visualMap.max;
+                if (Array.isArray(domains.visualMap)) [option.visualMap.min, option.visualMap.max] = domains.visualMap;
+            }
+            if (option.radar && Array.isArray(option.radar.indicator)) option.radar.indicator = option.radar.indicator.map((indicator, index) => {
+                const configuredDomain = Array.isArray(domains.indicators) ? domains.indicators[index] : domains.value;
+                const { min, max, ...semanticIndicator } = indicator;
+                return { ...semanticIndicator, name: labels[index] || indicator.name, ...(Array.isArray(configuredDomain) ? { min: configuredDomain[0], max: configuredDomain[1] } : {}) };
+            });
+            const thresholdValues = Object.values(presentation.thresholds || {}).filter(value => typeof value === 'number');
+            const optionSeries = Array.isArray(option.series) ? option.series : [];
+            optionSeries.forEach((series, index) => {
+                if (seriesLabels[index]) series.name = seriesLabels[index];
+                if (series.label && units[index]) series.label.formatter = params => `${params.value}${units[index]}`;
+                if (series.type === 'pie' && Array.isArray(series.data)) series.data = series.data.map((item, itemIndex) => ({ ...item, name: labels[itemIndex] || item.name }));
+                if (series.type === 'radar' && Array.isArray(series.data)) series.data = series.data.map((item, itemIndex) => ({ ...item, name: seriesLabels[itemIndex] || item.name }));
+                if (series.type === 'gauge') {
+                    delete series.min;
+                    delete series.max;
+                    if (Array.isArray(domains.value)) [series.min, series.max] = domains.value;
+                    if (series.detail) series.detail.formatter = value => `${value}${units[0] || ''}`;
+                    if (Array.isArray(series.data) && series.data[0]) series.data[0].name = tooltipLabels[0] || seriesLabels[0] || labels[0] || '';
+                }
+                if (series.markLine && thresholdValues.length) series.markLine.data = thresholdValues.map((value, thresholdIndex) => {
+                    const original = series.markLine.data && series.markLine.data[thresholdIndex] || {};
+                    const key = Object.prototype.hasOwnProperty.call(original, 'xAxis') ? 'xAxis' : 'yAxis';
+                    return { ...original, [key]: value, label: { ...(original.label || {}), formatter: labels[thresholdIndex] || `${value}${units[index] || units[0] || ''}` } };
+                });
+                if (!thresholdValues.length && series.markLine) delete series.markLine;
+            });
+            if (option.legend && seriesLabels.length) option.legend.data = seriesLabels;
+            if (option.tooltip && !['d02', 'r02', 'r03', 'd04', 'f02', 'r04', 'f03', 'r05'].includes(cfg.code)) option.tooltip.formatter = params => {
+                const items = Array.isArray(params) ? params : [params];
+                const heading = items[0] && (items[0].axisValueLabel || items[0].name) || '';
+                return `${heading ? `<div class="font-bold text-primary-strong mb-1">${heading}</div>` : ''}${items.map((item, index) => `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">${tooltipLabels[index] || seriesLabels[index] || item.seriesName || '数值'}:</span><span class="font-mono font-bold text-primary">${item.value}${units[index] || units[0] || ''}</span></div>`).join('')}`;
+            };
+            return option;
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || [];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const units = presentation.units || [];
+            const labels = presentation.labels || [];
+            const thresholds = presentation.thresholds || {};
+            const totals = presentation.totals || {};
+            const table = ({
+            headers: ['考核指标', '当前完成率', '基准目标', '考核判定'],
+            rows: [[labels[0] || '', `${d.rate}${units[0] || ''}`, totals.target ?? d.target, labels[1] || '']]
+        });
+            const configuredHeaders = presentation.tableHeaders || [axisLabels.y || axisLabels.x, ...(tooltipLabels.length ? tooltipLabels : seriesLabels)];
+            table.headers = table.headers.map((header, index) => configuredHeaders[index] || header);
+            table.rows = table.rows.map(row => row.map((value, index) => {
+                if (!units[index - 1] || index === 0 || typeof value !== 'string') return value;
+                const numeric = value.match(/[+-]?(?:[0-9]+[.]?[0-9]*|[.][0-9]+)/);
+                return numeric ? `${numeric[0]} ${units[index - 1]}`.trim() : value;
+            }));
+            return table;
+        }
+    }

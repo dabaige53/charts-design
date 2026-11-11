@@ -32,11 +32,25 @@ def test_every_guide_example_is_a_valid_card(code):
     ('mc13', {'target': 'high'}),
     ('mc14', {'priorValue': None}),
     ('mc15', {'items': []}),
-    ('mc16', {'note': 'x' * 121}),
 ])
 def test_malformed_shapes_are_rejected(code, change):
     with pytest.raises(DashboardError, match='KPI contract'):
         put(executive_document('kpi'), 'card', {**kpi_example(code), **change})
+
+
+# @wu-test type=boundary | scope=KPI创建与编辑 | protects=卡片描述通过组件配置或整份文档导入绕过禁止规则
+@pytest.mark.parametrize('location,field', [('component', 'subtitle'), ('config', 'note'), ('presentation', 'description')])
+def test_kpi_descriptions_rejected_at_authoring_entries(tmp_path, location, field):
+    doc = executive_document('kpi')
+    component = doc['manifest']['components']['total']
+    target = component if location == 'component' else component.setdefault(location, {})
+    target[field] = '需要放入指标详情的解释'
+    with pytest.raises(DashboardError) as edit_error:
+        apply_operations(doc, [{'op': 'put_component', 'id': 'total', 'value': component}])
+    assert edit_error.value.code == 'KPI_DESCRIPTION_NOT_ALLOWED'
+    with pytest.raises(DashboardError) as import_error:
+        Service(tmp_path).call('dashboard_create', {'dashboardId': 'kpi', 'document': doc})
+    assert import_error.value.code == 'KPI_DESCRIPTION_NOT_ALLOWED'
 
 
 # @wu-test type=integration | scope=KPI发现与绑定 | protects=选型返回的比较卡示例无法创建或按筛选重算

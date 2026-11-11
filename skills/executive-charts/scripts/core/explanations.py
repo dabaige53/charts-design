@@ -1,5 +1,4 @@
 # Complete 45+ McKinsey / Aviation Executive Chart & KPI Explanations Dictionary
-import json
 
 CHART_EXPLANATIONS_DATA = {
     "mc01": {
@@ -1046,7 +1045,5 @@ CHART_EXPLANATIONS_DATA = {
         }]
     }
 }
-
-EXPLANATIONS_JSON_STRING = json.dumps(CHART_EXPLANATIONS_DATA, ensure_ascii=False)
 
 CHART_EXPLANATIONS = CHART_EXPLANATIONS_DATA

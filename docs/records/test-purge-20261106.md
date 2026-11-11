@@ -236,7 +236,6 @@
 | tests/runtime/test_report.py:37 | test_old_documents_remain_valid_and_unchanged | KEEP | - | behavior | 校验旧文档修改内容 | 深拷贝验证对象内容不变 |
 | tests/runtime/test_report.py:45 | test_mode_initializes_reading_order_without_changing_grid_or_components | KEEP | - | behavior | 初始化报告改变布局组件数据 | 检查引用顺序布局数据原文档 |
 | tests/runtime/test_report.py:58 | test_canonical_source_survives_mode_switches_and_accepts_empty_report | KEEP | - | behavior | 模式切换清空改写正文 | 空正文图表正文重复切换 |
-| tests/runtime/test_report.py:67 | test_absent_report_metadata_and_legacy_empty_report_are_valid | KEEP | - | boundary | 缺元数据或空旧报告不能用 | 验证无元数据报告空blocks |
 | tests/runtime/test_report.py:75 | test_invalid_view_mode_is_rejected | KEEP | - | boundary | 非法模式通过操作导入 | 两入口参数化拒绝 |
 | tests/runtime/test_report.py:85 | test_markdown_type_and_limit | KEEP | - | boundary | 非字符串超长正文被保存 | 修改导入两入口拒绝 |
 | tests/runtime/test_report.py:94 | test_markdown_accepts_maximum_characters_and_literal_code | KEEP | - | boundary | 最大合法长度被拒或普通代码误识别 | 检查上限和代码chart内容 |

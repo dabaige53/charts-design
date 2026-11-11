@@ -1,167 +1,97 @@
-# McKinsey-Grade Executive Charts & Dashboard Suite (麦肯锡风格图表设计与高管决策看板套件)
+# Charts Design (麦肯锡风格高管决策看板与分析报告套件)
 
 ---
+
+> **当前状态（2026-11-10）**
+> 新 React 组件库和本项目 MCP 应用已建立共享构建路径。筛选器、表格及交互采用 shadcn/ui 与 TanStack Table；40 个图表定义独立维护，16 种指标卡复用同一实现。原生 HTML 生成器和旧单体页面继续下线。
+>
+> 当前支持 JSON、CSV、HTML 视图快照与独立静态网页导出。实施状态、构建命令和宿主确认边界见 [UI 整改计划](docs/ui-refactor-plan.md) 与 [组件清单](docs/ui-component-inventory.md)。
 
 文档总览见 [docs/README.md](docs/README.md)，开发与维护的按任务阅读入口见 [AGENTS.md](AGENTS.md)。
 
-## 版本与运行入口
+构建：`npm run ui:typecheck`、`npm run ui:build`、`npm run ui:package`。最后一步将应用资源交付给本项目后端；构建不会改写画布文件。设计系统资源通过 `npm run ui:package:design` 单独更新。
 
-包版本以 `package.json` 为准，Runtime 版本以 `pyproject.toml` 和 `dashboard_runtime/__init__.py` 为准。
+## 当前真实可用入口
 
-## 两条 Skills 与 MCP 生成路径
+1. **数据资产、指标口径与声明合同**：
+   - 业务数据资产：支持 SQLite 事务状态、JSON 镜像与 CSV 导入，项目根目录维护持久资产（`charts-project.json`、`dashboards/`、`data/`）。
+   - 指标口径定义规范：见 [指标定义规范](skills/executive-charts/references/metric-definitions.md) 与 [数据格式标准](skills/executive-charts/references/data_formatting_standards.md)。
+   - 图表与指标声明：保留 40 种图表规范（`skills/executive-charts/references/chart_catalog.json`）、16 种高管指标卡定义（[指标卡选型](skills/executive-charts/references/kpi-cards.md)）与 7 种构图模式（[布局模板](skills/executive-charts/references/layout_templates.md)）。
 
-- **Dashboard**：保留 [executive-charts Skill](skills/executive-charts/SKILL.md) 和原有案例；MCP 案例 `charts://examples/executive-dashboard`。
-- **分析报告**：[analytical-reports Skill](skills/analytical-reports/SKILL.md)，以认可的学术单栏版式为母稿；MCP 案例 `charts://examples/academic-report`。
+2. **CLI 积木式看板资产管理 (`charts-design dashboard`)**：
+   - 提供 `init`、`import-csv`、`inspect`、`validate`、`meta`、`add`、`table` 完整资产管理工具。
+   - 允许对筛选器、指标卡、图表声明和数据表格进行原子化组装与严格合同校验。
+   - 旧 `build` 及 HTML 检查命令（`inspect-html`、`inventory-html`、`compare-html`）已完全移除，调用会直接失败；旧 `chart`、`batch` 也已下线。
 
-MCP 可从空白文档声明数据、指标和图表，再写入包含嵌入图表的 Markdown 并渲染。调用 `generation_examples` 发现案例，`chart_declarations` 阅读声明合同，创建空白文档后，按共享流程开始编辑批次、提交修改、完成检查，再预览一次。每次 MCP 项目调用显式传入报表资产目录的绝对路径 `projectRoot`。案例数据均为合成数据，调用方必须用真实输入重写分析，不是仅导出一个母稿页面。见 [完整生成流程](docs/generation-tracks.md)。
+3. **Runtime 后端与 CLI (`charts-design-runtime`)**：
+   - 管理多项目路由、SQLite 存储、数据计算、批次修改与版本检查点。
+   - 支持 JSON 配置导出：`charts-design-runtime --root ./boards export <id> --format json --output ./export.json`。
+   - 详细接口与数据模式见 [Runtime 说明](docs/dashboard-runtime.md) 与 [项目资产与加载](docs/project-runtime.md)。
 
-## 本地个人分析报告 + Dashboard
+4. **MCP 协议服务**：
+   - 本地 stdio MCP 与自托管 HTTP 远程 MCP（Streamable HTTP + Bearer 令牌）。
+   - 提供版本化文档获取（`dashboard_get`）、原子批次修改（`dashboard_batch`）、指标计算、Markdown 报告正文维护及数据检查。批次完成时 `edit_finish` 返回 `nextAction=dashboard_preview` 与 `displayPolicy=saved-dashboard-ui`，调用方先核对保存结果，再打开已保存预览。
+   - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/self-hosted-server.md)。
 
-Runtime 提供两种独立的呈现方式，生成时确定类型：Dashboard 保留响应式网格，分析报告是一整篇 Markdown 文档，以学术论文式单栏版面阅读。像写文档一样写标题、段落、加粗、列表和引用，在需要图表的位置插入 chart 代码块，图表就会在文字之间渲染。两种模式共享组件、数据、指标口径和版本记录，不需要部署企业平台。
+5. **Seaborn 统计图后端（可选）**：
+   - 统计图后端独立于旧 UI，数据与统计计算能力继续完整支持。安装 `pip install ".[statistics]"` 后，可基于原始观测数据声明直方图、箱线图、回归散点图，输出纯图产物（SVG/PNG）供嵌入报告。
+   - 规范见 [Seaborn 后端说明](docs/seaborn-backend.md)。
 
-```bash
-npm --prefix runtime-ui install
-npm --prefix runtime-ui run build
-# 空白报告，不自动填入案例数据
-python3 -m dashboard_runtime --root ./boards init analysis --mode report --title "我的分析报告"
-# 可选：明确标记的合成数据示例
-python3 -m dashboard_runtime --root ./boards init report-demo --mode report --demo
-python3 -m dashboard_runtime --root ./boards serve --port 8765
-```
+## CLI 工作区使用 (Workspace Flow)
 
-打开 `serve` 打印的本地链接，编辑 Markdown 源文并预览。图表引用写成：
-
-````markdown
-# 我的分析报告
-
-*副标题由作者填写*
-
-**摘要：** 说明分析范围、主要观察与限制。
-
-**关键词：** 收入；描述性分析
-
-## 我的观察
-
-先写**分析与依据**，正文用[图](#fig-trend)引用下方图表。
-
-```chart
-{"componentId":"trend","caption":"月度收入变化","source":"数据来源：作者提供并核对的收入快照。"}
-```
-
-图表后继续写解读、限制和下一步。
-````
-
-源文保存在 `manifest.report.markdown`，CLI/MCP 使用 `set_report_markdown` 更新。图表 ID 必须指向已有的非文字组件；`caption`（最多 500 字符）和 `source`（最多 1,000 字符）是可选纯文字字符串，仅含 `componentId` 的旧代码块仍有效。图号按源文顺序生成，`[图](#fig-trend)` 自动显示对应图号并跳转；同一组件出现多次时，引用指向第一次出现的位置。二级章节标题自动编号，源文不必手写编号；作者、摘要、关键词及来源须由作者提供，不自动补写。保存时校验引用和 JSON，拒绝未知字段与重复键，普通代码块不会执行。分析文字由作者维护，筛选图表后需要复核文字结论。支持 JSON 保存/恢复及离线 HTML 导出，旧版段落块报告仍可读取。完整合同、CLI/MCP 源文工作流和使用边界见 [Runtime 文档](docs/dashboard-runtime.md)。
-
-## 自托管服务器：远程 MCP + 网页预览
-
-在自己的服务器上运行一个进程，同时提供 Streamable HTTP MCP（Bearer 令牌）和看板、分析报告的浏览器预览。`dashboard_preview` 会额外返回带签名、可过期、可撤销的 `previewUrl`，不支持 MCP Apps 的客户端也能把链接交给读者；`dashboard_share` 可签发只读或编辑链接。
+CLI workspace 负责将筛选器、KPI、图表和表格组织为清晰的文件资产。开发或 Agent 协作时可以逐块添加、检查和严格校验组件：
 
 ```bash
-npm --prefix runtime-ui ci && npm --prefix runtime-ui run build
-python3 -m pip install 'mcp>=1.28,<2'
-python3 -m dashboard_runtime server --workspace /data/projects --public-url https://charts.example.com --token "<随机长令牌>"
-claude mcp add --transport http charts-design https://charts.example.com/mcp --header "Authorization: Bearer <随机长令牌>"
-```
+# 1. 初始化空工作区
+charts-design dashboard init ./sales-board --title "销售经营看板" --org "经营分析部"
 
-远程调用中的 `projectRoot` 是项目名，不接受任意服务器路径。Docker、systemd 与 nginx 示例在 `deploy/`；部署、权限与边界见 [自托管服务器](docs/self-hosted-server.md)。
+# 2. 添加 KPI 指标卡定义与图表组件
+charts-design dashboard add kpi ./sales-board revenue --from ./revenue.kpi.json
+charts-design dashboard add chart ./sales-board regional-sales --from ./regional-sales.chart.json
 
-## 构图与指标卡：按问题选择，避免千篇一律
-
-- **7 种布局模板**：`executive`、`focus`、`bento`、`sidebar`、`grid3`、`narrative`、`scorecard`，一条 `apply_layout_template` 操作同时生成桌面/平板/手机布局；未指定模板时新组件按角色排列，不再全宽堆叠。见 [布局模板](skills/executive-charts/references/layout_templates.md)。
-- **16 种指标卡**：在原有 mc01–mc09 之外新增中位数极差、环形进度、迷你柱趋势、子弹目标、双期对比、指标清单、大字主指标（mc10–mc16），并给出每种卡回答的问题、字段与可绑定目标。见 [指标卡选型](skills/executive-charts/references/kpi-cards.md)。
-- **按问题选图**：`chart_recommend` 根据分析意图与数据形态排列 40 种图表，标注可筛选绑定的图形，并降低本页已用图形的排序。
-- **图表自适应**：窄卡片中自动为轴名称留出空间、截断拥挤类目、滚动过长图例；指标卡数值不再在单位中间换行。
-
-## 推荐：积木式构建 Dashboard
-
-CLI workspace 将筛选器、KPI、图表和表格拆成独立小文件。Agent 可以逐块添加、检查和验证，只在 `build` 阶段于内存中合并完整配置。
-
-```bash
-# 演示数据仅用于验证工具；业务交付时换成已确认的数据
-CHARTS_DEMO="skills/executive-charts/references/quickstart"
-python3 skills/executive-charts/scripts/dashboard_workspace.py init ./sales-board \
-  --title "销售经营看板（示例）" --org "经营分析部"
-python3 skills/executive-charts/scripts/dashboard_workspace.py add kpi ./sales-board revenue \
-  --from "$CHARTS_DEMO/revenue.kpi.json"
-python3 skills/executive-charts/scripts/dashboard_workspace.py add chart ./sales-board regional-sales \
-  --from "$CHARTS_DEMO/regional-sales.chart.json"
-python3 skills/executive-charts/scripts/dashboard_workspace.py table set ./sales-board \
-  --from "$CHARTS_DEMO/sales.table.json"
-python3 skills/executive-charts/scripts/dashboard_workspace.py add filter ./sales-board region \
+# 3. 关联筛选器与表格
+charts-design dashboard add filter ./sales-board region \
   --label "区域" --type multi-select --option 华东=华东 --option 华南=华南 \
   --field region --consumer revenue --consumer regional-sales
-python3 skills/executive-charts/scripts/dashboard_workspace.py inspect ./sales-board --json
-python3 skills/executive-charts/scripts/dashboard_workspace.py validate ./sales-board --strict --json
-python3 skills/executive-charts/scripts/dashboard_workspace.py build ./sales-board --output ./dist/sales.html
+charts-design dashboard table set ./sales-board --from ./sales.table.json
+
+# 4. 检查与严格校验资产结构
+charts-design dashboard inspect ./sales-board --json
+charts-design dashboard validate ./sales-board --strict --json
 ```
 
-脚本随 Skill 一起提供，直接由本机 `python3` 运行，无需安装 npm 包。完整命令与组件 schema 见 [`skills/executive-charts/references/dashboard-workspace.md`](skills/executive-charts/references/dashboard-workspace.md)。
+详细工作区命令与组件 schema 见 [工作区说明](skills/executive-charts/references/dashboard-workspace.md)。
 
-## 人工视觉展示 (Human Showcase)
+## 两条 Skills 生成路径
 
-`examples/` 用于人工浏览视觉效果，不是 Agent 的配置模板或源码输入。生成新看板时优先使用 CLI workspace 与图表目录元数据。
+- **Dashboard 路径**：[executive-charts Skill](skills/executive-charts/SKILL.md)，负责高管业务看板的指标拆解、图表推荐、7 种布局构图和数据建模。
+- **分析报告路径**：[analytical-reports Skill](skills/analytical-reports/SKILL.md)，负责以学术单栏规范编写分析报告，包括摘要、章节、图文交叉引用与严谨业务解读。
 
-| 看板文件 | 业务场景分类 | 核心图表与分析重点 |
-| :--- | :--- | :--- |
-| [**`examples/executive_report.html`**](examples/executive_report.html) | **# 核心研判** | 航线网络与机队效能穿透、RASK/PLF 联动、14 列表格、全局多维筛选 |
-| [**`examples/sample_executive_monthly.html`**](examples/sample_executive_monthly.html) | **# 经营月度** | 总裁级经营月度早报、时序营收走势、预算达成率子弹图、客座率散点跨度 |
-| [**`examples/sample_financial_attribution.html`**](examples/sample_financial_attribution.html) | **# 财务归因** | EBITDA 毛利归因瀑布图、收支剪刀差盈亏线、成本敏感度多因子分析 |
-| [**`examples/sample_saas_product_analytics.html`**](examples/sample_saas_product_analytics.html) | **# SaaS 产品** | 订阅漏斗全链路转化、MRR 留存热力图、NDR / LTV 单元经济学透视 |
-| [**`examples/sample_strategic_matrix_portfolio.html`**](examples/sample_strategic_matrix_portfolio.html) | **# 战略矩阵** | BCG 增长-份额战略四象限、资产组合气泡阵列、多维能力雷达对标 |
-| [**`examples/gallery.html`**](examples/gallery.html) | **# 全谱系画廊** | 已注册图表的全要素样式墙与交互示例 |
+生成流程与阶段划分见 [生成路径说明](docs/generation-tracks.md)。两条路径复用新 React 组件，通过 Runtime 导出 HTML 或打开 MCP 预览。
 
----
-
-## 本地脚本使用 (Local Scripts)
-
-Skill 内置生成脚本，使用本机 Python 直接运行。真实业务看板优先使用上面的 workspace 流程；`generate_dashboard.py` 仅保留整页 preset/config 兼容入口。
-
-```bash
-git clone https://github.com/dabaige53/charts-design.git
-cd charts-design
-
-# 生成看板
-python3 skills/executive-charts/scripts/generate_dashboard.py \
-    --preset executive_report --output ./examples/report.html --open
-
-# 生成单图表
-python3 skills/executive-charts/scripts/generate_chart.py --code t06 --output ./chart_t06.html
-```
-
-## 项目结构 (Project Architecture)
+## 项目结构
 
 ```
 charts-design/
-├── AGENTS.md                           # 按任务阅读文档的入口
-├── README.md                           # 项目用途与快速开始
-├── docs/                               # 项目规范、实现说明与历史证据
-│   ├── README.md                       # 文档总览
-│   └── agent/file-management.md         # 文件存放与维护规则
-├── bin/                                # CLI、MCP 启动与本地更新入口
-├── deploy/                             # 自托管服务器的 Docker、systemd、nginx 示例
-├── dashboard_runtime/                  # 状态、数据、查询、MCP 与共享网页模块
-│   └── examples/academic-report.md      # 分析报告案例的唯一 Markdown 母稿
-├── runtime-ui/                         # 原组件提取与前端打包
+├── AGENTS.md                           # 任务阅读入口与项目约定
+├── README.md                           # 项目当前可用入口与重构说明
+├── docs/                               # 规范、实现说明与验证记录
+│   ├── README.md                       # 文档总览与重构状态索引
+│   ├── agent/file-management.md         # 文件管理准则
+│   ├── dashboard-runtime.md            # 后端 Runtime 与状态存储说明
+│   └── testing.md                      # 测试与 CI 检查架构
+├── bin/                                # CLI 与 MCP 启动入口
+├── deploy/                             # 自托管后端容器镜像与部署配置
+├── dashboard_runtime/                  # SQLite 状态、数据计算、查询与 MCP 服务
+│   └── examples/academic-report.md      # 分析报告案例唯一 Markdown 基础稿
 ├── skills/
-│   ├── executive-charts/               # Dashboard Skill、组件、脚本与参考材料
-│   └── analytical-reports/             # 分析报告 Skill 与阅读母稿规范
-├── examples/                           # 人工浏览的看板与画廊案例
-├── tests/                              # 生成器、Runtime、协议与浏览器检查
-├── package.json                        # Node 入口、检查命令与包发布清单
-├── pyproject.toml                      # Python 依赖、版本与包配置
-├── mcp.json                            # MCP 启动配置模板
-└── .github/workflows/                  # CI 检查
+│   ├── executive-charts/               # 看板设计规范、指标卡、布局模板与 workspace 脚本
+│   └── analytical-reports/             # 分析报告 Skill 与学术规范
+├── tests/                              # 静态检查、数据与后端单元测试、容器冒烟测试
+├── package.json                        # Node CLI 入口与检查脚本
+└── pyproject.toml                      # Python 依赖与包配置
 ```
 
----
-
-## 开源协议 (License)
+## 开源协议
 
 MIT License
-
-### Seaborn 统计图（可选）
-
-安装 `pip install ".[statistics]"` 后，同一个 MCP 可声明直方图、箱线图、回归散点图，输出 SVG/PNG 并嵌入 Markdown 报告。保留 ECharts 交互图表。统计图直接读取原始观测行，显示口径、来源与缺失值计数；见 [声明合同与边界](docs/seaborn-backend.md)。
-
-动态系列、固定大小散点和可配置提示字段见 [动态图表声明与覆盖范围](docs/dynamic-encoding.md)。

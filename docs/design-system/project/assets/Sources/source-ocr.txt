@@ -1,0 +1,2610 @@
+## MDS v0.9.1
+
+## O _
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/398250e6563ba274267d56c85b0a7314bdd91c1d1fb51c04164a25028fee5cc9.jpg)
+
+
+# The McKinsey Design System
+
+version 0.9 
+
+## Release Notes
+
+<table><tr><td>Version</td><td>Release</td><td>Notes</td></tr><tr><td>v0.9.1</td><td>09.01.2020</td><td>Bug Fixes, New Components - Custom Select (styled options). Multi-select with Tags, with Checkboxes, Improved documentation for Links, Improved Pagination, Experimental Badges, Experimental Tags</td></tr><tr><td>v0.9</td><td>05.14.2020</td><td>All file reworked replacing Theinhardt for McKinseys Sans. Added Cards, Date Pickers, Page Switchers, Pagination, Menu Popups, Single and Multi Select Popups, and Tags and Badges as experimental.</td></tr><tr><td>v0.8.4</td><td>02.18.2020</td><td>Added MDS thumbnail for Core Sketch Library, reworked line heights to match 4px Grids, added minimum size for buttons (twice their own height), Electric Blue has a new value #2251FF. This was updated globally. Fixes: Fixed smart layout on several components, data tables are now working properly, created deprecated section for icons ahead of a stand alone icon library</td></tr><tr><td>v0.8.3</td><td>12.19.2019</td><td>Updated all components with Smart Layout Rules, Added danger buttons and buttons with right icons, Tooltips were adjusted/cleaned up and Typography and line heights were adjusted to work with 4pt grid (beta)</td></tr><tr><td>v0.8.2</td><td>10.23.2019</td><td>4pt Grids (Beta), Tooltips with content and CTAs, Alerts/notifications with CTAs</td></tr><tr><td>v0.8.1</td><td>09.10.2019</td><td>Added Alerts/Notifications, Form Validation, Simple Tooltips and Simple Modals</td></tr><tr><td>v0.8</td><td>07.30.2019</td><td>Color, Typography, Borders and Lines, Spacing, Grid, Icons, Script Mark. Core symbols: Avatars, Breadcrumbs, Buttons, Data Tables, Footers, Form Inputs, Headers, Links, Tabs</td></tr></table>
+
+## Color
+
+## Brand colors
+
+McKinsey Deep Blue #051C2C 
+
+$color-brand-deep-blue 
+
+McKinsey Electric Blue #2251FF 
+
+$color-brand-electric-blue 
+
+McKinsey Cyan 
+
+#00A9F4 
+
+$color-brand-cyan 
+
+## Functional colors
+
+Our functional palette is used primarily for data visualization. You can learn more by referencing https://mckinsey.ent.box.com/"le/408627955620 
+
+Blue Transition 1 #034B6F 
+
+$color-data-blue-1 
+
+Blue Transition 2 #027AB1 
+
+$color-data-blue-2 
+
+Blue Transition 3 #39BDF3 
+
+$color-data-blue-3 
+
+Blue Transition 4 
+
+#71D2F1 
+
+$color-data-blue-4 
+
+McKinsey Pale Electric Blue #AFC3FF 
+
+$color-data-pale-electric-blue 
+
+McKinsey Turquoise 
+
+#3C96B4 
+
+$color-data-turquoise 
+
+McKinsey Pale Blue 
+
+#AAE6F0 
+
+$color-data-pale-blue 
+
+McKinsey Purple 
+
+#8C5AC8 
+
+$color-data-purple 
+
+McKinsey Pink 
+
+#E6A0C8 
+
+$color-data-pink 
+
+McKinsey Red 
+
+#E5546C 
+
+McKinsey Orange 
+
+$color-data-red 
+
+#FAA082 
+
+$color-data-orange 
+
+## Neutrals colors
+
+Super Dark Gray #333333 
+
+$color-gray-80 
+
+Dark Gray #4D4D4D 
+
+$color-gray-70 
+
+Mid Gray 
+
+#757575 
+
+$color-gray-54 
+
+Light Gray #B3B3B3 
+
+$color-gray-30 
+
+Super Light Gray 
+
+#D0D0D0 
+
+Pale Gray 
+
+$color-gray-18 
+
+#E6E6E6 
+
+$color-gray-10 
+
+Super Pale Gray 
+
+#F0F0F0 
+
+$color-gray-06 
+
+Black 
+
+#000000 
+
+$color-black 
+
+White 
+
+#FFFFFF 
+
+$color-white 
+
+## Typography Desktop
+
+Desktop display headings 
+
+<table><tr><td>Style Name</td><td>Pixels</td><td>Line Height</td><td>Rems</td><td>Line Height</td></tr><tr><td>Display 1</td><td>64px</td><td>76px</td><td>4rem</td><td>1.187</td></tr><tr><td>Display 2</td><td>60px</td><td>72px</td><td>3.75rem</td><td>1.2</td></tr><tr><td>Display 3</td><td>56px</td><td>68px</td><td>3.5rem</td><td>1.214</td></tr><tr><td>Display 4</td><td>52px</td><td>64px</td><td>3.25rem</td><td>1.153</td></tr></table>
+
+
+Desktop heading styles
+
+
+<table><tr><td>Style Name</td><td>Pixels</td><td>Line Height</td><td>Rems</td><td>Line Height</td></tr><tr><td>Heading 1</td><td>44px</td><td>52px</td><td>2.75rem</td><td>1.181</td></tr><tr><td>Heading 2</td><td>40px</td><td>48px</td><td>2.5rem</td><td>1.2</td></tr><tr><td>Heading 3</td><td>36px</td><td>44px</td><td>2.25rem</td><td>1.222</td></tr><tr><td>Heading 4</td><td>32px</td><td>36px</td><td>2rem</td><td>1.125</td></tr><tr><td>Heading 5</td><td>28px</td><td>32px</td><td>1.75rem</td><td>1.142</td></tr><tr><td>Heading 6</td><td>24px</td><td>28px</td><td>1.5rem</td><td>1.166</td></tr></table>
+
+## Desktop body styles
+
+<table><tr><td>Style Name</td><td>Pixels</td><td>Line Height</td><td>Rems</td><td>Line Height</td></tr><tr><td>Article Lead</td><td>24px</td><td>36px</td><td>1.5rem</td><td>1.5</td></tr><tr><td>Article Body</td><td>20px</td><td>32px</td><td>1.25rem</td><td>1.6</td></tr><tr><td>Body Large</td><td>18px</td><td>28px</td><td>1.125rem</td><td>1.555</td></tr><tr><td>Body Default</td><td>16px</td><td>24px</td><td>1rem</td><td>1.5</td></tr><tr><td>Body Small</td><td>14px</td><td>20px</td><td>.875rem</td><td>1.428</td></tr></table>
+
+
+Mobile display headings
+
+
+## Typography Mobile
+
+<table><tr><td>Style Name</td><td>Pixels</td><td>Line Height</td><td>Rems</td><td>Line Height</td></tr><tr><td>Display 1</td><td>60px</td><td>72px</td><td>3.75rem</td><td>1.2</td></tr><tr><td>Display 2</td><td>56px</td><td>68px</td><td>3.5rem</td><td>1.214</td></tr><tr><td>Display 3</td><td>52px</td><td>60px</td><td>3.25rem</td><td>1.153</td></tr><tr><td>Display 4</td><td>48px</td><td>56px</td><td>3rem</td><td>1.166</td></tr></table>
+
+## Mobile heading styles
+
+<table><tr><td>Style Name</td><td>Pixels</td><td>Line Height</td><td>Rems</td><td>Line Height</td></tr><tr><td>Heading 1</td><td>40px</td><td>48px</td><td>2.5rem</td><td>1.2</td></tr><tr><td>Heading 2</td><td>36px</td><td>44px</td><td>2.25rem</td><td>1.111</td></tr><tr><td>Heading 3</td><td>32px</td><td>36px</td><td>2rem</td><td>1.125</td></tr><tr><td>Heading 4</td><td>28px</td><td>32px</td><td>1.75rem</td><td>1.142</td></tr><tr><td>Heading 5</td><td>24px</td><td>28px</td><td>1.5rem</td><td>1.333</td></tr><tr><td>Heading 6</td><td>20px</td><td>24px</td><td>1.25rem</td><td>1.4</td></tr></table>
+
+## Mobile body styles
+
+<table><tr><td>Style Name</td><td>Pixels</td><td>Line Height</td><td>Rems</td><td>Line Height</td></tr><tr><td>Article Lead</td><td>20px</td><td>32px</td><td>1.25rem</td><td>1.6</td></tr><tr><td>Article Body</td><td>18px</td><td>28px</td><td>1.125rem</td><td>1.555</td></tr><tr><td>Body Large</td><td>18px</td><td>28px</td><td>1.125rem</td><td>1.555</td></tr><tr><td>Body Default</td><td>16px</td><td>24px</td><td>1rem</td><td>1.5</td></tr><tr><td>Body Small</td><td>14px</td><td>20px</td><td>.875rem</td><td>1.428</td></tr></table>
+
+## Borders and Lines
+
+In Sketch, borders and lines can be distributed as shared styles. This makes working with horizontal rules consistent and easier to manage. 
+
+## Horizontal rules
+
+<table><tr><td>Sizes</td><td>Style</td><td>Color</td><td>Style Name</td><td>Example</td></tr><tr><td>1px</td><td>Solid</td><td>#E6E6E6</td><td>Light Seperator</td><td></td></tr><tr><td>1px</td><td>Solid</td><td>#B3B3B3</td><td>Medium Seperator</td><td></td></tr><tr><td>1px</td><td>Solid</td><td>#000000</td><td>Dark Seperator</td><td></td></tr></table>
+
+## Control borders
+
+<table><tr><td>Sizes</td><td>Style</td><td>Color</td><td>Style Name</td><td>Example</td></tr><tr><td>1px</td><td>Solid</td><td>#000000</td><td>Form Control Dark</td><td></td></tr><tr><td>1px</td><td>Solid</td><td>#2251FF</td><td>Form Control Focus</td><td></td></tr><tr><td>1px</td><td>Solid</td><td>#B3B3B3</td><td>Form Control Default</td><td></td></tr></table>
+
+## Elevation on MDS
+
+Elevations represent di!erent user interface layers simulated through the use of shadows. Placing di!erent elements on di!erent layers creates a clear hierarchy of interface elements and makes it easier to locate currently available options for the user. Layers are represented by various sized shadows to indicate a position along an imaginary z-axis extending above the user interface towards the user. 
+
+## Speci!cations/Anatomy
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/c92822ddb57520c6311268d2b6807f8a36917ea57462abb247492a750fdd7128.jpg)
+
+
+<table><tr><td>Component distance from surface</td><td>1° shadow</td><td>2° shadow</td></tr><tr><td>2px</td><td>Y = 2 | Blur = 4 | Spread = -1</td><td>Y = 0 | Blur = 1 | Spread = 0</td></tr><tr><td>4px</td><td>Y = 4 | Blur = 8 | Spread = -1</td><td>Y = 0 | Blur = 1 | Spread = 0</td></tr><tr><td>8px</td><td>Y = 8 | Blur = 16 | Spread = -1</td><td>Y = 0 | Blur = 1 | Spread = 0</td></tr><tr><td>16px</td><td>Y = 16 | Blur = 32 | Spread = -1</td><td>Y = 0 | Blur = 1 | Spread = 0</td></tr></table>
+
+## Look and feel
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/1e1321c6cedaf671b2b46f374246ac9f1ef7948b18f7d86fb8c30ef93ffb9845.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/514b238e23467c2cd2a66a1da3a5fc188179c4dc406327068db2bfeabe1d55bd.jpg)
+
+
+This diagram shows the di!erent layer representations stacked on top of each other as well as how di!erent components are distributed across the di!erent elevation layers. 
+
+## 0px elevation
+
+Content and common UI elements are usually placed on the surface of the page at the 0px elevation. 
+
+## 4px elevation
+
+The simplest components requiring contrast and the user's attention, such as tooltips and popovers, are placed at the 4px elevation. 
+
+## 16px elevation
+
+Components that require the most user focus like drawers, modals, and pickers are place at the upper most layer. 
+
+## 2px elevation
+
+The 2px layer elevation helps to indicate interactive components. After interaction, the component may rise to another elevation layer. 
+
+## 8px elevation
+
+More complex components and items with interactions such as navigation menus and cards in a hover state are placed at the 8px elevation. 
+
+## Spacing
+
+Spacing is one of the most important aspects of visual design and is foundational to the McKinsey Design System. Underlying every layout, component or spatial relationship is a 4pt spacing system. We use spacing consistently and intentionally to establish order, hierarchy and rhythm. 
+
+## Spacing sizes and increments
+
+All spacing helpers are percentages or multiples of 4px (0.25rem). Using 4px as a constant o!ers "exibility, clean numbers to work with, and helps improve design and accessibility when fonts are scaled in a browser. This also o!ers spacing consistency and consistent rhythm throughout the design system. 
+
+## Types of spacing
+
+Use margins and padding to create several types of spacing. See examples below for Inset spacing, Inline spacing, Stacked spacing, Spacing text, and Margins. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/e3a6d6b74b75339968c79d39c4989ec1ea12eddf34d5c7aae973030ec280edbd.jpg)
+
+
+## Spacing text
+
+Avoid measuring to the baseline of text. That creates unexpected spacing results. 
+
+Space text to the direct selection of a text box in Sketch. Line height determines text box size, so apply the correct line height to the text before making measurements. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/e5a19167c70f3bf21bac693827affb220bf8d1afc472acb8c47f1b579981527d.jpg)
+
+
+## 4pt grid system guidance
+
+The 4pt grid system is the underlying fabric that provides consistency and structure to all visual elements of McKinsey's Design System. It establishes a framework for consistently scaling and evolving the design system in a predictable and !exible way over time. All spacing, typography, and visual elements adhere to the 4pt grid system. 
+
+## Getting started
+
+The artboards you see here are setup with 4pt grid and layout settings in a variety of common sizes used for designing responsive web applications. These can be used as is or as a starting point for your projects. Typically Designers will choose three artboards representing mobile, tablet and desktop. The 4pt grid is very !exible and you are encouraged to setup your artboard to suit your needs using the grid system. 
+
+## Need the grid setup for a speci!c device?
+
+We have those too! We’ve worked to identify the most commonly used devices at the "rm and have setup artboards with all the grid and layout settings you need to get started. You can "nd these on Box at: 
+
+https://mckinsey.ent.box.com/notes/543675818181?s=zncbublu7ybq10w3rq0r96bn7vihpw3r 
+
+## Questions or comments
+
+Reach out on Slack in the #mds-community channel. 
+
+## iPhones XR, XS Max (414px wide)
+
+Apple devices do not adhere to an 8pt grid. To correct this, the canvas has been rounded 400px. This will add about 1px to each column when executed in code. 
+
+To check for design to code accuracy, Inspect screens at 400px width. 
+
+Left Rail is o! canvas and "lls viewport when activated 
+
+## iPhones XR, XS Max (414px wide)
+
+Apple devices do not adhere to an 8pt grid. To correct this, the canvas has been rounded 400px. This will add about 1px to each column when executed in code. 
+
+To check for design to code accuracy, Inspect screens at 400px width. 
+
+Both Rails are o! canvas and 
+
+"lls viewport when activated 
+
+## iPhones XR, XS Max (414px wide)
+
+Apple devices do not adhere to an 8pt grid. To correct this, the canvas has been rounded 400px. This will add about 1px to each column when executed in code. 
+
+To check for design to code accuracy, Inspect screens at 400px width. 
+
+Avoid using two rails on tablet. Instead, consider making right rail available o!-canvas. 
+
+## Script Mark
+
+Use the script mark in either its positive or inverse form. Always create high contrast between the script mark and its background. 
+
+Deep Blue 
+
+McKinsey Deep Blue is our standard for the script mark. Use it when full-color reproduction is available. 
+
+McKinsey & Company 
+
+Black 
+
+When you can't use color, use the black version of the script mark.. 
+
+McKinsey & Company 
+
+White 
+
+If you use the white version on a dark 
+
+background, use McKinsey Deep Blue 
+
+as your background. 
+
+McKinsey 
+
+& Company 
+
+## Alerts
+
+Alerts provide user feedback and messaging. There are two types of 
+
+alerts - Global Alerts and Contextual Alerts. Each have speci!c use 
+
+cases and cannot be used interchangeable. 
+
+
+Anatomy
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/67c57607f0c7510f8c3028a052fe4870829b4b2842d472165088f17f90c7d2d6.jpg)
+
+
+## Global Alerts
+
+Global alerts display system-wide messaging. They’re displayed above the header at 
+
+the very top of the screen. When buttons are not needed select the button and 
+
+choose “No Symbol” in overrride settings. 
+
+Warning global 
+
+Your account will expire in 3 days unless action is taken. Talk to our admins to help you. 
+
+Error/danger global 
+
+Secondary button Primary button 
+
+All !les that have not been saved will be lost. You can’t undo this, but you can save your !le. 
+
+Information global 
+
+You can now update your system information to v0.8.1. You can update it now. 
+
+You can now update your system information to v0.8.1. You can update it now. 
+
+Secondary button Primary button 
+
+Secondary button Primary button 
+
+Neutral global 
+
+Secondary button 
+
+## Where to use them
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/8a6a1f9efd0ee6f4e54d883e945fee24727e763affed75e1acf3627ca3556800.jpg)
+
+
+## Contextual Alerts
+
+Contextual alerts display messaging geared to a speci!c user action or state of an application. There are currently !ve alerts that can be displayed in a variety of contexts - Success, Warning, Error/Danger, Information and Neutral. These should not be used for system-wide messaging. 
+
+<table><tr><td>Your profile has been successfully updated! Always keep your information up to date.</td><td>×</td></tr><tr><td>Warning contextual</td><td></td></tr><tr><td>Your account will expire in 3 days unless action is taken. Talk to our admins to help you.</td><td>×</td></tr><tr><td>Error/danger contextual</td><td></td></tr><tr><td>All files that have not been saved will be lost. You can&#x27;t undo this, but you can save your file.</td><td>×</td></tr><tr><td>Information contextual</td><td></td></tr><tr><td>You can now update your system information to v0.8.1. You can update it now.</td><td>×</td></tr><tr><td>Neutral contextual</td><td></td></tr><tr><td>You can now update your system information to v0.8.1. You can update it now.</td><td>×</td></tr></table>
+
+
+Where to use them
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/bd2250dbd807d118540daab3b2698b7487974cd71bf630146a7e4d502587b1e8.jpg)
+
+
+## Sizes
+
+Global alerts display system-wide messaging. They’re displayed above the header at the very top of the screen. 
+
+## Desktop (1440px) - Success global
+
+Your pro!le has been successfully updated! Always keep your information up to date. 
+
+Tablet (768px) - Success globa 
+
+Your pro!le has been successfully updated! Always keep your information up to date. 
+
+Secondary button 
+
+Mobile (414px) - Success global 
+
+72px font size 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/38a34a985f92e657472fa8aed485e18b08fb7a48e654ddad7da99cd6b26a2f26.jpg)
+
+
+## Avatars
+
+Avatars display a user’s pro!le image. In our case, we encapsulate the photo in a circle. You may !nd these commonly used as a pro!le image in the top right of a header, on a pro!le card, in text messages, and many other contexts. 
+
+## Avatar sizes
+
+Avatar size depends on the element where it lives. For example, use Huge (256px) for big components like pro!le cards. On small components like a dashboard, it’s more appropriate to use the extra small (32px). Notice, the smaller the circle gets, the more zoom you need on the photo to recognize the person. 
+
+Extra Small (32px) 
+
+Small (48px) 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/80cc842df45a6ce571096788a2ba5d36ced2bd816faaa66c66952cb42e32913c.jpg)
+
+
+Medium (64px) 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6b4a83aa479aa9b75c95913d53b6f2848c5d981f1ae511def515f064d9b57ab0.jpg)
+
+
+
+Large (96px)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/0edd959d3c647cf91e2221b2ff7f861617dbeb36a5e5523bf54fbdd1f0146f01.jpg)
+
+
+
+Extra Large (128px)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/a0a23de6265027b8450489015a679ab623b069d5c0490e435c5633d38cfe5841.jpg)
+
+
+
+Huge (200px)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/651621f09e23cecc5bf3659ebd4fbc8030f43937d9d5406b071150b3924c1096.jpg)
+
+
+## Avatar styles
+
+Avatars have three styles, depending on what information the colleague provides. 
+
+
+No Name, No Photo
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/370cf68806d4de72673468a08c604fb76c0ca7bfab85e754647cefe048518f20.jpg)
+
+
+
+Full Name, No Photo
+
+
+DS 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/bc77a27d4b2b50f795ab38727cda24a036e9d3f38d01db6cbb49823813cfbde5.jpg)
+
+
+
+With Photo
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/a408bb9011851eaa57ee3e185678a2ae8785970b97092ac684541ef8f54a635b.jpg)
+
+
+## Font size
+
+When you use an avatar with initials only, match the font to the avatar size to make it readable. 
+
+Extra Small (32px avatar) 
+
+Small (48px avatar) 
+
+
+Medium (64px avatar)
+
+
+
+Large (96px avatar)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/ba94450079cbdb71465008a47f587a29b5f37e4a90140942ed33dd81565d0aad.jpg)
+
+
+
+16px font size
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/1f3af8facd976e2669f6ae679599c7b86e48910d8df8ad6e95d66ce9cb9d347a.jpg)
+
+
+
+20px font size
+
+
+DS 
+
+24px font size 
+
+
+36px font size
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/24dd46f7d28b58fde940754253bf88457692d71a4cf7951894fdd6b5ab5ceb07.jpg)
+
+
+
+Extra Large (128px avatar)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/dd931c5883a1470d1eee7bc5a2caa56befeec9ea4de74dd63ffe8867c30f0157.jpg)
+
+
+
+Huge (200px avatar)
+
+
+
+48px font size
+
+
+DS 
+
+## Breadcrumbs
+
+Breadcrumbs are used to help the users keep track and maintain awareness of the overall locations within a speci!c navigation that the user is currently in. A breadcrumb must have the minimum size of 2 items and the maximum of 5 items, so that it’s easier for the user to use it. 
+
+## Anatomy
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/bd4d090477dc13f4093f96dfbecd8a87519e292818f6f3ff1584ca8bf9e7e1b4.jpg)
+
+
+## Breadcrumbs options
+
+The last item on the breadcrumb is always where the user is currently on the overall navigation, so it uses the electric blue to di"erentiate from the others. 
+
+<table><tr><td>2 items</td><td>Item 1 &gt; Active item</td></tr><tr><td>3 items</td><td>Item 1 &gt; Item 2 &gt; Active item</td></tr><tr><td>4 items</td><td>Item 1 &gt; Item 2 &gt; Item 3 &gt; Active item</td></tr><tr><td>5 items</td><td>Item 1 &gt; Item 2 &gt; Item 3 &gt; Item 4 &gt; Active item</td></tr><tr><td>Active item</td><td>Item 1 &gt; Item 2 &gt; Item 3 &gt; Item 4 &gt; Active item</td></tr></table>
+
+If a breadcrumb needs more than 5 levels of navigation, our recommendation is to simply use the 16px glyphed icon ellipsis to indicate that there is more hidden within it. Once the user clicks on it, a popup menu will appear, providing all the navigation levels that are compressed. The best and appropriate place to put the ellipsis is replacing the second item on the breadcrumb. By doing so the !rst level is always visible, keeping the reference where iit all started, and we keep the last 3 levels, where the user is mostly likely to use to navigate. 
+
+<table><tr><td>Item 1 &gt; *** &gt; Item 5 &gt; Item 6 &gt; Active item</td><td>Item 1 &gt; ••• &gt; Item 5 &gt; Item 6 &gt; Active item</td></tr><tr><td></td><td>Item 2</td></tr><tr><td></td><td>Item 3</td></tr><tr><td></td><td>Item 4</td></tr></table>
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/ce10c45c21968bb1f54ca1243b6e439d63bb1e68217de35ff7ef463d51c6db9f.jpg)
+
+
+
+Primary dropdown small button
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/1101c546c6cfcd043a8f5e7b11f22ee074c8b251b322d65606fadf2db653379e.jpg)
+
+
+## Button Guidelines
+
+## Button Specs
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/998233d5314cfcf52af1aa00ea1b75a29a10f5ce3436a3f3d1f610ed9dcc5461.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6c593cc6ab7a752ab8834f6a53f223c81d411fe50290d60e884528ab0de64e88.jpg)
+
+
+## Button styles and hierarchy
+
+Primary, secondary and tertiary buttons provide interaction hierarchy. They’re designed to maintain priority across all states. Contrast progressively increases as users get closer to completing the interaction. The alternative high-contrast primary button is only used in certain scenarios. See usage below. 
+
+## Usage
+
+## Primary
+
+Primary buttons are used for drawing attention to the most important interactions. When possible limit primary buttons to one per page. 
+
+Secondary buttons are less prominent and are meant to draw attention without being distracting. They pair with primary and tertiary buttons. 
+
+## Tertiary
+
+Tertiary buttons are our most subtle and lowest priority buttons. They are particularly useful for error prevention such as Cancel, Back and Edit. 
+
+## Primary high contrast
+
+Primary high contrast buttons are used as an alternative to our Electric Blue buttons. These are used exclusively for high impact customer facing designs. 
+
+## Accessibility
+
+All buttons need to adhere to WCAG AA 2.0 guidelines a contrast ratio: 4.5 must be met. In additon to contrast ratio focus states are important for acessibility. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/8f18481a8bdae09c17b305afd7d62114ece5ff06dc617cabcd04249d2398b909.jpg)
+
+
+## Button groups
+
+Need to maintain visual hierarchy. The order and position need to be carefully consider. Primary actions almost always appear on the right. 
+
+## Fluid buttons
+
+Fluid buttons span a percentage of the of their container. Fluid buttons have a max-width of 575px constraining usage to mobile and in containers 575px or smaller like a modal. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/7c2b3d4ff458431e7b0e2ac8ab5845e493613045b8fa69df1084964b2504e82e.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/c84d697f4ab1bb4aee08aa685744edb8f73e9bc2c6c69aebe0a87c1fc26641f0.jpg)
+
+
+## Button background do’s
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/619e65ab298a06ab9606058d15123c0ed15cc5eb524a5ff5c59c684788b47de4.jpg)
+
+
+## Button background dont’s
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/f7383165c3794cdebe0bab8db3e0ef26235684590480b2736552260e59d88f77.jpg)
+
+
+
+Button Styles and States
+
+
+## Button Styles, States and Sizes
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/4ac12ad244b4d7c27f6db32c1e0ee6b7931ed7162191432bfb0c470cf441be13.jpg)
+
+
+Every button comes in large, medium and small sizes. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/b518b1051b4b21ceae25562b3db8dc9c6b84311aad17b0fe9185742a98cb4879.jpg)
+
+
+## Button Guidelines on Dark
+
+## Button styles and hierarchy
+
+Primary, secondary, and tertiary buttons provide interaction hierarchy. They’re designed to maintain priority across all states. Contrast progressively increases as users get closer to completing the interaction. 
+
+default 
+
+Primary button 
+
+Secondary button 
+
+Tertiary button 
+
+High contrast button 
+
+:hover 
+
+Primary button 
+
+Secondary button 
+
+Tertiary button 
+
+High contrast button 
+
+:active 
+
+Primary button 
+
+Secondary button 
+
+Tertiary button 
+
+High contrast button 
+
+<table><tr><td></td><td>Primary button</td><td>Secondary button</td><td>Tertiary button</td><td>Disabled button</td></tr><tr><td>Text Color</td><td>#333333</td><td>#FFFFFF</td><td>#7F7F7F</td><td>#4D4D4D</td></tr><tr><td>Background</td><td>#FFFFFF</td><td>Transparent</td><td>Transparent</td><td>7F7F7F</td></tr><tr><td>Border Color</td><td>None</td><td>#FFFFFF</td><td>#7F7F7F</td><td>None</td></tr><tr><td>Contrast on Deep Blue</td><td>AA: 17.37</td><td>AA: 17.37</td><td>AA: 4.33</td><td>N/A</td></tr><tr><td>Contrast on Black</td><td>AA: 21</td><td>AA: 21</td><td>AA: 5.24</td><td>N/A</td></tr></table>
+
+## Accessibility
+
+All buttons need to adhere to WCAG AA 2.0 guidelines A contrast ratio: 4.5 must be met. In additon to contrast ratio focus states important for acessibility. 
+
+## Button groups
+
+Need to maintain visual hierarchy. The order and position need to be carefully consider. Primary actions almost always appear on the right. 
+
+12px 
+
+Learn More 
+
+Sign Up 
+
+Cancel 
+
+Submit 
+
+Back 
+
+## Fluid buttons
+
+Fluid buttons span a percentage of the of their container. Fluid buttons have a max-width of 
+
+575px constraining usage to mobile and in containers 575px or smaller like a modal. 
+
+100% width on iPhone XR (414px): 
+
+1/2 on iPhone XR (414px): 
+
+Primary button 
+
+Check Out 
+
+## Button Styles, States, and Sizes on Dark
+
+## Primary buttons
+
+Small size 
+
+default 
+
+Default size 
+
+Primary Button 
+
+Primary button 
+
+Large size 
+
+:hover 
+
+Primary Button 
+
+Primary button 
+
+Primary button 
+
+Primary button 
+
+:active 
+
+Primary Button 
+
+Primary button 
+
+:disabled 
+
+Disabled button 
+
+Primary button 
+
+Disabled button 
+
+Disabled button 
+
+## Secondary buttons
+
+Small size 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/0d4a7b9b3d3758c3d3eda0d1d475453d3bb120b61df1651bd7380bd164588b1b.jpg)
+
+
+default 
+
+Secondary button 
+
+Secondary button 
+
+Secondary button 
+
+:hover 
+
+Secondary button 
+
+Secondary button 
+
+Secondary button 
+
+:active 
+
+## Large size
+
+Secondary button 
+
+Secondary button 
+
+Disabled button 
+
+:disabled 
+
+Secondary button 
+
+Disabled button 
+
+## Tertiary buttons
+
+Small size 
+
+Default size 
+
+default 
+
+Tertiary button 
+
+Tertiary button 
+
+Tertiary button 
+
+:hover 
+
+Tertiary button 
+
+Tertiary button 
+
+:active 
+
+Tertiary button 
+
+Tertiary button 
+
+## Large size
+
+Tertiary button 
+
+Disabled button 
+
+:disabled 
+
+Disabled button 
+
+Tertiary button 
+
+Disabled button 
+
+## Primary buttons with icons
+
+Small size 
+
+Default size 
+
+default 
+
+Primary button 
+
+Primary button 
+
+## Large size
+
+Primary button 
+
+:hover 
+
+Primary button 
+
+Primary button 
+
+Primary button 
+
+:active 
+
+Primary button 
+
+:disabled 
+
+Primary button 
+
+Disabled button 
+
+Disabled button 
+
+Primary button 
+
+Disabled button 
+
+## Secondary buttons with icons
+
+Small size 
+
+Default size 
+
+default 
+
+Secondary button 
+
+## Large size
+
+Secondary button 
+
+Secondary button 
+
+:hover 
+
+Secondary button 
+
+Secondary button 
+
+Secondary button 
+
+:active 
+
+Secondary button 
+
+Secondary button 
+
+Secondary button 
+
+:disabled 
+
+Disabled button 
+
+Disabled button 
+
+Disabled button 
+
+## Tertiary buttons with icons
+
+Small size 
+
+Default size 
+
+## Large size
+
+default 
+
+Tertiary button 
+
+Tertiary button 
+
+Tertiary button 
+
+:hover 
+
+Tertiary button 
+
+Tertiary button 
+
+Tertiary button 
+
+:active 
+
+Tertiary button 
+
+Tertiary button 
+
+Tertiary button 
+
+:disabled 
+
+Disabled button 
+
+Disabled button 
+
+Disabled button 
+
+## Cards
+
+A card component creates a structure that contains di!erent pieces of information. Cards are used to feature content and are usually placed at an elevation of 2px to highlight their interactivity. Depending on the speci"c needs of the card and the content the either the entire card or individual components may be active areas. When the whole card has a single 
+
+Cards are used to group information about a speci"c subject. Two common examples include a pro"le with a lot of information about the featured company/person or an article with a pertinent illustration/photo, eyebrow text, and introductory text. Another very common use of cards are in dashboards, where each card my have a di!erent content and size, with all cards adjusted for their speci"c content. In this usage the cards adapt to a very #exible layout to provide structure and focus to a lot of di!erent information. 
+
+The expected behavior upon interacting with a card is to navigate to another page with more extensive content related to the content that was summarized and featured on the selected card. 
+
+## Speci!cations/Anatomy
+
+The card is a flexible container component with content that will vary depending on individual use cases. Each part of the card shown below - from the Image all the way down to the Call to action - are optional. The main card content may be replaced by other non-text components such as a chart for a graphical dashboard requirement, but the pattern shown below should meet most text based content presentation needs. Use this component as the initial starting point when creating cards and simplify the card by removing unneeded items. 
+
+24px 4px 4px 8px 8px minimum 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/e5da26cc7698117a54bad677d9be2df5f8e4e40e98621c583ff42e944e753c3a.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/7edc5a8f0c332cbe545e90340e4aa9975d87a3fc9480e870598e57ec736d0165.jpg)
+
+
+
+Eyebrow Card title Card content 103 103 Go to the details
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/08ce665dd8f7ae471c77f293efd425577ef5dc9bcb985903a490a809626dd147.jpg)
+
+
+
+Eyebrow Card title Card content
+
+
+## Minimum and maximum text sizes
+
+To keep cards consistent with each other and to have good visual proportions, the minimum, maximum, and recommended lines of text are de"ned for the card titles and texts. For titles the minimum is 1 line and the maximum is 3 lines with a recommendation for 2 lines of text. For the card's main content the minimum is 2 lines and the maximum 5 lines with a recommendation of either 3 or 4 lines of text.The main text for a card should be a short summary, general idea, or introductory text that informs and guides the user to the detailed content. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/4fa4838cf261d6adcb8d85120a917ab8e69fdd0d2dab17d63fc851949b009c9a.jpg)
+
+
+The business value of design How do the best design performances increase all their revenues and shareholder returns at nearly twice the rate it originally started? 103 103 Go to the details 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/2b9d19be1b01d786a218e520ca27711e2346bef304b0b1f8a4d807ce0fff2a7d.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/1b8a1b507b8377b1a187cd6385d55210e25f71666dab4bfd1e978cda63dda35b.jpg)
+
+
+
+Article The value of design October 2018 - How do the best design performances. 103 103 Go to the details
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/8babc8dcb1e38033623a5d64e3e2a31997673f357b3de38ada8328eb8251aefc.jpg)
+
+
+## Matching cards
+
+Although card dimensions may vary a lot depending on the content they have, the general rule is to match the size of other nearby cards - for example, matching the height and width of cards in the same row and column. This will reinforce a grid structure and help the user identify and categorize the content into imaginary boxes for quick scanning and focus. The 16px spacing between the call to action and the penultimate content should be considered the minimum and allowed to vary depending on the height of the card as dictated by other nearby cards and the height of the card's content. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/75a02a3a3921a909ca9dfc80e9cebf07ef110cc1034fec543debfe74286aafc7.jpg)
+
+
+The business value of design How do the best design performances increase all their revenues and shareholder returns at nearly twice the rate it originally started? 103 103 Go to the details 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/7dfa4e0da21b12289084771218d2c0ff202875589cf297b706d956bc3fc2973f.jpg)
+
+
+
+Article The robo-doctor will see you now How our team helped design a surgical tool called Dexter. 103 103
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/b83d76c010e956499b05005b4f1274fe1e7682bd728df457cfecee75a4f7dbe3.jpg)
+
+
+Article Spoil alert: "Survivor" Head over to slack to see how EM Shophie Clark and alum Yul Kwon are. 103 103 Go to the details 
+
+## Styles and Variations
+
+Three standard image aspect ratios are recommended for use in cards: 16:9 rectangular images, 4:3 rectangular images, and 1:1 square images. The 16:9 image option is used to compliment the card text while the 1:1 image option is used to spotlight the card. The 4:3 option is a balanced compromise between complimenting and spotlighting the card. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/ff53f0dea9c769f00b27e80930f8910759e2fef69a16b6169a78bdeeca951a19.jpg)
+
+
+The business value of design How do the best design performances increase all their revenues and shareholder returns at nearly twice the rate it originally started? 103 103 Go to the details 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/dbfa3a7f677df0ad183b377b57660757987f5657a810c3fb0320067d5e1a6f37.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/131273138a2426b0f754e7f6dc1869101a025e4fe5cb3843cf5116964b47767d.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/356c9981618b6672582f61e230b6f13e531b55f10c9829845348c6f5478ee6d4.jpg)
+
+
+Article The business value of design How do the best design performances increase all their revenues and shareholder returns at nearly twice the rate it originally started? 103 103 Go to the details 
+
+
+Vertical / Horizontal
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/5b24b408191b67da0298b8d9d817272f099d70e9e478abf4230e0432877ee559.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/5de17f3852b748a6b36b1b13f30d28c59018bc4d0945365ae2c6b02b926d53f0.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/766471c45028502c112eec33b3b64b4d886fd4c19a912ee6e64139b2729f1ab0.jpg)
+
+
+## Normal / Flushed
+
+A #ushed version of the card without elevation can be used within a more immersive context. For example, within an article if a new speci"c topic needs to be introduced parallel to the current one, a single #ushed card could be used. When using the #ushed version, the call to action on the bottom of the card must be aligned to the left of the card. This prevents the a link pointing to any surrounding text - see the in context example below. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/c13c57895b229b7457605f9627001df46df29c31e2344f32337403949683ff00.jpg)
+
+
+Eyebrow Card title Card content 103 103 Go to the details 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/d4718fdd88c51edc72ce9703cf171c06a6104f6e9dce85af3be2a24a39d47940.jpg)
+
+
+Eyebrow Card title Card content 103 103 Go to the details 
+
+production, or for sectors like tourism, as well as through the use of new technologies and approaches to manage risk in a changing climate. One of the biggest challenges could stem from using the wrong models to quantify risk. These range from "nancial models used to make capital allocation decisions to engineering models used to design structures. For example, current models may not su$ciently take into account geospatial dimensions or assumptions could be based on historical precedent that no longer applies. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/0242d7919cc622d8b5afbb5c712c103cd5d668f7a3ebbc21e95cfa45162fe579.jpg)
+
+
+Societies have been adapting to the changing climate, but the pace and scale of adaptation will likely need to increase signi"cantly. Key adaptation reducing exposure, and ensuring that appropriate "nancing and insurance are in place. Implementing adaptation measures could be challenging for many reasons. The economics of adaptation could worsen in some geographies over time, for example, those exposed to rising sea levels. Adaptation may face technical or other limits. In other instances, there could be hard trade-o!s that need to be assessed, including who and what to protect and who and what to relocate. 
+
+Card title Card content 103 103 
+
+While adaptation is now urgent and there are many adaptation opportunities, climate science shows us that the risk from further warming can only be stopped by achieving zero net greenhouse gas emissions. Decarbonization is not the focus of this research, however, 
+
+with adaptation investments, particularly in the transition to renewable energy. Stakeholders should consider assessing their decarbonization potential and opportunities from decarbonization. 
+
+<table><tr><td>Even row</td><td>Odd row</td></tr><tr><td>Row</td><td>Row</td></tr></table>
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/9d9c16e1a5388ce5a7c08184f40cf04bfa51241257ae5e87c9b6d71d2ac83edd.jpg)
+
+
+## Data Tables
+
+Data tables are composed of multiple rows and columns. A header row at the top lists column names, and all subsequent rows contain data. Data tables must include a minimum of three columns. 
+
+## Header
+
+There are two stylings of header rows that can be used on a data table. The !rst one (Light) uses the Pale Gray as the background color (#E6E6E6) and has less contrast on a white background. The other option (Dark) uses the McKinsey Deep Blue as the (#051C2C) background color of the header. Both the header and the content rows have 48px height. On the Light version, the default font color is the Super Dark Gray (#333333), and on hover and active the McKinsey Electric Blue (#2251FF) takes over. On the Dark version, the default color is white, and the hover and active color is the McKinsey Cyan (#00A9F4). 
+
+## Light | Left align
+
+## Light | Left align + icon
+
+To be used when there is any kind of order to be displayed. 
+
+## Light | Right align
+
+The Right align is commonly used for information such as date an 
+
+## Light | Right align + icon
+
+The Right align is commonly used for information such as date and currencies and the need to have any kind of order to it 
+
+## Dark | Left align
+
+## Dark | Right align Rig
+
+The Right align is commonly used for information such 
+
+## Dark | Right align + icon
+
+## Row
+
+The rows are made to capture the content related to the Header column in which they are right below. The main purpose is to provide data in a way that is easy for the user to see it. On interactive tables, we can use only white rows, but for a better reading of the content on non-interactive tables, the suggestion is to use Even rows as white and Odd rows as light gray to keep track of the information. 
+
+## Left align
+
+<table><tr><td colspan="5">Even row</td><td>Odd row</td><td></td></tr><tr><td></td><td>Row</td><td></td><td>48px</td><td>Row</td><td><eq>\leftrightarrow</eq></td><td>Row</td></tr></table>
+
+## Icon + left align
+
+To use when there is something descriptive that visually adds to the content. 
+
+<table><tr><td colspan="2">Even row</td><td colspan="2">Odd row</td></tr><tr><td></td><td>User 312</td><td>48px</td><td>User 312</td></tr></table>
+
+## Left align + icon
+
+Use when there is more information to given, e.g an icon with a menu for print, save or export. 
+
+<table><tr><td colspan="2">Even row</td><td colspan="2">Odd row</td></tr><tr><td>Row</td><td>***</td><td>Row</td><td>***</td></tr><tr><td>16px</td><td>48px</td><td></td><td></td></tr><tr><td>15px</td><td></td><td></td><td></td></tr></table>
+
+## Right align
+
+Mainly used for content such as currencies and dates. 
+
+## Icon
+
+<table><tr><td colspan="2">Icon</td><td colspan="2">Checkbox</td></tr><tr><td colspan="2">To use when there is an extra information, e.g an expand icon to open a drawer with more rows.</td><td colspan="2">If users need to interact with data, a Checkbox should accompany each row. Checkboxes allow users to perform an action on multiple items at once.</td></tr><tr><td>Even row</td><td>Odd row</td><td>Even row</td><td>Odd row</td></tr><tr><td>...</td><td>...</td><td>□</td><td>□</td></tr></table>
+
+## Interactive Tables
+
+
+Light header
+
+
+<table><tr><td>Site</td><td>East</td><td>North</td><td>Elevation</td><td>Company</td><td colspan="2">Date</td></tr><tr><td>AA0105</td><td>75563258.25</td><td>6583920.25</td><td>180.08</td><td>Tropicana Products LTDA</td><td>5 Mar 2019</td><td>***</td></tr><tr><td>CU2975</td><td>75563258.25</td><td>6583920.25</td><td>140.08</td><td>Aloha Air Cargo</td><td>5 Mar 2019</td><td>***</td></tr><tr><td>6G8509</td><td>6583920.25</td><td>75563258.25</td><td>173.08</td><td>Kaiser Aluminium and Metal Storage</td><td>5 Mar 2019</td><td>***</td></tr><tr><td>HH7463</td><td>6583920.25</td><td>75563258.25</td><td>129.08</td><td>Dickies</td><td>5 Mar 2019</td><td>***</td></tr></table>
+
+
+Dark header
+
+
+<table><tr><td>CC</td><td>Client</td><td>Due Date</td><td>Cur</td><td colspan="2">Expenses</td></tr><tr><td>EF7563</td><td>Tropicana Products LTDA</td><td>5 Mar 2019</td><td>EUR</td><td>230,000</td><td>***</td></tr><tr><td>CU2975</td><td>Aloha Air Cargo</td><td>5 Mar 2019</td><td>EUR</td><td>253,000</td><td>***</td></tr><tr><td>GB8509</td><td>Kaiser Aluminium and Metal Storage</td><td>5 Mar 2019</td><td>EUR</td><td>230,000</td><td>***</td></tr><tr><td>HH7463</td><td>Dickies</td><td>5 Mar 2019</td><td>EUR</td><td>230,000</td><td>***</td></tr></table>
+
+## Hover on tables
+
+When you got your mouse over your table, the speci!c row that you are over has a distinct way to show it’s being selected. 
+
+<table><tr><td></td><td>CC</td><td>Client</td><td>Due Date</td><td>Cur</td><td colspan="2">Expenses</td></tr><tr><td></td><td>EF7663</td><td>Tropicana Products LTDA</td><td>5 Mar 2019</td><td>EUR</td><td>230,000</td><td>***</td></tr><tr><td></td><td>CU2975</td><td>Aloha Air Cargo</td><td>5 Mar 2019</td><td>EUR</td><td>253,000</td><td>***</td></tr><tr><td></td><td>GG8509</td><td>Kaiser Aluminium and Metal Storage</td><td>5 Mar 2019</td><td>EUR</td><td>230,000</td><td>***</td></tr><tr><td></td><td>HH7463</td><td>Dickies</td><td>5 Mar 2019</td><td>EUR</td><td>230,000</td><td>***</td></tr></table>
+
+## Non-interactive tables
+
+<table><tr><td>Site</td><td>East</td><td>North</td><td>Elevation</td><td>Company</td><td>Date</td></tr><tr><td>AA0105</td><td>75553258.25</td><td>6583920.25</td><td>180.08</td><td>Tropicana Products LTDA</td><td>5 Mar 2019</td></tr><tr><td>CU2975</td><td>75553258.25</td><td>6583920.25</td><td>140.08</td><td>Aloha Air Cargo</td><td>5 Mar 2019</td></tr><tr><td>GG8509</td><td>6583920.25</td><td>75553258.25</td><td>173.08</td><td>Kaiser Aluminium and Metal Storage</td><td>5 Mar 2019</td></tr><tr><td>HH7463</td><td>6583920.25</td><td>75553258.25</td><td>129.08</td><td>Dickies</td><td>5 Mar 2019</td></tr></table>
+
+## Footers
+
+## Footer options
+
+There are some di!erent versions of the footer available depending on the necessity of the design. When there is a need for more information, such as disclosure, subscribe and navigation, the large and default versions are more suitable as they got a lot of options and itens. When the purpose is to be more discrete and only identify, a common case in products, the condensed version is probably the best option. The icons within the links are always optional, and the copyright text is needed only for external facing products/pages. 
+
+## Desktop footers
+
+Spacing on footer 
+
+McKinsey & Company 
+
+112px 
+
+Link component 
+
+McKinsey Insights - Get our latest thinking on your iPhone, iPad, or Android device. 
+
+Large footer 
+
+## McKinsey
+
+& Company 
+
+Link component 
+
+Link component 
+
+McKinsey Insights - Get our latest thinking on your iPhone, iPad, or Android device. 
+
+Default footer 
+
+## McKinsey
+
+& Company 
+
+Condensed footer 
+
+McKinsey & Company © 1996-2020 McKinsey & Company 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/34d7e3dee7d0b722ae9106dbeea8198f57159e9c9ab3384c0af39f7b34aab51f.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/bef5a8f753ad421a9cc0e941d0b55ec4f41bf0a52ff21cfce6db73ecb46c5303.jpg)
+
+
+Contact us 
+
+© 1996-2020 McKinsey & Company 
+
+Send us feedback 
+
+## Tablet footers
+
+Large footer 
+
+McKinsey & Company 
+
+Link component Link component 
+
+McKinsey Insights - Get our latest thinking on your iPhone, iPad, or Android device. 
+
+© 1996-2020 McKinsey & Company 
+
+Default footer 
+
+McKinsey & Company 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/38019cb6d7f8ff2b20be563671c47e76c34b71773cf021f15632265fdd1c0306.jpg)
+
+
+FAQ 
+
+Site map 
+
+Contact us 
+
+© 1996-2020 McKinsey & Company 
+
+## Condensed footer
+
+McKinsey & Company 
+
+Send us feedback 
+
+## Mobile footers
+
+Large footer 
+
+McKinsey & Company 
+
+Default footer 
+
+McKinsey & Company 
+
+FAQ 
+
+Link component 
+
+Send us feedback 
+
+Link component 
+
+Link component 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/659054832e06f1b58000708c565f312e226842e80ceea71e2ef632b85bf8f10b.jpg)
+
+
+Contact us 
+
+© 1996-2020 McKinsey & Company 
+
+McKinsey Insights - Get our latest thinking on your iPhone, iPad, or Android device. 
+
+Site map 
+
+© 1996-2020 McKinsey & Company 
+
+## Condensed footer
+
+McKinsey & Company 
+
+Send us feedback 
+
+## Date Picker
+
+The date picker component allows selection of a singular date or a range of dates. When used within a form, the component is usually not visible when the form !rst loads and appears after the user clicks on a date or date range input !eld. The user then selects a speci!c date instead of inputing the information with the keyboard. The expanded date picker provides additional information on date restrictions and eliminates confusion between international date format variations by spelling out or abbreviating the month and including a four digit year. 
+
+## Speci!cations/Anatomy
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/b71a392286eb882b9c647a329cec16b1bee2e06a4edc5ee63231388853ba0004.jpg)
+
+
+## Styles and variations
+
+Active days on the current month calendar are indicated by more contrast while days outside the active range and on other months are indicated with a subtle gray. The current day is surrounded by a gray square to make sure the user can di"erentiate it from a selected day. When selecting a date range, the !rst and last selected days will have electric blue backgrounds and a white medium font while the days within the range will have a softer blue background. 
+
+Month days 
+
+1 
+
+Today 
+
+Common day of the current month being displayed. 
+
+The current date 
+
+Selected days 
+
+In range days 
+
+The !rst and second day selected by the user to create a range of days. 
+
+1 
+
+Past days 
+
+A day that has passed in the calendar. 
+
+Hover 
+
+Mouse hover. 
+
+All the days between the !rst and last selected days of a date range. 
+
+Today hover 
+
+The current date hovered. 
+
+1 
+
+Selected days hover 
+
+The !rst and second day selected by the user to create a range of days hovered. 
+
+In range days hover 
+
+All the days between the !rst and last selected days of a date range hovered. 
+
+## Date picker selector
+
+To open the date picker click on the date pick selector which is represented by a calendar icon on the right corner of the input !eld. The calendar icon signals the di"erence between a common input !eld and a date picker !eld. The date picker can be used to select a speci!c date or a date range. 
+
+Label name 
+
+DD MMM YYYY 
+
+Label name 
+
+DD MMM YYYY DD MMM YYYY 
+
+白
+
+## Date convention
+
+In order to keep the date consistent and easy to interpret across locals, an intuitive and easy to read date format has been selected. Dates will always be display with the day (DD) , followed by the !rst three letters of the month name (Mmm), and then the four digit year (YYYY). 
+
+Label name 
+
+27 Feb 2020 
+
+白
+
+## Styles and variations
+
+There are four states in which the input !eld can appear and 3 di"erent sizes to match the sizes of the standard input !elds and buttons. 
+
+States 
+
+DD MMM YYYY 
+
+Default 
+
+DD MMM YYYY 
+
+Dark Default 
+
+日
+
+Label name 
+
+DD MMM YYYY DD MMM YYYY 
+
+Selected 
+
+白
+
+Label name 
+
+Disabled 
+
+DD MMM YYYY 
+
+Sizes 
+
+Label name 
+
+DD MMM YYYY 
+
+Small 
+
+DD MMM YYYY 
+
+Label name 
+
+Medium 
+
+白
+
+Label name 
+
+Large 
+
+## Step by step
+
+Label name 
+
+Label name 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/7b1c801f542593dd738751948369a00f922317c4d1b2592041a844cdab6d4c02.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/d5424946e100d44f1a7fe9702332f9fdcb1a0e0e3457b6a78d90b8007ee3cb59.jpg)
+
+
+Label name 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/428f30f05346b7785e06c0731f58c407b7b06209c4cdedf5f9b1e885d6796339.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/caa1de58299c70c4051129ed2263b9c7aeb998bc5f718336048418ef22617d31.jpg)
+
+
+Label name 
+
+19 Mar 2020 22 Mar 2020 
+
+白
+
+## Text Inputs
+
+Text Inputs are interactive controls that allow users to enter a single line of text. There are a number of options and states to choose from depending on your needs. Though there are circumstances where a label might not be required, placeholder text should not be used in place of a label. 
+
+## 01. Default text input
+
+This is the default size and can be used in a broad set of contexts. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/b6935545fc84115ef6f00eb3143796f3c6340dc700c501d082bda9df0afc8014.jpg)
+
+
+## 02. Small text input
+
+Small text inputs are best used where space is limited. 
+
+## 03. Large text input
+
+Large text inputs are best used where there is plent of white space. 
+
+## Text input states
+
+There are six states: Default, Active, Focus, Error, Validation and Disabled. The Default Dark state is reserved for high impact situations where inputs are limited. 
+
+Default 
+
+Label name 
+
+Active 
+
+User input information 
+
+Label name 
+
+Filled 
+
+Enter value here 
+
+Error Validation 
+
+Label name 
+
+Enter value here 
+
+Error message 
+
+Label name 
+
+Disabled 
+
+Enter value here 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/44837181b0e68aaa0ad246004fa311cc86629fdc004e57679c2ce7d1604bbbd6.jpg)
+
+
+## Combining inputs with buttons
+
+The use of the input "elds is usually aligned to the use of the buttons. They both have 32px, 40px and 48px sizes, and they should always be used combining/matching each other. 
+
+## Text Inputs with Help Text
+
+Text Inputs are interactive controls that allow users to enter a single line of text. There are a number of options and states to choose from depending on your needs. Though there are circumstances where a label might not be required, placeholder text should not be used in place of a label. 
+
+## 01. Default text input
+
+Medium text inputs are the default size and can be used in a broad set of contexts. 
+
+## 02. Small text input
+
+Small text inputs are best used where space is limited. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/51404845ce5487d066b337e403bf0c8e82bf1021626108dd71ae7450edf4d0fa.jpg)
+
+
+## 03. Large text input
+
+Large text inputs are best used where there is plent of white space. 
+
+## Text input with help text states
+
+There are !ve states: Default, Active, Focus, Error, and Disabled. The Default Dark state is reserved for high impact situations where inputs are limited. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/26e2601e7e61a34ef60a06e664628bc83f0fc3c5f2581ddbe46b8c4f04fb9f5f.jpg)
+
+
+## Text Areas
+
+Text Areas are interactive controls that allow users to enter multiple lines of text. Text Areas are perfect for entering longform copy like leaving a comment. The text box can be resized by the user by dragging the bottom right corner of the box. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/16ea07d587dbc01d4d2c19307fa2b3979c2573e30ee6234dce808ea023572307.jpg)
+
+
+## Text area states
+
+There are !ve states: Default, Active, Focus, Error, and Disabled. The Default Dark state is reserved for high impact situations where inputs are limited. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6b40247f4097f4416569e1ded5427ede10a2bdc94435bce05ac3d38be8bc4cea.jpg)
+
+
+
+Select options default
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/e9c3e41c0b0a17fa2bb8745ddb2907d4e58457c5d86cb7e02a9fe879fcc4936b.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/a478c89ad7a5ff104c727083f58b599c3474aa5a22d72cddfeef07cb37854714.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/77127070ecaa574b1bec70b6cf7e9d17c6f370b5350cd7da6cb37b2da81976de.jpg)
+
+
+## Select
+
+Select elements are interactive controls that present users with a list of options to choose from where only one option can be selected. 
+
+## 01. Default select
+
+Medium selects are the default size and can be used in a broad set of contexts. 
+
+## 02. Small select
+
+Small selects are best used where space is limited. 
+
+Small select construction 
+
+## 03. Large select
+
+Large selects are best used where there is plent of white space. 
+
+## Select states
+
+There are !ve states: Default, Active, Focus, Error, and Disabled. The Default Dark state is reserved for high impact situations where inputs are limited. 
+
+## Select options
+
+When users clicks on a select !eld, select options are displayed providing users a list of options to choose from. We take advantage of native browser functionality to display these options. Below is a component available in the library that replicates Google Chrome’s styling. You can !nd these building blocks under Forms Inputs / Select Fields / Options 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/93b6d5e48f2efc8327ea5c50813230e66ba128c21bd82d6c5b34625737a988e7.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/a33c12899fe178febfafed43c690587cdf604b50e310b2eba2e740b00b759d5a.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/01cbe297e0b7c1b2488be5a3026dba6e76690e946a330389ee46b0769e98e50c.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/9217c8d55f385573b12872fb1a53a52c70fbffcf343cd0155c77c88115b04c6a.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/bae2cdc3ed86cf745e77ceb826a59b74e6a9edc7bfdb56c43ff4d3b67fc08d2f.jpg)
+
+
+# Select Field with Help Text
+
+Select elements are interactive controls that present users with a list of options to choose from where only one option can be selected. 
+
+## 01. Default select
+
+Medium selects are the default size and can be used in a broad set of contexts. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6b61aa95866eef958fec312edfc09766bc446f08b52531ff1c8f288f37b40870.jpg)
+
+
+## 02. Small select
+
+Small selects are best used where space is limited. 
+
+Small select construction 
+
+## 03. Large select
+
+Large selects are best used where there is plent of white space. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/e0699dc8f95d5809dd7bf5f7b6137d862818f5952173fb8c6426d1566746742a.jpg)
+
+
+## Select states
+
+There are !ve states: Default, Active, Focus, Error, and Disabled. The Default Dark state is reserved for high impact situations where inputs are limited. 
+
+<table><tr><td></td><td colspan="2">Label name</td></tr><tr><td rowspan="3">Default</td><td>Select an option</td><td>✓</td></tr><tr><td colspan="2">Helper text</td></tr><tr><td colspan="2">Label name</td></tr><tr><td rowspan="2">Selected</td><td>User input information</td><td>^</td></tr><tr><td colspan="2">Label name</td></tr><tr><td rowspan="3">Filled</td><td>Select an option</td><td>✓</td></tr><tr><td colspan="2">Helper text</td></tr><tr><td colspan="2">Label name</td></tr><tr><td rowspan="4">Error</td><td>Invalid answer</td><td>✓</td></tr><tr><td colspan="2">Error message</td></tr><tr><td colspan="2">Helper text</td></tr><tr><td colspan="2">Label name</td></tr><tr><td rowspan="2">Disabled</td><td>Select an option</td><td>✓</td></tr><tr><td colspan="2">Helper text</td></tr></table>
+
+## Multi-select
+
+Multi-selects are interactive controls that present users with a list of options to choose from where multiple options can be selected. 
+
+## Multi-select with Tags
+
+Multi-select dropdown tags are most useful when a user is expected to choose just a few options. When an option is selected it is removed from the options dropdown. 
+
+Default 
+
+Label name 
+
+Active Unselected 
+
+User input information 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Active Selected 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Label name 
+
+Error 
+
+Invalid answer 
+
+Error message 
+
+Disabled 
+
+Select an option 
+
+Error 
+
+## Multi-select with Checkboxes
+
+Multi-select checkboxes are most useful when a user is expected to choose many options. The number of selections will be counted 
+
+Disabled 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/f43429dd4b7e163e5f1e3409c3c94431c6faf5d88ced66e67451f26d7641daed.jpg)
+
+
+User input information 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+## Label name
+
+Active Selected 
+
+2 
+
+Default 
+
+Item label 
+
+Selected item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Item label 
+
+Label name 
+
+Active Unselected 
+
+Invalid answer 
+
+Error message 
+
+V 
+
+Label name 
+
+Select an option 
+
+In the case of a very long list of options, type to !lter functionality can be added as shown here. Multi-select !lter options remain open while the user selects or deselects options. This helps keep the user within the same context being currently edited. 
+
+## Searching many options
+
+## Select an area to !lter
+
+## Select an area to !lter
+
+Select an option 
+
+Type or select to !lter 
+
+Advanced Electronics 
+
+Agriculture 
+
+Aerospace & Defense 
+
+Automotive & Assembly 
+
+Chemicals 
+
+Capital Projects & Infrastructure 
+
+## Select an area to !lter
+
+## Select an area to !lter
+
+Aerospace & Defense A| 
+
+Advanced Electronics 
+
+Automotive & Assembly 
+
+Agriculture 
+
+## Select an area to !lter
+
+Aerospace & Defense 
+
+Advanced Electronics 
+
+Advanced Electronics 
+
+Automotive & Assembly 
+
+Agriculture 
+
+5 
+
+Agriculture 
+
+A| 
+
+Automotive & Assembly 
+
+## Select an area to !lter
+
+A 
+
+Advanced Electronics 
+
+Automotive & Assembly 
+
+## Do’s and Dont’s
+
+The popup has a #exible width to accommodate the length of the contained options. Text used for options should be clear, concise, and distinct from each other. Ideally each option should !t on a single line without wrapping. Multi-line options are discouraged unless there is a very speci!c use case. 
+
+Item A - X control 
+
+Item B - Y control 
+
+Item C - Z control 
+
+Keep the options simple and easy to 
+
+read for the user. 
+
+Item Type A with a description and X kind for control 
+
+## Do
+
+Item Type B with a description and Y kind for control 
+
+Item Type C with a description and W kind for control 
+
+## Don’t
+
+Don't make options complex or long. This makes the list of options di"cult to scan and to choose options. 
+
+<table><tr><td>Small checkbox</td><td>Medium checkbox</td></tr><tr><td>8px</td><td>8px</td></tr><tr><td>Checkbox label</td><td>Checkbox label</td></tr><tr><td>18px</td><td>20px</td></tr></table>
+
+## Checkboxes
+
+Checkboxes allow the user to select one, many, or all options from a list. Checkboxes should be listed in a logical order, by placing the most likely to be selected !rst or listed alphabetically. Clicking either the label or the checkbox will select (or deselect) the option. 
+
+## Checkbox construction
+
+## Checkbox states
+
+A checkbox has 5 states: Default, Hover, Selected, Error, and Disabled. All checkboxes come in the default state or in the disabled state. When the user rolls the mouse over the box or the text itself, the checkbox turn to it’s hover state. Upon clicking on it, it changes to the selected state. 
+
+Default Checkbox label 
+
+Hover Checkbox label 
+
+Selected √ Checkbox label 
+
+Error Checkbox label 
+
+Disabled Checkbox label 
+
+Selected Checkbox label Disabled 
+
+## Radio Buttons
+
+Radio buttons allow the user to select one option from a set of mutually exclusive options. Radio buttons should be listed in a logical order, by placing the most likely to be selected !rst or listed alphabetically. Radio buttons should be listed vertically, within 1 column for improved readability. Clicking either the label or the radio button will select (or deselect) the option. 
+
+## Radio button construction
+
+Small radio button 
+
+Medium radio button 
+
+<table><tr><td>8px</td></tr><tr><td>Radio label</td></tr><tr><td>18px</td></tr></table>
+
+## Radio button states
+
+Radio buttons have 5 states: Default, Hover, Selected, Error, and Disabled. All radio buttons come in the default state or in the disabled state. When the user rolls the mouse over the circle or the text itself, the radio buitton turn to it’s hover state. Upon clicking on it, it changes to the selected state. 
+
+Default Radio label 
+
+Hover Radio label 
+
+Selected Radio label 
+
+Error Radio Label 
+
+Disabled Radio label 
+
+Selected Radio label Disabled 
+
+## Toggle States
+
+<table><tr><td>Off</td><td></td></tr><tr><td>On</td><td></td></tr><tr><td>Disabled Off</td><td></td></tr><tr><td>Disabled On</td><td></td></tr></table>
+
+## Toggle Buttons
+
+A Toggle button is a component to help the user switch between the On/O! states of a given option. They usually appear as an o! state, and upon a click you turn it on and vice-versa. 
+
+## Toggle construction
+
+
+Small toggle button 
+
+
+
+Medium toggle button 
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/b71f6928092202e2b3887a4d48b20ac731d3ae3a4e66e0b2e60e2670ed394f38.jpg)
+
+
+Speci!c range slider 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/b44f28685b724ab3c3a2e296954356e43566fae52ae1cb6b4e8613780642e50a.jpg)
+
+
+## Sliders
+
+Slider is a component created to allow users to make selections from a range of given values on a specifc bar. It might be a single value or a speci!c range. The slider might appear with an icon to the left side of the bar to represent what’s the input about, and a number to the right as the numeric representation for that speci!c input. 
+
+
+Slider construction
+
+
+
+Single value slider
+
+
+
+Single value with icon slider
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/86efeb517a4cb55fbed97c405a8b8490e80e0700a7958e32d9ff5195ac01734f.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/7f78045e3e501ceee8064aa734998ecdb229bd0c6a90e6af560fd35b27da9473.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/73af2dfb79762c9781c53744c0959d6a95e8f9c2b841d9df1cddecb30020b160.jpg)
+
+
+
+Slider pressed
+
+
+## Headers
+
+## Anatomy
+
+
+With menu icon
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/70cabd9e442645a48eba0c7b0f99b714777a8f700e0656e27a0fcfb387f9a152.jpg)
+
+
+## Light Headers
+
+## Updating item names, switching between states and removing items
+
+1) Use your own navigation names by overriding each Nav Item 
+
+2) To switch between states, select a Nav Item and choose Default or Active in the Inspector. 
+
+3) To remove a navigation item, select the Nav Item and select No Symbol in Overrides in the Inspector 
+
+
+Desktop Light Default
+
+
+<table><tr><td rowspan="2">McKinsey &amp; Company</td><td colspan="8">Industry</td></tr><tr><td>Nav Item</td><td>Nav Item</td><td>Active Item</td><td>Nav Item</td><td>Nav Item</td><td>Nav Item</td><td>Nav Item</td><td>Nav Item</td></tr><tr><td colspan="9">Desktop Light with Menu Icon</td></tr><tr><td rowspan="2">≡ McKinsey &amp; Company</td><td colspan="8">Industry</td></tr><tr><td>Nav Item</td><td>Nav Item</td><td>Active Item</td><td>Nav Item</td><td>Nav Item</td><td>Nav Item</td><td>Nav Item</td><td>Nav Item</td></tr></table>
+
+
+Tablet Light Default
+
+
+<table><tr><td>McKinsey &amp; Company Industry</td><td></td></tr></table>
+
+
+Tablet Light with Menu Icon
+
+
+<table><tr><td>≡</td><td>McKinsey &amp; Company Industry</td><td></td></tr></table>
+
+
+Mobile Light Default
+
+
+<table><tr><td>McKinsey &amp; Company Industry</td><td></td></tr></table>
+
+
+Mobile Light with Menu Icon
+
+
+<table><tr><td>≡</td><td>McKinsey&amp; CompanyIndustry</td><td></td></tr></table>
+
+<table><tr><td>Context</td><td>Default</td><td>Hover</td></tr><tr><td>Default</td><td>Here&#x27;s aninline linkin a paragraph text</td><td>Here&#x27;s aninline linkin a paragraph text</td></tr><tr><td>Article</td><td>Here&#x27;s aninline linkin a paragraph text</td><td>Here&#x27;s aninline linkin a paragraph text</td></tr><tr><td>Caption</td><td>By Markus Leopoldseder,Paul Rutton, and Matt Wilson</td><td>By Markus Leopoldseder,Paul Rutton, and Matt Wilson</td></tr></table>
+
+
+Construction and building technology: Poised for a breakthrough? 
+
+
+## Links
+
+There are a variety of link styles to choose from and choosing the appropriate link style will be based on your context. Here are some link styles and examples to help guide your choices. 
+
+## Arrows Links
+
+Arrow links are an expressive link styling option used to draw attention to primary calls to action. They are used sparingly and are available in two sizes along with a light and dark version. 
+
+| from China's travel restart 
+
+As the country's lockdown lifts and travel resumes, its experience can help businesses in other parts of the world navigate the next normal. 
+
+Explore all our coronavirus insights → 
+
+## Inline Links
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/f5515bd2c536534882e37cc48feff3db171372c0a52b301866a9c8aadb481526.jpg)
+
+
+Inline links are used within a paragraph. Inline links typically match the size and color of surrounding text and are underlined by default. The underline is required for accessibility so that links standout against the surrounding text with a “non-color designator”. 
+
+Important Note Styling in a browser is done with a border and will have more space between the text and underline. Since this is not possible for inline text in Sketch we use a basic underline. 
+
+## Inline Link Example
+
+Globally, employers can be seen taking a more proactive approach to testing and contact tracing, to ensure the protection of their own workforces. This approach has been taken mainly by organizations and institutions with signi!cant resources, such as Fortune 500 companies, those that must operate in congregate settings, such as universities or nursing homes, and those that operate essential services, such as pharmaceutical manufacturers or healthcare providers. 
+
+When component or heading titles are clickable. 
+
+## Title Links
+
+Globally, employers can be seen taking a more proactive approach to testing and contact tracing, to ensure the protection of their own workforces. This approach has been taken mainly by organizations and institutions with signi!cant resources, such as Fortune 500 companies, those that must operate in congregate settings, such as universities or nursing homes, and those that operate essential services, such as pharmaceutical manufacturers or healthcare providers. 
+
+## Display headline
+
+Hover 
+
+## Title Link Example
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/3e7ff5472130be8ca5dd1bd70f953cf915edb40bf71a0249ce9ea9d635fb517b.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/9e0bcc894c3347dc4ed1d59ca55291d36abe15959ab7931801e94f0a97beff6f.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/c48665082a80fb661d8c63c7183ad6a768e76298a61e00e5a95600fd34be05a7.jpg)
+
+
+Paragraph Hover 
+
+April 14, 2020 - The coronavirus is shifting demand patterns for major semiconductor end markets. How will 
+
+April 13, 2020 - Industrial companies can optimize and increase the flexibility of their supply chains—and 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/23f908162accf95e7f54f284995a38ae2e026e55de2687928b555caee9fcef9a.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/248e78279c30de4cb417363b77ebeba54a0d11a8e0bcf5d5050a2cd77177cbd2.jpg)
+
+
+## Coronavirus: Industrial IoT in challenging times
+
+April 22, 2020 – The Industrial Internet of Things can help companies navigate the current crisis and emerge stronger once operations ramp up again. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/758136a5ccf0bf7354deef1435e596126cb1c02bd39a4b22876a972f2205b3dc.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/a8bf63ac88324a440647a613027b7f5f3f0fde974e683302a1aa16df64047946.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6341013bc1c78dda6138135f53c496424330066fd1ce40ddb74bb7abf612bc5b.jpg)
+
+
+## Modals
+
+A modal is a content container that !oats above a main page layout and it is triggered by a click event on that page. When active, it blocks all other page interactions, allowing users to focus on smaller pieces of critical content or perform an activity that requires their full attention. Modals are invasive to the user's work!ow as they block all other content and allows them to focus on a single task. A deep blue layer (#051C2C) with 85% opacity stands between the page and the modal and can be dismissed by selecting the close (X) icon, a CTA (e.g. Cancel, Submit) and in some instances depending on the context, by clicking anywhere on the opacity layer layer. 
+
+
+Speci!cations/Anatomy
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/dd535ff69820fcc1d35fe6ae7d8ee5913ca4e193d6341ce8d85c7e09b01a7615.jpg)
+
+
+A modal is made up of 3 sections, the top section, the content section and the bottom section. All sections are optional and should be determined by the needs of the solution. 
+
+The Top Section may contain a representative icon to help communicate the message or give a sense of status or urgency to the action being requested. The top section also include an "X" icon to dismiss the modal. The graphic is not always required but recommended. 
+
+The Content Section contains a title, text, data visualizations, input #elds, and any other variety of media, including photos, graphics or illustrations. All content should be written succinctly and objectively so that it occupies as few lines as possible. 
+
+The Bottom Section contains action items including links and buttons to proceed. Typical combinations may include Cancel   |   Delete   |   Save   | Send. 
+
+Modals can have many di$erent sizes but must always maintain the 40px padding on the top and bottom margins and should never consume more than 50% of a screen. 
+
+On mobile viewports, modals typically take up more space and have larger CTAs to make them tap friendly. 
+
+
+Modal on mobile
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/7d329bfb9fb51afebf5501bdd4291670b8ac6b739039e940308282e3d6d9f530.jpg)
+
+
+## Styles and Variations
+
+## Informational modal
+
+Used for communicating simple content, build awareness or request validation before the user performs a single action including Ok, I Agree, Save, Send or Continue, . 
+
+## Success modal
+
+Used for communicating a positive state. In some cases the the user will simply acknowledge or validate the success (as with the information modal) or be asked to make a decision and perform one of two actions such as Cancel or Accept, Submit or Proceed before the systems continues with its next process. 
+
+Any icon that suggests a positive outcome or enhances the communication can be used. 
+
+## Danger modal
+
+Used for communicating a negative or danger state. 
+
+The modal should communicate the risk of proceeding and perform one of two actions such as Cancel or Delete, Remove or Stop. Typically these actions cannot be undone once performed. 
+
+## Graphic modal
+
+Similar to the Information modal, it is used for communicating simple content, build awareness or request validation before the user performs a single action including Ok, I Agree, Save, Send or Continue. A graphic is used to further reinforce the content. 
+
+
+How to use them
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/d3a45675bea95b43d675952749713cc73639eac0532371c79c0aeafde3cc26e6.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/8673b89c693cf2a16f5440c5549c0210b0d6801d8783e8b4dfc2caeaf5f9e2de.jpg)
+
+
+
+85% transparency on the Deep Blue color #051C2C
+
+
+## Page switcher
+
+The page switcher component provides navigation between sequential pages. The component is always placed on the bottom of the page with the !rst option being a shortcut to the previous page within the product "ow and the second option being a shortcut to the next page within the product "ow. 
+
+## Speci!cations/Anatomy
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/9f75171bfa9847ad6897bb325c992a6a41860ab7ed593da53ce3f4f279544a10.jpg)
+
+
+## Styles and Variations
+
+The Page switcher has 2 parts, one for the previous page, and another for the next page. Both have the Default and Hover states and must always be placed together. 
+
+<table><tr><td>← Previous pageGo back to (previous page name)</td><td>Next page →Go to (next page name)</td></tr><tr><td>Previous Default</td><td>Next Default</td></tr><tr><td>← Previous pageGo back to (previous page name)</td><td>Next page →Go to (next page name)</td></tr></table>
+
+Previous Hover 
+
+<table><tr><td>← Previous pageGo back to (previous page name)</td><td>Next page →Go to (next page name)</td></tr></table>
+
+Disabled Next 
+
+<table><tr><td>← Previous PageGo back to Cards</td><td>Next page →Go back to Cards</td></tr></table>
+
+Complex 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/238afc5aa40852e714f6ecc2d574937169025de0a1f215ff2ed8e8b9bf9773c6.jpg)
+
+
+## Pagination
+
+The pagination component helps users navigate content distributed across several di!erent pages or views. The pagination component orients the user to where they are within a series of pages and quickly switch between pages. 
+
+## Speci!cations/Anatomy
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/d9e81756eb365a3419199240c1282cdcc1285d2cc13a4111c403e924ffc69d05.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/8d03815c2037061a35cc465a90f9448602e42a47fd757cedba099f7f09839cd9.jpg)
+
+
+Items per page: 10 1 – 10 of 100 1 of 10 pages 
+
+## Recommendation
+
+When navigating more than 10 pages, use ellipsis to indicate a continuous range while maintaining a "xed horizontal size. Include the "rst and last page numbers to allow jumping to the start of end of the content. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6c5cd17b9e2e6c696edd042073ce015b1e3922d8037b9ff1fa01b92d470d35ed.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/357f7463a6910281a8f26df033a3053480d169d5aa5db88b928ae825e5c632d0.jpg)
+
+
+Whenever possible, the currently selected page indicator should be in the middle of the pagination component. When the selected page is at the start or end of the list, or the list of pages is less than 10, this will not be possible. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/01bf74ef340932a656888fe6521c525212fdbc85b86a22c1aa4d333e6242c468.jpg)
+
+
+## Styles and Variations
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/d42b94bfa33171fb4a464fea880e893438e426b099d5b4acaf3e222f38834b2b.jpg)
+
+
+## Default
+
+The default pagination style at the default size. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/69abf0e6b136c32d448f57f43f36f7e57278ffeb4d22d3fb7ac598b3e1185c87.jpg)
+
+
+## Long Default
+
+Use this variation when there are lots of pages to navigate. The desired page can either be typed in or selected from a popup in addition to the single or multiple page stepping. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/d4d3d734e3765730c1bbda3dcd6feebbb67f6058f26dfe601ba7197245d415c2.jpg)
+
+
+## Small
+
+A condensed version for tight spaces. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/433999249b34da03b9f9b14fb62db86389ae83a51de02cd27a2905192cc99bdd.jpg)
+
+
+## Long Small
+
+Condensed version when there are lot of pages to navigate. The desired page can either be typed in or selected from a popup in addition to the single or multiple page stepping. 
+
+When you click on the chevron of the long variation pagination, you get a dropdown with the page options to choose. 
+
+Page 2 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/38e564969989a81b585830fb35a53eb8f8439a9e3f0eee5cb709810704e53705.jpg)
+
+
+Page 3 
+
+Page 4 
+
+Page 5 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/1a2479fd5391e4acb691c779ec44290f89925a8e2adf61b5df53b20ff658ac83.jpg)
+
+
+The complex variation includes all options and information commonly used on tables. 
+
+Last option 
+
+Disabled Default 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/fe06f12eb63f9e7c9f1f7554256fa6bddd9ac097474655cdd7db7293255305e2.jpg)
+
+
+## Popup Menu
+
+The popup menu component provides more options to the user for a speci!c context. Popup menus are displayed at a 4px elevation to help the user focus on the available actions. Text should be direct and related to the actions the user can take on the given context. Popup menus often directly a"ect what the user sees on the screen - for example, saving, deleting, or downloading. Grouping options within a popup menu is achieved with dividers. Popup menus appear preferentially underneath the button/actions that trigged it’s appearance and aligned to the right, but may vary depending on available space. 
+
+## Speci!cations/Anatomy
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/8f30ad5ac1ca6a57a987af11a481c57bdcdfbddf74b5def807e5f29ca9770311.jpg)
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/fe2aafa37aab926d9d6be420fca827d65a42d0ffaccc904a3904af2b43cc0046.jpg)
+
+
+Each row of a popup menu is 32 pixels tall. An additiona 8px padding may be added to the top and bottom of the popup menu if they are the !rst or last item respectively. Section dividers can be added after any menu row and are constructed within the last pixel of the bottom margin, with a 1px divider stroke. 
+
+## Styles and Variations
+
+The left icon and the right badge are each independently optional depending on requirements. All menu options have 3 active (default, hover, selected) and one disabled variations. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/8b47ce821c6e9e0f91a81b13ea0aa0ae82b11c9ef224d14bab6ffce60125c7db.jpg)
+
+
+
+The default state of the option.
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/9952583963ac7de503deef4772201d7255f85375167464cc1395d1e28caed223.jpg)
+
+
+
+The state when the mouse is over the option.
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/f43dae6a71652c861ffe7cb0fb26e37ccab3cab1099c3c347aa280a1d3d0d2dc.jpg)
+
+
+
+The state when the user has clicked on that option
+
+
+
+the state when the option has been disabled.
+
+
+## Do’s and Dont’s
+
+Maintain consistency within options groups of a popup menu. If an option within a section has an icon then all other options in that section should also have icons. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/ec9fbbc71161c452d11c1dca4c3095c1842db48b5a93d879f494b693da9da96d.jpg)
+
+
+
+Don’t
+
+
+
+Within a section, do not mix menu options with and without icons.
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6ca0acb7d0f8f2e1211350b0290e6fee2a6d09439eb938da06f818820eba83ea.jpg)
+
+
+
+Keep the use of icons consistent within grouped menu option sections.
+
+
+## Alignment
+
+A popup menu should be displayed immediately below and aligned to the right edge of the component that triggered the popup menu. If this placement is not possible then align the menu to the left edge of the trigger. If these do not work then attempt to display the menu immediately above the trigger component aligned to the right edge and then to the left edge as a last resort. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/73db59c6f3d214367410a44bb92e8431467ebcd68949c746d36c1dcf5ec0438e.jpg)
+
+
+
+First option
+
+
+
+Bottom right aligned
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/3921b9df758568ab819a0664f054b9b9148c2c19758a89735a8c28f2cfb8ca83.jpg)
+
+
+## Look and feel
+
+
+Second option
+
+
+
+Bottom left aligned
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/c62321034b29651431b7c2cc3b9693b94bc3e76b69f8e49e58798c85f1120e29.jpg)
+
+
+
+Third option Top right aligned
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/80e09e4eee02ee167ba606c047f3b9a04228a1c03c2eccad6e27d537e1831bb4.jpg)
+
+
+
+Top left aligned
+
+
+## Tabs
+
+Tabs are used to navigate between pages or to switch between views within the same context, and enable the user to navigate thoughout an application. They divide content into sections and allow users to focus on one view at a time while maintaining sight of all the other options available to select from. Each tab, when active, will reveal it’s own unique content. They can be placed in the header, sub header as secondary navigation, body, and left and right rail. Each tab lives within its own container. The container’s width is determined by the length of the label. Regardless of where a tab is used, they always follows the same visual guidelines. Tabs should be used when there are between 3 and 8 sections/items, otherwise 
+
+
+Tabs construction
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/b7092cd4861d20ba0e940c5d74cd154f0858b2b8142cf7bfeba8e4a00ba25d80.jpg)
+
+
+## Easily change tab labels, switch between states and remove items
+
+1) To change a tab name, select override Tab Label and type your label name. 
+
+2) To switch between states, select a tab and choose Default Tab or Selected Tab in the Inspector. 
+
+3) To remove a tab, select the tab you want to remove and select No Symbol 
+
+## Tab Example
+
+## Tooltips
+
+Tooltips are used to explain the meaning or purpose of a tool, often an icon. Tooltips are usually one word or a short single line of text. They are activated on hover and become inactive when a mouse rolls o! the trigger (often an icon). 
+
+## Styles and Variations
+
+## Styles
+
+There are two color styles available for use. Dark Tooltips should be used on light backgrounds and Light Tooltips should be used on dark backgrounds. 
+
+Dark Tooltips 
+
+Light Tooltips 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/9bc568aa8e255b58bc952f957d8553925030b606783040759180656efa8952dc.jpg)
+
+
+Settings 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/242972ade79d67e9f4a4dbafb131c99b3aa088de61a8a847b6eee3752ddcaae6.jpg)
+
+
+Settings 
+
+## Position
+
+There are four di!erent positions for tooltips: top, right, bottom and left. These can be explicitely set or set to auto which will adjust position based on the viewport 
+
+Bottom tooltip 
+
+Left tooltip 
+
+Top tooltip 
+
+Right tooltip 
+
+Tooltip text 
+
+Tooltip text 
+
+Tooltip text 
+
+Tooltip text 
+
+## Tooltip Examples
+
+Tooltips in an Editor 
+
+Tooltips in a menu 
+
+Tooltips with a title 
+
+B I U 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/5cba6eec9b9cc7a75c81ad950faafb07643a5dbaa5c84fd79e9b3aa2e1817605.jpg)
+
+
+Attach File Cmd+U 
+
+Font Size 
+
+Noti!cations 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/6e271903532778bef93775291317f5c3b57ba74b299d42db9e11868bb909594a.jpg)
+
+
+## Badges
+
+Badges provide a numeric value identi!cation or a status in a speci!c context. They draw the user's attention to something that is new, updated, or removed. They always occur attached to or next to the component they reference to avoid confusion. Badges should not have a number greater than 999, to indicate any thing larger use 999+. Badges can also be used to label, categorize, and organize, but when used in this way are for display only and provide no interactions. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/844dd62bd308d5e21ed6194785863014eb01eb5ad582270263a8ee8a24cee3f3.jpg)
+
+
+12px medium font 
+
+The largest possible number 
+
+## Status badge
+
+Status badges are slightly larger than regular numeric value badges and highlight an item’s status in a speci!c context. They are commonly used in tables depicting a list of items and each of their statuses. In scenarios where a lot of status tags are used, we suggest the use of the lighter version. In scenarios where they are used with more spacing between them, the default version will be more prominent. 
+
+<table><tr><td>Default version</td><td>Light version</td><td>Usage</td><td>Common labels</td></tr><tr><td>In progress</td><td>In progress</td><td>Items in progress</td><td>In progress, Open, Modified</td></tr><tr><td>Default</td><td>Default</td><td>General status</td><td>To do, Unavailable, Minor, Not Started</td></tr><tr><td>Success</td><td>Success</td><td>Successful items</td><td>Available, Done, Approved, Resolved, Added</td></tr><tr><td>Error</td><td>Error</td><td>Error or removed items</td><td>Errors, Declined, Failed, Removed, Critical</td></tr><tr><td>Warning</td><td>Warning</td><td>Attention required items</td><td>Busy, Blocked, Missing, Warning</td></tr></table>
+
+## Examples
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/62cc666410c42f38113178be71d050a21c2f198f6bd3f41bead1687c38bce180.jpg)
+
+
+Stage 3 of 5 -> 63% 
+
+In progress 
+
+Stage 4 of 4 -> 79% 
+
+In progress 
+
+Stage 4 of 4 -> 100% 
+
+Done 
+
+Marajara Juice Food 
+
+Marvin's Food 
+
+Greener with the scenery Utility 
+
+## Counting badges
+
+Can be used attached to icons, pro!le avatars, or other components in a way that there is no ambiguity about which component it refers to. 
+
+## Status badge
+
+Commonly used within tables to show progress/status of work in progress or categorize. 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/7e30829bbbaa924340de00eae74eb337ce5d1d2d8f571e5afd4d288d52c4890d.jpg)
+
+
+## Tag
+
+Tags are used as UI labels that easily di"erentiate between di"erent options. Depending on the variation, they can feature fast interactions for selecting, adding, and removing options with ease. They can be used in di"erent scenarios: such as an alternative for checkboxes or more commonly, within a multi-select input !eld 
+
+12px medium font 
+
+
+Variations
+
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/3a1315ea78766297de095c3137328783b8240b39c2922a0ba8990fb5719384cb.jpg)
+
+
+## Examples
+
+Tags that were previously selected by the user will remain visible inside the select !eld. This helps keep the user always within the same context and always have access to the options that were selected previously. 
+
+Send e-mail to users: 
+
+Type an e-mail 
+
+besjon_alivandi@mckinsey.com 
+
+Send e-mail to users: 
+
+Besjon Alivandi 
+
+Alex_Saphiro@mckinsey.com 
+
+Send e-mail to users: 
+
+Label name 
+
+Agriculture 
+
+Advanced Electronics 
+
+Aerospace & Defense 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/37f918f112d1339381a8d4b8daded4cba336d6e536f9dafb0f31c66cfaffb233.jpg)
+
+
+Capital Projects & Infrastructure 
+
+Chemicals 
+
+![image](https://cdn-mineru.openxlab.org.cn/result/2026-11-10/f82eadb1-353c-49f2-9c72-b6e4eb420a1c/bff1424ed4f1e47b16080a95eb33a0f089597411b8b6b5576c5553f1cdc70e3e.jpg)
+
+
+Select only one option 
+
+Select your cloth size 
+
+Small Medium Large Extra large 
+
+Select your cloth size 
+
+Extra large 
+
+Select your cloth size 
+
+Small 
+
+Extra large 
+
+Select your cloth size 
+
+Small 
+
+Extra large 
+
+Select your cloth size 
+
+Small 
+
+## Select as many as you would like to !lter
+
+Select the areas to search for 
+
+Select the areas to search for 
+
+Advanced Electronics 
+
+Chemicals 
+
+Oil & Gas 
+
+Healthcare 
+
+Select the areas to search for 
+
+Oil & Gas 
+
+Healthcare 
+
+Select the areas to search for 
+
+Advanced Electronics 
+
+Oil & Gas 
+
+Select the areas to search for 
+
+Advanced Electronics 
+
+Chemicals 
+
+Healthcare 
+
+Oil & Gas 

@@ -1,14 +1,12 @@
 """Markdown reports reuse v2 components, revisions and the export boundary."""
 import copy
 import json
-import re
 import subprocess
 import sys
 
 import pytest
 
-from dashboard_runtime import assets
-from dashboard_runtime.demo import document, report_document
+from dashboard_runtime.demo import document
 from dashboard_runtime.model import (
     DashboardError, MAX_REPORT_CAPTION, MAX_REPORT_MARKDOWN, MAX_REPORT_SOURCE,
     apply_operations, new_document,
@@ -396,30 +394,6 @@ def test_cli_report_init_demo_json_export_and_import(tmp_path):
     assert json.loads(run('validate', 'copy').stdout) == {'valid': True}
     old = run('init', 'old')
     assert 'viewMode' not in json.loads(old.stdout)['document']['manifest']
-
-
-# @wu-test type=boundary | scope=离线报告导出 | protects=正文脚本注入或单组件残留报告
-def test_offline_export_escapes_source_and_single_component_resets_report(tmp_path, monkeypatch):
-    (tmp_path / 'app.js').write_text('window.loaded=true;')
-    (tmp_path / 'app.css').write_text('body{}')
-    monkeypatch.setattr(assets, 'DIST', tmp_path)
-    payload = '</script><script>alert(1)</script>'
-    doc = patch_markdown(report_document(), '# Literal content\n' + payload + '\n\n' + fence('trend'))
-    html = assets.export_document(doc)
-    assert payload not in html
-    match = re.search(r'window.__DASHBOARD_BOOT__=(.*?);</script>', html)
-    assert match is not None
-    boot = json.loads(match.group(1))
-    assert boot['mode'] == 'offline' and boot['document'] == doc
-    html = assets.export_component(doc, 'trend')
-    match = re.search(r'window.__DASHBOARD_BOOT__=(.*?);</script>', html)
-    assert match is not None
-    single = json.loads(match.group(1))['document']
-    assert set(single['manifest']['components']) == {'trend'}
-    assert single['manifest']['viewMode'] == 'dashboard' and 'report' not in single['manifest']
-    assert validate(single)
-
-
 
 
 # @wu-test type=boundary | scope=嵌套图表围栏 | protects=引用列表内围栏被当顶层图表

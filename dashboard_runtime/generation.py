@@ -41,8 +41,9 @@ def case_operations(doc):
 def generation_examples(case_id=None):
     if case_id is None:
         return {'cases':[{'id':key, **value, 'uri':f'charts://examples/{key}'} for key,value in CASES.items()],
+                'presentationStatus':'unavailable',
                 'policy':'Examples are synthetic references, not user data. Select a case explicitly, replace data and recompute every narrative claim before real use.',
-                'workflow':['chart_recommend(intent, data shape)', 'chart_declarations(code)', 'layout_templates', 'generation_examples(caseId)', 'dashboard_create', 'dashboard_edit_begin', 'dashboard_patch(expectedRevision, operations incl. apply_layout_template)', 'dashboard_edit_finish', 'dashboard_preview'],
+                'workflow':['chart_recommend(intent, data shape)', 'chart_declarations(code)', 'layout_templates', 'generation_examples(caseId)', 'dashboard_create', 'dashboard_edit_begin', 'dashboard_patch(expectedRevision, operations incl. apply_layout_template)', 'dashboard_edit_finish', 'dashboard_get'],
                 'variety':'The two dashboard cases share data but differ in layout template, KPI shapes and chart codes. Choose per question with chart_recommend and the kpiGuide; do not reuse one composition for every dashboard.'}
     require(case_id in CASES, 'Unknown generation case', 'UNKNOWN_EXAMPLE')
     doc = {'academic-report': report_document, 'operations-scorecard': operations_document}.get(case_id, executive_document)('example')
@@ -52,4 +53,4 @@ def generation_examples(case_id=None):
                 'Use the report master structure and restrained reading style, but include abstract/keywords only when authored.',
                 'Declare provenance, units, aggregation and uncertainty; do not reuse synthetic findings with new data.',
                 'Use chart fences for declarations already registered as components, not executable JavaScript.',
-                'Validate then render and inspect the output. Narrative is not automatically recalculated by filters.']}
+                'Validate and inspect saved declarations with dashboard_get; UI rendering is unavailable during reconstruction. Narrative is not automatically recalculated by filters.']}

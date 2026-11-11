@@ -1,0 +1,113 @@
+{
+        id: 'chart-t03',
+        code: 't03',
+        title: '常旅客飞行航段与金银卡升级阶梯门槛',
+        subtitle: '呈现常旅客飞行定级航段对应会员等级的阶梯升级门槛规则',
+        explainKey: 't03',
+        data: {
+            segments: ['0-10段 (普卡)', '11-25段 (银卡)', '26-50段 (金卡)', '51-90段 (白金卡)', '90+段 (终身白金)'],
+            rates: [0.18, 0.25, 0.32, 0.40, 0.45]
+        },
+        optionBuilder: (d, gran, tokens, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || [];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const units = presentation.units || [];
+            const labels = presentation.labels || [];
+            const domains = presentation.domains || {};
+            const option = ({
+            ...tokens.commonOption,
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                borderColor: tokens.palette.rule,
+                borderWidth: 1,
+                padding: [8, 12],
+                extraCssText: 'box-shadow: 0 4px 14px rgba(18, 59, 93, 0.08); border-radius: 6px;',
+                formatter: params => `<div class="font-bold text-primary-strong mb-1">${params[0].name}</div><div class="flex items-center justify-between gap-4"><span class="text-ink-muted">积分兑换单价:</span><span class="font-mono font-bold text-primary">¥${params[0].value} / 航段</span></div>`
+            },
+            xAxis: { type: 'category', data: d.segments, axisTick: { show: false } },
+            yAxis: { type: 'value', min: 0.15, max: 0.50, name: '积分兑换单价 (元/段)', nameLocation: 'end', nameTextStyle: tokens.axisTitleStyleY, axisLabel: { formatter: '¥{value}' }, splitLine: { lineStyle: { color: tokens.palette.gridline } } },
+            series: [{
+                name: '阶梯回馈率',
+                type: 'line',
+                step: 'start',
+                data: d.rates,
+                lineStyle: { color: tokens.palette.primary, width: 2.5 },
+                itemStyle: { color: tokens.palette.primary, borderColor: '#FFF', borderWidth: 2 }
+            }]
+        });
+            [['x', option.xAxis], ['y', option.yAxis]].forEach(([key, axisOption]) => {
+                const domain = domains[key];
+                [axisOption].flat().filter(Boolean).forEach((axis, index) => {
+                    if (axisLabels[key]) axis.name = axisLabels[key];
+                    delete axis.min;
+                    delete axis.max;
+                    const axisDomain = Array.isArray(domain && domain[0]) ? domain[index] : domain;
+                    if (Array.isArray(axisDomain)) [axis.min, axis.max] = axisDomain;
+                    if (axis.type === 'value') axis.axisLabel = { ...(axis.axisLabel || {}), formatter: value => `${value}${units[index] || units[0] || ''}` };
+                });
+            });
+            if (option.visualMap) {
+                delete option.visualMap.min;
+                delete option.visualMap.max;
+                if (Array.isArray(domains.visualMap)) [option.visualMap.min, option.visualMap.max] = domains.visualMap;
+            }
+            if (option.radar && Array.isArray(option.radar.indicator)) option.radar.indicator = option.radar.indicator.map((indicator, index) => {
+                const configuredDomain = Array.isArray(domains.indicators) ? domains.indicators[index] : domains.value;
+                const { min, max, ...semanticIndicator } = indicator;
+                return { ...semanticIndicator, name: labels[index] || indicator.name, ...(Array.isArray(configuredDomain) ? { min: configuredDomain[0], max: configuredDomain[1] } : {}) };
+            });
+            const thresholdValues = Object.values(presentation.thresholds || {}).filter(value => typeof value === 'number');
+            const optionSeries = Array.isArray(option.series) ? option.series : [];
+            optionSeries.forEach((series, index) => {
+                if (seriesLabels[index]) series.name = seriesLabels[index];
+                if (series.label && units[index]) series.label.formatter = params => `${params.value}${units[index]}`;
+                if (series.type === 'pie' && Array.isArray(series.data)) series.data = series.data.map((item, itemIndex) => ({ ...item, name: labels[itemIndex] || item.name }));
+                if (series.type === 'radar' && Array.isArray(series.data)) series.data = series.data.map((item, itemIndex) => ({ ...item, name: seriesLabels[itemIndex] || item.name }));
+                if (series.type === 'gauge') {
+                    delete series.min;
+                    delete series.max;
+                    if (Array.isArray(domains.value)) [series.min, series.max] = domains.value;
+                    if (series.detail) series.detail.formatter = value => `${value}${units[0] || ''}`;
+                    if (Array.isArray(series.data) && series.data[0]) series.data[0].name = tooltipLabels[0] || seriesLabels[0] || labels[0] || '';
+                }
+                if (series.markLine && thresholdValues.length) series.markLine.data = thresholdValues.map((value, thresholdIndex) => {
+                    const original = series.markLine.data && series.markLine.data[thresholdIndex] || {};
+                    const key = Object.prototype.hasOwnProperty.call(original, 'xAxis') ? 'xAxis' : 'yAxis';
+                    return { ...original, [key]: value, label: { ...(original.label || {}), formatter: labels[thresholdIndex] || `${value}${units[index] || units[0] || ''}` } };
+                });
+                if (!thresholdValues.length && series.markLine) delete series.markLine;
+            });
+            if (option.legend && seriesLabels.length) option.legend.data = seriesLabels;
+            if (option.tooltip && !['d02', 'r02', 'r03', 'd04', 'f02', 'r04', 'f03', 'r05'].includes(cfg.code)) option.tooltip.formatter = params => {
+                const items = Array.isArray(params) ? params : [params];
+                const heading = items[0] && (items[0].axisValueLabel || items[0].name) || '';
+                return `${heading ? `<div class="font-bold text-primary-strong mb-1">${heading}</div>` : ''}${items.map((item, index) => `<div class="flex items-center justify-between gap-4 py-0.5"><span class="text-ink-muted">${tooltipLabels[index] || seriesLabels[index] || item.seriesName || '数值'}:</span><span class="font-mono font-bold text-primary">${item.value}${units[index] || units[0] || ''}</span></div>`).join('')}`;
+            };
+            return option;
+        },
+        tableDataExtractor: (d, gran, cfg = {}) => {
+            const presentation = cfg.presentation || {};
+            const axisLabels = presentation.axisLabels || {};
+            const seriesLabels = presentation.seriesLabels || [];
+            const tooltipLabels = presentation.tooltipValueLabels || seriesLabels;
+            const units = presentation.units || [];
+            const labels = presentation.labels || [];
+            const thresholds = presentation.thresholds || {};
+            const totals = presentation.totals || {};
+            const table = ({
+            headers: ['定级航段阶梯', '会员等级', '单航段积分兑换率'],
+            rows: d.segments.map((s, i) => [s.split(' ')[0], s.split(' ')[1].replace(/[()]/g, ''), `¥${d.rates[i]} / 段`])
+        });
+            const configuredHeaders = presentation.tableHeaders || [axisLabels.y || axisLabels.x, ...(tooltipLabels.length ? tooltipLabels : seriesLabels)];
+            table.headers = table.headers.map((header, index) => configuredHeaders[index] || header);
+            table.rows = table.rows.map(row => row.map((value, index) => {
+                if (!units[index - 1] || index === 0 || typeof value !== 'string') return value;
+                const numeric = value.match(/[+-]?(?:[0-9]+[.]?[0-9]*|[.][0-9]+)/);
+                return numeric ? `${numeric[0]} ${units[index - 1]}`.trim() : value;
+            }));
+            return table;
+        }
+    }

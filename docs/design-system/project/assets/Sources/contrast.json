@@ -1,0 +1,50 @@
+[
+  {
+    "pair": "品牌 Electric Blue / White",
+    "foreground": "#2251FF",
+    "background": "#FFFFFF",
+    "ratio": 5.69
+  },
+  {
+    "pair": "按钮 Action / White",
+    "foreground": "#1F40E6",
+    "background": "#FFFFFF",
+    "ratio": 7.16
+  },
+  {
+    "pair": "正文 Gray 80 / White",
+    "foreground": "#333333",
+    "background": "#FFFFFF",
+    "ratio": 12.63
+  },
+  {
+    "pair": "次正文 Gray 54 / White",
+    "foreground": "#757575",
+    "background": "#FFFFFF",
+    "ratio": 4.61
+  },
+  {
+    "pair": "Cyan / White",
+    "foreground": "#00A9F4",
+    "background": "#FFFFFF",
+    "ratio": 2.63
+  },
+  {
+    "pair": "深色 Tertiary / Deep Blue",
+    "foreground": "#7F7F7F",
+    "background": "#051C2C",
+    "ratio": 4.34
+  },
+  {
+    "pair": "默认 Control 边框 / White",
+    "foreground": "#B3B3B3",
+    "background": "#FFFFFF",
+    "ratio": 2.1
+  },
+  {
+    "pair": "Focus / White",
+    "foreground": "#2251FF",
+    "background": "#FFFFFF",
+    "ratio": 5.69
+  }
+]

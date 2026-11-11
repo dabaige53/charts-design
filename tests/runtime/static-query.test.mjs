@@ -17,3 +17,12 @@ test('table grouping, sort, paging, search and full CSV export use same scope',a
  const search=await engine.query({...args,tableStates:{table:{keyword:'B'}}});assert.equal(search.computed.tables.table.totalRows,1);
  const exported=await engine.query({...args,export:{}});assert.equal(exported.rowCount,2);assert.match(exported.csv,/代理/);assert.match(exported.csv,/6/);
 });
+
+// @wu-test type=integration | scope=static calculated table | protects=网页按行平均比例或空分母展示零值
+test('table calculates ratio after grouping and after filtering',async()=>{
+ const d=make(),c=d.manifest.components.table;c.presentation={columns:[{key:'agent',title:'代理'},{key:'rate',title:'指标值'},{key:'n'},{key:'d'},{key:'unit'}],groupBy:['agent','unit'],sumFields:['n','d','rate'],calculatedColumns:{rate:{numerator:'n',denominator:'d',unitField:'unit',decimals:1}},tableState:{pageSize:10}};
+ d.staticFiles.sales=['all'];delete d.staticPartitions;
+ const query=createStaticQuery(d,async()=>[{agent:'A',unit:'%',n:1,d:2},{agent:'A',unit:'%',n:2,d:8},{agent:'B',unit:'分钟',n:36,d:3},{agent:'C',unit:'%',n:null,d:0}]);
+ let result=await query.query({componentIds:['table']});assert.deepEqual(result.computed.components.table.rows.map(r=>r.rate),['30.0%','12.0 分钟','—']);
+ result=await query.query({componentIds:['table'],filters:[{field:'agent',op:'in',values:['B'],componentIds:['table']}]});assert.equal(result.computed.components.table.rows[0].rate,'12.0 分钟');
+});

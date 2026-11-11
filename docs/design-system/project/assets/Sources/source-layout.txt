@@ -1,0 +1,4322 @@
+MDS
+v0.9.1
+The McKinsey
+Design System                                               version 0.9
+
+
+
+
+Release Notes
+Version   Release      Notes
+
+
+v0.9.1    09.01.2020    Bug Fixes, New Components - Custom Select (styled options). Multi-select with Tags, with Checkboxes, Improved documentation for Links, Improved
+                        Pagination, Experimental Badges, Experimental Tags
+
+
+
+v0.9      05.14.2020    All file reworked replacing Theinhardt for McKinseys Sans. Added Cards, Date Pickers, Page Switchers, Pagination, Menu Popups, Single and Multi Select
+                        Popups, and Tags and Badges as experimental.
+
+
+v0.8.4    02.18.2020    Added MDS thumbnail for Core Sketch Library, reworked line heights to match 4px Grids, added minimum size for buttons (twice their own height), Electric
+                        Blue has a new value #2251FF. This was updated globally. Fixes: Fixed smart layout on several components, data tables are now working properly, created
+                        deprecated section for icons ahead of a stand alone icon library
+
+
+v0.8.3    12.19.2019    Updated all components with Smart Layout Rules, Added danger buttons and buttons with right icons, Tooltips were adjusted/cleaned up and Typography
+                        and line heights were adjusted to work with 4pt grid (beta)
+
+
+v0.8.2    10.23.2019    4pt Grids (Beta), Tooltips with content and CTAs, Alerts/notifications with CTAs
+
+
+v0.8.1    09.10.2019    Added Alerts/Notifications, Form Validation,Simple Tooltips and Simple Modals
+
+
+v0.8      07.30.2019    Color, Typography, Borders and Lines, Spacing, Grid, Icons, Script Mark. Core symbols: Avatars, Breadcrumbs, Buttons, Data Tables, Footers, Form Inputs,
+                        Headers, Links, Tabs
+Mckinsey Design System                                                                                                         2020
+
+
+
+
+Color
+
+Brand colors
+
+
+  McKinsey Deep Blue                      McKinsey Electric Blue                 McKinsey Cyan
+  #051C2C                                 #2251FF                                #00A9F4
+  $color-brand-deep-blue                  $color-brand-electric-blue             $color-brand-cyan
+
+
+
+
+Functional colors
+Our functional palette is used primarily for data visualization. You can learn
+more by referencing https://mckinsey.ent.box.com/file/408627955620
+
+
+
+
+  Blue Transition 1                       Blue Transition 2                      Blue Transition 3       Blue Transition 4
+  #034B6F                                 #027AB1                                #39BDF3                 #71D2F1
+  $color-data-blue-1                      $color-data-blue-2                     $color-data-blue-3      $color-data-blue-4
+
+
+
+
+  McKinsey Pale Electric Blue             McKinsey Turquoise                     McKinsey Pale Blue
+  #AFC3FF                                 #3C96B4                                #AAE6F0
+  $color-data-pale-electric-blue          $color-data-turquoise                  $color-data-pale-blue
+
+
+
+
+  McKinsey Purple                         McKinsey Pink                          McKinsey Red             McKinsey Orange
+  #8C5AC8                                 #E6A0C8                                #E5546C                  #FAA082
+  $color-data-purple                      $color-data-pink                       $color-data-red          $color-data-orange
+
+
+
+
+Neutrals colors
+
+
+  Super Dark Gray                         Dark Gray                              Mid Gray                Light Gray
+  #333333                                 #4D4D4D                                #757575                 #B3B3B3
+  $color-gray-80                          $color-gray-70                         $color-gray-54          $color-gray-30
+
+
+
+
+  Super Light Gray                        Pale Gray                              Super Pale Gray
+  #D0D0D0                                 #E6E6E6                                #F0F0F0
+  $color-gray-18                          $color-gray-10                         $color-gray-06
+
+
+
+
+  Black                                   White
+  #000000                                 #FFFFFF
+  $color-black                            $color-white
+Mckinsey Design System                                                     2020
+
+
+
+
+Typography Desktop
+
+
+Desktop display headings
+
+Style Name                 Pixels   Line Height   Rems       Line Height
+
+
+
+
+Display 1                  64px     76px          4rem       1.187
+
+
+
+
+Display 2                  60px     72px          3.75rem    1.2
+
+
+
+
+Display 3                  56px     68px          3.5rem     1.214
+
+
+
+
+Display 4                  52px     64px          3.25rem    1.153
+
+
+
+
+Desktop heading styles
+
+Style Name                 Pixels   Line Height   Rems       Line Height
+
+
+
+
+Heading 1                  44px     52px          2.75rem    1.181
+
+
+
+
+Heading 2                  40px     48px          2.5rem     1.2
+
+
+
+
+Heading 3                  36px     44px          2.25rem    1.222
+
+
+
+
+Heading 4                  32px     36px          2rem       1.125
+
+
+
+
+Heading 5                  28px     32px          1.75rem    1.142
+
+
+
+
+Heading 6                  24px     28px          1.5rem     1.166
+
+
+
+
+Desktop body styles
+
+Style Name                 Pixels   Line Height   Rems       Line Height
+
+
+
+
+Article Lead               24px     36px          1.5rem     1.5
+
+
+
+
+Article Body               20px     32px          1.25rem    1.6
+
+
+
+
+Body Large                 18px     28px          1.125rem   1.555
+
+
+
+Body Default               16px     24px          1rem       1.5
+
+
+
+Body Small                 14px     20px          .875rem    1.428
+Mckinsey Design System                                                    2020
+
+
+
+
+Typography Mobile
+
+
+Mobile display headings
+
+Style Name                Pixels   Line Height   Rems       Line Height
+
+
+
+
+Display 1                 60px     72px          3.75rem    1.2
+
+
+
+
+Display 2                 56px     68px          3.5rem     1.214
+
+
+
+
+Display 3                 52px     60px          3.25rem    1.153
+
+
+
+
+Display 4                 48px     56px          3rem       1.166
+
+
+
+
+Mobile heading styles
+
+Style Name                Pixels   Line Height   Rems       Line Height
+
+
+
+
+Heading 1                 40px     48px          2.5rem     1.2
+
+
+
+
+Heading 2                 36px     44px          2.25rem    1.111
+
+
+
+
+Heading 3                 32px     36px          2rem       1.125
+
+
+
+
+Heading 4                 28px     32px          1.75rem    1.142
+
+
+
+
+Heading 5                 24px     28px          1.5rem     1.333
+
+
+
+
+Heading 6                 20px     24px          1.25rem    1.4
+
+
+
+
+Mobile body styles
+
+Style Name                Pixels   Line Height   Rems       Line Height
+
+
+
+Article Lead              20px     32px          1.25rem    1.6
+
+
+
+
+Article Body              18px     28px          1.125rem   1.555
+
+
+
+
+Body Large                18px     28px          1.125rem   1.555
+
+
+
+Body Default              16px     24px          1rem       1.5
+
+
+
+Body Small                14px     20px          .875rem    1.428
+Mckinsey Design System                                                    2020
+
+
+
+
+Borders and Lines
+In Sketch, borders and lines can be distributed as shared styles. This
+makes working with horizontal rules consistent and easier to manage.
+
+
+
+
+Horizontal rules
+Sizes        Style       Color        Style Name                Example
+
+
+1px          Solid       #E6E6E6      Light Seperator
+
+
+1px          Solid       #B3B3B3      Medium Seperator
+
+
+1px          Solid       #000000      Dark Seperator
+
+
+
+
+Control borders
+Sizes        Style       Color        Style Name                Example
+
+
+
+1px          Solid       #000000      Form Control Dark
+
+
+
+
+1px          Solid       #2251FF      Form Control Focus
+
+
+
+
+1px          Solid       #B3B3B3      Form Control Default
+Mckinsey Design System                                                                                                                                                            2020
+
+
+
+
+Elevation on MDS
+Elevations represent different user interface layers simulated through the use of shadows. Placing different elements on
+different layers creates a clear hierarchy of interface elements and makes it easier to locate currently available options for
+the user. Layers are represented by various sized shadows to indicate a position along an imaginary z-axis extending
+above the user interface towards the user.
+
+
+
+
+Specifications/Anatomy
+
+
+
+
+                                                                                                                Shadow color #051C2C -> opacity 20%              ––>
+
+
+0px (Surface)             2px             4px                          8px                 16px
+
+
+
+  Component distance from surface   1º shadow                                  2º shadow
+
+
+  2px                               Y = 2 | Blur = 4 | Spread = -1             Y = 0 | Blur = 1 | Spread = 0
+
+
+  4px                               Y = 4 | Blur = 8 | Spread = -1             Y = 0 | Blur = 1 | Spread = 0
+
+
+  8px                               Y = 8 | Blur = 16 | Spread = -1            Y = 0 | Blur = 1 | Spread = 0
+
+
+  16px                              Y = 16 | Blur = 32 | Spread = -1           Y = 0 | Blur = 1 | Spread = 0
+
+
+
+
+                                                                                                                      4º                        Drawers
+                                                                                                      16px     elevation                        Modals
+
+
+Look and feel
+                                                                                                                                                Pickers
+
+
+
+
+                                                                         16px elevation
+
+
+                                                                                                                      3º
+                                                                                                                                                Navigation bars (during scroll)
+                                                                                                       8px     elevation
+                                                                         8px elevation                                                          Cards (hover)
+
+
+                                                                         4px elevation
+                                                                         2px elevation
+                                                                                                                      2º
+                                                                                                       4px     elevation                        Tooltips
+                                                                         0px elevation                                                          Popovers
+
+                                                                                                                       1º
+                                                                                                       2px     elevation                        Cards
+
+
+                                                                                                                  Page
+                                                                                                       0px      surface
+
+
+
+
+This diagram shows the different layer representations stacked on top of each other as well as how different
+components are distributed across the different elevation layers.
+
+
+
+    0px elevation                                                                                   2px elevation
+
+    Content and common UI elements are usually placed on the                                        The 2px layer elevation helps to indicate interactive
+    surface of the page at the 0px elevation.                                                       components. After interaction, the component may rise to
+                                                                                                    another elevation layer.
+
+
+
+    4px elevation                                                                                   8px elevation
+
+    The simplest components requiring contrast and the user's                                       More complex components and items with interactions such
+    attention, such as tooltips and popovers, are placed at the 4px                                 as navigation menus and cards in a hover state are placed at
+    elevation.                                                                                      the 8px elevation.
+
+
+
+    16px elevation
+
+    Components that require the most user focus like drawers,
+    modals, and pickers are place at the upper most layer.
+Mckinsey Design System                                                                                                                                                        2020
+
+
+
+
+Spacing
+Spacing is one of the most important aspects of visual design and is foundational to the
+McKinsey Design System. Underlying every layout, component or spatial relationship is a
+4pt spacing system. We use spacing consistently and intentionally to establish order,
+hierarchy and rhythm.
+
+
+
+
+Spacing sizes and increments
+All spacing helpers are percentages or multiples of 4px (0.25rem). Using 4px as a constant offers flexibility,
+clean numbers to work with, and helps improve design and accessibility when fonts are scaled in a browser.
+This also offers spacing consistency and consistent rhythm throughout the design system.
+
+Small                              Medium                             Large
+
+4
+    8   12   16                     24     32
+                                                     48
+                                                                             64
+                                                                                            96
+
+
+
+
+Types of spacing
+Use margins and padding to create several types of spacing. See
+examples below for Inset spacing, Inline spacing, Stacked spacing,
+Spacing text, and Margins.
+
+
+
+
+Inset spacing
+                                                          Inset spacing
+Inset spacing is spacing applied
+to the inside of a container or
+component.
+
+                                                                                                                                                             16px
+                                                                                  Label Placeholder
+                                                                                                                                                                       16px
+                                                                                     Enter value here
+                                                                      16px
+
+
+                                                                                  16px
+
+
+
+
+                                                                                                        Inset spacing on default text input
+
+
+
+
+Inline spacing                                            Inline spacing
+Inline spacing occurs horizontally
+between objects across the x-axis.
+
+
+
+
+                                                                                                                            Industry
+
+                                                                                                                            Item 1     Item 2    Item 3   Item 4
+
+
+
+                                                                       32px         32px                          80px            24px        24px    24px          24px
+
+
+
+
+                                                                                                         Inline spacing on main header
+
+
+
+
+Stacked spacing                                           Stacked spacing
+Stacked spacing occurs vertically
+between objects across the y-axis.
+
+
+                                                                                                              Customer insights/Market research
+                                                                                                 16px
+                                                                                                              Marketing/Communications/PR
+                                                                                                 16px
+                                                                                                              Operations/Support
+                                                                                                 16px
+                                                                                                              Product development/R&D
+                                                                                                 16px
+                                                                                                              Others
+
+
+
+
+                                                                                                    Stacked spacing between checkbox inputs
+
+
+
+
+Spacing text
+Space text to the direct selection of a text box in Sketch. Line height determines
+text box size, so apply the correct line height to the text before making
+measurements.
+
+Avoid measuring to the baseline of text. That creates unexpected spacing results.
+
+
+
+
+                        64px
+
+
+                                                By Manuel Altmeier, Harald Bauer, Michael Becker, and Markus Simon
+                        48px
+
+
+                                                Shifting growth patterns and digitization are reshaping the
+                                                sector. A strategic response can help machinery and industrial
+                                                automation companies to keep pace.
+                        64px
+
+
+
+
+                                                T      he global machinery and industrial automation sector has been in a
+                                                       well-balanced equilibrium for decades—with only small shifts in
+                                                revenue and market share, in the low single-digit percentage range. Now
+                                                things are suddenly becoming exciting again.
+                        24px
+
+                                                This is because there seems to be a clear and widespread consensus among
+                                                pundits and the sector’s players that two emerging global megatrends in their
+                                                industry—shifting growth patterns and the increasing pace of digitization—will
+                                                have a severe impact on strategic control points and value pools, forcing
+                                                companies to rethink their business model (Exhibit 1). The trends’ effect on
+                                                value pools are especially critical, because the ability of the sector’s players to
+                                                hold on to the value they claim or capture the new value being created, or both
+                                                —and to stake or maintain a claim in the new machinery and industrial
+                                                automation landscape—is directly tied to their ability to occupy strategic control
+                                                points along the evolving value chain.
+                        24px
+Mckinsey Design System                                                                             2020
+
+
+
+
+4pt grid system guidance
+The 4pt grid system is the underlying fabric that provides consistency and structure to all
+visual elements of McKinsey's Design System. It establishes a framework for consistently
+scaling and evolving the design system in a predictable and flexible way over time. All
+spacing, typography, and visual elements adhere to the 4pt grid system.
+
+
+
+
+Getting started
+The artboards you see here are setup with 4pt grid and layout settings in a variety of common
+sizes used for designing responsive web applications. These can be used as is or as a starting
+point for your projects. Typically Designers will choose three artboards representing mobile,
+tablet and desktop. The 4pt grid is very flexible and you are encouraged to setup your artboard
+to suit your needs using the grid system.
+
+
+
+
+Need the grid setup for a specific device?
+We have those too! We’ve worked to identify the most commonly used devices at the firm and
+have setup artboards with all the grid and layout settings you need to get started. You can find
+these on Box at:
+
+
+https://mckinsey.ent.box.com/notes/543675818181?s=zncbublu7ybq10w3rq0r96bn7vihpw3r
+
+
+
+
+Questions or comments
+Reach out on Slack in the #mds-community channel.
+iPhones XR, XS Max (414px wide)
+Apple devices do not adhere to an 8pt grid. To
+correct this, the canvas has been rounded 400px.
+This will add about 1px to each column when
+executed in code.
+
+To check for design to code accuracy, Inspect
+screens at 400px width.
+Left Rail is off canvas and fills
+viewport when activated
+iPhones XR, XS Max (414px wide)
+Apple devices do not adhere to an 8pt grid. To
+correct this, the canvas has been rounded 400px.
+This will add about 1px to each column when
+executed in code.
+
+
+To check for design to code accuracy, Inspect
+screens at 400px width.
+Both Rails are off canvas and
+fills viewport when activated
+iPhones XR, XS Max (414px wide)
+Apple devices do not adhere to an 8pt grid. To
+correct this, the canvas has been rounded 400px.
+This will add about 1px to each column when
+executed in code.
+
+
+To check for design to code accuracy, Inspect
+screens at 400px width.
+Avoid using two rails on tablet. Instead, consider
+making right rail available off-canvas.
+Mckinsey Design System                                                           2020
+
+
+
+
+Script Mark
+Use the script mark in either its positive or inverse form. Always create high
+contrast between the script mark and its background.
+
+
+
+
+Deep Blue
+McKinsey Deep Blue is our standard for
+the script mark. Use it when full-color
+reproduction is available.
+
+
+
+
+Black
+When you can't use color, use the black
+version of the script mark..
+
+
+
+
+White
+If you use the white version on a dark
+background, use McKinsey Deep Blue
+as your background.
+Mckinsey Design System                                                                                                                                                                 2020
+
+
+
+
+Alerts
+Alerts provide user feedback and messaging. There are two types of
+alerts - Global Alerts and Contextual Alerts. Each have specific use
+cases and cannot be used interchangeable.
+
+
+
+
+Anatomy
+
+         Main message                                                                                                   Secondary button         Primary button                     56px
+
+
+
+24px   16px                                                                                           Opcional Action Buttons                                            24px
+
+
+          24px Action Icon                                                                                                                 Optional Dismiss Icon
+
+
+
+
+Global Alerts
+Global alerts display system-wide messaging. They’re displayed above the header at
+the very top of the screen. When buttons are not needed select the button and
+choose “No Symbol” in overrride settings.
+
+
+Warning global
+
+
+         Your account will expire in 3 days unless action is taken. Talk to our admins to help you.                                        Secondary button        Primary button
+
+
+
+
+Error/danger global
+
+
+         All files that have not been saved will be lost. You can’t undo this, but you can save your file.                                 Secondary button        Primary button
+
+
+
+
+Information global
+
+
+         You can now update your system information to v0.8.1. You can update it now.                                                      Secondary button        Primary button
+
+
+
+
+Neutral global
+
+
+         You can now update your system information to v0.8.1. You can update it now.                                                      Secondary button        Primary button
+
+
+
+
+Where to use them
+
+
+
+
+Contextual Alerts
+Contextual alerts display messaging geared to a specific user action or state of an
+application. There are currently five alerts that can be displayed in a variety of
+contexts - Success, Warning, Error/Danger, Information and Neutral. These should
+not be used for system-wide messaging.
+
+
+Success contextual
+
+
+         Your profile has been successfully updated! Always keep your information up to date.
+
+
+
+
+Warning contextual
+
+
+         Your account will expire in 3 days unless action is taken. Talk to our admins to help you.
+
+
+
+
+Error/danger contextual
+
+
+         All files that have not been saved will be lost. You can’t undo this, but you can save your file.
+
+
+
+
+Information contextual
+
+
+         You can now update your system information to v0.8.1. You can update it now.
+
+
+
+
+Neutral contextual
+
+
+         You can now update your system information to v0.8.1. You can update it now.
+
+
+
+
+Where to use them
+
+
+
+
+Sizes
+Global alerts display system-wide messaging. They’re displayed above the header at
+the very top of the screen.
+
+
+Desktop (1440px) - Success global
+
+
+         Your profile has been successfully updated! Always keep your information up to date.                                              Secondary button        Primary button
+
+
+
+
+Tablet (768px) - Success global
+
+
+         Your profile has been successfully updated!              Secondary button       Primary button
+         Always keep your information up to date.
+
+
+
+
+Mobile (414px) - Success global
+
+
+          Your profile has been successfully
+          updated! Always keep your information
+          up to date.
+
+              Secondary button     Primary button
+Mckinsey Design System                                                                                                                         2020
+
+
+
+
+Avatars
+Avatars display a user’s profile image. In our case, we encapsulate the photo in a circle.
+You may find these commonly used as a profile image in the top right of a header, on a
+profile card, in text messages, and many other contexts.
+
+
+
+
+Avatar sizes
+Avatar size depends on the element where it lives. For example, use Huge (256px) for big components like
+profile cards. On small components like a dashboard, it’s more appropriate to use the extra small (32px).
+Notice, the smaller the circle gets, the more zoom you need on the photo to recognize the person.
+
+
+Extra Small           Small           Medium              Large                Extra Large               Huge
+  (32px)             (48px)           (64px)              (96px)                 (128px)                (200px)
+
+
+
+
+Avatar styles
+Avatars have three styles, depending on what information the colleague provides.
+
+
+No Name, No Photo                    Full Name, No Photo                  With Photo
+
+
+
+
+                                           DS
+
+
+Font size
+When you use an avatar with initials only, match the font to the avatar size to make it readable.
+
+
+Extra Small (32px avatar)         Small (48px avatar)              Medium (64px avatar)                 Large (96px avatar)
+
+
+  DS          16px font size
+                                    DS          20px font size
+                                                                     DS          24px font size
+                                                                                                           DS                 36px font size
+
+
+
+
+Extra Large (128px avatar)                       Huge (200px avatar)
+
+
+
+
+       DS
+                                                          DS
+                               48px font size
+
+                                                                                       72px font size
+Mckinsey Design System                                                                                                                    2020
+
+
+
+
+Breadcrumbs
+Breadcrumbs are used to help the users keep track and maintain awareness of the overall locations
+within a specific navigation that the user is currently in. A breadcrumb must have the minimum size
+of 2 items and the maximum of 5 items, so that it’s easier for the user to use it.
+
+
+
+
+Anatomy
+
+Item      Item           Item     Item        Item              20px
+
+
+
+                 16 16
+
+
+
+
+Breadcrumbs options
+The last item on the breadcrumb is always where the user is currently on the overall navigation, so it uses the electric
+blue to differentiate from the others.
+
+
+
+2 items           Item 1        Active item
+
+
+
+
+3 items           Item 1        Item 2        Active item
+
+
+
+
+4 items           Item 1        Item 2        Item 3        Active item
+
+
+
+
+5 items           Item 1        Item 2        Item 3        Item 4        Active item
+
+
+
+
+Active item       Item 1        Item 2        Item 3        Item 4        Active item
+
+
+
+
+If a breadcrumb needs more than 5 levels of navigation, our recommendation is to simply use the 16px glyphed icon ellipsis to
+indicate that there is more hidden within it. Once the user clicks on it, a popup menu will appear, providing all the navigation
+levels that are compressed. The best and appropriate place to put the ellipsis is replacing the second item on the
+breadcrumb. By doing so the first level is always visible, keeping the reference where iit all started, and we keep the last 3
+levels, where the user is mostly likely to use to navigate.
+
+
+Item 1               Item 5        Item 6        Active item                                     Item 1   Item 5   Item 6   Active item
+
+
+                                                                                        Item 2
+
+                                                                                        Item 3
+
+                                                                                        Item 4
+Mckinsey Design System                                                                                                                                                                                 2020
+
+
+
+
+Button Guidelines
+
+
+Button Specs
+
+Primary large button                                                                                      Primary medium button
+
+24px                   24px                                                                              16px                    16px
+
+
+                                        16px                                                                                                    12px
+       Primary button                                       Primary button                                     Primary button            40px                        Primary button
+                                  48px
+
+
+
+Primary small button
+
+16px               16px
+
+
+                                 9px
+   Primary button             32px                         Primary button
+
+
+
+Primary dropdown large button                                                                             Primary dropdown medium button
+
+24px                      24 16 16 16                                                                    16px                    16 1216 12
+
+
+
+       Primary button                      48px             Primary button                                     Primary button                   40px                 Primary button
+
+
+
+Primary dropdown small button
+
+16px                16 8 16 8
+
+
+
+   Primary button                 32px                     Primary button
+
+
+
+
+Button styles and hierarchy
+Primary, secondary and tertiary buttons provide interaction hierarchy. They’re designed to maintain priority across all states. Contrast progressively
+increases as users get closer to completing the interaction. The alternative high-contrast primary button is only used in certain scenarios. See
+usage below.
+
+
+
+default               Primary button                       Secondary button                  Tertiary button                     High
+                                                                                                                                  Highcontrast
+                                                                                                                                       Contrastbutton
+
+
+
+
+:hover                Primary button                       Secondary button                  Tertiary button                     High contrast button
+
+
+
+
+:active               Primary button                       Secondary button                  Tertiary button                     High contrast button
+
+
+
+
+Usage
+Primary                                                 Secondary                                         Tertiary                                                 Primary high contrast
+
+Primary buttons are used for drawing                    Secondary buttons are less prominent              Tertiary buttons are our most subtle and                 Primary high contrast buttons are used
+attention to the most important                         and are meant to draw attention without           lowest priority buttons. They are                        as an alternative to our Electric Blue
+interactions. When possible limit primary               being distracting. They pair with primary         particularly useful for error prevention                 buttons. These are used exclusively for
+buttons to one per page.                                and tertiary buttons.                             such as Cancel, Back and Edit.                           high impact customer facing designs.
+
+
+
+
+Accessibility
+All buttons need to adhere to WCAG AA 2.0 guidelines a contrast ratio: 4.5 must be met. In additon to
+contrast ratio focus states are important for acessibility.
+
+
+
+                                          Primary button                      Secondary button                 Tertiary button                    Disabled button
+
+
+
+
+Text Color                              #FFFFFF                             #1F40E6                       #333333                               #7F7F7F
+
+Background                              #1F40E6                             Transparent                   Transparent                           #D0D0D0
+
+Border Color                            None                                #1F40E6                       #D0D0D0                               None
+
+Contrast on White                       AA: 7.16                            AA: 7.16                      AA: 12.63                             N/A
+
+Contrast on Gray 10                     AA: 6.28                            AA: 6.28                      AA: 10.12                             N/A
+
+
+
+
+Button groups
+Need to maintain visual hierarchy. The order and position need to be carefully consider. Primary actions
+almost always appear on the right.
+
+                       12px
+
+
+
+       Learn More                 Sign Up                                         Cancel               Submit                                            Back                     Next
+
+
+       Secondary                   Primary                                        Tertiary           Primary                                            Tertiary            Secondary
+
+
+
+
+Fluid buttons
+Fluid buttons span a percentage of the of their container. Fluid buttons have a max-width of 575px constraining usage
+to mobile and in containers 575px or smaller like a modal.
+
+
+100% width on iPhone XR (414px):                                                                         1/2 on iPhone XR (414px):
+
+
+
+
+                            Primary button                                                                                Back                            Check Out
+
+
+
+
+Button background do’s
+
+
+
+
+          Primary button                       Primary button                    Primary button                  Primary button                        Primary button                 Primary button
+
+
+
+
+          Secondary button                     Secondary button                  Secondary button                Secondary button                      Secondary button               Secondary button
+
+
+
+
+          Tertiary button                      Tertiary button                                                   Tertiary button
+
+
+
+
+Button background dont’s
+
+
+
+
+          Primary button                       Primary button                    Primary button                  Primary button                        Primary button                 Primary button
+
+
+
+
+                                               Secondary button                                                  Secondary button                      Secondary button               Secondary button
+
+
+
+
+          Tertiary button                      Tertiary button                   Tertiary button                 Tertiary button                       Tertiary button
+Mckinsey Design System                                                                                                               2020
+
+
+
+
+Button Styles, States and Sizes
+
+
+Button Styles and States
+
+
+Styles                     Default               Hover                  Active              Focus (in testing)   Disabled
+
+
+
+
+Primary                      Button label          Button label           Button label        Button label         Button label
+
+
+
+
+Secondary                    Button label          Button label           Button label        Button label         Button label
+
+
+
+
+Tertiary                     Button label          Button label           Button label        Button label         Button label
+
+
+
+
+High Contrast                Button label          Button label           Button label        Button label         Button label
+
+
+
+
+Danger                         Danger              Button label           Button label        Button label         Button label
+                               button
+
+
+
+Primary Icon Left               Button label           Button label          Button label         Button label        Button label
+
+
+
+
+Secondary Icon Left             Button label           Button label          Button label         Button label        Button label
+
+
+
+
+Tertiary Icon Left              Button label           Button label          Button label         Button label        Button label
+
+
+
+
+High Contrast Icon Left         Button label           Button label          Button label         Button label        Button label
+
+
+
+
+Danger Icon Left                Button label             Button label        Button label         Button label        Button label
+
+
+
+
+Primary Icon Right           Button label          Button label           Button label        Button label         Button label
+
+
+
+
+Secondary Icon Right         Button label          Button label           Button label        Button label         Button label
+
+
+
+
+Tertiary Icon Right          Button label          Button label           Button label        Button label         Button label
+
+
+
+
+High Contrast Icon Right     Button label          Button label           Button label        Button label         Button label
+
+
+
+
+Primary Dropdown             Dropdown              Dropdown               Dropdown            Dropdown             Dropdown
+
+
+
+
+Secondary Dropdown           Dropdown              Dropdown               Dropdown            Dropdown             Dropdown
+
+
+
+
+Tertiary Dropdown            Dropdown              Dropdown               Dropdown            Dropdown             Dropdown
+
+
+
+
+High Contrast Dropdown       Dropdown              Dropdown               Dropdown            Dropdown             Dropdown
+
+
+
+
+Primary Icon Only
+
+
+
+
+Secondary Icon Only
+
+
+
+
+Tertiary Icon Only
+
+
+
+
+High Contrast Icon Only
+
+
+
+
+Button Sizes
+Every button comes in large, medium and small sizes.
+
+
+
+                             Medium Button         Small Button
+    Large Button
+Mckinsey Design System                                                                                                                                           2020
+
+
+
+
+Button Guidelines on Dark
+
+
+Button styles and hierarchy
+Primary, secondary, and tertiary buttons provide interaction hierarchy. They’re designed to maintain priority
+across all states. Contrast progressively increases as users get closer to completing the interaction.
+
+
+
+default             Primary button                    Secondary button             Tertiary button                     High contrast button
+
+
+
+
+:hover              Primary button                    Secondary button             Tertiary button                     High contrast button
+
+
+
+
+:active             Primary button                    Secondary button             Tertiary button                     High contrast button
+
+
+
+
+Accessibility
+All buttons need to adhere to WCAG AA 2.0 guidelines A contrast ratio: 4.5 must be met. In additon to
+contrast ratio focus states important for acessibility.
+
+
+
+                                     Primary button                Secondary button                  Tertiary button                  Disabled button
+
+
+
+Text Color                        #333333                        #FFFFFF                        #7F7F7F                            #4D4D4D
+
+Background                        #FFFFFF                        Transparent                    Transparent                        7F7F7F
+
+Border Color                      None                           #FFFFFF                        #7F7F7F                            None
+
+Contrast on Deep Blue             AA: 17.37                      AA: 17.37                      AA: 4.33                           N/A
+
+Contrast on Black                 AA: 21                         AA: 21                         AA: 5.24                           N/A
+
+
+
+
+Button groups
+Need to maintain visual hierarchy. The order and position need to be carefully consider. Primary actions
+almost always appear on the right.
+
+                    12px
+
+
+
+     Learn More                Sign Up                                    Cancel             Submit                                       Back            Next
+
+
+
+
+Fluid buttons
+Fluid buttons span a percentage of the of their container. Fluid buttons have a max-width of
+575px constraining usage to mobile and in containers 575px or smaller like a modal.
+
+
+100% width on iPhone XR (414px):                                                                1/2 on iPhone XR (414px):
+
+
+
+
+                           Primary button                                                                       Back                          Check Out
+Mckinsey Design System                                                                 2020
+
+
+
+
+Button Styles, States, and Sizes on Dark
+
+
+Primary buttons
+            Small size               Default size            Large size
+
+
+              Primary Button           Primary button
+default                                                         Primary button
+
+
+
+
+              Primary Button           Primary button
+:hover                                                          Primary button
+
+
+
+
+              Primary Button           Primary button
+:active                                                         Primary button
+
+
+
+
+              Disabled button          Disabled button
+:disabled                                                       Disabled button
+
+
+
+
+Secondary buttons
+            Small size               Default size            Large size
+
+
+              Secondary button         Secondary button
+default                                                         Secondary button
+
+
+
+
+              Secondary button         Secondary button
+:hover                                                          Secondary button
+
+
+
+
+              Secondary button         Secondary button
+:active                                                         Secondary button
+
+
+
+
+              Disabled button          Disabled button
+:disabled                                                       Disabled button
+
+
+
+
+Tertiary buttons
+            Small size               Default size            Large size
+
+
+              Tertiary button          Tertiary button
+default                                                          Tertiary button
+
+
+
+
+              Tertiary button          Tertiary button
+:hover                                                           Tertiary button
+
+
+
+
+              Tertiary button          Tertiary button
+:active                                                          Tertiary button
+
+
+
+
+              Disabled button          Disabled button
+:disabled                                                        Disabled button
+
+
+
+
+Primary buttons with icons
+            Small size               Default size            Large size
+
+
+                  Primary button          Primary button
+default                                                            Primary button
+
+
+
+
+                  Primary button          Primary button
+:hover                                                             Primary button
+
+
+
+
+                  Primary button          Primary button
+:active                                                            Primary button
+
+
+
+
+                  Disabled button         Disabled button
+:disabled                                                          Disabled button
+
+
+
+
+Secondary buttons with icons
+            Small size               Default size            Large size
+
+
+                  Secondary button        Secondary button
+default                                                             Secondary button
+
+
+
+
+                  Secondary button        Secondary button
+:hover                                                              Secondary button
+
+
+
+
+                  Secondary button        Secondary button
+:active                                                             Secondary button
+
+
+
+
+                  Disabled button         Disabled button
+:disabled                                                           Disabled button
+
+
+
+
+Tertiary buttons with icons
+            Small size               Default size            Large size
+
+
+                  Tertiary button         Tertiary button
+default                                                             Tertiary button
+
+
+
+
+                  Tertiary button         Tertiary button
+:hover                                                              Tertiary button
+
+
+
+
+                  Tertiary button         Tertiary button
+:active                                                             Tertiary button
+
+
+
+
+                  Disabled button         Disabled button
+:disabled                                                           Disabled button
+Mckinsey Design System                                                                                                                                                              2020
+
+
+
+
+Cards
+A card component creates a structure that contains different pieces of information. Cards are used to feature content and
+are usually placed at an elevation of 2px to highlight their interactivity. Depending on the specific needs of the card and
+the content the either the entire card or individual components may be active areas. When the whole card has a single
+interaction with a mouse over, the component will be raised to the 8px elevation to emphasize the interaction.
+
+
+Cards are used to group information about a specific subject. Two common examples include a profile with a lot of
+information about the featured company/person or an article with a pertinent illustration/photo, eyebrow text, and
+introductory text. Another very common use of cards are in dashboards, where each card my have a different content and
+size, with all cards adjusted for their specific content. In this usage the cards adapt to a very flexible layout to provide
+structure and focus to a lot of different information.
+
+
+The expected behavior upon interacting with a card is to navigate to another page with more extensive content related to
+the content that was summarized and featured on the selected card.
+
+
+
+
+Specifications/Anatomy
+The card is a flexible container component with content that will vary depending on individual use cases. Each part of the card shown below -
+from the Image all the way down to the Call to action - are optional. The main card content may be replaced by other non-text components such
+as a chart for a graphical dashboard requirement, but the pattern shown below should meet most text based content presentation needs. Use this
+component as the initial starting point when creating cards and simplify the card by removing unneeded items.
+
+
+
+
+                                                                                                                                    Image
+
+
+
+                                                    24px
+                                                                         Eyebrow                                                    Eyebrow
+                                                    4px
+                                                                         Card title                                                 Title
+                                                    4px
+                                                                         Card content                                               Main content
+                                                    8px
+                                                                            103             103                                     Social/Interaction
+                                         8px minimum
+                                                                                            Go to the details                       Call to action
+
+
+
+
+   Eyebrow                                        Eyebrow
+
+   Card title                                     Card title
+   Card content                                   Card content
+      103    103
+
+             Go to the details
+
+
+
+
+Minimum and maximum text sizes
+To keep cards consistent with each other and to have good visual proportions, the minimum, maximum, and recommended lines of text are
+defined for the card titles and texts. For titles the minimum is 1 line and the maximum is 3 lines with a recommendation for 2 lines of text. For the
+card's main content the minimum is 2 lines and the maximum 5 lines with a recommendation of either 3 or 4 lines of text.The main text for a card
+should be a short summary, general idea, or introductory text that informs and guides the user to the detailed content.
+
+
+
+
+   Article                                                                                         Article
+
+   The business value of                             maximum                                       The value of design                                      minimum
+                                                                                                                                                            1 line
+   design                                            2-3 lines                                     October 2018 - How do the best                           minimum
+                                                                                                   design performances.                                     2 lines
+   How do the best design
+   performances increase all their                                                                      103    103
+   revenues and shareholder returns                  maximum
+                                                     5 lines                                                  Go to the details
+   at nearly twice the rate it
+   originally started?
+      103    103
+
+             Go to the details
+
+
+
+
+Matching cards
+Although card dimensions may vary a lot depending on the content they have, the general rule is to match the size of other nearby cards - for
+example, matching the height and width of cards in the same row and column. This will reinforce a grid structure and help the user identify and
+categorize the content into imaginary boxes for quick scanning and focus. The 16px spacing between the call to action and the penultimate
+content should be considered the minimum and allowed to vary depending on the height of the card as dictated by other nearby cards and the
+height of the card's content.
+
+
+
+
+                    Article                                                      Article                                                       Article
+
+                    The business value of                                        The robo-doctor will                                          Spoil alert: "Survivor"
+                    design                                                       see you now                                                   Head over to slack to see how EM
+                    How do the best design                                       How our team helped design a                                  Shophie Clark and alum Yul Kwon
+                    performances increase all their                              surgical tool called Dexter.                                  are.
+                    revenues and shareholder returns                                103           103                                                103      103
+                    at nearly twice the rate it
+                    originally started?
+                       103    103
+
+                              Go to the details                                                   Go to the details                                           Go to the details
+
+
+
+
+Styles and Variations
+Image size
+Three standard image aspect ratios are recommended for use in cards: 16:9 rectangular images, 4:3 rectangular images, and 1:1 square images.
+The 16:9 image option is used to compliment the card text while the 1:1 image option is used to spotlight the card. The 4:3 option is a balanced
+compromise between complimenting and spotlighting the card.
+
+
+
+
+   Article
+
+   The business value of
+   design                                                              Article
+
+   How do the best design                                              The business value of
+   performances increase all their                                     design                                                                    Article
+   revenues and shareholder returns                                    How do the best design
+   at nearly twice the rate it                                         performances increase all their
+                                                                                                                                                 The business value of
+   originally started?                                                 revenues and shareholder returns                                          design
+      103    103                                                       at nearly twice the rate it                                               How do the best design
+                                                                       originally started?                                                       performances increase all their
+             Go to the details
+                                                                          103              103                                                   revenues and shareholder returns
+                                                                                                                                                 at nearly twice the rate it
+                                                                                       Go to the details
+                                                                                                                                                 originally started?
+                                                                                                                                                      103      103
+
+                                                                                                                                                               Go to the details
+
+
+
+
+Vertical / Horizontal
+
+
+                                                                                                                     Eyebrow
+
+                                                                                                                     Card title
+                                                                                                                     Card content
+                                                                                                                       103     103
+
+
+                                                                                                                               Go to the details
+
+
+
+   Eyebrow
+
+   Card title
+   Card content
+      103     103
+
+             Go to the details
+
+
+
+
+Normal / Flushed
+A flushed version of the card without elevation can be used within a more immersive context. For example, within an article if a new specific topic
+needs to be introduced parallel to the current one, a single flushed card could be used. When using the flushed version, the call to action on the
+bottom of the card must be aligned to the left of the card. This prevents the a link pointing to any surrounding text - see the in context example
+below.
+
+
+
+
+   Eyebrow                                          Eyebrow
+
+   Card title                                       Card title
+   Card content                                     Card content
+      103     103                                      103       103
+
+             Go to the details                      Go to the details
+
+
+
+
+              production, or for sectors like tourism, as well as through the use of new technologies and approaches to manage risk in
+              a changing climate. One of the biggest challenges could stem from using the wrong models to quantify risk. These range
+              from financial models used to make capital allocation decisions to engineering models used to design structures. For
+              example, current models may not sufficiently take into account geospatial dimensions or assumptions could be based on
+              historical precedent that no longer applies.
+
+
+                                                                             Societies have been adapting to the changing climate, but the pace and
+                                                                             scale of adaptation will likely need to increase significantly. Key adaptation
+                                                                             measures include protecting people and assets, building resilience,
+                                                                             reducing exposure, and ensuring that appropriate financing and insurance
+                                                                             are in place. Implementing adaptation measures could be challenging for
+                                                                             many reasons. The economics of adaptation could worsen in some
+                                                                             geographies over time, for example, those exposed to rising sea levels.
+                                                                             Adaptation may face technical or other limits. In other instances, there
+                                                                             could be hard trade-offs that need to be assessed, including who and what
+                                                                             to protect and who and what to relocate.
+              Eyebrow
+
+              Card title                                     While adaptation is now urgent and there are many adaptation
+              Card content                                   opportunities, climate science shows us that the risk from further warming
+                103      103                                 can only be stopped by achieving zero net greenhouse gas emissions.
+              Go to the details                              Decarbonization is not the focus of this research, however,
+                                                             decarbonization investments will need to be considered in parallel
+              with adaptation investments, particularly in the transition to renewable energy. Stakeholders should consider assessing
+              their decarbonization potential and opportunities from decarbonization.
+Mckinsey Design System                                                                                                                                                       2020
+
+
+
+
+Data Tables
+Data tables are composed of multiple rows and columns. A header row at the top lists column names,
+and all subsequent rows contain data. Data tables must include a minimum of three columns.
+
+
+
+
+Header
+There are two stylings of header rows that can be used on a data table. The first one (Light) uses the Pale Gray as the background color (#E6E6E6)
+and has less contrast on a white background. The other option (Dark) uses the McKinsey Deep Blue as the (#051C2C) background color of the
+header. Both the header and the content rows have 48px height. On the Light version, the default font color is the Super Dark Gray (#333333), and
+on hover and active the McKinsey Electric Blue (#2251FF) takes over. On the Dark version, the default color is white, and the hover and active color
+is the McKinsey Cyan (#00A9F4).
+
+
+Light | Left align
+The most common use for the Header is to be Left
+aligned, for general information.
+
+
+Default                                                                               Selected
+
+
+   Header 14px font size           48px                      Header                     Header
+
+
+
+16px
+
+
+
+
+Light | Left align + icon
+To be used when there is any kind of order to be
+displayed.
+
+
+Default                                                                               Selected
+
+
+   Header                          48px                      Header                     Header
+
+
+
+16px                     16px
+
+
+
+
+Light | Right align
+The Right align is commonly used for information such
+as date and currencies.
+
+
+Default                                                                               Selected
+
+
+                Currency           48px                                    Currency                 Currency
+
+
+
+                         16px
+
+
+
+
+Light | Right align + icon
+The Right align is commonly used for information such as date and
+currencies and the need to have any kind of order to it
+
+
+Default                                                                               Selected
+
+
+            Currency               48px                             Currency                    Currency
+
+
+
+                     16px 16px
+
+
+
+
+Dark | Left align                                                                     Dark | Left align + icon
+The most common use for the Header is to be Left                                      To be used when there is any kind of
+aligned, for general information.                                                     order to be displayed.
+
+
+Default                                 Selected                                      Default                             Selected
+
+
+   Header                                 Header                                        Header                                 Header
+
+
+
+
+Dark | Right align                                                                    Dark | Right align + icon
+The Right align is commonly used for information such                                 The Right align is commonly used for information such as date and
+as date and currencies.                                                               currencies and the need to have any kind of order to it
+
+
+Default                                 Selected                                      Default                             Selected
+
+
+                  Header                               Header                                    Header                                 Header
+
+
+
+
+Row
+The rows are made to capture the content related to the Header column in which they are right below. The main purpose is to provide data in a way
+that is easy for the user to see it. On interactive tables, we can use only white rows, but for a better reading of the content on non-interactive tables,
+the suggestion is to use Even rows as white and Odd rows as light gray to keep track of the information.
+
+
+Left align
+The most common aligment for general information.
+
+
+Even row                                                                              Odd row
+
+
+   Row                             48px                      Row                        Row
+
+
+
+16px
+
+
+
+
+Icon + left align
+To use when there is something descriptive that visually adds to the content.
+
+
+Even row                                                                              Odd row
+
+
+          User 312                 48px                            User 312                   User 312
+
+
+
+16px 16px
+
+
+
+
+Left align + icon
+Use when there is more information to given, e.g an icon with a menu for print, save or export.
+
+
+Even row                                                                              Odd row
+
+
+   Row                             48px                      Row                        Row
+
+
+
+16px                     16px
+
+
+
+
+Right align
+Mainly used for content such as currencies and dates.
+
+
+Even row                                Odd row
+
+
+                        Row                                  Row
+
+
+
+
+Icon                                                                                  Checkbox
+To use when there is an extra information, e.g an expand                              If users need to interact with data, a Checkbox should
+icon to open a drawer with more rows.                                                 accompany each row. Checkboxes allow users to perform an
+                                                                                      action on multiple items at once.
+
+
+Even row                                Odd row                                       Even row                            Odd row
+
+
+
+
+Interactive Tables
+Light header
+
+   Site                          East                              North                   Elevation            Company                                              Date
+
+
+   AA0105                        75553258.25                       6583920.25              180.08               Tropicana Products LTDA                      5 Mar 2019
+
+
+   CU2975                        75553258.25                       6583920.25              140.08               Aloha Air Cargo                              5 Mar 2019
+
+
+   GG8509                        6583920.25                        75553258.25             173.08               Kaiser Aluminium and Metal Storage           5 Mar 2019
+
+
+   HH7463                        6583920.25                        75553258.25             129.08               Dickies                                      5 Mar 2019
+
+
+
+
+Dark header
+
+               CC                          Client                                               Due Date                          Cur                     Expenses
+
+
+               EF7663                      Tropicana Products LTDA                                 5 Mar 2019                           EUR                    230,000
+
+
+               CU2975                      Aloha Air Cargo                                         5 Mar 2019                           EUR                    253,000
+
+
+               GG8509                      Kaiser Aluminium and Metal Storage                      5 Mar 2019                           EUR                    230,000
+
+
+               HH7463                      Dickies                                                 5 Mar 2019                           EUR                    230,000
+
+
+
+
+Hover on tables
+When you got your mouse over your table, the specific row that you are over has a distinct way to show it’s being selected.
+
+
+                CC                         Client                                               Due Date                          Cur                     Expenses
+
+
+                EF7663                     Tropicana Products LTDA                                 5 Mar 2019                           EUR                    230,000
+
+
+                CU2975                     Aloha Air Cargo                                         5 Mar 2019                           EUR                    253,000
+
+
+                GG8509                     Kaiser Aluminium and Metal Storage                      5 Mar 2019                           EUR                    230,000
+
+
+                HH7463                     Dickies                                                 5 Mar 2019                           EUR                    230,000
+
+
+
+
+Non-interactive tables
+
+   Site                          East                              North                   Elevation                 Company                                                 Date
+
+
+   AA0105                        75553258.25                       6583920.25              180.08                    Tropicana Products LTDA                            5 Mar 2019
+
+
+   CU2975                        75553258.25                       6583920.25              140.08                    Aloha Air Cargo                                    5 Mar 2019
+
+
+   GG8509                        6583920.25                        75553258.25             173.08                    Kaiser Aluminium and Metal Storage                 5 Mar 2019
+
+
+   HH7463                        6583920.25                        75553258.25             129.08                    Dickies                                            5 Mar 2019
+        Mckinsey Design System                                                                                                                                                                   2020
+
+
+
+
+        Footers
+
+
+        Footer options
+        There are some different versions of the footer available depending on the necessity of the design. When there is a need for more information, such
+        as disclosure, subscribe and navigation, the large and default versions are more suitable as they got a lot of options and itens. When the purpose is
+        to be more discrete and only identify, a common case in products, the condensed version is probably the best option. The icons within the links are
+        always optional, and the copyright text is needed only for external facing products/pages.
+
+
+
+
+        Desktop footers
+
+
+        Spacing on footer
+
+
+                64px
+
+
+
+
+                                                                                                                                                                              8px
+                         20px
+112px
+
+        Link component      Link component     Link component        Link component   Link component    Link component         Link component
+
+
+
+        McKinsey Insights - Get our latest thinking                                                                                                                    © 1996-2020 McKinsey & Company
+        on your iPhone, iPad, or Android device.                                                                                                                             Only needed for external facing products
+
+
+
+
+        Large footer
+
+
+
+
+               Optional icon
+
+
+           Link component           Link component           Link component       Link component        Link component            Link component      Link component
+
+
+
+        McKinsey Insights - Get our latest thinking                                                                                                                    © 1996-2020 McKinsey & Company
+        on your iPhone, iPad, or Android device.
+
+
+
+
+        Default footer
+
+
+
+                                                                                                                                                FAQ   Send us feedback       Contact us         Site map
+
+
+
+                                                                                                                                                                       © 1996-2020 McKinsey & Company
+
+
+
+
+        Condensed footer
+
+
+
+                                                                                                                                                                                       Send us feedback
+
+
+
+
+        Tablet footers
+
+
+        Large footer
+
+
+
+
+                   Link component          Link component            Link component
+
+                   Link component          Link component            Link component
+
+
+
+
+               McKinsey Insights - Get our latest thinking                               © 1996-2020 McKinsey & Company
+               on your iPhone, iPad, or Android device.
+
+
+
+
+        Default footer
+
+
+
+                                                               FAQ        Send us feedback      Contact us          Site map
+
+
+
+                                                                                         © 1996-2020 McKinsey & Company
+
+
+
+
+        Condensed footer
+
+
+
+                                                                                                         Send us feedback
+
+
+
+
+        Mobile footers
+
+
+        Large footer                                                                         Default footer
+
+
+
+
+                                                                                                       FAQ
+
+                 Link component                                                                        Send us feedback
+
+                 Link component                                                                        Contact us
+
+                 Link component                                                                        Site map
+
+
+
+
+                                                                                                   © 1996-2020 McKinsey & Company
+
+
+
+
+             McKinsey Insights - Get our latest thinking
+             on your iPhone, iPad, or Android device.
+
+
+             © 1996-2020 McKinsey & Company
+
+
+
+
+        Condensed footer
+
+
+
+
+                 Send us feedback
+Mckinsey Design System                                                                                                                                                                                    2020
+
+
+
+
+Date Picker
+The date picker component allows selection of a singular date or a range of dates. When used within a form, the
+component is usually not visible when the form first loads and appears after the user clicks on a date or date range input
+field. The user then selects a specific date instead of inputing the information with the keyboard. The expanded date
+picker provides additional information on date restrictions and eliminates confusion between international date format
+variations by spelling out or abbreviating the month and including a four digit year.
+
+
+
+
+Specifications/Anatomy
+                                                                                                            16px medium font
+
+                                                                                                                                          Hover icon
+                                                                                          March 2020
+
+                                                                            Mo     Tu     We     Th    Fr   Sa         Su
+
+                                                                            25     26     27     28    29   30         1
+
+                                               #333333 | Today               2     3      4      5     6      7        8                  #333333
+
+                                                                             9     10     11     12    13     14       15
+                                                                                                                                      #E8EDFF | Range day
+                                                                            16     17     18     19    20     21       22                 #2251FF | Selected day
+
+                                                                            23     24     25     26    27   28         29                 14px light font
+
+                                                                            30     31     1      2     3      4        5                  #B3B3B3
+
+
+                                                                                 Today
+
+
+
+
+Styles and variations
+Active days on the current month calendar are indicated by more contrast while days outside the active range and on other months are indicated
+with a subtle gray. The current day is surrounded by a gray square to make sure the user can differentiate it from a selected day. When selecting a
+date range, the first and last selected days will have electric blue backgrounds and a white medium font while the days within the range will have
+a softer blue background.
+
+
+  1                                                    1                                                           1                                                            1
+
+Month days                                           Today                                                    Selected days                                                   In range days
+
+Common day of the current                            The current date.                                        The first and second day                                        All the days between the first
+month being displayed.                                                                                        selected by the user to create a                                and last selected days of a date
+                                                                                                              range of days.                                                  range.
+
+
+
+
+  1                                                    1                                                           1                                                            1
+
+Past days                                            Hover                                                    Today hover                                                     Selected days hover
+
+A day that has passed in the                         Mouse hover.                                             The current date hovered.                                       The first and second day
+calendar.                                                                                                                                                                     selected by the user to create a
+                                                                                                                                                                              range of days hovered.
+
+
+
+
+  1
+
+In range days hover
+
+All the days between the first
+and last selected days of a date
+range hovered.
+
+
+
+
+Date picker selector
+To open the date picker click on the date pick selector which is represented by a calendar icon on the right corner of the input field. The calendar
+icon signals the difference between a common input field and a date picker field. The date picker can be used to select a specific date or a date
+range.
+
+
+Label name                                                 Label name
+
+  DD MMM YYYY                                                DD MMM YYYY               DD MMM YYYY
+
+
+
+
+Date convention
+In order to keep the date consistent and easy to interpret across locals, an intuitive and easy to read date format has been selected. Dates will
+always be display with the day (DD) , followed by the first three letters of the month name (Mmm), and then the four digit year (YYYY).
+
+
+Label name
+
+  27 Feb 2020
+
+
+
+
+Styles and variations
+There are four states in which the input field can appear and 3 different sizes to match the sizes of the standard input fields and buttons.
+
+
+
+States
+Label name                                                                                     Label name
+
+  DD MMM YYYY            DD MMM YYYY                                                             DD MMM YYYY                DD MMM YYYY
+
+
+Default                                                                                        Dark Default
+
+
+Label name                                                                                     Label name
+
+  DD MMM YYYY            DD MMM YYYY                                                             DD MMM YYYY                DD MMM YYYY
+
+
+Selected                                                                                       Disabled
+
+
+
+Sizes
+
+Label name                                                                Label name                                                                        Label name
+
+  DD MMM YYYY            DD MMM YYYY                                        DD MMM YYYY               DD MMM YYYY                                               DD MMM YYYY         DD MMM YYYY
+
+Small
+                                                                          Medium                                                                            Large
+
+
+
+
+Step by step
+Label name                                             Label name                                                      Label name
+
+  DD MMM YYYY                 DD MMM YYYY                  DD MMM YYYY                 DD MMM YYYY                          DD MMM YYYY                 DD MMM YYYY
+
+
+                                                                            March 2020                                                       March 2020
+
+                                                             Mo      Tu     We     Th     Fr    Sa    Su                      Mo     Tu      We     Th      Fr    Sa     Su
+
+                                                             25     26      27    28     29     30     1                      25    26       27    28       29    30     1
+
+                                                              2      3      4      5      6      7     8                      2      3       4      5       6       7    8
+
+                                                              9      10     11    12     13      14    15                     9      10      11    12       13      14   15
+
+                                                              16     17     18    19     20      21   22                      16     17      18    19       20      21   22
+
+                                                             23     24      25    26     27     28    29                      23    24       25    26       27    28     29
+
+                                                             30      31      1     2      3      4     5                      30     31       1     2       3       4    5
+
+
+                                                                   Today                                                           Today
+
+
+
+
+Label name                                             Label name                                                      Label name
+
+  19 Mar 2020            DD MMM YYYY                       19 Mar 2020           22 Mar 2020                                19 Mar 2020           22 Mar 2020
+
+
+                    March 2020                                              March 2020
+
+      Mo      Tu    We    Th    Fr   Sa   Su                 Mo      Tu     We     Th     Fr    Sa    Su
+
+      25     26     27   28     29   30   1                  25     26      27    28     29     30     1
+
+        2     3     4     5     6    7    8                   2      3      4      5      6      7     8
+
+        9     10    11    12    13   14   15                  9      10     11    12     13      14    15
+
+      16      17    18   19     20   21   22                  16     17     18    19     20      21   22
+
+      23     24     25   26     27   28   29                 23     24      25    26     27     28    29
+
+      30      31    1     2     3    4    5                  30      31      1     2      3      4     5
+
+
+            Today                                                  Today
+Mckinsey Design System                                                                                                                                                 2020
+
+
+
+
+Text Inputs
+Text Inputs are interactive controls that allow users to enter a single line of text. There are a number of options and states
+to choose from depending on your needs. Though there are circumstances where a label might not be required,
+placeholder text should not be used in place of a label.
+
+
+
+
+01. Default text input
+                                           Default text input
+This is the default size and can be
+used in a broad set of contexts.
+
+
+
+                                                                        Label name
+                                                                                                                                                                8px
+                                                          8px
+                                                                          Enter value here                 16px font size                                       40px
+                                                          8px
+
+
+                                                                       16px                                                                       16px
+
+
+
+
+                                                                                                  Default text input construction
+
+
+
+
+02. Small text input
+                                           Small text input
+Small text inputs are best used
+where space is limited.
+
+
+
+
+                                                                           Label name
+                                                                                                                                                           8px
+                                                                8px
+                                                                               Enter value here               14px font size                             32px
+                                                                8px
+
+
+                                                                          16px                                                               16px
+
+
+
+
+                                                                                                  Small text input construction
+
+
+
+
+03. Large text input
+                                           Large text input
+Large text inputs are best used
+where there is plent of white space.
+
+
+
+
+                                                                Label Placeholder
+                                                                                                                                                         8px
+                                                   12px
+                                                                      Enter value here               16px font size                                      48px
+                                                   12px
+
+
+                                                                16px                                                                       16px
+
+
+
+
+                                                                                                  Large text input construction
+
+
+
+
+Text input states
+There are six states: Default, Active, Focus, Error, Validation and Disabled. The
+Default Dark state is reserved for high impact situations where inputs are limited.
+
+
+               Label name                                                                                             Label name
+                                                                                                  Dark
+Default           Enter value here                                                                Default               Enter value here
+
+
+
+               Label name
+                                                                                                                      Label name
+Active            User input information                                                          Dark
+                                                                                                  Filled                Enter value here
+
+
+
+               Label name
+
+Filled            Enter value here
+
+
+
+
+               Label name
+Error
+Validation        Enter value here
+
+                     Error message
+
+
+
+
+               Label name
+
+Disabled          Enter value here
+
+
+
+
+Combining inputs with buttons
+The use of the input fields is usually aligned to the use of the buttons. They both have 32px, 40px and 48px
+sizes, and they should always be used combining/matching each other.
+
+
+
+  Enter value here                                                             Primary button                 40px
+
+
+
+                                                                        12px
+Mckinsey Design System                                                                                                                              2020
+
+
+
+
+Text Inputs with Help Text
+Text Inputs are interactive controls that allow users to enter a single line of text. There are a number of options and states
+to choose from depending on your needs. Though there are circumstances where a label might not be required,
+placeholder text should not be used in place of a label.
+
+
+
+
+01. Default text input                     Default text input with help text
+Medium text inputs are the default
+size and can be used in a broad set
+of contexts.
+
+
+
+                                                             Label name
+                                                                                                                                             8px
+                                                   8px
+                                                                Enter value here          16px font size                                   40px
+                                                   8px
+                                                                                                                                             4px
+                                                             Helper text
+                                                                                                                                    16px
+
+
+
+
+                                                                                   Default text input with help text construction
+
+
+
+
+02. Small text input
+                                           Small text input with help text
+Small text inputs are best used
+where space is limited.
+
+
+
+
+                                                             Label name
+                                                                                                                                              8px
+                                                    8px
+                                                                Enter value here          14px font size                                   32px
+                                                    8px
+                                                                                                                                              4px
+                                                             Helper text
+
+
+
+
+                                                                                   Small text input with help text construction
+
+
+
+
+03. Large text input
+                                           Large text input with help text
+Large text inputs are best used
+where there is plent of white space.
+
+
+
+
+                                                             Label name
+                                                                                                                                              8px
+                                                   12px
+                                                                Enter value here          16px font size                                   48px
+                                                   12px
+                                                                                                                                              4px
+                                                             Helper text
+                                                                                                                                    16px
+
+
+
+
+                                                                                   Large text input with help text construction
+
+
+
+
+Text input with help text states
+There are five states: Default, Active, Focus, Error, and Disabled. The Default Dark
+state is reserved for high impact situations where inputs are limited.
+
+
+               Label name                                                                                  Label name
+                                                                                        Dark
+Default           Enter value here                                                                           Enter value here
+                                                                                        Default
+               Helper text                                                                                 Helper text
+
+
+
+
+               Label name                                                                                  Label name
+
+Active            User input information                                                Filled               Enter value here
+
+               Helper text                                                                                 Helper text
+
+
+
+
+               Label name
+
+Filled            Enter value here
+
+               Helper text
+
+
+
+
+               Label name
+Error
+Validation        Enter value here
+
+                   Error message
+               Helper text
+
+
+
+
+               Label name
+
+Disabled          Enter value here
+
+               Helper text
+Mckinsey Design System                                                                                                                        2020
+
+
+
+
+Text Areas
+Text Areas are interactive controls that allow users to enter multiple lines of text. Text Areas are perfect for entering long-
+form copy like leaving a comment. The text box can be resized by the user by dragging the bottom right corner of the box.
+
+
+
+
+01. Default text area
+                                          Default text area
+Medium text areas are the default
+size and can be used in a broad set
+of contexts.
+
+                                                              Label name
+                                                                                                                                        8px
+                                                                                                                                        8px
+                                                                Enter value here
+                                                                                                                                   Varies
+
+                                                                                                                                        8px
+
+
+
+                                                                                                                            16px
+
+
+
+                                                                                     Default text area construction
+
+
+
+
+02. Small text area
+                                          Small text area
+Small text areas are best used
+where space is limited.
+
+
+
+
+                                                              Label name
+                                                                                                                                        8px
+                                                                                                                                        8px
+                                                                Enter value here
+                                                                                            14px font size                         Varies
+
+                                                                                                                                        8px
+
+
+
+
+                                                                                      Small text area construction
+
+
+
+
+Text area states
+There are five states: Default, Active, Focus, Error, and Disabled. The Default Dark
+state is reserved for high impact situations where inputs are limited.
+
+
+               Label name                                                                             Label name
+
+                 Enter value here                                                                        Enter value here
+                                                                                   Dark
+Default                                                                            Default
+
+
+
+
+               Label name                                                                             Label name
+
+                 User input information                                                                  Enter value here
+                                                                                   Dark
+Active                                                                             Filled
+
+
+
+
+               Label name
+
+                 Enter value here
+Filled
+
+
+
+
+               Label name
+
+                 Enter value here
+Error
+
+
+
+
+               Label name
+
+                 Enter value here
+Disabled
+Mckinsey Design System                                                                                                                                      2020
+
+
+
+
+Select
+Select elements are interactive controls that present users with a list
+of options to choose from where only one option can be selected.
+
+
+
+
+01. Default select
+                                             Default select
+Medium selects are the default
+size and can be used in a broad
+set of contexts.
+
+
+
+                                                              Label name
+                                                                                                                                                     8px
+                                                                 Select an option            16px font size                                  40px
+                                                                                                                                                     8px
+
+                                                              16px                                                                     8px
+
+
+
+
+                                                                                       Default select construction
+
+
+
+
+02. Small select
+                                             Small select
+Small selects are best used where
+space is limited.
+
+
+
+                                                              Label name
+                                                                                                                                                     8px
+                                                                 Select an option            14px font size                                   32px
+                                                                                                                                                     8px
+
+                                                              16px                                                                     8px
+
+
+
+
+                                                                                        Small select construction
+
+
+
+
+03. Large select
+                                             Large select
+Large selects are best used where
+there is plent of white space.
+
+
+
+
+                                                              Label name
+                                                                                                                                                    8px
+                                                                                                16px font size                                 48px
+                                                                 Select an option
+                                                                                                                                                    12px
+
+                                                              16px                                                                     8px
+
+
+
+
+                                                                                        Large select construction
+
+
+
+
+Select states
+There are five states: Default, Active, Focus, Error, and Disabled. The Default Dark
+state is reserved for high impact situations where inputs are limited.
+
+
+               Label name                                                                              Label name
+                                                                                    Dark
+Default           Select an option                                                  Default               Select an option
+
+
+
+
+               Label name                                                                              Label name
+                                                                                    Dark
+Selected          User input information                                                                  Select an option
+                                                                                    Filled
+
+
+
+               Label name
+
+Filled            Select an option
+
+
+
+
+               Label name
+
+Error             Invalid answer
+
+
+
+
+               Label name
+
+Disabled          Select an option
+
+
+
+
+Select options
+When users clicks on a select field, select options are displayed providing users a list of options to choose from. We take advantage of native
+browser functionality to display these options. Below is a component available in the library that replicates Google Chrome’s styling. You can find
+these building blocks under Forms Inputs / Select Fields / Options
+
+
+
+                                            Select options parts                                                      Select options default
+
+                                      8px
+                                                                                                                             Option Item
+Background with                                                                                                              Option Item
+Guides On or
+Guides Off                                                                                                                   Option Item Selected
+                                                                                                                             Option Item
+                                      8px
+
+
+
+Default option item                           Option Item                                                             Select options grouped
+
+Default option item selected                  Option Item Selected                                                           Group Name
+                                                                                                                               Group Option Item Name
+                                                                                                                               Group Option Item Selected
+Group name                                    Group Name                                                                     Group Name
+                                                                                                                               Group Option Item Name
+                                                                                                                               Group Option Item Name
+Group option item name                          Group Option Item Name
+
+
+
+                                                Group Option Item Selected                                            Example
+
+                                                                                                                      Fruit
+
+                                                                                                                         Select your favorite fruit
+
+                                                                                                                             Apple
+                                                                                                                             Banana
+                                                                                                                             Cherry
+                                                                                                                             Orange
+Mckinsey Design System                                                                                                                        2020
+
+
+
+
+Select Field with Help Text
+Select elements are interactive controls that present users with a list
+of options to choose from where only one option can be selected.
+
+
+
+
+01. Default select
+                                          Default select
+Medium selects are the default
+size and can be used in a broad
+set of contexts.
+
+
+
+                                                           Label name
+                                                                                                                                        8px
+                                                              Select an option            16px font size                        40px
+                                                   4px                                                                                  8px
+                                                           Helper text
+                                                                                                                          8px
+                                                           16px
+
+
+
+
+                                                                                    Default select construction
+
+
+
+
+02. Small select
+                                          Small select
+Small selects are best used where
+space is limited.
+
+
+
+                                                           Label name
+                                                                                                                                        8px
+                                                              Select an option            14px font size                         32px
+                                                   4px                                                                                  8px
+                                                           Helper text
+                                                                                                                          8px
+                                                           16px
+
+
+
+
+                                                                                     Small select construction
+
+
+
+
+03. Large select
+                                          Large select
+Large selects are best used where
+there is plent of white space.
+
+
+
+
+                                                           Label name
+                                                                                                                                       8px
+                                                                                             16px font size                       48px
+                                                              Select an option
+                                                                                                                                       12px
+                                                  4px
+                                                           Helper text
+                                                                                                                          8px
+
+                                                           16px
+
+
+
+
+                                                                                     Large select construction
+
+
+
+
+Select states
+There are five states: Default, Active, Focus, Error, and Disabled. The Default Dark
+state is reserved for high impact situations where inputs are limited.
+
+
+               Label name                                                                           Label name
+                                                                                 Dark
+Default          Select an option                                                Default               Select an option
+
+               Helper text                                                                          Helper text
+
+
+               Label name                                                                           Label name
+                                                                                 Dark
+Selected         User input information                                                                Select an option
+                                                                                 Filled
+
+                                                                                                    Helper text
+
+
+               Label name
+
+Filled           Select an option
+
+               Helper text
+
+
+               Label name
+
+Error            Invalid answer
+
+                   Error message
+               Helper text
+
+
+               Label name
+
+Disabled         Select an option
+
+               Helper text
+Mckinsey Design System                                                                                                                                                        2020
+
+
+
+
+Multi-select
+Multi-selects are interactive controls that present users with a list of
+options to choose from where multiple options can be selected.
+
+
+
+
+Multi-select with Tags                                                                        Multi-select with Checkboxes
+Multi-select dropdown tags are most useful when a user is                                     Multi-select checkboxes are most useful when a
+expected to choose just a few options. When an option is                                      user is expected to choose many options. The
+selected it is removed from the options dropdown.                                             number of selections will be counted
+
+
+                Label name                                                                                  Label name
+
+Default            Select an option                                                           Default            Select an option
+
+
+
+
+                Label name                                                                                  Label name
+
+Active             User input information                                                     Active             User input information
+Unselected                                                                                    Unselected
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+
+
+
+                Label name                                                                                  Label name
+
+                    Aerospace & Defense         Agriculture                                                       2
+Active                                                                                        Active
+Selected            Automotive & Assem...                                                     Selected
+                                                                                                                       Item label
+
+                     Item label                                                                                        Selected item label
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+                     Item label                                                                                        Item label
+
+                     Item label
+
+
+
+
+                Label name                                                                                  Label name
+
+Error              Invalid answer                                                             Error              Invalid answer
+                    Error message                                                                                 Error message
+
+
+
+
+                Label name                                                                                  Label name
+
+Disabled           Select an option                                                           Disabled           Select an option
+
+
+
+
+Searching many options
+In the case of a very long list of options, type to filter functionality can
+be added as shown here. Multi-select filter options remain open while
+the user selects or deselects options. This helps keep the user within
+the same context being currently edited.
+
+
+
+
+Select an area to filter                                      Select an area to filter                                            Select an area to filter
+
+  Type or select to filter                                      Select an option                                                    A|
+
+
+                                                                   Advanced Electronics                                                  Advanced Electronics
+
+                                                                   Aerospace & Defense                                                   Aerospace & Defense
+
+                                                                   Agriculture                                                           Agriculture
+
+                                                                   Automotive & Assembly                                                 Automotive & Assembly
+
+                                                                   Capital Projects & Infrastructure
+
+                                                                   Chemicals
+
+
+
+
+Select an area to filter                                      Select an area to filter                                            Select an area to filter
+
+   Aerospace & Defense        A|                                 Aerospace & Defense     A|                                          Aerospace & Defense        Agriculture
+
+                                                                                                                                    A
+     Advanced Electronics                                          Advanced Electronics
+                                                                                                                                         Advanced Electronics
+     Agriculture                                                   Agriculture
+                                                                                                                                         Automotive & Assembly
+     Automotive & Assembly                                         Automotive & Assembly
+
+
+
+
+Do’s and Dont’s
+The popup has a flexible width to accommodate the length of the contained
+options. Text used for options should be clear, concise, and distinct from each
+other. Ideally each option should fit on a single line without wrapping. Multi-line
+options are discouraged unless there is a very specific use case.
+
+
+
+
+                                                                                                                      Item Type A with a description and X
+                                                                                                                      kind for control
+                           Item A - X control
+                                                                                                                      Item Type B with a description and Y
+                           Item B - Y control                                                                         kind for control
+
+                           Item C - Z control                                                                         Item Type C with a description and W
+                                                                                                                      kind for control
+
+
+
+
+          Do                                                                                             Don’t
+
+   Keep the options simple and easy to                                                           Don't make options complex or long. This makes the
+   read for the user.                                                                            list of options difficult to scan and to choose options.
+Mckinsey Design System                                                                                                                               2020
+
+
+
+
+Checkboxes
+Checkboxes allow the user to select one, many, or all options from a list. Checkboxes should be listed in a logical order, by
+placing the most likely to be selected first or listed alphabetically. Clicking either the label or the checkbox will select (or
+deselect) the option.
+
+
+
+
+Checkbox construction
+Small checkbox                           Medium checkbox
+  8px                                      8px
+
+       Checkbox label                           Checkbox label
+
+18px                                     20px
+
+
+
+
+Checkbox states
+A checkbox has 5 states: Default, Hover, Selected, Error, and Disabled. All checkboxes come in the default state or in the disabled state. When
+the user rolls the mouse over the box or the text itself, the checkbox turn to it’s hover state. Upon clicking on it, it changes to the selected state.
+
+
+Default                 Checkbox label
+
+
+
+Hover                   Checkbox label
+
+
+
+Selected                Checkbox label
+
+
+
+Error                   Checkbox label
+
+
+
+Disabled                Checkbox label
+
+
+
+Selected                Checkbox label
+Disabled
+Mckinsey Design System                                                                                                                                 2020
+
+
+
+
+Radio Buttons
+Radio buttons allow the user to select one option from a set of mutually exclusive options. Radio buttons should be listed
+in a logical order, by placing the most likely to be selected first or listed alphabetically. Radio buttons should be listed
+vertically, within 1 column for improved readability. Clicking either the label or the radio button will select (or deselect) the
+option.
+
+
+
+
+Radio button construction
+Small radio button                      Medium radio button
+  8px                                    8px
+
+       Radio label                            Radio label
+
+18px                                   20px
+
+
+
+
+Radio button states
+Radio buttons have 5 states: Default, Hover, Selected, Error, and Disabled. All radio buttons come in the default state or in the disabled state.
+When the user rolls the mouse over the circle or the text itself, the radio buitton turn to it’s hover state. Upon clicking on it, it changes to the
+selected state.
+
+
+Default              Radio label
+
+
+
+Hover                Radio label
+
+
+
+Selected             Radio label
+
+
+
+Error                Radio Label
+
+
+
+Disabled             Radio label
+
+
+
+Selected             Radio label
+Disabled
+Mckinsey Design System                                                                                                   2020
+
+
+
+
+Toggle Buttons
+A Toggle button is a component to help the user switch between the On/Off states of a given option. They usually appear
+as an off state, and upon a click you turn it on and vice-versa.
+
+
+
+
+Toggle construction
+Small toggle button                                           Medium toggle button
+
+                        8px
+                                                                                       8px
+
+               18px          Toggle option On                          20px                 Toggle option On
+                                   14px font size                                                       16px font size
+  14px                14px                                                           14px
+
+
+
+
+Toggle States
+
+Off
+
+On
+
+Disabled Off
+
+Disabled On
+Mckinsey Design System                                                                                                     2020
+
+
+
+
+Sliders
+Slider is a component created to allow users to make selections from a range of given values on a specifc bar. It might be a
+single value or a specific range. The slider might appear with an icon to the left side of the bar to represent what’s the input
+about, and a number to the right as the numeric representation for that specific input.
+
+
+
+
+Slider construction
+Single value slider                          Single value with icon slider
+
+                             4px                                        20
+
+     12px                                    8px                      8px
+
+
+
+
+Specific range slider
+                           8px
+
+
+20                          60
+                            16px font size
+ 8px 12px      12px
+
+
+
+
+Slider pressed
+
+
+     24px
+Mckinsey Design System                                                                                                                                                2020
+
+
+
+
+Headers
+
+
+Anatomy
+With menu icon
+
+
+                                          Industry
+
+                                          Nav Item 1     Nav Item 2       Nav Item Active    Nav Item 4       Nav Item 5   Nav Item 6       Nav Item 7   Nav Item 8
+
+
+
+32px        32px               96px                  24px                                                                                                              32px
+
+
+
+
+Light Headers
+Updating item names, switching between states and removing items
+1) Use your own navigation names by overriding each Nav Item
+2) To switch between states, select a Nav Item and choose Default or Active in the Inspector.
+3) To remove a navigation item, select the Nav Item and select No Symbol in Overrides in the Inspector
+
+
+Desktop Light Default
+
+
+                               Industry
+
+                               Nav Item      Nav Item       Active Item    Nav Item     Nav Item     Nav Item      Nav Item     Nav Item
+
+
+
+
+Desktop Light with Menu Icon
+
+
+                                          Industry
+
+                                          Nav Item      Nav Item      Active Item     Nav Item     Nav Item     Nav Item      Nav Item     Nav Item
+
+
+
+
+Tablet Light Default
+
+
+
+
+       Industry
+
+
+
+
+Tablet Light with Menu Icon
+
+
+
+
+                   Industry
+
+
+
+
+Mobile Light Default
+
+
+
+
+       Industry
+
+
+
+
+Mobile Light with Menu Icon
+
+
+
+
+                   Industry
+Mckinsey Design System                                                                                                                                                           2020
+
+
+
+
+Links
+There are a variety of link styles to choose from and choosing the
+appropriate link style will be based on your context. Here are some link
+styles and examples to help guide your choices.
+
+
+
+
+Arrows Links
+Arrow links are an expressive link styling option used to draw
+attention to primary calls to action. They are used sparingly and are
+available in two sizes along with a light and dark version.
+
+
+
+
+Sizes                   Default                                  Hover                                      Dark                                   Dark Hover
+
+
+
+
+Default                 Dive into the details                    Dive into the details                      Dive into the details                  Dive into the details
+
+
+
+
+Medium                  Dive into the details                    Dive into the details                      Dive into the details                  Dive into the details
+
+
+
+
+Arrow Link Example
+
+
+
+
+    Medium Inverse
+
+
+
+
+Inline Links
+Inline links are used within a paragraph. Inline links typically match                                                          Important Note
+                                                                                                                                Styling in a browser is done with a border and will
+the size and color of surrounding text and are underlined by default.                                                           have more space between the text and underline.
+The underline is required for accessibility so that links standout                                                              Since this is not possible for inline text in Sketch we
+against the surrounding text with a “non-color designator”.                                                                     use a basic underline.
+
+
+
+
+Context                   Default                                                        Hover
+
+
+
+
+Default                   Here’s an inline link in a paragraph text                      Here’s an inline link in a paragraph text
+
+
+
+
+Article                   Here’s an inline link in a paragraph text                      Here’s an inline link in a paragraph text
+
+
+
+Caption                   By Markus Leopoldseder, Paul Rutten, and Matt Wilson           By Markus Leopoldseder, Paul Rutten, and Matt Wilson
+
+
+
+
+Inline Link Example
+
+
+
+
+          Paragraph Default                                                                        Paragraph Hover
+
+          Globally, employers can be seen taking a more proactive                                  Globally, employers can be seen taking a more proactive
+          approach to testing and contact tracing, to ensure the                                   approach to testing and contact tracing, to ensure the
+          protection of their own workforces. This approach has been                               protection of their own workforces. This approach has been
+          taken mainly by organizations and institutions with significant                          taken mainly by organizations and institutions with significant
+          resources, such as Fortune 500 companies, those that must                                resources, such as Fortune 500 companies, those that must
+          operate in congregate settings, such as universities or nursing                          operate in congregate settings, such as universities or nursing
+          homes, and those that operate essential services, such as                                homes, and those that operate essential services, such as
+          pharmaceutical manufacturers or healthcare providers.                                    pharmaceutical manufacturers or healthcare providers.
+
+
+
+
+Title Links
+When component or heading titles are clickable.
+
+
+Styles                            Default                                                               Hover
+
+
+
+
+Card Title                        Card title example                                                   Card title example
+
+
+
+Display Heading
+                                  Display headline                                                    Display headline
+
+
+Title Link Example
+
+
+
+
+                                                                                               Coronavirus: Industrial IoT in
+                                                                                               challenging times
+Mckinsey Design System                                                                                                                                                                                2020
+
+
+
+
+Modals
+A modal is a content container that floats above a main page layout and it is triggered by a click event on that page. When
+active, it blocks all other page interactions, allowing users to focus on smaller pieces of critical content or perform an
+activity that requires their full attention. Modals are invasive to the user's workflow as they block all other content and
+allows them to focus on a single task. A deep blue layer (#051C2C) with 85% opacity stands between the page and the
+modal and can be dismissed by selecting the close (X) icon, a CTA (e.g. Cancel, Submit) and in some instances depending
+on the context, by clicking anywhere on the opacity layer layer.
+
+
+
+
+Specifications/Anatomy
+                                                                                                                                                      16px
+
+
+                                                                                                                                                                      16px
+                                                                                                                          40px                                                    Dismiss Icon
+
+                            Top section                                  Auxiliar Icon
+
+                                                                                                                          16px
+                                                             24px font                   Success message
+                                                                                                                                               12px
+                                                              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed nec quam vel quam                 Varies
+                       Content section                          efficitur vestibulum a et est. Aliquam commodo leo ut ante pharetra facilisis.
+                                                                                                                                    24px
+                                                            14px font
+                                                                                     Cancel                    Accept                                                   Drop shadow on 60%
+                                                                                                                                                                        Y 6px and 24 on Blur
+                        Bottom section
+                                                                                                                                    40px
+
+
+
+
+A modal is made up of 3 sections, the top section, the content section and the bottom section. All sections are optional and should be determined
+by the needs of the solution.
+
+The Top Section may contain a representative icon to help communicate the message or give a sense of status or urgency to the action being
+requested. The top section also include an "X" icon to dismiss the modal. The graphic is not always required but recommended.
+
+The Content Section contains a title, text, data visualizations, input fields, and any other variety of media, including photos, graphics or illustrations.
+All content should be written succinctly and objectively so that it occupies as few lines as possible.
+
+The Bottom Section contains action items including links and buttons to proceed. Typical combinations may include Cancel | Delete | Save |
+Send.
+
+Modals can have many different sizes but must always maintain the 40px padding on the top and bottom margins and should never consume more
+than 50% of a screen.
+
+On mobile viewports, modals typically take up more space and have larger CTAs to make them tap friendly.
+
+
+Modal on mobile
+
+
+
+
+                Modals on mobile
+         It’s important to better use the space when on
+         mobile, so when there are 2 buttons we should
+        provide equal space for them using fluid buttons.
+
+
+               Cancel                     Accept
+
+
+
+
+Styles and Variations
+Informational modal
+Used for communicating simple content, build awareness or request                                                                      Informational message
+validation before the user performs a single action including Ok, I                                                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed nec quam vel quam
+                                                                                                                     efficitur vestibulum a et est. Aliquam commodo leo ut ante pharetra facilisis.
+Agree, Save, Send or Continue, .
+                                                                                                                                                      Primary button
+
+
+
+
+Success modal
+Used for communicating a positive state. In some cases the the user
+will simply acknowledge or validate the success (as with the
+information modal) or be asked to make a decision and perform one of                                                                        Success message
+                                                                                                                   Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed nec quam vel quam
+two actions such as Cancel or Accept, Submit or Proceed before the
+                                                                                                                     efficitur vestibulum a et est. Aliquam commodo leo ut ante pharetra facilisis.
+systems continues with its next process.
+                                                                                                                                       Tertiary button        Primary button
+Any icon that suggests a positive outcome or enhances the
+communication can be used.
+
+
+
+Danger modal
+Used for communicating a negative or danger state.
+
+The modal should communicate the risk of proceeding and perform one                                                                          Danger message
+of two actions such as Cancel or Delete, Remove or Stop. Typically                                                 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed nec quam vel quam
+                                                                                                                     efficitur vestibulum a et est. Aliquam commodo leo ut ante pharetra facilisis.
+these actions cannot be undone once performed.
+
+                                                                                                                                       Tertiary button        Danger button
+
+
+
+
+Graphic modal
+Similar to the Information modal, it is used for communicating simple
+content, build awareness or request validation before the user performs
+a single action including Ok, I Agree, Save, Send or Continue. A graphic
+is used to further reinforce the content.
+                                                                                                                                         Information message
+                                                                                                                   Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed nec quam vel quam
+                                                                                                                     efficitur vestibulum a et est. Aliquam commodo leo ut ante pharetra facilisis.
+
+
+                                                                                                                                                      Primary button
+
+
+
+
+How to use them
+
+
+
+
+                                                                                                                                  85% transparency on the Deep Blue color #051C2C
+       Mckinsey Design System                                                                                                                      2020
+
+
+
+
+       Page switcher
+       The page switcher component provides navigation between sequential pages. The component is always placed on the
+       bottom of the page with the first option being a shortcut to the previous page within the product flow and the second
+       option being a shortcut to the next page within the product flow.
+
+
+
+
+       Specifications/Anatomy
+24px
+               Previous z               16px Medium font
+                                                                                8    96px
+               Go back to Cards
+
+
+                            18px Light font
+       24px   16px
+
+
+
+               Previous Page
+               Go back to Cards
+
+
+
+
+       Styles and Variations
+       The Page switcher has 2 parts, one for the previous page, and another for the next page. Both have the Default and Hover states and must always
+       be placed together.
+
+
+               Previous page                                                                                                          Next page
+               Go back to (previous page name)                                                                            Go to (next page name)
+
+
+       Previous Default                                                       Next Default
+
+
+
+
+               Previous page                                                                                                          Next page
+               Go back to (previous page name)                                                                            Go to (next page name)
+
+
+       Previous Hover                                                         Next Hover
+
+
+
+
+               Previous page                                                                                                          Next page
+               Go back to (previous page name)                                                                            Go to (next page name)
+
+
+       Disabled Previous                                                      Disabled Next
+
+
+
+
+               Previous Page                                                                                                          Next page
+               Go back to Cards                                                                                                Go back to Cards
+
+
+       Complete use
+Mckinsey Design System                                                                                                                                                                     2020
+
+
+
+
+Pagination
+The pagination component helps users navigate content distributed across several different pages or views. The
+pagination component orients the user to where they are within a series of pages and quickly switch between pages.
+
+
+
+
+Specifications/Anatomy
+                                        44px                                                                                             4px
+     4px
+                      Hover item                          20px light font
+
+
+              1            2       3       4       5      6        7                                       1           2             3         4        5           6         7
+                                                   Selected item
+   4px
+                                                   16px medium font
+
+          1       2        3    4      5       6   7
+                                                                                                  Items per page: 10                     1 – 10 of 100          1       of 10 pages
+                                                       16px light font
+                               32px
+
+
+
+
+Recommendation
+When navigating more than 10 pages, use ellipsis to indicate a continuous range while maintaining a fixed horizontal size. Include the first and last
+page numbers to allow jumping to the start of end of the content.
+
+
+
+              1            2       3       4       5      ...     14                                           1               ...       11        12          13       ...       19
+
+
+
+
+Whenever possible, the currently selected page indicator should be in the middle of the pagination component. When the selected page is at the
+start or end of the list, or the list of pages is less than 10, this will not be possible.
+
+
+
+              1            2       3       4       5      6        7                                               1                 2        3        4            5         6        7
+
+
+                  If we are on the first page, back arrow should be disabled
+
+
+
+
+Styles and Variations
+
+              1            2       3       4       5      6        7
+                                                                                                               1           2         3     4       5       6        7
+
+
+Default                                                                                                Small
+
+The default pagination style at the default size.                                                      A condensed version for tight spaces.
+
+
+
+                       1       of 78 pages
+                                                                                                                       1         of 10 pages
+
+
+Long Default                                                                                           Long Small
+
+Use this variation when there are lots of pages to                                                     Condensed version when there are lot of pages to
+navigate. The desired page can either be typed in or                                                   navigate. The desired page can either be typed in or
+selected from a popup in addition to the single or                                                     selected from a popup in addition to the single or
+multiple page stepping.                                                                                multiple page stepping.
+
+
+
+
+When you click on the chevron of the long variation pagination, you get a dropdown with the page options to choose.
+
+
+                       1       of 78 pages
+
+Page 1
+
+Page 2
+
+Page 3
+
+Page 4
+
+Page 5
+
+
+
+
+     Tropicana Products LTDA                                                5 Mar 2019                   EUR
+
+
+     Tropicana Products LTDA                                                5 Mar 2019                   EUR
+
+
+                                       Items per page: 10          1 – 10 of 100     1   of 10 pages
+
+
+
+Complex
+
+The complex variation includes all options and information commonly used on tables.
+Mckinsey Design System                                                                                                                                                         2020
+
+
+
+
+Popup Menu
+The popup menu component provides more options to the user for a specific context. Popup menus are displayed at a
+4px elevation to help the user focus on the available actions. Text should be direct and related to the actions the user can
+take on the given context. Popup menus often directly affect what the user sees on the screen - for example, saving,
+deleting, or downloading. Grouping options within a popup menu is achieved with dividers. Popup menus appear
+preferentially underneath the button/actions that trigged it’s appearance and aligned to the right, but may vary
+depending on available space.
+
+
+
+
+Specifications/Anatomy
+                                      8px
+        Item label            2                             Optional 16px icon
+                                                                                                                      Each row of a popup menu is 32 pixels tall. An additional
+                                                                    16px regular font
+        Item label            2
+                                                                                                                      8px padding may be added to the top and bottom of the
+                                             48px          Item label             2              Optional badge       popup menu if they are the first or last item respectively.
+        Item label            2
+
+        Item label            2
+                                                                                                                      Section dividers can be added after any menu row and are
+                                                    16px 8px                          16px
+        Item label            2
+                                                                                                                      constructed within the last pixel of the bottom margin, with
+                                                                        Optional Section
+                                                                        Divider                                       a 1px divider stroke.
+        Item label            2
+
+
+
+                             4px elevation
+
+
+
+
+Styles and Variations
+The left icon and the right badge are each independently optional depending on requirements. All menu options have 3 active (default, hover,
+selected) and one disabled variations.
+
+
+        Item label            2                     Item label            2                                 Item label          2                      Item label      2
+
+
+
+Default                                       Hover                                                    Selected                                   Disabled Default
+
+The default state of the option.              The state when the mouse is                              The state when the user has                the state when the option has
+                                              over the option.                                         clicked on that option                     been disabled.
+
+
+
+
+Do’s and Dont’s
+Maintain consistency within options groups of a popup menu. If an option within a section has an icon then all other options in that section should
+also have icons.
+
+
+
+        New item                                                 New item
+
+        Open recent           2                                  Open recent
+
+
+        Downloads             4                                       Downloads                  4
+
+  Location                                                            Location
+
+
+  Delete                                                              Delete
+
+
+Don’t                                                          Do
+
+Within a section, do not mix menu options                      Keep the use of icons consistent within
+with and without icons.                                        grouped menu option sections.
+
+
+
+
+Alignment
+A popup menu should be displayed immediately below and aligned to the right edge of the component that triggered the popup menu. If this
+placement is not possible then align the menu to the left edge of the trigger. If these do not work then attempt to display the menu immediately
+above the trigger component aligned to the right edge and then to the left edge as a last resort.
+
+
+
+
+First option                                  Second option                                            Third option                               Last option
+
+Bottom right aligned                          Bottom left aligned                                      Top right aligned                          Top left aligned
+
+
+
+
+Look and feel
+
+                     5 Mar 2019               EUR                         230,000
+
+
+                     5 Mar 2019               EUR                         253,000
+
+
+                                                               New item
+
+                                                               Open recent
+
+
+                                                                    Downloads                4
+
+                                                                    Location
+
+
+                                                                    Delete
+Mckinsey Design System                                                                                                     2020
+
+
+
+
+Tabs
+Tabs are used to navigate between pages or to switch between views within the same context, and enable the user to
+navigate thoughout an application. They divide content into sections and allow users to focus on one view at a time while
+maintaining sight of all the other options available to select from. Each tab, when active, will reveal it’s own unique content.
+They can be placed in the header, sub header as secondary navigation, body, and left and right rail. Each tab lives within its
+own container. The container’s width is determined by the length of the label. Regardless of where a tab is used, they
+always follows the same visual guidelines. Tabs should be used when there are between 3 and 8 sections/items, otherwise
+they may not be the best suitable option because of legibility issues.
+
+
+Tabs construction
+
+
+Tab Item   Tab Item     Tab Item    Tab Item   Tab Item    Tab Item   Tab Item   Tab Item   72px
+
+
+
+
+        24px
+
+
+
+
+Easily change tab labels, switch between states and remove items
+1) To change a tab name, select override Tab Label and type your label name.
+2) To switch between states, select a tab and choose Default Tab or Selected Tab in the Inspector.
+3) To remove a tab, select the tab you want to remove and select No Symbol
+
+
+Tab Example
+
+Tab 1   Tab 2   Tab 3    Tab 4     Tab 5   Tab 6   Tab 7    Tab 8
+Mckinsey Design System                                                                                                          2020
+
+
+
+
+Tooltips
+Tooltips are used to explain the meaning or purpose of a tool, often an icon. Tooltips are usually one word or a short single
+line of text. They are activated on hover and become inactive when a mouse rolls off the trigger (often an icon).
+
+
+
+
+Styles and Variations
+Styles
+There are two color styles available for use. Dark Tooltips should be used on light
+backgrounds and Light Tooltips should be used on dark backgrounds.
+
+Dark Tooltips               Light Tooltips
+
+
+        Settings                   Settings
+
+
+
+
+Position
+There are four different positions for tooltips: top, right, bottom and left. These can
+be explicitely set or set to auto which will adjust position based on the viewport
+
+Bottom tooltip              Left tooltip             Top tooltip                      Right tooltip
+
+
+ Tooltip text                Tooltip text              Tooltip text                      Tooltip text
+
+
+
+
+Tooltip Examples
+Tooltips in an Editor                                Tooltips in a menu                                 Tooltips with a title
+
+                                                                                                         Attach File
+    B     I     U AA                                                                                     Cmd+U
+
+
+                                                                      Notifications
+                Font Size
+Mckinsey Design System                                                                                                                                                        2020
+
+
+
+
+Badges
+Badges provide a numeric value identification or a status in a specific context. They draw the user's attention to something that is new, updated, or removed. They always occur
+attached to or next to the component they reference to avoid confusion. Badges should not have a number greater than 999, to indicate any thing larger use 999+. Badges can
+also be used to label, categorize, and organize, but when used in this way are for display only and provide no interactions.
+
+
+
+                                                    88
+
+                                                      2                                    999+       The largest possible number
+
+                                                           12px medium font
+
+
+
+
+Status badge
+
+Status badges are slightly larger than regular numeric value badges and highlight an item’s status in a specific context. They are commonly used in tables depicting a list of items
+and each of their statuses. In scenarios where a lot of status tags are used, we suggest the use of the lighter version. In scenarios where they are used with more spacing
+between them, the default version will be more prominent.
+
+
+
+  Default version            Light version                 Usage                           Common labels
+
+
+       In progress            In progress                  Items in progress               In progress, Open, Modified
+
+
+        Default                 Default                    General status                  To do, Unavailable, Minor, Not Started
+
+
+        Sucess                  Sucess                     Successful items                Available, Done, Approved, Resolved, Added
+
+
+          Error                  Error                     Error or removed items          Errors, Declined, Failed, Removed, Critical
+
+
+        Warning                Warning                     Attention required items        Busy, Blocked, Missing, Warning
+
+
+
+
+Examples
+                                                               Counting badges
+                     5
+  11
+                                                               Can be used attached to icons, profile avatars, or other components in a way that
+                                                               there is no ambiguity about which component it refers to.
+
+
+
+
+  Stage 3 of 5 -> 63%                       In progress        Status badge
+
+                                                               Commonly used within tables to show progress/status of work in progress or
+  Stage 4 of 4 -> 79%                       In progress
+                                                               categorize.
+
+  Stage 4 of 4 -> 100%                           Done
+
+
+
+
+  Marajara Juice                                  Food
+
+
+
+  Marvin's                                        Food
+
+
+
+  Greener with the scenery                       Utility
+Mckinsey Design System                                                                                                                                                                                2020
+
+
+
+
+Tag
+Tags are used as UI labels that easily differentiate between different options. Depending on the variation, they can feature fast interactions for selecting, adding, and removing
+options with ease. They can be used in different scenarios: such as an alternative for checkboxes or more commonly, within a multi-select input field.
+
+
+
+                                                                                                 8px           12 8
+
+                                                                                                    Filter label
+
+                                                                                                                         Delete selection
+
+                                                                                                          12px medium font
+
+
+
+
+Variations
+
+                                 Example                    Hover                        Selected
+
+
+  Selected                       Filter label               Filter label                                               Dismissible
+
+
+  Default                        Filter label               Filter label                  Filter label                 Selectable
+
+
+  Selected                       Filter label               Filter label                  Filter label                 Selectable
+
+
+  Error                          Filter label               Filter label                                               Dismissible
+
+
+
+
+Examples
+Tags that were previously selected by the user will remain visible inside the select field. This helps keep the user always within the same
+context and always have access to the options that were selected previously.
+
+
+
+Send e-mail to users:                                                                                      Send e-mail to users:
+
+  Type an e-mail                                                                                              besjon_alivandi@mckinsey.com
+
+
+Send e-mail to users:                                                                                      Send e-mail to users:
+
+  Besjon Alivandi         Alex_Saphiro@mckinsey.com                                                           Besjon Alivandi          Alex Saphiro     Type an e-mail
+
+                                                                                                                   Alex_Saphiro is not a valid e-mail
+
+
+
+
+Label name                                                                      Label name                                                                    Label name
+
+  Select an option                                                                 User input information                                                        Automotive & Assem...
+
+
+
+                                                                                         Advanced Electronics                                                     Advanced Electronics
+
+                                                                                         Aerospace & Defense                                                      Aerospace & Defense
+
+                                                                                         Agriculture                                                              Agriculture
+
+                                                                                         Automotive & Assembly                                                    Capital Projects & Infrastructure
+
+                                                                                         Capital Projects & Infrastructure                                        Chemicals
+
+                                                                                         Chemicals                                                                Consumer Packaged Goods
+
+
+
+
+Select only one option
+Select your cloth size
+
+ Small      Medium       Large      Extra large
+
+
+
+
+Select your cloth size
+
+ Small      Medium       Large      Extra large
+
+
+
+
+Select your cloth size
+
+ Small      Medium       Large      Extra large
+
+
+
+
+Select your cloth size
+
+ Small      Medium       Large      Extra large
+
+
+
+
+Select your cloth size
+
+ Small      Medium       Large      Extra large
+
+
+
+
+Select as many as you would like to filter
+
+
+Select the areas to search for
+
+ Advanced Electronics      Agriculture          Chemicals   Oil & Gas      Healthcare
+
+
+
+
+Select the areas to search for
+
+ Advanced Electronics      Agriculture          Chemicals   Oil & Gas      Healthcare
+
+
+
+
+Select the areas to search for
+
+ Advanced Electronics       Agriculture         Chemicals   Oil & Gas      Healthcare
+
+
+
+
+Select the areas to search for
+
+ Advanced Electronics      Agriculture          Chemicals   Oil & Gas      Healthcare
+
+
+
+
+ Select the areas to search for
+
+  Advanced Electronics      Agriculture         Chemicals    Oil & Gas      Healthcare
+

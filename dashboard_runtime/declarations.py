@@ -67,7 +67,7 @@ def _common():
     component = _object({
         'kind': {'enum': ['kpi', 'table', 'text', 'legacy']},
         'title': {'type': 'string', 'maxLength': 240},
-        'subtitle': {'type': 'string', 'maxLength': 1000, 'description': 'Saved component explanation shown with the title.'},
+        'subtitle': {'type': 'string', 'maxLength': 1000, 'description': 'Non-KPI explanation shown with the title. KPI subtitles and descriptions are forbidden.'},
         'datasetId': _identifier(), 'x': field_name, 'series': field_name,
         'measures': {'type': 'array', 'items': _identifier(), 'minItems': 1, 'uniqueItems': True},
         'presentation': {'type': 'object'}, 'text': string,
@@ -207,9 +207,21 @@ def _legacy(common):
         schema['properties']['family'] = {'const': family}
         schema['required'] = ['kind', 'title', 'family', 'config']
         if family == 'chart':
-            config_schema = _object({'code': {'enum': codes} if codes else {'type': 'string'}, 'data': {'type': 'object', 'minProperties': 1},
+            config_schema = _object({'code': {'type': 'string', 'minLength': 1}, 'data': {'type': 'object'},
+                                     'renderer': {'enum': ['preset', 'echarts', 'html'], 'default': 'preset'},
+                                     'html': {'type': 'string', 'minLength': 1, 'description': 'HTML/CSS/JavaScript in an isolated script-enabled frame. Compiled React bundles are allowed; raw JSX is not compiled. Data is available as window.chartData.'},
+                                     'table': _object({'headers': {'type': 'array', 'minItems': 1, 'items': {'type': 'string'}},
+                                                       'rows': {'type': 'array', 'items': {'type': 'array'}}}, ['headers', 'rows']),
                                      'presentation': {'type': 'object'},
-                                     'echarts': {'type': 'object', 'additionalProperties': True, 'description': 'Optional native ECharts JSON option overrides, applied after the preset. Objects merge recursively; component arrays merge by matching id or index; other arrays replace. Unknown fields pass through. JavaScript strings are not executed.'}}, ['code', 'data', 'presentation'])
+                                     'echarts': {'type': 'object', 'additionalProperties': True, 'description': 'Native ECharts JSON. With renderer=echarts this is the complete option; otherwise it extends the preset. For executable callbacks use renderer=html.'}}, ['code'])
+            config_schema['allOf'] = [
+                {'if': {'properties': {'renderer': {'const': 'echarts'}}, 'required': ['renderer']},
+                 'then': {'required': ['echarts'], 'properties': {'echarts': {'minProperties': 1}}}},
+                {'if': {'properties': {'renderer': {'const': 'html'}}, 'required': ['renderer']},
+                 'then': {'required': ['html']}},
+                {'if': {'properties': {'renderer': {'const': 'preset'}}},
+                 'then': {'required': ['data', 'presentation'], 'properties': {'code': {'enum': codes}}}},
+            ]
             example_config = chart_config
         elif family == 'kpi':
             config_schema = _object({'type': {'enum': kpis, 'default': 'mc01'} if kpis else {'type': 'string', 'default': 'mc01'},
@@ -224,6 +236,9 @@ def _legacy(common):
                 {'if': {'required': ['type'], 'properties': {'type': {'const': 'mc03'}}},
                  'then': {'anyOf': [{'required': ['sparkData']}, {'required': ['sparkline']}]}}
             ]
+            for field in (module.KPI_DESCRIPTION_FIELDS if module else ()):
+                config_schema['properties'][field] = {'enum': ['', None]}
+                schema['properties'][field] = {'enum': ['', None]}
             example_config = kpi_configs['mc01']['exampleConfig'] if kpis else {'type': 'mc01', 'label': 'Synthetic value', 'value': '12'}
         else:
             config_schema = _object({
@@ -248,7 +263,9 @@ def _legacy(common):
             'Per-code requirements are extracted from the installed Python registry. They are partial guidance, not complete JSON Schemas. Nested object rules, matrix dimensions, scalar fields and specialized checks remain in the authoritative validator.',
             'registeredArrayFields does not enumerate every required data field: for example t06 requires month and quarter objects, m01 requires target, and m04 requires rate and target.',
             'presentationRequirements uses axis keys and required lengths for seriesLabels, tooltipValueLabels, units and optional labels; numeric/domain pairs name additional required fields. A series count of lines means len(data.lines); tableHeaderCount can be months+1 or stages+1.',
-            'Use only registered chartCodes for family=chart, kpiTypes for family=kpi, and explicit columns/rows for family=table. Do not interpret all catalog IDs as config.code.',
+            'Chart codes are presets, not a creativity whitelist. Use renderer=preset with a registered code, renderer=echarts with complete native options and any non-empty code, or renderer=html with custom HTML/CSS/JavaScript and any non-empty code.',
+            'Custom renderers currently consume explicit config.data and optional config.table. They do not infer dataset aggregation or global-filter bindings. HTML runs in an isolated frame with HTTPS resources; compiled React may be included. There is no JSX compiler or access to the parent application.',
+            'KPI cards never contain descriptions: subtitle, description, desc, note, detail, rankSub, trendLabel and gaugeSub are rejected on put_component. Keep definitions in metrics or a separate text component. Historical descriptions are not rendered.',
             'Legacy family defaults to chart in the validator; declarations should always supply family explicitly.',
             'Legacy configs preserve original data paths and presentation. No catalog preview data is substituted for supplied business data.',
             'config.echarts passes native JSON options to the standard ECharts runtime without a per-feature whitelist. Presets and data binding remain unchanged. Display overrides do not add filter computation or cross-chart linkage. Preserve series data/identity when relying on existing bindings and data tables; explicit data overrides affect the chart, not the bound dataset. Existing preset callbacks are preserved; JSON strings are not evaluated as JavaScript. Third-party extensions still need separate registration.',
@@ -292,9 +309,20 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             {'tool': 'dashboard_get', 'purpose': 'Read canonical state and current revision before mutation.'},
             {'tool': 'dashboard_patch', 'purpose': 'Supply dashboardId, the latest expectedRevision and an operations array. Put source, dataset, metric and component in one atomic batch.'},
             {'tool': 'dashboard_validate', 'purpose': 'Validate the saved dashboard or a complete proposed document.'},
-            {'tool': 'dashboard_preview', 'purpose': 'Render and inspect the result. A successful declaration check does not substitute for visual review.'},
+            {'tool': 'dashboard_preview', 'purpose': 'Open the saved document using the installed React resources; host acceptance is separate from saving.'},
         ],
         'common': common, 'legacy': _legacy(common),
+        'customRenderers': {
+            'component': {'kind': 'legacy', 'family': 'chart'},
+            'echarts': {'required': ['code', 'renderer', 'echarts'], 'renderer': 'echarts',
+                        'code': 'Any non-empty business code', 'content': 'Complete native ECharts JSON option'},
+            'html': {'required': ['code', 'renderer', 'html'], 'renderer': 'html',
+                     'code': 'Any non-empty business code', 'content': 'HTML/CSS/JavaScript, including browser-ready React',
+                     'data': 'Optional config.data object exposed as window.chartData',
+                     'execution': 'Isolated script-enabled iframe; HTTPS resources; no host DOM access or JSX compiler'},
+            'table': 'Optional config.table {headers: string[], rows: array[]}; enables table view and CSV',
+            'binding': 'Explicit snapshots only; preset binding/datasetId/measures are rejected',
+        },
         'reportEmbedding': {
             'operation': 'set_report_markdown',
             'example': '## Observation\n\n```chart\n{"componentId":"example-bar","caption":"Synthetic comparison","source":"Explicit fixture data"}\n```\n',
@@ -303,7 +331,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
         },
     }
     result['dynamicEncoding'] = {
-        'codes': ['r02', 'c03'],
+        'codes': ['r02', 'c03', 'r03', 'k01', 'f02'],
         'enable': 'config.encoding; requires explicit binding; config.data={} and presentation={} are allowed',
         'scatter': {'binding': {'categoryField': 'od', 'measures': {'x': 'market-metric', 'y': 'ho-metric', 'share': 'ratio-metric'}, 'attributes': {'grade': {'field': 'grade', 'aggregation': 'unique', 'label': '评级'}}}, 'encoding': {'symbolSize': 18, 'colorBy': 'grade', 'tooltip': ['x', 'y', 'share', 'grade'], 'colors': {}}},
         'bars': {'binding': {'categoryField': 'category', 'seriesField': 'series', 'measures': {'value': 'metric'}, 'orderBy': {'target': 'value', 'direction': 'desc'}}, 'encoding': {'orientation': 'horizontal', 'stacked': True, 'colors': {}, 'topSeries': 4, 'pinnedSeries': [], 'visibleCount': 10, 'barWidth': 14, 'adjustableBarWidth': True, 'emptyText': '当前筛选范围暂无数据'}},
@@ -319,8 +347,9 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             'documentSchemaVersion': result['documentSchemaVersion'],
             'statistical': {'backend':'seaborn','types':result['statistical']['types'],'component':result['statistical']['component'],'resource':'charts://declarations','renderTool':'statistical_render'},
             'dynamicEncoding': result['dynamicEncoding'],
+            'customRenderers': result['customRenderers'],
             'summary': True, 'resource': 'charts://declarations',
-            'usage': f"Choose code for one of the {len(legacy['chartCodes'])} original charts or {len(legacy['kpiTypes'])} KPI types. The full resource also documents the table family.",
+            'usage': f"Choose from {len(legacy['chartCodes'])} optional chart presets, native ECharts or custom HTML/JavaScript. KPI has {len(legacy['kpiTypes'])} forms and no descriptions. See customRenderers for freedom beyond presets.",
             'kpiGuide': kpi_guide([code for code in legacy['kpiTypes'] if code in KPI_GUIDE]),
             'kpiPatterns': KPI_PATTERNS,
             'legacy': {
@@ -335,7 +364,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
         legacy = result['legacy']
         require(legacy['available'], 'Original schema registry is not installed', 'LEGACY_UNAVAILABLE')
         require(legacy_code in legacy['chartCodes'] or legacy_code in legacy['kpiTypes'],
-                'Unknown original chart/KPI code; table catalog entries use family=table with explicit columns and rows')
+                'No preset declaration for this code; custom codes use renderer=echarts/html. Read chart_declarations without legacyCode for customRenderers.')
         family = 'chart' if legacy_code in legacy['chartCodes'] else 'kpi'
         result['selection'] = {'code': legacy_code, 'family': family}
         legacy['chartCodes'] = {legacy_code: legacy['chartCodes'][legacy_code]} if family == 'chart' else {}

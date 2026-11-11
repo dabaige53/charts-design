@@ -12,11 +12,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from generate_dashboard import CHARTS_MAP, generate_dashboard
 from core.csv_profiler import profile_csv
-from core.component_schemas import CHART_SCHEMA_REGISTRY, KPI_TYPES, validate_chart_data, validate_kpi_presentation
+from core.component_schemas import KPI_TYPES, validate_chart_data, validate_kpi_presentation, validate_kpi_content, validate_chart_renderer
 from core.filter_bindings import validate_filter_bindings
-from core.html_inspector import compare_html, inspect_html, inventory_html
 
 
 SCHEMA_VERSION = 1
@@ -232,6 +230,7 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
             error("KPI_TYPE_INVALID", f"{path}.type", "KPI type must be one of mc01 through mc09")
         if strict and not item.get("unit"):
             error("KPI_UNIT_MISSING", f"{path}.unit", "Declare a unit for the KPI")
+        errors.extend(validate_kpi_content(item, path))
         if strict:
             errors.extend(validate_kpi_presentation(item, path))
 
@@ -246,10 +245,11 @@ def validate_resolved(resolved: dict[str, Any], strict: bool) -> tuple[list[dict
         else:
             seen_ids.add(item_id)
         code = str(item.get("code", "")).lower()
-        if code not in CHARTS_MAP or code not in CHART_SCHEMA_REGISTRY:
-            error("CHART_CODE_UNKNOWN", f"{path}.code", f"Unknown chart code: {code or '<missing>'}")
+        errors.extend(validate_chart_renderer(item, path))
         if not item.get("title"):
             error("CHART_TITLE_MISSING", f"{path}.title", "Chart title is required")
+        if item.get("renderer", "preset") != "preset":
+            continue
         if "data" not in item:
             error("CHART_DATA_MISSING", f"{path}.data", "Chart data is required; catalog demo data is not used in workspace builds")
         else:
@@ -307,14 +307,6 @@ def parse_option(raw: str, default_values: set[str]) -> dict[str, Any]:
     return {"value": value, "label": label, "default": value in default_values}
 
 
-def infer_display_unit(value: Any) -> str:
-    text = str(value)
-    for unit in ("元/㎡/天", "元/㎡", "亿元", "万元", "%", "天", "家", "人", "个"):
-        if unit in text:
-            return unit
-    return "count"
-
-
 def ensure_id(value: str) -> None:
     if not ID_PATTERN.match(value):
         raise WorkspaceError("ID_INVALID", f"Use lowercase letters, digits, _ or - for id: {value}")
@@ -362,15 +354,9 @@ def cmd_import_csv(args: argparse.Namespace) -> None:
     manifest = load_manifest(root)
     write_json(root / "filters.json", config.get("filters", []))
     write_json(root / "table.json", config.get("table", {"title": "数据明细", "columns": [], "rows": []}))
-    for index, kpi in enumerate(config.get("kpis", []), start=1):
-        item_id = kpi.get("id") or f"kpi-{index}"
-        kpi.setdefault("unit", infer_display_unit(kpi.get("value", "")))
-        write_json(root / "kpis" / f"{item_id}.json", kpi)
-        component_refs(manifest, "kpis").append(f"kpis/{item_id}.json")
-    # Profiler chart JS is intentionally not imported as final workspace components.
     manifest.setdefault("draft", {})["csvProfile"] = {
         "source": str(Path(args.csv).expanduser().resolve()),
-        "suggestedChartCount": len(config.get("charts", [])),
+        "suggestedChartCount": config["suggestedChartCount"],
         "note": "Add explicit chart components after reviewing the inferred fields.",
     }
     write_json(manifest_path(root), manifest)
@@ -383,7 +369,7 @@ def cmd_import_csv(args: argparse.Namespace) -> None:
             "warnings": [{
                 "code": "CSV_PROFILE_IS_DRAFT",
                 "path": "dashboard.json.draft.csvProfile",
-                "message": "CSV inference imported filters, KPIs and table only; add reviewed chart components explicitly.",
+                "message": "CSV inference imported filters and table only; add reviewed KPI and chart components explicitly.",
             }],
         },
         args.json,
@@ -514,89 +500,12 @@ def cmd_set_table(args: argparse.Namespace) -> None:
     emit("dashboard.table.set", {"workspace": str(root), "component": {"path": str(table_path)}}, args.json)
 
 
-def cmd_build(args: argparse.Namespace) -> None:
-    root = workspace_root(args.workspace)
-    manifest = load_manifest(root)
-    resolved, errors = resolve_workspace(root, manifest)
-    validation_errors, warnings = validate_resolved(resolved, strict=True)
-    errors.extend(validation_errors)
-    if errors:
-        payload = {"workspace": str(root), "valid": False, "errors": errors, "warnings": warnings}
-        raise WorkspaceError("VALIDATION_FAILED", json.dumps(payload, ensure_ascii=False))
-    output = Path(args.output).expanduser().resolve()
-    captured = io.StringIO()
-    with contextlib.redirect_stdout(captured):
-        generate_dashboard(
-            config_dict=resolved,
-            output_path=str(output),
-            auto_open=args.open,
-            allow_preset_fallback=False,
-        )
-    inspection = inspect_html(output, strict=True, manifest_path=Path(args.manifest) if args.manifest else None)
-    if not inspection["ok"]:
-        raise WorkspaceError("HTML_INSPECTION_FAILED", json.dumps({
-            "workspace": str(root), "output": str(output), "inspection": inspection,
-            "errors": inspection["errors"], "warnings": inspection["warnings"],
-        }, ensure_ascii=False))
-    emit(
-        "dashboard.build",
-        {
-            "workspace": str(root),
-            "output": str(output),
-            "bytes": output.stat().st_size,
-            "summary": summary(root, manifest, resolved),
-            "warnings": warnings,
-            "inspection": inspection,
-        },
-        args.json,
-    )
-
-
-def emit_html_result(result: dict[str, Any], json_mode: bool) -> None:
-    if json_mode:
-        print(json.dumps(result, ensure_ascii=False))
-    else:
-        print(f"{'✓' if result['ok'] else '✗'} {result['command']}")
-        print(f"  html: {result.get('html') or result.get('after')}")
-        for issue in [*result["errors"], *result["warnings"]]:
-            print(f"  {issue['code']} {issue['path']}: {issue['message']}")
-    if not result["ok"]:
-        raise SystemExit(2)
-
-
-def cmd_inspect_html(args: argparse.Namespace) -> None:
-    emit_html_result(inspect_html(
-        Path(args.html), strict=args.strict,
-        manifest_path=Path(args.manifest) if args.manifest else None,
-    ), args.json)
-
-
-def cmd_compare_html(args: argparse.Namespace) -> None:
-    emit_html_result(compare_html(
-        Path(args.before), Path(args.after),
-        manifest_path=Path(args.manifest) if args.manifest else None,
-    ), args.json)
-
-
-def cmd_inventory_html(args: argparse.Namespace) -> None:
-    html_path = Path(args.html).expanduser().resolve()
-    manifest, errors = inventory_html(html_path)
-    if errors:
-        raise WorkspaceError("HTML_INVENTORY_FAILED", json.dumps({"errors": errors}, ensure_ascii=False))
-    output = Path(args.output).expanduser().resolve()
-    write_json(output, manifest)
-    emit("dashboard.inventory-html", {
-        "html": str(html_path), "output": str(output),
-        "summary": {"ids": len(manifest["requiredIds"]), "text": len(manifest["requiredText"]), "assets": len(manifest["requiredAssets"])},
-    }, args.json)
-
-
 def add_json_flag(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="Emit one stable JSON object to stdout")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Composable dashboard workspace editor and builder")
+    parser = argparse.ArgumentParser(description="Composable dashboard workspace asset editor")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init", help="Create an empty dashboard workspace")
@@ -628,26 +537,6 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--strict", action="store_true")
     add_json_flag(validate_parser)
     validate_parser.set_defaults(func=cmd_validate)
-
-    inspect_html_parser = subparsers.add_parser("inspect-html", help="Inspect a generated dashboard HTML contract")
-    inspect_html_parser.add_argument("html")
-    inspect_html_parser.add_argument("--strict", action="store_true")
-    inspect_html_parser.add_argument("--manifest", help="Preservation Manifest JSON path")
-    add_json_flag(inspect_html_parser)
-    inspect_html_parser.set_defaults(func=cmd_inspect_html)
-
-    compare_html_parser = subparsers.add_parser("compare-html", help="Compare generated HTML against its baseline")
-    compare_html_parser.add_argument("before")
-    compare_html_parser.add_argument("after")
-    compare_html_parser.add_argument("--manifest", help="Preservation Manifest JSON path")
-    add_json_flag(compare_html_parser)
-    compare_html_parser.set_defaults(func=cmd_compare_html)
-
-    inventory_html_parser = subparsers.add_parser("inventory-html", help="Create a preservation manifest from existing HTML")
-    inventory_html_parser.add_argument("html")
-    inventory_html_parser.add_argument("--output", "-o", required=True)
-    add_json_flag(inventory_html_parser)
-    inventory_html_parser.set_defaults(func=cmd_inventory_html)
 
     meta_parser = subparsers.add_parser("meta", help="Update dashboard metadata")
     meta_subparsers = meta_parser.add_subparsers(dest="meta_command", required=True)
@@ -711,15 +600,6 @@ def build_parser() -> argparse.ArgumentParser:
     table_set.add_argument("--from", dest="from_file", required=True)
     add_json_flag(table_set)
     table_set.set_defaults(func=cmd_set_table)
-
-    build_cmd = subparsers.add_parser("build", help="Strictly validate and compile a workspace to HTML")
-    build_cmd.add_argument("workspace")
-    build_cmd.add_argument("--output", "-o", required=True)
-    build_cmd.add_argument("--open", action="store_true")
-    build_cmd.add_argument("--inspect-html", action="store_true", help="Compatibility flag; static HTML inspection always runs")
-    build_cmd.add_argument("--manifest", help="Preservation Manifest used by --inspect-html")
-    add_json_flag(build_cmd)
-    build_cmd.set_defaults(func=cmd_build)
 
     return parser
 

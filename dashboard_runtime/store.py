@@ -4,7 +4,7 @@ import json
 import copy
 import sqlite3
 from pathlib import Path
-from .model import DashboardError, MAX_ROWS, apply_operations, identifier, inferred_fields, json_bytes, new_document, require, utcnow, validate
+from .model import DashboardError, MAX_ROWS, apply_operations, identifier, inferred_fields, json_bytes, new_document, require, utcnow, validate, validate_component_content
 from .local_data import LocalData
 
 class Store:
@@ -102,7 +102,10 @@ class Store:
         doc = document or new_document(board_id, title)
         doc = json.loads(json_bytes(doc))
         doc['id'], doc['revision'] = board_id, 1
-        doc = self.compact(validate(doc))
+        validate(doc)
+        for key, component in doc['manifest']['components'].items():
+            validate_component_content(component, key)
+        doc = self.compact(doc)
         try:
             with self.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
