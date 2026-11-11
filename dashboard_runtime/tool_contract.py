@@ -21,7 +21,7 @@ BOARD = {
     'dashboardId': described(ID, 'Stable dashboard/report ID from dashboard_list, or a new ID for dashboard_create. Scoped to projectRoot.'),
     'dataMode': described({'enum': ['snapshot', 'local']}, 'MCP defaults to local: immutable data references and bounded computed results. snapshot is for explicit legacy snapshot reads, not full-data export.'),
 }
-EXPECTED = described(INT, 'Latest document.revision from dashboard_get or the previous successful write in this batch. On REVISION_CONFLICT read dashboard_get and reconcile changes before retrying.')
+EXPECTED = described(INT, 'Latest revision: document.revision from dashboard_get/full results, or top-level revision from an MCP write summary. On REVISION_CONFLICT read dashboard_get and reconcile changes before retrying.')
 TARGET = {**BOARD, 'componentId': described(ID, 'Existing component key from document.manifest.components, not its display title.')}
 PUBLISHED = described({'type': 'boolean', 'default': False}, 'Protect this checkpoint from automatic history pruning. This is a retention marker; it does not deploy a website or create a share link.')
 NAME = described(STR, 'Optional checkpoint label. A non-empty name protects the checkpoint from automatic pruning.')
@@ -83,7 +83,7 @@ OPERATION_SCHEMAS = {
             {'type': 'object', 'required': ['kind', 'title', 'chartType'],
              'properties': {'kind': {'const': 'chart'}, 'title': STR, 'chartType': STR},
              'description': 'Historical chart update only: must preserve the existing kind and chartType. New kind=chart components are rejected.'}]},
-         'Create or replace the complete component. Preserve existing fields; use chart_declarations(code) for preset details. New charts use kind=legacy, family=chart. KPI prose is forbidden.'),
+         'Create or replace the complete component. Preserve existing fields; use chart_declarations(code) for preset details. New charts use kind=legacy, family=chart. KPI prose is forbidden. Submit structureDiagram with the component in the same batch: config.presentation for legacy, presentation otherwise. Omission after declaration changes marks the saved diagram stale. Use metricId for canonical definitions; SVG contains no business values.'),
     )
 }
 OPERATION_SCHEMAS.update({
@@ -195,7 +195,7 @@ TOOLS = {
     }, ('dashboardId', 'shareId'))),
     'runtime_keepalive': ('App only: renew the runtime lifetime while the preview is visible; stop when hidden. Returns ok; agents must not poll it.', schema()),
     'dashboard_list': ('List saved dashboards/reports in this project; returns IDs, titles and draft revisions. No cross-project discovery. Choose an ID, then dashboard_get before editing.', schema()),
-    'dashboard_create': ('Create an empty dashboard/report container, or import a complete reviewed schema-v2 document. Requires an explicit project or startup project default; inserts no demo data. Returns document and revision. For reports use set_view_mode and set_report_markdown in an edit batch.', schema({
+    'dashboard_create': ('Create an empty dashboard/report container, or import a complete reviewed schema-v2 document. Requires an explicit project or startup project default; inserts no demo data. Returns the created revision. For reports use set_view_mode and set_report_markdown in an edit batch.', schema({
         **BOARD, 'title': described(STR, 'Title for an empty dashboard; defaults to Dashboard. A supplied document carries its own title.'),
         'document': described({'type': 'object'}, 'Optional complete schema-v2 artifact, not a patch. Omit to create an empty dashboard; get shape guidance from charts://contract and chart_declarations.'),
     }, ('dashboardId',))),
@@ -205,7 +205,7 @@ TOOLS = {
     'dashboard_validate': ('Validate schema and references of either a complete supplied document or a stored draft; does not run full component calculations or create a checkpoint. Supply document or dashboardId. Returns valid=true; failures return errors. Use dashboard_doctor for data/calculation checks.', schema({
         **BOARD, 'document': described({'type': 'object'}, 'Complete proposed schema-v2 document to validate without saving; omit to validate dashboardId.'),
     }, anyOf=[{'required': ['dashboardId']}, {'required': ['document']}])),
-    'dashboard_patch': ('Apply 1-200 atomic operations to the latest draft. Begin with dashboard_get and dashboard_edit_begin; preserve unmodified definitions and stable IDs. Returns updated document and semanticChanges; replacement operations remove omitted content. Read charts://contract for operations.' + WRITE_FLOW, schema({
+    'dashboard_patch': ('Apply 1-200 atomic operations to the latest draft. Begin with dashboard_get and dashboard_edit_begin; preserve unmodified definitions and stable IDs. Returns the updated revision and semanticChanges; replacement operations remove omitted content. Read charts://contract for operations.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED, 'operations': OPERATIONS,
         'expectedAnnotations': described(ANNOTATIONS, 'Project-only independent comment save: provide the exact annotation list read earlier and use only set_annotations operations. Conflicts fail; successful independent saves do not increment the design revision.'),
     }, ('dashboardId', 'expectedRevision', 'operations'))),
@@ -213,7 +213,7 @@ TOOLS = {
         **BOARD, 'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based checkpoint offset, project mode only.'),
         'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 50}, 'Maximum checkpoints per page, project mode only. A full page may require another call.'),
     }, ('dashboardId',))),
-    'dashboard_restore': ('Restore a retained checkpoint as a new draft revision; preserves history, project annotations and the current formal publication. By default restores its data references too. Returns the draft; inspect and save with dashboard_checkpoint before dashboard_preview. Does not restore deleted/pruned checkpoints.' , schema({
+    'dashboard_restore': ('Restore a retained checkpoint as a new draft revision; preserves history, project annotations and the current formal publication. By default restores its data references too. Returns the restored revision; inspect with dashboard_get and save with dashboard_checkpoint before dashboard_preview. Does not restore deleted/pruned checkpoints.' , schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'revision': described(INT, 'Retained checkpoint revision from dashboard_history, not the current draft revision.'),
         'useCurrentData': described({'type': 'boolean', 'default': False}, 'Project mode only: retain current data snapshot instead of historical data; restored definitions must remain compatible.'),
@@ -226,14 +226,14 @@ TOOLS = {
     }, ('dashboardId', 'componentId'))),
     'query_inspect': ('Inspect component source/query provenance and local data reference without executing upstream SQL. Returns source, filters and snapshot time; supplied provenance is not certified execution. Use semantic_inspect for metric definitions.', schema(TARGET, ('dashboardId', 'componentId'))),
     'semantic_inspect': ('Read the actual component metric definitions, units, aggregation and dataset metadata. Returns metrics and provenance-related presentation; certified=false is not approval. Do not replace unknown business definitions with guessed semantics.', schema(TARGET, ('dashboardId', 'componentId'))),
-    'query_execute': ('Execute bounded read-only SQLite SQL through an operator-configured connection alias, then replace the destination dataset snapshot and provenance. The query is read-only but saving changes the dashboard. Returns document and execution metadata; inferred numeric metrics remain unverified.' + WRITE_FLOW, schema({
+    'query_execute': ('Execute bounded read-only SQLite SQL through an operator-configured connection alias, then replace the destination dataset snapshot and provenance. The query is read-only but saving changes the dashboard. Returns the updated revision and execution metadata; inferred numeric metrics remain unverified.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'datasetId': described(ID, 'Destination dataset ID; an existing ID replaces its saved data and affects all bound components.'),
         'connection': described(STR, 'Operator-configured source alias, not a path or URL. Obtain it from project configuration; do not guess aliases.'),
         'sql': described(STR, 'Single bounded read-only SQLite query against the configured source; never DDL or writes.'),
         'parameters': described({'type': ['object', 'array']}, 'Named or positional SQL parameters matching the query; omit when none.'),
     }, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql'))),
-    'dataset_import': ('Import a small explicit JSON row array or CSV text; provide exactly one input. Replaces the destination dataset. Returns document and semanticChanges; inferred numeric fields create unverified sum metrics, which need business review.' + WRITE_FLOW, schema({
+    'dataset_import': ('Import a small explicit JSON row array or CSV text; provide exactly one input. Replaces the destination dataset. Returns the updated revision and semanticChanges; inferred numeric fields create unverified sum metrics, which need business review.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'datasetId': described(ID, 'Destination dataset ID; an existing ID replaces its metadata and complete row set.'),
         'rows': described({'type': 'array', 'minItems': 1, 'items': {'type': 'object'}}, 'Non-empty explicit row objects with field keys and typed JSON values; do not also provide csvText.'),
@@ -283,7 +283,7 @@ TOOLS = {
         'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based candidate offset.'),
         'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 1000, 'default': 100}, 'Maximum candidate values in one response.'),
     }, ('dashboardId', 'filterId'))),
-    'dataset_attach': ('Stream a configured local SQLite table into an immutable data version without sending all rows through MCP. Replaces the destination dataset reference. Returns document and import counts; inspect before authoring shared metrics.' + WRITE_FLOW, schema({
+    'dataset_attach': ('Stream a configured local SQLite table into an immutable data version without sending all rows through MCP. Replaces the destination dataset reference. Returns the updated revision and import counts; inspect with dashboard_get before authoring shared metrics.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'datasetId': described(ID, 'Destination dataset ID; replacing it affects all components bound to it.'),
         'connection': described(STR, 'Operator-configured read-only SQLite source alias; obtain from project configuration, not an arbitrary path.'),

@@ -9,6 +9,7 @@ from .assets import MIME_TYPE, render_html, ui_build_id, ui_resource_uri
 from .model import DashboardError, MAX_BYTES
 from .service import TOOLS
 from .tool_contract import APP_ONLY, tool_annotations
+from .mcp_results import DOCUMENT_WRITES, WRITE_RESPONSE_HELP, write_receipt, write_response_schema
 from .project_routing import ProjectResolver, ProjectServices, project_result, project_schema
 
 def result_text(result):
@@ -66,6 +67,9 @@ def create_server(service, lifetime=None, profile=None):
                 continue
             description = profile.describe(name, description)
             schema = profile.schema(name, schema)
+            if name in DOCUMENT_WRITES:
+                description += WRITE_RESPONSE_HELP
+                schema = write_response_schema(name, schema)
             ui = {}
             if name == 'dashboard_preview' and ui_build_id() != 'unavailable':
                 ui['resourceUri'] = ui_resource_uri()
@@ -89,7 +93,13 @@ def create_server(service, lifetime=None, profile=None):
         try:
             if name in profile.hidden_tools or (name not in TOOLS and name not in profile.extra_tools):
                 raise DashboardError('UNKNOWN_TOOL', f'Unsupported tool: {name}', 404)
-            selected, request = await asyncio.to_thread(projects.resolve, dict(arguments or {}))
+            request = dict(arguments or {})
+            response_mode = 'full'
+            if name in DOCUMENT_WRITES:
+                response_mode = request.pop('responseMode', 'summary')
+                if response_mode not in ('summary', 'full'):
+                    raise DashboardError('INVALID_ARGUMENT', 'responseMode must be summary or full')
+            selected, request = await asyncio.to_thread(projects.resolve, request)
             if name == 'dashboard_create' and not selected.project_root:
                 raise DashboardError('PROJECT_REQUIRED', 'Pass projectRoot or start with --project-root for new dashboards; legacy --root supports existing dashboards only')
             if name in TOOLS and 'dataMode' in TOOLS[name][1].get('properties', {}):
@@ -98,6 +108,8 @@ def create_server(service, lifetime=None, profile=None):
                 handled = profile.call(name, request, selected)
                 return profile.decorate(name, request, handled if handled is not None else selected.call(name, request), selected)
             result = await asyncio.to_thread(execute)
+            if response_mode == 'summary':
+                result = write_receipt(name, request, result)
             failed = result.get('ok') is False
             text = None
             if name not in UNPACKED:

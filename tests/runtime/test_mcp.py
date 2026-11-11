@@ -10,7 +10,7 @@ from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
-# @wu-test type=integration | scope=MCP stdio | protects=工具调用对象与影响标记错误或编辑报告和分块读取失败
+# @wu-test type=integration | scope=MCP stdio | protects=默认写入摘要泄漏全文或显式完整结果及分块读取失败
 def test_real_stdio_protocol(tmp_path):
     from dashboard_runtime.store import Store
     Store(tmp_path/'mcp').create('mcp-test', 'MCP')
@@ -59,17 +59,17 @@ def test_real_stdio_protocol(tmp_path):
                 result=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':1,'operations':[{'op':'set_title','value':'Edited over MCP'}]})
                 assert not result.isError
                 assert result.structuredContent is not None
-                assert result.structuredContent['document']['revision']==2
+                assert result.structuredContent['revision']==2
                 import json
                 assert isinstance(result.content[0], TextContent)
                 summary = json.loads(result.content[0].text)
-                assert summary['document']['id'] == 'mcp-test'
+                assert summary['dashboardId'] == 'mcp-test'
                 assert summary == result.structuredContent
-                assert 'document' in summary
-                assert summary['document']['snapshot']['datasets'] == {}
+                assert 'document' not in summary
+                assert summary['ok'] is True
                 bad=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':1,'operations':[{'op':'set_title','value':'Stale'}]})
                 assert bad.isError
-                report=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':2,'operations':[
+                report=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','responseMode':'full','expectedRevision':2,'operations':[
                     {'op':'put_component','id':'note','value':{'kind':'text','title':'Analysis','text':'Authored finding'}},
                     {'op':'set_view_mode','value':'report'},
                     {'op':'set_report','value':{'subtitle':'Personal report','blocks':[{'id':'opening','componentId':'note'}]}}
@@ -79,7 +79,7 @@ def test_real_stdio_protocol(tmp_path):
                 assert report.structuredContent['document']['manifest']['viewMode']=='report'
                 assert report.structuredContent['document']['manifest']['report']['blocks']==[{'id':'opening','componentId':'note'}]
                 source='# Written over MCP\n\n**A finding** with a list:\n\n- Verify the source.\n'
-                markdown=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':3,'operations':[
+                markdown=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','responseMode':'full','expectedRevision':3,'operations':[
                     {'op':'set_report_markdown','value':source}
                 ]})
                 assert not markdown.isError
@@ -96,7 +96,7 @@ def test_real_stdio_protocol(tmp_path):
                 # Pipe reads must support report requests beyond asyncio's default 64 KiB limit.
                 large_source = '# Large report\n\n' + ('Descriptive findings.\n' * 5000)
                 large = await session.call_tool('dashboard_patch', {'dashboardId':'mcp-test',
-                    'expectedRevision':4,'operations':[{'op':'set_report_markdown','value':large_source}]})
+                    'responseMode':'full','expectedRevision':4,'operations':[{'op':'set_report_markdown','value':large_source}]})
                 assert not large.isError
                 assert large.structuredContent is not None
                 async def resolve(result):
@@ -122,7 +122,7 @@ def test_real_stdio_protocol(tmp_path):
                 # A representative 960-row transport fixture exceeds the reported response size.
                 rows = [{'detail': str(i) + 'x' * 1000} for i in range(960)]
                 payload = await session.call_tool('dashboard_patch', {'dashboardId': 'mcp-test',
-                    'dataMode': 'snapshot',
+                    'dataMode': 'snapshot', 'responseMode': 'full',
                     'expectedRevision': 5, 'operations': [
                         {'op': 'put_source', 'id': 'transport-fixture', 'value': {'kind': 'fixture'}},
                         {'op': 'put_dataset', 'id': 'details', 'meta': {
@@ -251,7 +251,7 @@ def test_read_annotations_and_edit_target_over_stdio(tmp_path):
                 assert 'document' not in review and 'snapshot' not in review
                 current = (await call('dashboard_get', dashboardId='review'))['document']
                 component = current['manifest']['components'][note['componentId']]
-                modified = await call('dashboard_patch', dashboardId='review', expectedRevision=current['revision'], operations=[
+                modified = await call('dashboard_patch', dashboardId='review', expectedRevision=current['revision'], responseMode='full', operations=[
                     {'op': 'put_component', 'id': note['componentId'], 'value': {**component, 'text': '已核对收入'}}])
                 assert modified['document']['manifest']['components']['finding']['text'] == '已核对收入'
                 after = await call('dashboard_annotations', dashboardId='review')

@@ -80,6 +80,10 @@ node /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absol
 
 `dashboard_get` 读取可编辑草稿，`dashboard_view` 返回实际计算结果。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态。
 
+MCP 中，创建、patch、恢复、数据导入/挂接/查询和数据迁移这八个原本返回文档的写入工具，默认 `responseMode=summary`：返回 `dashboardId`、顶层 `revision`、可能受影响的 `affectedComponentIds`、组件/数据集/指标数量及原有操作元数据；完整 `document` 与图表产物按需读取。共享指标、数据和布局操作可影响多个组件，受影响 ID 可能包含间接受影响或已删除的组件。下一次写入直接使用返回的顶层 `revision`。
+
+需要完整结果时可显式传 `responseMode=full`，或按需调用 `dashboard_get`。MCP 编辑器显式请求 full，以继续更新页面；共享 Service、CLI 和网页 HTTP API 保留原文档返回。写入、权限、版本冲突和保存检查沿用既有规则；完整 Doctor 检查在完成编辑批次时执行。读取、预览、完成编辑及错误响应沿用各自原有结构。
+
 预览工具为 `dashboard_preview`，UI 资源 URI 带运行版本与构建标识。宿主决定显示为对话卡片或面板。分块、资源过期和诊断字段见 [传输与诊断](mcp-transport-diagnostics.md)。
 
 ## 页面元信息与组件声明
@@ -140,3 +144,26 @@ python3 -m dashboard_runtime --root ./boards --sources ./sources.json call query
 测试层次与授权边界统一见 [测试与 CI](testing.md)。普通维护只运行受影响的局部检查。
 
 维护时机：模块边界、配置入口、发现方式或导入/交付边界改变时更新；组件外观、报告语法、项目存储和单次验收结果在各自负责正文维护。
+
+## 保存的结构简图
+
+`structure_diagram.py` 维护静态 SVG 清理、标注参数和失效规则。所有组件使用同一声明：legacy 位于 `config.presentation.structureDiagram`，其他组件位于 `presentation.structureDiagram`。MCP 与 Runtime CLI 共用 `put_component`，不新增生成服务。
+
+```json
+{
+  "version": 1,
+  "viewBox": [0, 0, 600, 360],
+  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"220\" y=\"100\" width=\"60\" height=\"180\" fill=\"#123b5d\"/></svg>",
+  "annotations": [
+    {"id": "revenue-mark", "metricId": "revenue", "anchor": [250, 180], "label": [30, 180], "align": "left"}
+  ]
+}
+```
+
+该示例只说明保存格式；生成时必须依据当前组件实际结构绘制。坐标范围固定从 `[0,0]` 开始，宽高为正数且不超过 10000；标注点都在范围内。`align=left` 的文字向右展开，`right` 向左展开，默认居中。标签应留足空间，前端不承担自动排布或类型识别。标注 ID 唯一且稳定，每张简图 1–32 个。指标引用从当前指标声明读取名称与定义；无指标引用时提供名称和描述。未提供定义或引用指标已不存在时，详情明确显示缺失状态，不生成业务解释。
+
+SVG 限制为静态基本图形、分组和文字，最多 100000 字符、2000 个元素。脚本、事件、外部资源、样式、`foreignObject`、嵌套 SVG 和 URL 填充会移除；DTD 与实体声明、无效 XML 会拒绝。后端统一写入 viewBox，前端再次清理并以图片展示。SVG 不含业务数值，与筛选结果无关。
+
+`put_component` 明确携带简图代表 Agent 已同步确认该简图；保存时状态为 `ready`。省略简图且组件声明改变时，保留原简图并标记 `stale`；完全相同的声明不改变状态。预设切换也使简图失效。数据刷新、布局与筛选操作不使简图失效。图形、绑定或系列含义改变时，Agent 必须同步重绘，不能复制未经确认的旧简图。旧组件无简图时只显示未配置状态，其余详情保持可用。
+
+内置案例的简图维护在 `demo_diagrams.py`，按组件 ID 保存独立资产，随案例创建批次提交，不作为生产图表类型适配器。已保存的业务看板和远程分享副本不会因更新案例源码自动迁移；需要读取其实际声明，逐个生成简图并通过现有编辑流程保存。

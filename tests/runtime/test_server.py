@@ -196,6 +196,9 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
                     created = await client.call_tool('dashboard_create', {'projectRoot': 'fresh', 'dashboardId': 'blank', 'title': 'Blank'})
                     assert not created.isError and created.structuredContent is not None
                     assert created.structuredContent['projectRoot'] == 'fresh'
+                    assert created.structuredContent['dashboardId'] == 'blank'
+                    assert created.structuredContent['revision'] == 1
+                    assert 'document' not in created.structuredContent
                     preview = await client.call_tool('dashboard_preview', {'projectRoot': 'sales', 'dashboardId': 'exec'})
                     assert not preview.isError and preview.structuredContent is not None
                     assert preview.structuredContent['document']['id'] == 'exec'

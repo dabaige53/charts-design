@@ -344,3 +344,10 @@
 }
 @media (pointer: coarse) { .semantic-callout, .semantic-metric summary { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .semantic-nav a::after { transition: none; } }
+
+.semantic-diagram { container-type: inline-size; margin-bottom: 0; }
+.semantic-diagram .semantic-callout { font-size: clamp(10px, 2.1cqi, 12px); }
+.semantic-callout:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@keyframes semantic-definition-in { from { opacity: .7; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.semantic-definition { animation: semantic-definition-in 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .semantic-definition { animation: none; } }

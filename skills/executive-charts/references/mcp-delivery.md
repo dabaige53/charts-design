@@ -25,6 +25,8 @@ Choose a preset, native ECharts, or custom HTML/JavaScript route. `chart_recomme
 
 Annotations remain independent of design restoration. Preserve their original context when anchors become unavailable.
 
+MCP document-writing tools default to `responseMode=summary`. Successful receipts contain a top-level `revision`; use it as the next `expectedRevision` without re-reading the entire document after every write. Receipts preserve operation metadata but omit `document` and rendered artifacts. `affectedComponentIds` includes potentially affected components, including removals; it is not a complete field-level diff or proof of full validation. When you need newly inferred metric definitions or the actual updated configuration, read `dashboard_get` or explicitly request `responseMode=full`. Finish/checkpoint checks and preview remain required as appropriate.
+
 `dashboard_get` returns the editable draft; project preview/refresh reads the latest completed checkpoint. Failed finish/checkpoint checks return `DOCTOR_FAILED` and MCP `isError: true`; the draft and batch remain. Read the latest draft, fix the Doctor issues, then finish again. On `REVISION_CONFLICT`, reconcile current content before retrying. A checkpoint's `published` flag protects history from pruning.
 
 Read `tools/list` and `charts://contract` for the same installed, transport-specific definitions and typed operation schemas. `runtime_keepalive`, `runtime_report_error` and local `dashboard_export_open` are App-only; agents read diagnostics and download managed exports instead. Supply exactly one of `rows` or `csvText` to `dataset_import`; connection aliases must come from operator configuration.

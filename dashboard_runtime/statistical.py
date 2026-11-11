@@ -15,7 +15,7 @@ _LOCK = threading.RLock()
 
 
 def validate_statistical(doc, component):
-    require(set(component) <= {'kind','title','subtitle','datasetId','plot','analysis'}, 'Unknown statistical component field')
+    require(set(component) <= {'kind','title','subtitle','datasetId','plot','analysis','presentation'}, 'Unknown statistical component field')
     require('subtitle' not in component or isinstance(component['subtitle'], str) and len(component['subtitle']) <= 1000, 'Statistical subtitle must be text up to 1000 characters')
     ds = component.get('datasetId')
     require(isinstance(ds, str) and ds in doc['manifest']['datasets'], 'Statistical dataset not found')
@@ -139,6 +139,7 @@ def statistical_declarations():
 
 
 def statistical_schema():
+    from .structure_diagram import schema as diagram_schema
     field_name = {'type':'string','minLength':1,'maxLength':199}
     variants=[]
     for kind in PLOT_TYPES:
@@ -151,6 +152,7 @@ def statistical_schema():
     return {'type':'object','additionalProperties':False,'required':['kind','title','datasetId','plot','analysis'],'properties':{
         'kind':{'const':'statistical'},'title':{'type':'string','maxLength':240},'subtitle':{'type':'string','maxLength':1000},
         'datasetId':{'type':'string'},'plot':{'oneOf':variants},
+        'presentation':{'type':'object','properties':{'structureDiagram':diagram_schema()}},
         'analysis':{'type':'object','additionalProperties':False,'required':['definition','unit'],'properties':{'definition':{'type':'string','minLength':1,'maxLength':1000},'unit':{'type':'string','maxLength':100}}}}}
 
 

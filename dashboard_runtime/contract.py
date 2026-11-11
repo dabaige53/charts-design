@@ -31,7 +31,7 @@ CONTRACT = {
     'statistical': statistical_declarations(),
     'rules': [
         'contains filters accept zero or one text value, match a declared string field without case sensitivity, and update only explicit componentIds. Local filtering queries the immutable data version; it never reruns the upstream source query.',
-        'Read dashboard_get before mutation and supply its expectedRevision.',
+        'Read dashboard_get before editing and supply its document.revision as expectedRevision. Within a batch, use the revision from each successful write; MCP summaries return it at the top level. Read again when actual content is needed or a conflict occurs.',
         'Project edits follow dashboard_get -> dashboard_edit_begin -> patch/import/query with the latest revision -> dashboard_edit_finish -> dashboard_preview once. get reads the editable draft; preview reads the latest completed checkpoint.',
         'DOCTOR_FAILED means the draft and edit batch remain but no checkpoint was created. Fix the issues, read the latest revision, and finish again. REVISION_CONFLICT requires reading and reconciling current content before retrying; never replay an uncertain write blindly.',
         'Checkpoint published is a retention-protection marker, not website deployment or link sharing. Use dashboard_share on remote MCP only for explicitly requested sharing; static-site export produces a ZIP and does not deploy it.',

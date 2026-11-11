@@ -32,6 +32,8 @@ def _identifier():
 
 def common_declarations():
     """Return fresh shared authoring shapes without loading the chart registry."""
+    from .structure_diagram import schema as diagram_schema
+    presentation_schema = _object({"structureDiagram": diagram_schema()})
     string = {'type': 'string'}
     field_name = {'type': 'string', 'minLength': 1, 'maxLength': 199}
     field_info = _object({'type': {'enum': ['string', 'number', 'date', 'boolean']},
@@ -71,9 +73,9 @@ def common_declarations():
         'subtitle': {'type': 'string', 'maxLength': 1000, 'description': 'Non-KPI explanation shown with the title. KPI subtitles and descriptions are forbidden.'},
         'datasetId': _identifier(), 'x': field_name, 'series': field_name,
         'measures': {'type': 'array', 'items': _identifier(), 'minItems': 1, 'uniqueItems': True},
-        'presentation': {'type': 'object'}, 'text': string,
+        'presentation': presentation_schema, 'text': string,
         'family': {'enum': ['chart', 'kpi', 'table']},
-        'config': {'type': 'object'}, 'binding': {'type': 'object'},
+        'config': _object({'presentation': presentation_schema}), 'binding': {'type': 'object'},
         'sourceId': _identifier(),
     }, ['kind', 'title'])
     return {
@@ -86,7 +88,7 @@ def common_declarations():
                        'propertyNames': field_name, 'additionalProperties': field_info},
         }, ['sourceId', 'fields']),
         'rowsSchema': {'type': 'array', 'items': {'type': 'object'}},
-        'metricSchema': metric, 'componentSchema': component,
+        'metricSchema': metric, 'componentSchema': component, 'structureDiagramSchema': diagram_schema(),
         'limits': {'maxRowsAcrossDatasets': MAX_ROWS, 'maxComponents': MAX_COMPONENTS,
                    'maxOperationsPerPatch': 200, 'maxDocumentBytes': 16 * 1024 * 1024},
         'rules': [
@@ -213,7 +215,7 @@ def _legacy(common):
                                      'html': {'type': 'string', 'minLength': 1, 'description': 'HTML/CSS/JavaScript in an isolated script-enabled frame. Compiled React bundles are allowed; raw JSX is not compiled. Data is available as window.chartData.'},
                                      'table': _object({'headers': {'type': 'array', 'minItems': 1, 'items': {'type': 'string'}},
                                                        'rows': {'type': 'array', 'items': {'type': 'array'}}}, ['headers', 'rows']),
-                                     'presentation': {'type': 'object'},
+                                     'presentation': copy.deepcopy(common['componentSchema']['properties']['presentation']),
                                      'echarts': {'type': 'object', 'additionalProperties': True, 'description': 'Native ECharts JSON. With renderer=echarts this is the complete option; otherwise it extends the preset. For executable callbacks use renderer=html.'}}, ['code'])
             config_schema['allOf'] = [
                 {'if': {'properties': {'renderer': {'const': 'echarts'}}, 'required': ['renderer']},
@@ -249,6 +251,7 @@ def _legacy(common):
             example_config = {'title': 'Synthetic regional detail', 'columns': [
                 {'key': 'region', 'title': 'Region'}, {'key': 'value', 'title': 'Value', 'type': 'number'}],
                 'rows': [{'region': 'East', 'value': 12}, {'region': 'West', 'value': 8}]}
+        config_schema['properties']['presentation'] = copy.deepcopy(common['componentSchema']['properties']['presentation'])
         schema['properties']['config'] = config_schema
         families[family] = {'componentSchema': schema, 'example': _legacy_example(family, example_config)}
     return {

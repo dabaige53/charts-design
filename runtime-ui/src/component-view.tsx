@@ -414,7 +414,7 @@ export function ComponentView({
               ) : detailLoading ? (
                 <p role="status" className="text-sm text-muted-foreground">正在加载指标说明…</p>
               ) : (
-                <SemanticDetails value={details} component={c} document={doc} componentId={id} filters={filters} onReadData={onReadData} chartOption={chart.current?.getOption()} grain={grain} />
+                <SemanticDetails value={details} component={c} document={doc} componentId={id} filters={filters} onReadData={onReadData} grain={grain} />
               )}
             </div>
           </DialogContent>

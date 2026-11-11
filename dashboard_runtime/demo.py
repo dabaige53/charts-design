@@ -1,6 +1,7 @@
 """Explicit fixture, never inserted into a real dashboard implicitly."""
 from typing import Any
 from .model import apply_operations, new_document
+from .demo_diagrams import attach, BASE, EXECUTIVE, OPERATIONS
 
 def document(board_id='demo'):
     doc = new_document(board_id, 'Revenue and Capacity / DEMO')
@@ -25,6 +26,7 @@ def document(board_id='demo'):
         {'op': 'set_filters', 'value': [{'id': 'region', 'label': 'Region', 'field': 'region', 'op': 'in', 'values': [], 'componentIds': ['total','load','trend','regions','details']}]},
         {'op': 'set_status', 'value': 'fixture'}
     ]
+    attach(ops, BASE)
     doc = apply_operations(doc, ops)
     for bp, cols in [('desktop',12),('tablet',8)]:
         half = cols//2
@@ -45,6 +47,7 @@ def report_document(board_id='report-demo'):
         values = [140, 174, 170] if key == 'trend' else [278, 206]
         config = {'code': code, 'unit': '万元', 'data': {target: categories, measure_target: values}, 'presentation': {'axisLabels': {'x': '月份' if key == 'trend' else '区域', 'y': '收入'}, 'seriesLabels': ['收入'], 'tooltipValueLabels': ['收入'], 'units': ['万元'], 'tableHeaders': ['月份', '收入', '变化率'] if key == 'trend' else ['区域', '收入']}}
         ops.append({'op': 'put_component', 'id': key, 'value': {'kind': 'legacy', 'family': 'chart', 'title': doc['manifest']['components'][key]['title'], 'config': config, 'sourceId': 'fixture', 'binding': {'datasetId': 'sales', 'categoryField': category, 'categoryTarget': target, 'measures': {measure_target: 'revenue'}}}})
+    attach(ops, BASE)
     doc = apply_operations(doc, ops)
     return apply_operations(doc, [
         {'op': 'set_title', 'value': '季度收入变化与区域结构的描述性分析'},
@@ -114,6 +117,7 @@ def executive_document(board_id='executive-demo'):
         else:
             positions += [{'id': 'trend', 'x': 0, 'y': y, 'w': cols, 'h': 9}, {'id': 'regions', 'x': 0, 'y': y + 9, 'w': cols, 'h': 7}, {'id': 'details', 'x': 0, 'y': y + 16, 'w': cols, 'h': 11}]
         ops.append({'op': 'set_layout', 'breakpoint': bp, 'value': positions})
+    attach(ops, EXECUTIVE)
     return apply_operations(doc, ops)
 
 
@@ -163,4 +167,5 @@ def operations_document(board_id='operations-demo'):
         {'id': 'region', 'label': '区域', 'field': 'region', 'op': 'in', 'values': [], 'componentIds': consumers},
         {'id': 'period', 'label': '月份范围', 'field': 'month', 'op': 'range', 'values': [], 'componentIds': consumers}]})
     ops.append({'op': 'apply_layout_template', 'template': 'scorecard', 'order': consumers})
+    attach(ops, OPERATIONS)
     return apply_operations(doc, ops)

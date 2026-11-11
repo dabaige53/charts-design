@@ -9,6 +9,8 @@
 
 ## 大响应
 
+写入工具默认先生成摘要，再进入以下传输流程；完整文档不会随摘要被缓存为隐藏分块。需要完整写入结果时显式指定 `responseMode=full`，或另读 `dashboard_get`。编辑器在 MCP 调用中显式使用 full。摘要模式与完整结果的字段约定见 [Runtime 编辑与结果确认](dashboard-runtime.md#编辑与结果确认)。
+
 超过 48,000 字节的 MCP 工具结果返回 `transport` 描述，不再把完整 JSON 交给宿主转存。描述含 requestId、chunks、bytes 和 base64-json-v1 编码。调用 runtime_result_chunk，按从零开始的 index 读取全部分块，每块最多 24,000 个 ASCII 字符。拼接后 Base64 解码，核对字节数，再按 UTF-8 解码和 JSON 解析。网页客户端自动完成这一流程，代理或自定义消费者也须处理此描述。
 
 结构化结果和纯文本回退路径使用相同的小结果。不得从损坏的 JSON 截取前缀、跳过坏行，或用减少业务行数的方法隐藏传输失败。单次响应保留完整数据语义；本地 transport-results.sqlite3 保存完整响应 24 小时，同一运行目录的进程共享，进程重启不丢失；每次写入清理到期响应。超过 24 小时返回 RESULT_EXPIRED，需重新发起原读取。修改操作不能因响应过期而自动重放。

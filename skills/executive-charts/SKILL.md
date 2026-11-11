@@ -63,3 +63,11 @@ Markdown reports use the analytical-reports path and reference the same saved co
 Read [design standards](references/design_standards.md) for component titles, alignment and actions.
 
 For business definitions, read [metric definitions](references/metric-definitions.md). For calculations and supported dynamic fields, read the current Runtime declarations. Keep facts, labels and formulas consistent; creative freedom applies to presentation, not invented data.
+
+## Saved structure diagrams
+
+Generate a separate structure diagram for each component from its actual marks, field bindings and series meaning. Submit it in the same `put_component` batch: `config.presentation.structureDiagram` for legacy components, `presentation.structureDiagram` for other components, including statistical images, KPI cards and tables. Use the shared `structureDiagramSchema` from declarations; never select a generic diagram by chart type.
+
+Save `{version:1, viewBox:[0,0,width,height], svg, annotations}`. An annotation has a stable `id`, an `anchor:[x,y]` on the shape and `label:[x,y]`; optional `align` is `left`, `center` or `right`. Reference a canonical `metricId` without duplicated name/definition, or provide `name` and `description` for axes, nodes and other parts. Keep label areas clear. SVG contains only static geometry/text, no business values, scripts, events, external references, CSS or URL paints.
+
+When geometry, field bindings or series meaning changes, regenerate the diagram before submitting the component. Omission after a declaration change retains the previous diagram as stale; explicit submission confirms the supplied diagram. Data refreshes, filters and resize reuse the saved geometry. Old components remain usable without diagrams; explicitly add an authored diagram to each component being delivered. Do not develop chart-family adapters or substitute catalog sample business definitions.

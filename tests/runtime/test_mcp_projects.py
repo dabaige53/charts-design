@@ -103,7 +103,7 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                 # The project is available before the first chunk is decoded.
                 text = '# First project\n\n' + 'Project-owned report content.\n' * 3000
                 packed = await call(session, 'dashboard_patch', first, dashboardId='same', expectedRevision=2,
-                    operations=[{'op': 'set_report_markdown', 'value': text}])
+                    responseMode='full', operations=[{'op': 'set_report_markdown', 'value': text}])
                 assert packed['projectRoot'] == str(first)
                 transfer = packed['transport']
                 wrong = await session.call_tool('runtime_result_chunk', {'projectRoot': str(second),

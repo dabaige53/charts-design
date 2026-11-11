@@ -341,6 +341,8 @@ def validate(doc):
     for key, c in m['components'].items():
         identifier(key, 'component id')
         require(isinstance(c, dict) and c.get('kind') in ('chart', 'kpi', 'table', 'text', 'legacy', 'statistical'), f'{key}: invalid component kind')
+        from .structure_diagram import validate as validate_diagram
+        validate_diagram(c)
         require(isinstance(c.get('title'), str) and len(c['title']) <= 240, f'{key}: title required')
         require(isinstance(c.get('subtitle', ''), str) and len(c.get('subtitle', '')) <= 1000, f'{key}: subtitle must contain 0-1000 characters')
         presentation = c.get('config', {}) if c['kind'] == 'legacy' else c.get('presentation', {})
@@ -533,6 +535,7 @@ def apply_operations(doc, operations):
             key = identifier(op.get('id'))
             collection = {'put_source': 'sources', 'put_metric': 'metrics', 'put_component': 'components'}[kind]
             require(isinstance(op.get('value'), dict), 'Operation value must be an object')
+            previous_component = m['components'].get(key) if kind == 'put_component' else None
             if kind == 'put_component':
                 validate_component_content(op['value'], key)
             if kind == 'put_component' and key not in m['components']:
@@ -546,6 +549,9 @@ def apply_operations(doc, operations):
                 m[collection][key]['datasetId'] = binding.get('datasetId')
                 require(isinstance(binding.get('measures', {}), dict), 'Binding measures must be an object')
                 m[collection][key]['measures'] = list(dict.fromkeys(binding.get('measures', {}).values()))
+            if kind == 'put_component':
+                from .structure_diagram import update as update_diagram
+                update_diagram(previous_component, m[collection][key])
         elif kind == 'put_dataset':
             key = identifier(op.get('id'))
             m['datasets'][key] = copy.deepcopy(op.get('meta'))
@@ -584,13 +590,18 @@ def apply_operations(doc, operations):
             current = component['config']['code']
             require(current in ('c01', 'c02') and code in ('c01', 'c02'), 'No reviewed conversion between these original codes', 'INCOMPATIBLE_CHART')
             if current != code:
+                from .structure_diagram import invalidate
+                invalidate(component)
                 component['config']['code'] = code
                 axes = component['config']['presentation']['axisLabels']
                 axes['x'], axes['y'] = axes['y'], axes['x']
         elif kind == 'set_chart':
             key = op.get('id')
             require(key in m['components'] and m['components'][key]['kind'] == 'chart', 'Chart not found')
-            m['components'][key]['chartType'] = op.get('chartType')
+            if m['components'][key].get('chartType') != op.get('chartType'):
+                from .structure_diagram import invalidate
+                invalidate(m['components'][key])
+                m['components'][key]['chartType'] = op.get('chartType')
         elif kind == 'set_layout':
             bp = op.get('breakpoint', 'desktop')
             require(bp in COLS, 'Unknown breakpoint')

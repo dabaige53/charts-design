@@ -35,11 +35,20 @@ function readWebToken() {
 }
 const webToken = readWebToken();
 const queue = createRequestQueue(4);
+// Editors immediately consume the updated document; Agent calls default to receipts.
+const documentWrites = new Set([
+  "dashboard_create", "dashboard_patch", "dashboard_restore",
+  "dataset_import", "dataset_attach", "query_execute",
+  "dashboard_migrate", "dashboard_migration_rollback",
+]);
 const send = (name: string, args: Config) =>
   queue(async () => {
     if (boot.mode === "mcp") {
       if (!app) throw Error("MCP 宿主尚未连接");
-      return app.callServerTool({ name, arguments: args });
+      return app.callServerTool({
+        name,
+        arguments: documentWrites.has(name) ? { ...args, responseMode: "full" } : args,
+      });
     }
     const response = await fetch((boot.apiBase || "/api/tools/") + name, {
       method: "POST",

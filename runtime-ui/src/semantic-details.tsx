@@ -102,7 +102,7 @@ function MetricDefinition({ metric, fields, scope, period }: {
 }
 
 export function SemanticDetails({
-  value, component, document, componentId, filters, onReadData, chartOption, grain,
+  value, component, document, componentId, filters, onReadData, grain,
 }: {
   value: Config | null;
   component: Config;
@@ -110,7 +110,6 @@ export function SemanticDetails({
   componentId: string;
   filters: Filter[];
   onReadData?: (state: TableState) => Promise<Config>;
-  chartOption?: Config;
   grain?: string;
 }) {
   const prefix = useId();
@@ -118,7 +117,7 @@ export function SemanticDetails({
   const [activeSection, setActiveSection] = useState("");
   if (!value) return null;
   const explanation = value.originalExplanation || component.config?.explanation || {};
-  const presentation = value.originalPresentation || component.config?.presentation || component.presentation || {};
+  const presentation = (component.kind === "legacy" ? component.config?.presentation : component.presentation) || {};
   const datasetId = component.datasetId || component.binding?.datasetId;
   const dataset = document.manifest.datasets[datasetId] || value.dataset || {};
   const fields: Config = dataset.fields || {};
@@ -138,32 +137,13 @@ export function SemanticDetails({
   const originalMetrics: Config[] = explanation.metrics || [];
   // Current metric declarations remain the authority for bound data.
   const shownMetrics = metricIds.length ? metrics : metrics.length ? metrics : originalMetrics;
-  const structure = explanation.structure || {};
-  const category = component.binding?.categoryField || component.x;
-  const categoryName = fields[category]?.label || category;
-  const horizontal = component.config?.code === "c02";
-  const measureNames = metrics.map((metric) => metric.label || metric.name || metric.id);
-  const axes = [
-    ["X 轴", structure.xAxis, presentation.axisLabels?.x],
-    ["Y 轴", structure.yAxis, presentation.axisLabels?.y || presentation.axisLabels?.leftY],
-    ["右侧 Y 轴", structure.rightYAxis, presentation.axisLabels?.rightY],
-  ].map(([label, axis, fallback]) => {
-    const name = fallback || axis?.name || (categoryName
-      ? (label === (horizontal ? "Y 轴" : "X 轴") ? categoryName : label !== "右侧 Y 轴" ? measureNames.join("、") : undefined)
-      : undefined);
-    return [label, axis, name];
-  }).filter(([, axis, fallback]) => axis || fallback);
-  const series: Config[] = metricIds.length
-    ? (presentation.seriesLabels || measureNames).map((name: string) => ({ name }))
-    : structure.series || (presentation.seriesLabels || []).map((name: string) => ({ name }));
   const overview = component.subtitle || component.config?.desc || (!metricIds.length ? explanation.overview : undefined);
-  const chart = (component.family || component.kind) === "chart";
   const specs: [string, unknown][] = [
     ["统计周期", explanation.period],
     ["对比基准", explanation.comparison],
   ];
   const sections = [
-    ...(chart && (axes.length || series.length || chartOption) ? [["structure", "图表结构"]] : []),
+    ["structure", "图表结构"],
     ...(shownMetrics.length ? [["metrics", "指标口径"]] : []),
     ...(component.kind === "table" && Object.keys(fields).length ? [["fields", "表格字段"]] : []),
     ...(onReadData ? [["data", "明细数据"]] : []),
@@ -200,15 +180,10 @@ export function SemanticDetails({
           )}
         </section>
       )}
-      {chart && (axes.length > 0 || series.length > 0 || chartOption) && (
-        <section id={`${prefix}-structure`} className="semantic-section">
-          <h3>图表结构</h3>
-          <SemanticStructure axes={axes.map(([label, axis, name]) => ({
-            label: String(label), name: String(name || axis?.name || label),
-            description: [axis?.meaning, axis?.range].filter(Boolean).join("；"),
-          }))} series={series} metrics={shownMetrics} option={chartOption} />
-        </section>
-      )}
+      <section id={`${prefix}-structure`} className="semantic-section">
+        <h3>图表结构</h3>
+        <SemanticStructure diagram={presentation.structureDiagram} metrics={document.manifest.metrics} />
+      </section>
       {shownMetrics.length > 0 && (
         <section id={`${prefix}-metrics`} className="semantic-section">
           <h3>指标口径</h3>
@@ -261,7 +236,7 @@ export function SemanticDetails({
           {(source?.sql || source?.query) && <pre className="overflow-x-auto whitespace-pre-wrap break-words bg-muted/40 p-3 text-xs leading-relaxed">{String(source.sql || source.query)}</pre>}
         </section>
       )}
-      {!overview && !shownMetrics.length && !Object.keys(fields).length && !axes.length && !series.length && (
+      {!overview && !shownMetrics.length && !Object.keys(fields).length && !presentation.structureDiagram && (
         <p className="text-sm text-muted-foreground">此组件尚未保存业务说明。</p>
       )}
 
