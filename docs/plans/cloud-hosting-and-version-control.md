@@ -51,7 +51,7 @@ MCP、页面编辑器、项目资产和版本历史统一托管在腾讯云。�
 | SCF | 每分钟执行到期、撤销和中断上传的物理清理 |
 | 域名和 HTTPS | MCP 与网页的统一公开入口 |
 
-现有部署入口见 [自托管服务器](../self-hosted-server.md)，COS 与 SCF 部署见 [腾讯云分享](../self-hosted-server.md#腾讯云在线分享与云端清理)。这是安装自有服务，不是将本地 stdio 配置直接上传到 COS。
+现有部署入口见 [自托管服务器](../operations/self-hosted-server.md)，COS 与 SCF 部署见 [腾讯云分享](../operations/self-hosted-server.md#腾讯云在线分享与云端清理)。这是安装自有服务，不是将本地 stdio 配置直接上传到 COS。
 
 ## 两类访问密钥
 

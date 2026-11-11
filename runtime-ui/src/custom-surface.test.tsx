@@ -1,6 +1,5 @@
-// @vitest-environment jsdom
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it } from "bun:test";
 import { CustomSurface } from "./custom-surface";
 
 afterEach(cleanup);

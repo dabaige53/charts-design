@@ -67,7 +67,7 @@ CONTRACT = {
         'charts://declarations provides required-field schemas and original family/code requirements with authoritative validator sources and coverage limits.',
         'The original discovery catalog lists chart, KPI and table entries; its installed validator registry has 40 chart codes and 16 KPI types (mc01-mc16). Do not use every catalog entry as a chart code. Choose KPI shapes by question (chart_declarations returns kpiGuide), not mc01 for every metric.',
         'Preset charts require registered code/data/presentation. Custom charts use renderer=echarts or html with any non-empty code and explicit content. Unknown preset codes fail before saving with an actionable renderer error.',
-        'config.echarts supports arbitrary native JSON options. renderer=html supports executable JavaScript and compiled React in an isolated frame. Custom renderers currently use explicit data snapshots, not preset dataset bindings. See docs/echarts-options.md.',
+        'config.echarts supports arbitrary native JSON options. renderer=html supports executable JavaScript and compiled React in an isolated frame. Custom renderers currently use explicit data snapshots, not preset dataset bindings. See docs/implementation/echarts-options.md.',
         'Source verification supplied is not proof of execution or certification.'
     ]
 }

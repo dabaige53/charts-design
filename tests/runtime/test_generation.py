@@ -63,7 +63,7 @@ assert.equal(resolveOriginal(doc,'goal').percent,99);
 doc.manifest.filters.find(f=>f.id==='search').values=['no match'];
 assert.deepEqual(resolveOriginal(doc,'trend').data.month.revenue,[]);
 """
-    result = subprocess.run(['node', '--input-type=module', '-e', script], input=json.dumps(doc), text=True, capture_output=True)
+    result = subprocess.run(['bun', '-e', script], input=json.dumps(doc), text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
 
 

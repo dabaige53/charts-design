@@ -54,7 +54,7 @@ def test_mcp_ignores_shadow_module_and_keeps_relative_project(tmp_path):
     shadow.mkdir()
     (shadow/'__init__.py').write_text('raise RuntimeError("wrong module")')
     async def check():
-        params=StdioServerParameters(command='node',args=[str(root/'bin/dashboard-runtime.js'),'--project-root','project','--runtime-root','runtime','mcp'],cwd=str(tmp_path),
+        params=StdioServerParameters(command='bun',args=[str(root/'bin/dashboard-runtime.js'),'--project-root','project','--runtime-root','runtime','mcp'],cwd=str(tmp_path),
                                     env={**os.environ, 'PYTHON': sys.executable,
                                          'PYTHONPATH': os.pathsep.join(str(Path(entry).resolve()) for entry in sys.path if entry)})
         async with stdio_client(params) as (read,write):

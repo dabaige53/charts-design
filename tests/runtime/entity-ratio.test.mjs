@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {aggregate} from '../../dashboard_runtime/web/engine.mjs';
 // @wu-test type=behavior | scope=entity ratio | protects=同实体正负记录未抵消或空数据误计

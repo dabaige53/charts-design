@@ -46,6 +46,11 @@ function anchors(file) {
 
 let checked = 0;
 const failures = [];
+for (const entry of fs.readdirSync(path.join(root, 'docs'), {withFileTypes: true})) {
+  if (entry.isFile() && entry.name !== 'README.md') {
+    failures.push(`docs/${entry.name}: put topic documents and evidence in the directory defined by docs/agent/file-management.md`);
+  }
+}
 const files = [path.join(root, 'README.md'), path.join(root, 'AGENTS.md'), ...markdownFiles(path.join(root, 'docs')), ...markdownFiles(path.join(root, 'skills'))];
 for (const file of files) {
   const text = fs.readFileSync(file, 'utf8').replace(FENCE, '').replace(/`[^`\n]*`/g, '');

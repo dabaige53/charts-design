@@ -33,9 +33,12 @@ def replace_entry(text: str, entry: Path) -> str:
     updated, count = re.subn(r'(?m)^args\s*=\s*\[[\s\S]*?\]', lambda _: 'args = ' + json.dumps(args, ensure_ascii=False), body, count=1)
     if count != 1:
         raise ValueError('无法安全更新入口，配置未修改')
+    updated, count = re.subn(r'(?m)^command\s*=[^\n]+', 'command = "bun"', updated, count=1)
+    if count != 1:
+        raise ValueError('无法安全更新 Bun 启动命令，配置未修改')
     result = text[:section.end()] + updated + text[end:]
     parsed = tomllib.loads(result)
-    expected = dict(current, args=args)
+    expected = dict(current, args=args, command='bun')
     if parsed['mcp_servers']['charts-design'] != expected:
         raise ValueError('更新影响了其他 MCP 字段，配置未修改')
     parsed['mcp_servers']['charts-design'] = current
@@ -48,7 +51,7 @@ async def smoke(entry: Path):
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
     with tempfile.TemporaryDirectory(prefix='charts-mcp-check-') as state:
-        params = StdioServerParameters(command='node', args=[str(entry), '--root', state, 'mcp'], env=dict(os.environ))
+        params = StdioServerParameters(command='bun', args=[str(entry), '--root', state, 'mcp'], env=dict(os.environ))
         async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
             await session.initialize()
             tools = await session.list_tools()
@@ -80,19 +83,22 @@ def update(workspace: Path):
         raise ValueError('当前 MCP 直接引用源码，不需要更新安装包')
     def run(*args):
         subprocess.run(list(args), cwd=source, check=True)
-    run('npm', 'run', 'ui:build')
-    run('npm', 'run', 'ui:package')
-    run('npm', 'run', 'check')
+    run('bun', 'run', 'ui:prepare')
+    run('bun', 'run', 'check')
     version = json.loads((source / 'package.json').read_text())['version']
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     release = old_package.parent.parent / ('charts-design-' + version + '-' + stamp)
     release.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix='charts-pack-') as staging:
-        run('npm', 'pack', '--ignore-scripts', '--pack-destination', staging)
+        run('bun', 'pm', 'pack', '--ignore-scripts', '--destination', staging)
         archive = next(Path(staging).glob('*.tgz'))
         run('tar', '-xzf', str(archive), '-C', str(release))
     installed = release / 'package'
-    environment = json.loads((source / '.charts-runtime-env.json').read_text())
+    environment_path = source / '.charts-runtime-env.json'
+    environment = json.loads(environment_path.read_text()) if environment_path.exists() else {}
+    environment['python'] = os.path.abspath(sys.executable)
+    environment['isolated'] = False
+    environment.pop('dependencies', None)
     for key in ('dependencies', 'cache', 'browsers'):
         if environment.get(key):
             environment[key] = str((source / environment[key]).resolve())

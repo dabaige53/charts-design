@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {createProgressiveLoader} from '../../dashboard_runtime/web/progressive.mjs';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,10));

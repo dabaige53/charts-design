@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import * as r from '../../dashboard_runtime/web/review-state.mjs';
 const at='2026-11-09T12:00:00Z';

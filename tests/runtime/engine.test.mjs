@@ -1,8 +1,10 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const pythonEntry = fileURLToPath(new URL('../../bin/python-runtime.js', import.meta.url));
 import {aggregate,visibleRows,grouped,compatible,csv} from '../../dashboard_runtime/web/engine.mjs';
-const doc=JSON.parse(execFileSync('python3',['-c','import json;from dashboard_runtime.demo import document;print(json.dumps(document()))'],{encoding:'utf8'}));
+const doc=JSON.parse(execFileSync(process.execPath,[pythonEntry,'-c','import json;from dashboard_runtime.demo import document;print(json.dumps(document()))'],{encoding:'utf8'}));
 // @wu-test type=behavior | scope=aggregate ratio | protects=比例按百分比平均或零分母产生错误值
 test('weighted ratio is recomputed, not mean of percentages',()=>{
   assert.equal(aggregate([{p:90,s:100},{p:1,s:10}],{aggregation:'ratio',numerator:'p',denominator:'s'}),91/110);
@@ -29,7 +31,7 @@ test('shape compatibility blocks missing roles',()=>{
 // @wu-test type=boundary | scope=CSV export | protects=公式注入及引号破坏CSV
 test('CSV quotes values and neutralizes formula injection',()=>{
   const result=csv([{label:'=HYPERLINK("x")',value:-3}]);
-  const parsed=JSON.parse(execFileSync('python3',['-c',
+  const parsed=JSON.parse(execFileSync(process.execPath,[pythonEntry,'-c',
     'import csv,io,json,sys; print(json.dumps(list(csv.reader(io.StringIO(sys.stdin.read().lstrip(chr(0xfeff)), newline="")))))'
   ],{input:result,encoding:'utf8'}));
   assert.deepEqual(parsed,[['label','value'],['\'=HYPERLINK("x")','-3']]);

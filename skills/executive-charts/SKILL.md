@@ -28,7 +28,7 @@ All three chart routes use `put_component` with `kind: "legacy"`, `family: "char
 
 Custom routes may supply `table: {headers: string[], rows: array[]}` for shared table view and CSV. Without a declared table, those actions are absent. HTML components do not expose the host ECharts PNG/clipboard actions. `window.chartData` provides their `config.data`.
 
-Read package-root [native and custom rendering](../../docs/echarts-options.md) for declarations, examples and execution boundaries. Read `charts://declarations` or call `chart_declarations` for the currently connected server's capabilities.
+Read package-root [native and custom rendering](../../docs/implementation/echarts-options.md) for declarations, examples and execution boundaries. Read `charts://declarations` or call `chart_declarations` for the currently connected server's capabilities.
 
 ## Work on an existing artifact
 
