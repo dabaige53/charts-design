@@ -140,11 +140,12 @@ def free_port():
         return probe.getsockname()[1]
 
 
-# @wu-test type=integration | scope=远程MCP与分享链接 | protects=跨项目读写或分享链接越权调用或撤销后链接仍可用
+# @wu-test type=integration | scope=远程MCP与分享链接 | protects=远程发现清单不一致或分享链接越权与撤销后仍可用
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
 def test_remote_mcp_and_scoped_viewer_api(tmp_path):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
+    from pydantic import AnyUrl
     port = free_port()
     server = start(tmp_path, port)
     with Running(create_app(server), port):
@@ -154,9 +155,23 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
             async with streamablehttp_client(base + '/mcp', headers={'Authorization': 'Bearer ' + TOKEN}) as (read, write, _):
                 async with ClientSession(read, write) as client:
                     await client.initialize()
-                    names = {tool.name for tool in (await client.list_tools()).tools}
+                    tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+                    names = tools.keys()
                     assert {'dashboard_share', 'dashboard_share_revoke', 'dashboard_preview'} <= names
                     assert 'dashboard_export_open' not in names
+                    from mcp.types import TextResourceContents
+                    guide = (await client.read_resource(AnyUrl('charts://contract'))).contents[0]
+                    assert isinstance(guide, TextResourceContents)
+                    contract = json.loads(guide.text)
+                    assert contract['tools'] == {name: tool.model_dump(by_alias=True, exclude_none=True, exclude={'name'})
+                        for name, tool in tools.items()}
+                    assert 'Project name on this server' in contract['projectRouting']['description']
+                    revoke_annotations = tools['dashboard_share_revoke'].annotations
+                    assert revoke_annotations is not None
+                    assert revoke_annotations.destructiveHint is True
+                    keepalive_meta = tools['runtime_keepalive'].meta
+                    assert keepalive_meta is not None
+                    assert keepalive_meta['ui']['visibility'] == ['app']
                     outside = await client.call_tool('dashboard_list', {'projectRoot': '/etc'})
                     assert outside.isError and outside.structuredContent is not None
                     assert outside.structuredContent['error']['code'] == 'PROJECT_OUTSIDE_WORKSPACE'

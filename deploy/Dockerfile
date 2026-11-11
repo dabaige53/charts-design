@@ -2,6 +2,10 @@
 # Build from the repository root:  docker build -f deploy/Dockerfile -t charts-design .
 # Optional Seaborn statistics:     docker build -f deploy/Dockerfile --build-arg EXTRAS=statistics -t charts-design .
 
+FROM python:3.11-slim AS cloud-dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+RUN pip install --no-cache-dir --target /cloud-dependencies 'cos-python-sdk-v5>=1.9,<2'
+
 FROM node:22-slim AS ui
 WORKDIR /build
 RUN corepack enable
@@ -23,6 +27,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CHARTS_HOST=0.0.0.0 \
     CHARTS_PORT=8000
 WORKDIR /app
+COPY --from=cloud-dependencies /cloud-dependencies /usr/local/lib/python3.11/site-packages/
 RUN pip install --no-cache-dir 'mcp>=1.28,<2' \
  && if [ "$EXTRAS" = "statistics" ]; then pip install --no-cache-dir 'seaborn>=0.13.2,<0.14' 'matplotlib>=3.8,<4' 'pandas>=2.1,<3'; fi
 COPY dashboard_runtime/ dashboard_runtime/

@@ -26,11 +26,11 @@
 
 现有虚拟来源只区分吉祥航空与其他航司。以前点分类由原有 HO / other 数值展开；没有拆造 MU、CA 等数据。产品多系列能力另由三商品零售用例验证。
 
-![安装包中的虚拟看板](images/transfer-prototype-validation.png)
+![安装包中的虚拟看板](../images/transfer-prototype-validation.png)
 
 ## 当前安装与预览
 
 安装在仓库 `.runtime-installs/dynamic-encoding-20261028/package`。analyst-workspace 主目录及指定工作树的 `.codex/config.toml` 已更新入口。新安装包的本地浏览器预览已验证营业部、直飞筛选和服务表空结果，未记录浏览器运行错误。
 
 
-能力边界与可复用声明见 [动态图表声明](dynamic-encoding.md)。工程跟踪：[INS-221](https://linear.app/insightal/issue/INS-221)。
+能力边界与可复用声明见 [动态图表声明](../dynamic-encoding.md)。工程跟踪：[INS-221](https://linear.app/insightal/issue/INS-221)。

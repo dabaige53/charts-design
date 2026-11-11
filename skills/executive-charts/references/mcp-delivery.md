@@ -25,6 +25,10 @@ Choose a preset, native ECharts, or custom HTML/JavaScript route. `chart_recomme
 
 Annotations remain independent of design restoration. Preserve their original context when anchors become unavailable.
 
+`dashboard_get` returns the editable draft; project preview/refresh reads the latest completed checkpoint. Failed finish/checkpoint checks return `DOCTOR_FAILED` and MCP `isError: true`; the draft and batch remain. Read the latest draft, fix the Doctor issues, then finish again. On `REVISION_CONFLICT`, reconcile current content before retrying. A checkpoint's `published` flag only protects history from pruning; it does not deploy a site or create a share link.
+
+Read `tools/list` and `charts://contract` for the same installed, transport-specific definitions and typed operation schemas. `runtime_keepalive`, `runtime_report_error` and local `dashboard_export_open` are App-only; agents read diagnostics and download managed exports instead. Supply exactly one of `rows` or `csvText` to `dataset_import`; connection aliases must come from operator configuration.
+
 ## Locate failures and performance work
 
 Use request IDs with `runtime_diagnostics`. Distinguish backend query, serialization, chunk transport, client decoding and rendering. Retain the failing response and error position when available. Record version, phase, elapsed time and payload size; keep raw business rows and credentials out of logs.

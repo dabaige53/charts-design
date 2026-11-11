@@ -8,7 +8,7 @@ description: Generate evidence-based analytical reports as canonical Markdown wi
 Use the approved academic reading structure. Preserve Markdown as the portable canonical source. Reports use the same React chart components through the single-column Markdown adapter.
 
 > **Current status (2026-11-10)**
-> The shared React component library and MCP application use separate adapters and explicit build/package steps. Preview, JSON/CSV, HTML snapshots and static site exports use the new resources. Missing builds return `UI_UNAVAILABLE`. Current completion and host acceptance are tracked in package-root `docs/ui-refactor-plan.md`.
+> The shared React component library and MCP application use separate adapters and explicit build/package steps. Preview, JSON/CSV, HTML snapshots and static site exports use the new resources. Missing builds return `UI_UNAVAILABLE`. Current completion and host acceptance are tracked in package-root `docs/plans/ui-refactor-plan.md`.
 
 ## Discover before generating
 

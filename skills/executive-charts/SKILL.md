@@ -54,7 +54,7 @@ For local datasets that must remain outside the preview, read [local data](refer
 
 Maintain this skill in `skills/executive-charts/`; installed aliases should point here. Store business datasets and declarations in the user's project, never in the skill tooling directory.
 
-The CLI workspace accepts KPI and chart declaration files. Its custom chart renderer validation matches Runtime. Use the shared React Runtime and explicit build/package steps. The implementation status is in package-root `docs/ui-refactor-plan.md`.
+The CLI workspace accepts KPI and chart declaration files. Its custom chart renderer validation matches Runtime. Use the shared React Runtime and explicit build/package steps. The implementation status is in package-root `docs/plans/ui-refactor-plan.md`.
 
 Markdown reports use the analytical-reports path and reference the same saved components. Report prose does not belong inside KPI cards.
 

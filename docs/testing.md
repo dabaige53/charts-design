@@ -16,7 +16,7 @@
 
 ## 本地准备
 
-- Python 依赖：`python3 -m pip install '.[statistics,mcp,test]'`。项目要求 `mcp<2`；若系统已装更新的大版本，安装到 `.mcp-test-deps` 并在 `.charts-runtime-env.json` 中指定，见 [Runtime 说明](dashboard-runtime.md#mcp)。
+- Python 依赖：`python3 -m pip install '.[statistics,mcp,test]'`。项目要求 `mcp<2`；若系统已装更新的大版本，安装到 `.mcp-test-deps` 并在 `.charts-runtime-env.json` 中指定，见 [Runtime 说明](dashboard-runtime.md#启动与依赖)。
 - UI：`pnpm --dir runtime-ui install --frozen-lockfile`，然后执行 `npm run ui:typecheck`、`npm run ui:build` 和 `npm run ui:package`。构建只写 `runtime-ui/dist`，资源打包才更新后端资源。需要预览资源的后端测试先完成此步骤。
 - 静态检查：`python3 -m pip install 'ruff==0.16.9'` 后运行 `npm run lint:py`。
 - 容器：需要 Docker（BuildKit）；`tests/deploy/container_smoke.py --url <地址> --token <令牌>` 也可直接检查已经运行的服务器。

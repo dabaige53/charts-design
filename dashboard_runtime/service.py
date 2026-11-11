@@ -11,6 +11,7 @@ from .store import Store
 from .declarations import declaration_contract
 from .local_view import LocalView
 from .build import BACKEND_BUILD_ID, MODULE_ROOT
+from .tool_contract import READ_ONLY as READ_ONLY, TOOLS as TOOLS
 
 class Service:
     project_name: str
@@ -114,6 +115,21 @@ class Service:
             self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
+        if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status'):
+            from .cloud_shares import CloudShares
+            shares = CloudShares.from_environment()
+            from qcloud_cos.cos_exception import CosClientError, CosServiceError
+            try:
+                if tool == 'dashboard_share_publish':
+                    return shares.publish(self, board, args['expectedRevision'],
+                                          args.get('expiration', '7d'), args.get('accessKey'))
+                if tool == 'dashboard_share_status':
+                    return shares.status(self, board, args.get('shareId'))
+                return shares.revoke(self, board, args.get('shareId'))
+            except (CosClientError, CosServiceError) as error:
+                raise DashboardError('CLOUD_STORAGE_FAILED',
+                    'Tencent COS request failed. Check cloud service permissions and dashboard_share_status before retrying a publish.',
+                    503) from error
         if tool == 'dashboard_version_label':
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             return self.store.label_checkpoint(board,args['expectedRevision'],args['revision'],args.get('name',''),args.get('published',False))
@@ -132,7 +148,9 @@ class Service:
                 return self.store.diff(board, args['fromRevision'], args['toRevision'])
             report = self._call('dashboard_doctor', {'dashboardId': board, 'mode': 'full'})
             if not report['passed']:
-                return {'ok': False, 'doctor': report}
+                return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
+                        'message': 'Draft checks failed; no checkpoint was created. Read dashboard_get, fix the reported issues, then retry with the latest revision.'},
+                        'doctor': report, 'nextAction': 'dashboard_get'}
             from .semantic_diff import semantic_diff
             changes = semantic_diff(self.store.readable(board), self.store.get(board, hydrate=False))
             checkpoint = self.store.checkpoint(board, args['expectedRevision'], args.get('name', ''), args.get('published', False), args.get('batchId'))
@@ -396,6 +414,8 @@ class Service:
             import io
             import re
             ds = identifier(args.get('datasetId'))
+            require(('rows' in args) != ('csvText' in args),
+                    'Supply exactly one of rows or csvText', 'INVALID_ARGUMENT')
             rows = args.get('rows')
             if args.get('csvText') is not None:
                 rows = list(csv.DictReader(io.StringIO(args['csvText'])))
@@ -434,99 +454,3 @@ class Service:
                     operations.append({'op': 'put_metric', 'id': mid, 'value': {'datasetId': ds, 'field': key, 'aggregation': 'sum', 'label': key, 'unit': '', 'definition': f'业务定义待确认：字段「{key}」的业务对象、记录粒度、纳入与排除条件尚未说明。当前配置仅对该字段求和。', 'status': 'unverified'}})
             return {'document': self.store.mutate(board, args['expectedRevision'], operations), 'execution': source['query']}
         raise DashboardError('UNKNOWN_TOOL', f'Unsupported tool: {tool}', 404)
-
-def schema(properties=None, required=()):
-    return {'type': 'object', 'properties': properties or {}, 'required': list(required), 'additionalProperties': False}
-STR = {'type': 'string'}
-INT = {'type': 'integer', 'minimum': 1}
-BOARD = {'dashboardId': STR, 'dataMode': {'enum': ['snapshot', 'local']}}
-TARGET = {**BOARD, 'componentId': STR}
-TOOLS = {
-    'runtime_keepalive': ('Keep the local runtime alive only while its preview is visible; do not poll from background agents', schema()),
-    'dashboard_list': ('List saved dashboards', schema()),
-    'dashboard_create': ('Create a dashboard with an optional reviewed artifact', schema({**BOARD, 'title': STR, 'document': {'type': 'object'}}, ('dashboardId',))),
-    'dashboard_annotations': ('Read saved comments and selection anchors without loading chart data. Returns revision, annotations and target component identities. When asked to act on comments, read dashboard_get for canonical content, then use dashboard_patch with its latest expectedRevision. Preserve comments unless asked to edit or remove them. Anchors are relative geometry/text references, not screenshots; verify ambiguous visual targets in the rendered page.', schema({'dashboardId': STR}, ('dashboardId',))),
-    'dashboard_get': ('Read current canonical state including manifest.annotations before editing', schema(BOARD, ('dashboardId',))),
-    'dashboard_preview': ('Open this saved dashboard with the shared React chart, KPI, table and GridStack UI in this MCP', schema(BOARD, ('dashboardId',))),
-    'dashboard_validate': ('Validate a stored dashboard or supplied artifact', schema({**BOARD, 'document': {'type': 'object'}})),
-    'dashboard_patch': ('Apply atomic typed operations with optimistic concurrency; expectedAnnotations enables independent, conflict-checked project annotation saves', schema({**BOARD, 'expectedRevision': INT, 'expectedAnnotations': {'type': 'array', 'maxItems': 100, 'items': {'type': 'object'}}, 'operations': {'type': 'array', 'minItems': 1, 'maxItems': 200, 'items': {'type': 'object'}}}, ('dashboardId', 'expectedRevision', 'operations'))),
-    'dashboard_history': ('List the last 100 revisions', schema(BOARD, ('dashboardId',))),
-    'dashboard_restore': ('Restore a revision as a new revision; never overwrite history', schema({**BOARD, 'expectedRevision': INT, 'revision': INT}, ('dashboardId', 'expectedRevision', 'revision'))),
-    'chart_catalog': ('List the 40 installed original chart codes and component catalog', schema(TARGET)),
-    'component_data': ('Read a bounded page of component snapshot rows using the current filters', schema({**TARGET, 'expectedRevision': INT, 'filters': {'type': 'array', 'items': {'type': 'object'}}, 'sort': {'type': 'array', 'items': {'type': 'object'}}, 'search': STR, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 1000}}, ('dashboardId', 'componentId'))),
-    'query_inspect': ('Inspect actual or supplied SQL provenance, without execution', schema(TARGET, ('dashboardId', 'componentId'))),
-    'semantic_inspect': ('Inspect stored metric definitions, units and aggregation', schema(TARGET, ('dashboardId', 'componentId'))),
-    'query_execute': ('Execute a bounded read-only SQLite query on a configured alias and atomically save its snapshot', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'connection': STR, 'sql': STR, 'parameters': {'type': ['object', 'array']}}, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql')))
-}
-READ_ONLY = {'dashboard_annotations', 'component_data', 'dashboard_list', 'dashboard_get', 'dashboard_preview', 'dashboard_validate', 'dashboard_history', 'chart_catalog', 'query_inspect', 'semantic_inspect'}
-READ_ONLY.add('runtime_keepalive')
-TOOLS.update({
-    'dataset_import': ('Import explicit JSON rows or CSV; inferred measures remain unverified', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'rows': {'type':'array', 'items':{'type':'object'}}, 'csvText':STR, 'name':STR}, ('dashboardId','expectedRevision','datasetId'))),
-    'legacy_render': ('Read-only original component HTML snapshot using the shared React UI', schema(TARGET, ('dashboardId','componentId')))
-})
-READ_ONLY.add('legacy_render')
-
-TOOLS.update({
-    'generation_examples': ('Discover Dashboard and analytical-report generation cases; select caseId for reusable atomic declarations and the academic Markdown master. The two dashboard cases use different layouts, KPI shapes and charts on the same data: compose for the question rather than copying one. All case data is synthetic.', schema({'caseId': {'type':'string','enum':['executive-dashboard','operations-scorecard','academic-report']}})),
-    'chart_declarations': ('Discover available declaration types; select an original chart/KPI code for bounded schemas and working examples. Full reference: charts://declarations.', schema({'code':STR}))
-})
-READ_ONLY.update({'generation_examples','chart_declarations'})
-TOOLS['layout_templates'] = ('Discover named dashboard compositions (executive, focus, bento, sidebar, grid3, narrative, scorecard) and how to apply one with the apply_layout_template operation. Choose by content; avoid giving every dashboard the same layout.', schema())
-READ_ONLY.add('layout_templates')
-TOOLS['chart_recommend'] = ('Rank registered chart codes for a business question (intent) and data shape, mark which support filter bindings, suggest matching KPI shapes, and down-rank codes the dashboard already uses. Use before choosing codes; then read chart_declarations for the chosen code.',
-    schema({'intent': {'enum': ['comparison', 'ranking', 'trend', 'composition', 'distribution', 'relationship', 'flow', 'change', 'attribution', 'target', 'forecast']},
-            'categories': {'type': 'integer', 'minimum': 1}, 'measures': {'type': 'integer', 'minimum': 1}, 'hasTime': {'type': 'boolean'},
-            'dashboardId': STR, 'datasetId': STR}, ('intent',)))
-READ_ONLY.add('chart_recommend')
-
-TOOLS["statistical_render"] = ("Render a declared Seaborn component as bounded SVG or PNG with raw-observation provenance", schema({**TARGET, "format": {"enum": ["svg", "png"]}}, ("dashboardId", "componentId")))
-READ_ONLY.add("statistical_render")
-
-VIEW = {**BOARD, 'filters': {'type': 'array', 'items': {'type': 'object'}}, 'tableStates': {'type': 'object'}, 'granularities': {'type': 'object'}}
-TOOLS['runtime_info'] = ('Read installed UI build identity and current dashboard revision without loading view rows', schema(BOARD))
-TOOLS['dashboard_refresh'] = ('Refresh the latest dashboard while preserving reader filter values and table state; never saves reader overrides', schema(VIEW, ('dashboardId',)))
-READ_ONLY.update({'runtime_info', 'dashboard_refresh'})
-TOOLS.update({
-    'dashboard_view': ('Compute a local preview from immutable versions; returns only aggregate results and table pages, without saving reader filters', schema({**VIEW, 'responseMode': {'enum': ['full', 'patch']}, 'componentIds': {'type': 'array', 'items': STR}, 'expectedRevision': INT, 'includeFilterOptions': {'type': 'boolean'}}, ('dashboardId',))),
-    'dashboard_data_inspect': ('Inspect dataset versions, row counts, sizes and shared versions without reading full rows', schema(BOARD, ('dashboardId',))),
-    'dashboard_filter_options': ('Search and page the full selection universe without reducing filter scope', schema({**BOARD, 'filterId': STR, 'search': STR, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 1000}}, ('dashboardId', 'filterId'))),
-    'dataset_attach': ('Stream an operator-configured local SQLite table into an immutable data version; never send full data through MCP', schema({**BOARD, 'expectedRevision': INT, 'datasetId': STR, 'connection': STR, 'table': STR, 'fields': {'type': 'object'}}, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'table'))),
-    'dataset_export': ('Export every matching row to a local CSV file, streaming; returns the local path and counts, not the file content', schema({**TARGET, 'datasetId': STR, 'filters': {'type': 'array', 'items': {'type': 'object'}}, 'columns': {'type': 'array', 'items': STR}, 'sort': {'type': 'array', 'items': {'type': 'object'}}, 'search': STR}, ('dashboardId',))),
-    'dashboard_migrate': ('Back up a legacy dashboard and compact all revisions to immutable local data references; preserves business revision numbers', schema({**BOARD, 'expectedRevision': INT}, ('dashboardId', 'expectedRevision'))),
-    'dashboard_migration_rollback': ('Restore backed-up pre-migration content as a new revision, preserving subsequent history', schema({**BOARD, 'expectedRevision': INT, 'backupId': STR}, ('dashboardId', 'expectedRevision', 'backupId'))),
-})
-READ_ONLY.update({'dashboard_view', 'dashboard_data_inspect', 'dashboard_filter_options'})
-TOOLS['dashboard_export'] = ('Export JSON configuration or an HTML snapshot of the current computed view', schema({**VIEW, 'format': {'enum': ['html', 'json']}}, ('dashboardId', 'format')))
-READ_ONLY.add('dashboard_export')
-TOOLS['runtime_result_chunk'] = ('Read one complete base64 page of a large MCP response. Decode all pages in index order as UTF-8 JSON; never sample or truncate.', schema({'requestId': STR, 'index': {'type': 'integer', 'minimum': 0}}, ('requestId', 'index')))
-TOOLS['runtime_diagnostics'] = ('Query metadata-only preview transport logs by requestId; no business rows, arguments or credentials are logged.', schema({'requestId': STR, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100}}))
-TOOLS['runtime_report_error'] = ('Record a client preview decoding failure without sending response contents.', schema({'requestId': STR, 'code': {'enum': ['CLIENT_DECODE_FAILED', 'CHUNK_MISMATCH', 'RESULT_EXPIRED']}}, ('code',)))
-READ_ONLY.update({'runtime_result_chunk', 'runtime_diagnostics'})
-TOOLS['dashboard_export_open'] = ('Open a previously generated managed export or reveal it in Finder, only after a user file-action click', schema({**BOARD, 'exportId': STR, 'format': {'enum': ['html', 'json', 'csv', 'zip']}, 'action': {'enum': ['open', 'reveal']}}, ('dashboardId', 'exportId', 'format', 'action')))
-TOOLS['dashboard_export_read'] = ('Read a bounded chunk of an existing managed export for MCP host download', schema({**BOARD, 'exportId': STR, 'format': {'enum': ['html', 'json', 'csv', 'zip']}, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 262144}}, ('dashboardId', 'exportId', 'format')))
-READ_ONLY.add('dashboard_export_read')
-
-TOOLS['dashboard_doctor'] = ('Check project data and component calculations without opening a page', schema({**BOARD, 'mode': {'enum': ['quick','full']}}, ('dashboardId',)))
-TOOLS['dashboard_edit_begin'] = ('Begin or resume one edit batch; all patches save draft only', schema({**BOARD, 'expectedRevision': INT}, ('dashboardId','expectedRevision')))
-TOOLS['dashboard_edit_finish'] = ('Run doctor and create one checkpoint; call dashboard_preview to open the saved UI', schema({**BOARD, 'expectedRevision': INT, 'batchId': STR, 'name': STR, 'published': {'type':'boolean'}}, ('dashboardId','expectedRevision','batchId')))
-TOOLS['dashboard_checkpoint'] = ('Validate and checkpoint current draft, optionally name or publish it', schema({**BOARD,'expectedRevision':INT,'name':STR,'published':{'type':'boolean'}}, ('dashboardId','expectedRevision')))
-TOOLS['dashboard_history_diff'] = ('Compare two retained design checkpoints', schema({**BOARD,'fromRevision':INT,'toRevision':INT}, ('dashboardId','fromRevision','toRevision')))
-TOOLS['dashboard_history'][1]['properties'].update({'offset':{'type':'integer','minimum':0}, 'limit':{'type':'integer','minimum':1,'maximum':100}})
-TOOLS['dashboard_restore'][1]['properties']['useCurrentData']={'type':'boolean'}
-TOOLS['dashboard_view'][1]['properties'].update({'dataVersion':STR, 'filterSequence':{'type':'integer','minimum':0}})
-READ_ONLY.update({'dashboard_doctor','dashboard_history_diff'})
-
-TOOLS['runtime_diagnostics'][1]['properties'].update({'dashboardId': STR, 'stage': STR, 'code': STR})
-
-TOOLS['runtime_report_error'][1]['properties'].update({'dashboardId':STR,'revision':INT})
-TOOLS['runtime_report_error'][1]['properties']['code']['enum'].extend(['CLIENT_RENDER_FAILED','CLIENT_DATA_APPLIED'])
-
-TOOLS['dashboard_version_label'] = ('Name or protect an existing checkpoint without creating a new design revision', schema({**BOARD,'expectedRevision':INT,'revision':INT,'name':STR,'published':{'type':'boolean'}}, ('dashboardId','expectedRevision','revision')))
-
-TOOLS['runtime_report_error'][1]['properties']['durationMs'] = {'type': 'number', 'minimum': 0, 'maximum': 3600000}
-TOOLS['runtime_report_error'][1]['properties']['code']['enum'].extend(['CLIENT_DECODE_COMPLETE','CLIENT_FRAME_READY'])
-
-TOOLS['dashboard_view'][1]['properties']['compactRecords'] = {'type': 'boolean'}
-
-TOOLS['dashboard_export_site'] = ('Build an independent static React site with versioned data shards; returns a managed ZIP export', schema({**BOARD}, ('dashboardId',)))
-READ_ONLY.add('dashboard_export_site')

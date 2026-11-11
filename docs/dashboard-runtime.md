@@ -1,135 +1,42 @@
-# Dashboard and Analysis Report Runtime: web + CLI + MCP
+# Runtime：架构、配置与接口入口
 
-The runtime extends charts-design. Original chart builders, KPI bodies, table and explanation components remain the rendering foundation; the runtime adds persistence, editing, transport and a shared SVG-only action layer.
+Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MCP 和网页编辑器提供数据、指标计算、版本与文件导出。看板和报告使用共享 React 应用；视图切换不执行上游 SQL，也不生成业务结论。
 
-> **Current status (2026-11-10)**
-> The shared React component library and MCP application use separate adapters and explicit build/package steps. Preview, JSON/CSV, HTML snapshots and static site exports use the new resources. Missing builds return `UI_UNAVAILABLE`. Current completion and host acceptance are tracked in package-root `docs/ui-refactor-plan.md`.
+## 模块职责
 
-## Run locally
+| 维护入口 | 职责 |
+| --- | --- |
+| `service.py` | 工具执行、数据计算编排与返回结果 |
+| `tool_contract.py`、`contract.py` | 工具用途、参数说明、操作结构与发现资源 |
+| `mcp_server.py`、`project_routing.py` | MCP 协议适配、请求项目选择与结果传输 |
+| `store.py`、`project.py`、`local_data.py` | 事务状态、草稿/检查点、批注与不可变数据 |
+| `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
+| `server.py`、`http_app.py` | 自托管远程服务与本机网页入口 |
+| `runtime-ui/src/` | 展示组件、应用状态、布局和宿主能力适配 |
 
-Python requirements and optional dependency groups are declared in `pyproject.toml`. Use the project-selected Python interpreter. The commands below use `python3` as its placeholder.
+展示组件接收 props 和事件，不访问数据库或直接调用 MCP；应用适配层管理工具请求、结果合并和宿主能力。画布与应用共享组件，分别构建与打包。业务状态通过 Service 修改，不手工维护 SQLite 的 JSON 镜像。
 
-```sh
-python3 -m dashboard_runtime --root ./boards init demo --demo
-```
+## 启动与依赖
 
-Plain `init` creates an empty dashboard; `--demo` explicitly inserts synthetic data. The test fixtures also use explicitly labelled demonstration data. Keep `./boards` outside source control: it contains business snapshots, SQL and parameters.
-
-## Personal analysis reports
-
-A report is one Markdown document, presented as a single-column academic reading layout. Write headings, paragraphs, bold text, lists and blockquotes as usual; put a fenced `chart` block where a shared chart should appear. Charts render inline between the surrounding prose, with numbered captions and optional source notes below them. Dashboard mode remains an independent responsive grid using the same components, data, filters, metric definitions and source inspectors. Switching views does not execute SQL or generate new claims.
-
-```sh
-# An empty Markdown report; no business data is inserted.
-python3 -m dashboard_runtime --root ./boards init analysis --mode report --title "我的分析报告"
-
-# An explicitly synthetic Markdown example, with prose and two inline charts.
-python3 -m dashboard_runtime --root ./boards init report-demo --mode report --demo
-```
-
-Each generated artifact has one saved presentation: dashboard or report. Editing supports layout dragging and direct plain-text editing of page/component titles and descriptions. GridStack enables dragging and resizing in edit mode and locks layout in view mode. Adding, duplicating, deleting charts and importing data are hidden in the UI. Chart type switching remains available. Annotation behavior depends on host capabilities; the rules and stored-note contract are in [位置引用与批注](annotation-composer.md). Report Markdown remains editable. Report Markdown determines reading order, and chart fences reference existing component IDs.
-
-For example, this is the entire source of a small report. The `trend` and `regions` components must already exist, or be created in the same atomic update:
-
-````markdown
-# 我的经营观察
-
-*——基于合成快照的描述性分析*
-
-**摘要：** 这里只使用明确标记的合成数据，描述收入变化，不作因果推断。
-
-**关键词：** 收入变化；区域结构；合成数据
-
-## 收入走势
-
-如[图](#fig-trend)所示，9 月收入**高于 7 月**，但低于 8 月。先观察变化，再验证原因。
-
-```chart
-{"componentId":"trend","caption":"2026 年 7—9 月收入变化","source":"数据来源：内置合成快照；金额单位为万元。"}
-```
-
-三个观测点不足以判断变化是否持续，需要结合更长时期的数据。
-
-## 区域拆解
-
-两地区的累计收入规模存在差异（见[图](#fig-regions)）。还需复核 East 的月度变化，并对照更细时间粒度的数据。
-
-```chart
-{"componentId":"regions","caption":"East 与 South 的季度累计收入","source":"数据来源：同一内置合成快照，统计期间为 2026 年 7—9 月。"}
-```
-
-图表之后可以继续写分析、限制和下一步。
-````
-
-Conclusions are authored and do not recalculate when filters change. Review the Markdown after changing data or filters. Raw HTML and ordinary code are not executable report instructions.
-
-### Academic reading conventions
-
-An authored level-one heading is the centered title; an emphasized paragraph immediately after it can provide a centered subtitle. Write abstract and keywords as ordinary paragraphs beginning with `**摘要：**` and `**关键词：**`. Level-two section headings receive presentation-only section numbers, so omit manual numbers in their Markdown. These conventions style supplied content; they do not invent authors, dates, abstracts, keywords or other metadata for existing documents.
-
-Figures receive numbers in Markdown source order. Optional `caption` and `source` strings render as plain text under their chart; do not include a manual figure number in the caption. Use a standard Markdown link such as `[图](#fig-trend)` in prose to display the corresponding figure number and jump to the figure for component `trend`. Repeating a chart fence creates another numbered figure; links using `#fig-trend` still refer to that component's first occurrence. No extra `figureId` field is needed or accepted. Reordering the chart fences updates the rendered numbering without rewriting the canonical Markdown.
-
-### Canonical source and validation (backward-compatible schema v2)
-
-`manifest.viewMode` is optional: `"dashboard"` (the default for older documents) or `"report"`. The canonical report source is `manifest.report.markdown`:
-
-```json
-{
-  "viewMode": "report",
-  "report": {
-    "markdown": "# 我的报告\n\n先写分析。\n\n```chart\n{\"componentId\":\"trend\"}\n```\n\n再写解读。"
-  }
-}
-```
-
-- `markdown` is a string of 0–200,000 characters. An empty string is a valid, intentionally empty report.
-- A top-level fence whose exact info string is `chart` contains a JSON object with required `componentId` and optional `caption` and `source`. The existing 1–80 character identifier rule applies to `componentId`. It must resolve to a non-text component: chart, KPI, table or original catalog component. The same component may appear more than once. Existing `{"componentId":"trend"}` fences remain valid.
-- `caption` must be a string of 0–500 characters; `source` must be a string of 0–1,000 characters. Both fields are plain text, may be omitted or empty, and cannot be `null`, objects, arrays, booleans or numbers. They do not execute code or fetch a source; author and verify the actual description and provenance yourself.
-- Fences use backticks or tildes, at least three characters, optionally indented by up to three spaces. A closing fence uses the same character and is at least as long as its opener. Ordinary fenced code is inert, including examples of chart syntax inside a longer non-chart code fence.
-- Invalid or unclosed chart JSON, duplicate JSON keys, unknown fields, missing components and references to text components are rejected when saving, importing or patching. A frontend may keep unfinished source locally while the author is typing; that does not bypass persistence validation.
-- `set_report_markdown` takes the complete string as `value`, without changing mode, data or grid layouts. References are checked after the entire atomic batch, so component creation may follow the source operation.
-- `remove_component` rejects deletion if canonical Markdown still references it, with `REPORT_COMPONENT_REFERENCED`. First remove its chart fence using `set_report_markdown`; both operations can be in the same batch, in that order.
-- `set_view_mode` with `value: "report"` initializes missing Markdown from the title, existing legacy report or desktop reading order (top-to-bottom, then left-to-right). Existing canonical source survives view switching. Imported old reports can be displayed through the same non-mutating migration utility.
-
-### Write source from CLI or MCP
-
-Save your document as `analysis.md`, read the latest revision with `get`, and wrap the source in a JSON operation:
+Python 版本和可选依赖以 `pyproject.toml` 为准。使用项目选定的解释器；下列 `python3` 表示该解释器。
 
 ```sh
-python3 -m dashboard_runtime --root ./boards get report-demo
-python3 - <<'PYCODE'
-import json
-from pathlib import Path
-operations = [
-    {"op": "set_report_markdown", "value": Path("analysis.md").read_text()},
-    {"op": "set_view_mode", "value": "report"},
-]
-Path("report-patch.json").write_text(json.dumps(operations, ensure_ascii=False))
-PYCODE
-# Replace 1 with the revision returned by get.
-python3 -m dashboard_runtime --root ./boards patch report-demo --expected 1 --file report-patch.json
+python3 -m dashboard_runtime --root ./boards init demo
+python3 -m dashboard_runtime --root ./boards serve
 ```
 
-Use the same `set_report_markdown` operation in `dashboard_patch` over HTTP or MCP, with `dashboardId`, the latest `expectedRevision`, and `operations`. Revision checks, validation, history and restore are shared across transports. JSON export/import preserves the exact source. Full-document HTML export opens a read-only Markdown report snapshot using the shared renderer. Single-component export resets presentation to a standalone dashboard card and omits report metadata and unrelated components.
+普通 `init` 创建空白文档，只有显式 `--demo` 才插入合成数据。业务目录包含数据快照、来源 SQL 与参数，不提交到公共仓库。报告创建和源文约定见 [生成路径](generation-tracks.md)。
 
-### Legacy report compatibility
-
-Old `report.subtitle` plus `report.blocks` documents and the `set_report` operation remain supported. Without canonical Markdown, the subtitle is bounded at 1,000 characters and blocks at 100 unique block IDs and component references. Existing text components become escaped literal text under Markdown headings; non-text components become chart fences. Migration preserves the old components, grid and metadata and does not execute their contents.
-
-When `markdown` is present, it alone determines the report. Retained subtitle/blocks are historical metadata and cannot override the source or prevent deletion of an unreferenced component. `set_report_markdown` retains those fields. The legacy `set_report` operation still explicitly replaces the whole report object; supplying only legacy fields returns to legacy representation. Only unmigrated block reports retain their old auto-append/cleanup behavior. New authoring should use Markdown source and `set_report_markdown`.
-
-## MCP
+共享应用先构建，再显式打包到后端：
 
 ```sh
-python3 -m pip install 'mcp>=1.28,<2'
-node /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolute/path/runtime-cache mcp
+npm run ui:build
+npm run ui:package
 ```
 
-MCP uses one entry point for multiple projects. Pass the absolute asset directory as `projectRoot` on every project call; it is not the Agent working directory. A call never selects a shared current project. Registration, source aliases, startup defaults, legacy `--root` compatibility and router requirements are defined in [项目资产与加载](project-runtime.md). CLI and the local HTTP editor use the storage selected at startup. `mcp.json` remains a legacy centralized-storage template and uses `${PLUGIN_ROOT}`; clients that do not expand it need actual absolute paths. Logs go to stderr; stdout is reserved for MCP protocol messages.
+缺少资源时预览返回 `UI_UNAVAILABLE`。构建与打包命令维护在 `package.json` 和 `runtime-ui/package.json`；设计组件包通过独立入口更新，不隐式改写画布。
 
-The Python worker and local web server exit by default after 60 seconds without requests or a visible preview. Active requests finish before the idle countdown starts. Visible previews renew the lifetime every 20 seconds; hidden tabs stop polling. Documents and history remain saved. The Node MCP launcher retains the stdio connection and restarts its Python worker on the next request, restoring initialization. Direct Python MCP entry points close the whole connection and require client reconnection. Restart an idle local web server before using it again. Adjust the positive timeout with `mcp --idle-timeout 120` or `serve --idle-timeout 120`; do not add background keepalive calls for unused processes.
-
-For project-local dependencies, use the selected Python interpreter to run `python -m pip install --target .mcp-test-deps --upgrade '.[mcp,statistics,test]'`. Pyright also searches this ignored directory. Save the interpreter and local paths in the ignored `.charts-runtime-env.json`:
+Node 启动器读取项目根目录忽略的 `.charts-runtime-env.json`：
 
 ```json
 {
@@ -141,84 +48,69 @@ For project-local dependencies, use the selected Python interpreter to run `pyth
 }
 ```
 
-The Node launchers use this interpreter and dependency directory. With `isolated` enabled, they omit shared Python site-packages. `PYTHON` can explicitly override the interpreter; install the dependencies with the same Python version. Do not run UI tests or browser automation for this refactor; use the scoped checks in the plan. Tests run in separate directories to avoid duplicate module names. `npm run runtime:mcp` and `npm run runtime:serve` use the same setup.
+用同一解释器安装 `pyproject.toml` 声明的依赖。`isolated` 与依赖目录同时配置时，启动器不加载共享 Python site-packages；`PYTHON` 可显式覆盖解释器。`PYTHONPATH`、缓存与浏览器路径的构造由 `bin/python-runtime.js` 维护，不另开一套环境加载方式。
 
-Registration is managed once through Magpie, with absolute paths for Node, the launcher and runtime cache. Do not create per-project registrations or modify Agent configuration as part of chart generation. Existing project-local registrations and `--project-root` startup defaults remain compatible; configuration changes belong to the registration-management task. Installation updates and reconnect checks are described in [本地 MCP 更新](local-mcp-update.md).
+本地 Python 工作进程和网页服务器在没有请求或可见预览时按配置空闲退出；请求执行期间不计空闲。Node MCP 启动器保留 stdio 连接，并在下次请求恢复工作进程与初始化；直接 Python MCP 退出后需重连。App 仅在可见时保活，不增加后台轮询。超时参数与默认值以 `__main__.py`、`lifecycle.py` 为准。
 
-Tools: `dashboard_create`, `dashboard_list`, `dashboard_get`, `dashboard_patch`, `dashboard_validate`, `dashboard_preview`, `dashboard_history`, `dashboard_restore`, `chart_catalog`, `dataset_import`, `query_execute`, `query_inspect`, `semantic_inspect`, `legacy_render`, `generation_examples`, `chart_declarations`, `chart_recommend`, `layout_templates`. The self-hosted server adds `dashboard_share` and `dashboard_share_revoke` and hides `dashboard_export_open`.
-
-Preview tools link to a resource whose URI includes the runtime version and UI build ID, with MIME `text/html;profile=mcp-app`. It uses `@modelcontextprotocol/ext-apps` and the same built UI as the independent web editor. Prefer the current build-specific preview tool listed by the server; the fixed `dashboard_preview` name remains compatible. Tool discovery, result chunking and stale-page checks are defined in [传输与诊断](mcp-transport-diagnostics.md). A normal MCP connection does not establish MCP Apps host acceptance. Remote Streamable HTTP MCP with bearer tokens, project names instead of server paths and expiring browser preview links is provided by the self-hosted server described in [自托管服务器](self-hosted-server.md); OAuth and multi-user permissions are not included. Independent static-site export is available as described in [静态部署包](static-deployment.md); it does not provide a hosted multi-user backend.
-
-## Canonical state and editing
-
-`dashboard_runtime.service.Service` is the mutation service for all transports. Every edit supplies `expectedRevision`; stale writes fail with `REVISION_CONFLICT`. Operations in one patch validate and commit atomically. Project mode stores drafts and checkpoints separately: begin a batch with `dashboard_edit_begin`, apply patches with the latest revision, then call `dashboard_edit_finish` with that revision and the batch ID. Finish runs full Doctor checks and creates one checkpoint; preview once after success. Legacy centralized storage retains its document/revision workflow. Storage, checkpoint retention, comparison and restore rules are defined in [项目资产与加载](project-runtime.md).
-
-Schema v2 separates components, datasets/field metadata, metric definitions, source/query provenance, per-breakpoint layout, and bounded snapshot rows. It contains no executable application code. View changes never execute SQL.
+## MCP 发现与项目选择
 
 ```sh
-python3 -m dashboard_runtime contract
-python3 -m dashboard_runtime --root ./boards get demo
-python3 -m dashboard_runtime --root ./boards patch demo --expected 1 --file changes.json
-python3 -m dashboard_runtime --root ./boards history demo
-python3 -m dashboard_runtime --root ./boards restore demo --expected 2 --revision 1
+node /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolute/path/runtime-cache mcp
 ```
 
-Example changes.json:
+单入口服务多个项目。每次项目请求显式传入 `projectRoot`；本地使用资产目录绝对路径，远程使用工作区内项目名。请求不会选中一个供后续调用沿用的“当前项目”。默认项目、旧集中存储及 Router 转发约定统一见 [项目资产与加载](project-runtime.md)。
 
-```json
-[
-  {"op":"set_title","value":"Revenue review"},
-  {"op":"set_meta","value":{"subtitle":"Monthly revenue review"}}
-]
-```
+注册由既有注册管理流程维护；生成内容不为每个业务项目新增注册或改写 Agent 配置。更新安装与重连见 [本地更新](local-mcp-update.md)。日志写 stderr，stdout 只承载协议消息。
 
-Restore creates a new revision; it does not rewrite history. Project-mode annotations are independent and survive design restore; legacy centralized revisions retain their historical annotation behavior. Browser undo/redo uses the same service. New external revisions clear the browser undo stack instead of silently undoing another writer's work. Visible, idle readers check for external revisions every five seconds; editing, annotations and unsaved input pause this polling.
+| 发现入口 | 内容 |
+| --- | --- |
+| `tools/list` | 当前安装与传输实际提供的工具、参数、影响标记和 App 可见范围 |
+| `charts://contract` | 同一份传输适配后的工具定义、原子操作结构和编辑约定 |
+| `chart_catalog`、`chart_declarations` | 当前预设、指标卡、声明要求、示例和绑定能力 |
+| `generation_examples`、`charts://examples` | 明确标记为合成数据的案例；读取不创建资产 |
+| `layout_templates`、`charts://layouts` | 可选构图建议；显式布局继续可用 |
 
-GridStack uses independent desktop/tablet/mobile 12/8/4-column layouts. `apply_layout_template` computes all three from one of seven named compositions (executive, focus, bento, sidebar, grid3, narrative, scorecard), runs after the rest of its batch, is saved as `manifest.layoutTemplate` and re-flows when components are added or removed; `set_layout` replaces it. Without a template, new components are placed by role (KPI rows, paired charts, full-width tables/text) instead of stacking full width. Selection rules: `skills/executive-charts/references/layout_templates.md`. Edit mode supports layout dragging; component resizing is enabled only in edit mode. Adding, duplicating, deleting components and importing data remain API/CLI operations rather than visible editor controls. Read/edit modes, titles/descriptions, undo/redo, filters, export and SQL/semantic inspectors remain available.
+工具定义由 `tool_contract.py` 维护，输入结构说明参数来源、默认值和替换影响。修改定义时同步发现资源与调用方，不在文档手工复制工具枚举。
 
-Component action placement, Lucide controls, code-label visibility, table pagination and saved versus temporary presentation state are defined in [标题区与绑定](icon-header-and-bindings.md). Menus and forms retain readable text. Runtime previews and exports share the Runtime bundle; the standalone Python generators have their own card shell.
+`runtime_keepalive`、`runtime_report_error` 与本地 `dashboard_export_open` 标为 App 专用。可见范围是宿主路由规则，不是服务器鉴权。Agent 读取诊断和下载受管导出，不代替客户端上报渲染完成或触发桌面文件按钮。远程服务额外提供签名分享工具，并隐藏桌面文件操作。
 
-## Original components and chart switching
+## 编辑与结果确认
 
-The runtime directly bundles all 40 original chart builders, 16 KPI rendering branches (the original mc01–mc09 plus mc10–mc16, added in the same shared engine for selection variety), the detail table and business explanation dialog. Bodies render as React components; the original chart definitions are maintained in independent TypeScript modules. The migration preserves geometry, labels, microcharts and semantics while using shadcn/ui and Lucide for controls.
+写操作使用最新 `expectedRevision`，一次 patch 的操作原子提交。项目草稿、检查点、独立批注、恢复及冲突恢复统一由项目存储约定管理；标准交付顺序见 [共享交付流程](../skills/executive-charts/references/mcp-delivery.md)。
+
+`dashboard_get` 读取可编辑草稿，不等于预览当前展示的检查点；实际计算结果通过 `dashboard_view` 取得。检查失败不能报告保存完成。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态，不能盲目重放写入。
+
+预览工具固定名为 `dashboard_preview`，UI 资源 URI 带运行版本与构建标识。宿主决定显示为对话卡片或面板，正常 MCP 连接不等于 MCP App 界面已验收。分块、资源过期和诊断字段见 [传输与诊断](mcp-transport-diagnostics.md)。
+
+## 页面元信息与组件声明
+
+页面标题使用 `manifest.title` / `set_title`。`manifest.meta` 提供 `iconKey`、`subtitle`、`org`、`system`、`statusText`；`set_meta` 整体替换，`{}` 清空。文本长度、枚举和兼容读取以当前操作结构与校验器为准；没有 meta 的旧导入仍可读取 `originalWorkspace.meta`。
+
+组件声明保存稳定 ID、来源、数据集与指标引用、渲染配置和断点布局。预设、完整 ECharts 与自由 HTML/JavaScript 均通过明确声明进入；执行隔离、原生覆盖与绑定限制见 [渲染与覆盖](echarts-options.md)。历史 `kind=chart` 保留兼容读取，新组件遵循当前声明要求。
+
+KPI 内容边界维护在产品规则，形态接口与接入状态维护在组件清单。不能把非 KPI 的 subtitle 规则套到 KPI，也不能从标题推断目标、同比基期或指标公式。
 
 ```sh
 python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
 ```
 
-Workspace import preserves original chart/KPI/table JSON, including c01/c02 designs and KPI auxiliary fields. It does not turn charts into generic bars or KPI cards into text. Original filter metadata is retained; working cross-component filtering requires explicit dataset/metric bindings. Supported bindings include 14 one-dimensional chart shapes, mc01-mc06 and detail tables. Complex shapes and mc07-mc09 require additional reviewed transforms; incomplete bindings fail rather than inventing data. Their static original configurations remain usable.
+工作区导入保留原图表、指标卡和表格声明，不把复杂图表替换为普通柱状图或文本。已有快照不会因导入而得到动态筛选能力；历史已丢失字段需要从原资产恢复，不能由 Runtime 推造。
 
-The product chart system consists only of the 40 original registered chart codes. MCP declarations and generation do not expose the additional eight generic types. New generic charts are rejected; historical documents retain compatibility reading. Reviewed original switching currently supports c01/c02 in edit mode, preserving data and swapping axis labels. Other code pairs require a reviewed conversion before they can be offered.
-
-Metrics support sum, average, min, max, row count and ratio-of-sums. Filters recalculate SUM(numerator)/SUM(denominator), never the average of percentages. Nulls remain missing; a zero denominator yields no value. Percent formatting requires fractional values. Existing aggregate snapshots cannot produce missing finer-grained dimensions or statistically valid averages without the underlying data.
-
-## Import data
-
-Use the common CLI tool entrance or `dataset_import` over MCP. Import controls are hidden in the current web editor:
+## 数据导入与查询来源
 
 ```sh
 python3 -m dashboard_runtime --root ./boards call dataset_import --json-file import.json
 ```
 
-```json
-{
-  "dashboardId":"demo","expectedRevision":1,"datasetId":"sales2",
-  "rows":[{"region":"East","revenue":128},{"region":"South","revenue":96}]
-}
-```
+`dataset_import` 明确提供 `rows` 或 `csvText` 其中一种，不能同时提供，也不能都省略。目标数据集存在时替换其数据与元信息。推断得到的数值指标是未复核的默认求和，业务定义、单位和粒度仍需确认。需要保留数字标识或前导零时，用 JSON 字符串明确类型。整份 schema-v2 文档可通过 `import NEW_ID --file artifact.json` 创建新看板。
 
-Use `csvText` instead of `rows` for CSV. Inferred numeric metrics are unreviewed default sums; confirm definitions, units and grain before use. Leading-zero strings remain strings. A complete exported v2 artifact can be imported as a new dashboard using `import NEW_ID --file artifact.json`.
-
-## SQL and semantic provenance
-
-SQL execution currently supports SQLite only. Displaying SQL from another engine does not make that engine a live connector. Operators configure allowed source aliases, not MCP callers:
+SQL 执行只连接运维配置的 SQLite 来源别名；展示其他引擎 SQL 不代表已建立连接。别名配置为：
 
 ```json
 {"analytics":{"engine":"sqlite","path":"/absolute/path/analytics.sqlite3"}}
 ```
 
 ```sh
-python3 -m dashboard_runtime --root ./boards --sources ./sources.json serve
 python3 -m dashboard_runtime --root ./boards --sources ./sources.json call query_execute --json-file query.json
 ```
 
@@ -231,110 +123,22 @@ python3 -m dashboard_runtime --root ./boards --sources ./sources.json call query
 }
 ```
 
-Read-only SQLite connections use query_only, an authorizer and a function allowlist. Extension loading, ATTACH, PRAGMA, DDL and DML are blocked. Time and row limits fail explicitly instead of silently truncating data. Successful query provenance records exact SQL, parameters, source alias, engine, duration, timestamp and row count in the same transaction as the snapshot. Supplied sources are marked supplied, never runtime-executed.
+查询连接采用只读模式、授权器和函数限制；不接受扩展加载、ATTACH、PRAGMA、DDL 或 DML。时间与行数超限明确失败，不静默截断。查询成功时将 SQL、参数、别名、引擎、耗时、时间与行数和快照一起保存；调用方提供的来源只标记为 supplied，不冒充 runtime-executed。
 
-The semantic inspector uses stored business definitions and aggregation rules, not generated explanations inferred from labels. `reviewed` is descriptive metadata, not an enterprise approval system. Local query restrictions are not a hardened multi-tenant sandbox. Exported parameters and snapshots remain sensitive.
+`query_inspect` 读取来源而不执行 SQL；`semantic_inspect` 使用实际保存的业务定义和聚合规则。`reviewed` 是说明状态，不是企业审批。完整本地数据导入、不可变版本与分页计算由项目数据流程负责。
 
-## Export and verification
+## 导出、部署与验证
 
-```sh
-python3 -m dashboard_runtime --root ./boards validate demo
-python3 -m dashboard_runtime --root ./boards export demo --format json --output ./dist/demo.json
-python3 -m pytest tests/runtime -q
-node --test tests/runtime/*.test.mjs
-```
+| 交付 | 数据与操作范围 |
+| --- | --- |
+| JSON | 保存配置与不可变本地引用，不等于可移植的全量明细备份 |
+| HTML | 当前计算视图的只读快照，不连接上游来源 |
+| CSV | 导出全部匹配记录；筛选、排序和列选择在完整结果上执行 |
+| 静态网页 ZIP | 使用中的完整数据集分片及共享应用；格式与离线能力见 [静态部署包](static-deployment.md) |
+| 远程网页与腾讯云副本 | 鉴权、密钥、存储、有效期和 SCF 清理见 [自托管服务器](self-hosted-server.md) |
 
-JSON export preserves canonical configuration and local references. HTML exports a read-only snapshot of the current computed view. CSV exports the complete matching table result; static site export includes the used dataset shards.
+导出文件使用受管 ID，通过读取工具或远程下载链接交付，不接受任意导出路径。创建文件不意味着已部署；协议通过、目标宿主显示、剪贴板、全屏、下载和云端执行分别确认。
 
-Test layers, local commands and CI jobs are described in [测试与 CI](testing.md). MCP integration uses a real stdio SDK client. Running full test suites requires explicit user authorization; local development uses scoped verification.
+测试层次与授权边界统一见 [测试与 CI](testing.md)。普通维护只运行受影响的局部检查，不从本文复制整套测试命令。OAuth、多用户行级权限、数据仓库连接、企业审批与定时业务刷新不因上述入口存在而自动具备。
 
-## Remaining boundaries
-
-Complex original-data transforms, warehouse execution, OAuth, multi-user permissions/RLS, enterprise approval, scheduled refresh, and actual Codex host acceptance are not established by the checks described here. The self-hosted server provides token-authenticated remote MCP and browser previews, not a multi-tenant application backend. UI completion does not imply these platform capabilities exist. 
-
-Local server launch links now use an explicit `#token=...` fragment. Ordinary Markdown section and figure anchors never replace an existing session token. Legacy bare-token links are accepted for a fresh browser session; use the newly printed launch link to replace a token after a server restart.
-
-
-## MCP 生成案例与声明发现
-
-两条 Skills、案例和空白生成流程见 [generation-tracks.md](generation-tracks.md)。新增只读工具 `generation_examples`（可选 caseId）与 `chart_declarations`。对应 JSON 资源：`charts://examples`、`charts://examples/executive-dashboard`、`charts://examples/academic-report`、`charts://declarations`。案例返回完整原子操作和 Markdown；读取不会创建文档或写入示例数据。
-
-## 在对话内展示 MCP App
-
-单入口与 Python 工作进程生命周期按上方 MCP 章节执行。支持 MCP Apps 的宿主通过已注册的本地 MCP 展示界面；本项目不要求创建插件。
-
-先执行 `npm run ui:build` 和 `npm run ui:package`。`dashboard_preview` 指向包含构建标识的 React 资源；协议可用与宿主内显示分别确认。
-
-工具结果携带文档与统计图资源。界面通过官方 MCP Apps SDK 接收结果，通过宿主桥接调用工具保存图表类型与布局；筛选保持临时查看状态；迟到的旧版本不会覆盖新版本。宿主支持全屏时，工具栏显示“全屏查看”和“返回对话”。`runtime_keepalive` 仅向 App 开放，界面可见时才调用。
-
-批次完成后，调用当前构建的预览工具，提供 `projectRoot` 和已保存的 `dashboardId`。具体出现为对话卡片还是面板由宿主决定。创建与修改返回保存结果；已有页面可按版本检测更新。普通客户端仍获得结构化结果，HTML 导出用于离线快照。
-
-
-页面说明使用 `manifest.meta`：可选字段 `subtitle`、`org`、`system`、`statusText`，均为最多 1000 字符的文本。`set_meta` 整体替换这些字段；传入 `{}` 清空页面说明。未设置 `meta` 的旧导入项目继续读取 `originalWorkspace.meta`。标题仍使用 `manifest.title` / `set_title`。通过 MCP 的 `set_meta` 修改这些字段。
-
-同一项目保存多个页面时，页面操作区提供“切换看板”选择器，由 `dashboard_list` 读取列表，切换通过 `dashboard_get` 加载。编辑时禁用切换。切换后清空临时表格、筛选与粒度状态；离线 HTML 不提供切换。
-
-组件的 `subtitle` 为最多 1000 字符的说明，图表、指标卡和表格均显示。原版组件未设置顶层说明时使用 `config.subtitle`。原生指标卡默认 `presentation.type=mc01`，也支持 `mc02`–`mc16`（选型见 `skills/executive-charts/references/kpi-cards.md`）；同比、环比、目标等字段需要明确提供，系统不会自动推算。`mc03` 需要有效数据字段 `timeField` 或显式 `sparkData` / `sparkline`；`mc06` 需要 `leftVal` 和 `rightVal`。
-
-筛选栏集中显示条件标签与“清空全部”。清除操作同时取消单选、多选、范围、搜索和图表联动条件；无条件时按钮保持可见并禁用。窄屏时摘要与清除按钮换到同一行。多组件筛选的候选项取关联数据集的并集。新增 `op=contains`：`values` 为空或一个最多 1000 字符的文本，对明确声明的字符串 `field` 做不区分大小写的包含匹配；仅影响 `componentIds`。全页搜索使用本地数据版本，不重新执行来源 SQL。表格自己的搜索框只搜索本表。
-
-原生 KPI 筛选后只显示能重算的主值、时间趋势；未绑定的同比、环比、参考值等清空为 `—`，避免混用统计范围。需要这些衍生指标跟随筛选时，使用原版 KPI 的显式 `binding.measures`。表格列标题按 `title`、旧字段 `label`、`key` 的顺序读取。原版图表的月／季度控件常驻显示；目录中的 `filterBinding` 明确各组件是否支持动态重算，`snapshotOnly` 表示仅支持快照展示。
-
-位置引用和批注的数据合同见 [批注说明](annotation-composer.md)。新 React 页面保留读取和语义说明，位置批注编辑入口尚未迁移。项目模式恢复设计不回退批注；JSON 导出保留已有批注，离线 HTML 只读。
-
-页面固定使用浅色样式，不提供深色模式切换；旧文档的 theme 字段仍可读取。
-
-预览与编辑的操作范围、标题区、直接入口与表格分页统一见 [标题区与绑定](icon-header-and-bindings.md)。信息图标打开只读“指标定义与语义”面板，保留 720px 弹窗与 52px 标题栏，正文用分隔线组织概览、图表结构、指标说明、数据来源和明细数据，不再嵌套大圆角卡片或折叠内容。指标卡不显示坐标结构；业务定义、计算公式、汇总方式、单位、判定规则和复核状态直接展开，公式使用轻底色。字段与指标按结构化说明呈现，不展示整份诊断 JSON。底部明细为当前筛选范围的最多 10 行只读示例，由 `component_data` 读取；不提供搜索、自定义列、排序、导出或分页操作，显示实际示例行数和匹配总行数。绑定指标 ID 从当前声明读取并去重，接口空指标列表不能使界面退回目录案例定义；数据集字段同样优先读取当前绑定。查看语义展示实际数据集、分组、换算和筛选范围，不拿目录案例定义替代业务指标。数据区的分页与图表转表的滚动范围见下方局部更新说明。
-
-
-## 大数据看板：纯本地模式
-
-复用 stdio MCP 进程和本机 SQLite，无需启动 HTTP 服务或增加常驻进程。完整数据保存在 `data.sqlite3`；看板配置及历史只保存不可变版本引用。指标卡与图表读取聚合结果，表格只读取当前页；筛选、排序、分页和全量 CSV 导出在本机执行。比例使用分子合计除以分母合计。
-
-使用配置好的只读 SQLite 来源别名调用 `dataset_attach`；用 `dashboard_view` 读取交互结果，`dashboard_data_inspect` 检查行数、体积与耗时，`dataset_export` 导出全部匹配行。高基数筛选选项可搜索并逐页加载，超出聚合结果上限明确报错，不截断数据。标题与布局修改复用原数据版本。
-
-旧快照可调用 `dashboard_migrate`，先生成备份再迁移全部配置历史；`dashboard_migration_rollback` 将备份恢复为新修订。小数据保留旧快照兼容。详细契约和复测命令见 [local-data.md](../skills/executive-charts/references/local-data.md)。本地 AppBridge 验证与真实 Codex 宿主验证分别记录，不互相替代。
-
-
-指标说明的文案要求见 [指标定义与统计口径写作规范](../skills/executive-charts/references/metric-definitions.md)。业务定义用中文说明统计对象、范围及数值含义，计算公式采用业务名称；实际字段与聚合表达式在查看语义中展示。不得从名称推断净额扣减、税费、退款、去重或绩效政策。
-
-
-## 密集图表、筛选与刷新
-
-- 单轴柱状图超过 12 项、折线图超过 24 项时，默认显示可读窗口，保留完整数据；支持滑块、滚轮缩放、拖动和平移及重置。已有专用缩放配置保持有效，多绘图区图表不强行套用单轴规则。
-- 单选采用 shadcn/ui Select，多选采用 Popover 与 Command。选择即时更新查看状态；多选提供候选项搜索、已选数量、全选和清空。全选读取候选项全部分页。
-- `runtime_info` 返回安装版本、前后端构建标识、模块来源、进程与项目路径及报表版本，不读取图表明细；`dashboard_refresh` 使用最新定义重新读取当前视图，并保留读者筛选、表格和粒度状态。读者的临时条件不会写回正式报表。
-- 在线阅读界面提供“刷新报表”，可见且无未保存操作时每 5 秒检查报表版本；版本改变才重新取视图。离线 HTML 是当前视图快照，不自动取数。
-- MCP UI 资源地址随最新 bundle 内容变化，并发出资源与工具目录更新通知。已加载的旧 iframe 无法由服务端强制替换；新版界面检测到构建差异会提示重新打开最新预览。主机若仍缓存旧工具目录，需要重新连接 MCP 后打开新预览。
-
-本地数据模式按不可变版本保存 SQLite 引用，筛选与汇总由本机计算；HTML/JSON 导出不嵌入全量明细。CSV 导出全部匹配结果；HTML 保留当前视图快照。安装包与 GitHub 发布不包含用户的数据库或业务明细。
-
-
-
-
-### 局部更新与性能验证
-
-`dashboard_view` 默认返回完整 `document`。交互调用可传 `responseMode: "patch"`、`componentIds` 和 `expectedRevision`，返回 `{id, revision, componentIds, computed, statisticalArtifacts}`。`computed.components`、`tables`、`grouped` 只包含选中的组件；省略字段表示保留已有值，空数组表示清空。省略 `componentIds` 表示全部，空列表表示不计算组件。仅在需要重新加载筛选选项时传 `includeFilterOptions: true`。版本不符返回 `REVISION_CONFLICT`；先刷新最新定义再重试。MCP 结构化结果与文本回退返回相同的小结果；超过阈值时均返回分块描述，消费者读取完整分块。不得把摘要或截断文本当完整响应，详细协议见传输与诊断文档。
-
-`component_data` 接受 `sort: [{field, direction}]` 与 `search`，沿用表格排序和子串搜索规则。指标定义面板展示 `semantic_inspect` 返回的实际结果。图表转表显示对应完整聚合结果，并在自身容器内滚动。主表默认每页 10 行，明确配置继续保留；搜索、排序、分页由后端执行。CSV 导出全部匹配行，HTML 快照保留当前计算视图。
-
-本项目 MCP 中，有数据集绑定的组件在详情面板底部显示“明细数据”，打开面板后通过 `component_data` 读取当前筛选范围内的原始行，并携带当前版本检查。每页默认 10 行，搜索、排序和翻页在后端执行；明细的表格状态独立于看板主表，关闭面板后丢弃。来源与原始定义折叠区保留在明细之后。静态快照、无数据集绑定的组件不调用此接口。
-
-前端按可见组件 ID 查询并合并结果，最多四个查询并发。筛选只更新绑定的组件；表格搜索、排序、分页和图表粒度切换只更新当前组件。请求按组件记录代次，过期的排队请求不再发送，旧响应不覆盖新选择。无需数据绑定的静态图表直接读取配置，不请求计算视图。
-
-更新时保留现有内容，不在已有卡片内反复显示更新提示；加载状态通过 `aria-busy` 表达。图表尺寸变化和配置变化合并到同一帧处理，尺寸未变且配置未变时不重复绘制；指标卡配置未变时跳过重复渲染。表格自动高度只观察相关表格，统一读取尺寸后再更新布局。切换看板时保留当前页面至新定义返回，再替换内容；进入布局编辑不插入占据页面高度的说明。取消布局编辑会恢复原布局。HTML 快照和静态站点使用同一套 React 组件，导出不依赖浏览器自动化。
-
-图表联动只刷新旧、新条件的关联组件，来源图保留完整类别；再次点击同一来源的同一类别取消选择。图表以稳定系列 ID 和类别名称合并数据，柱状图选中类别保留原色，其余柱子变灰；清除联动条件恢复原色。图形与指标卡主数值使用 260ms 更新过渡，生效条件行展开、收起使用短过渡；系统启用减少动态效果时直接呈现最终数据。本次仅构建和同步资源，未运行 UI 测试、浏览器自动化或性能实测。
-
-百万行本地数据的独立合成验收：
-
-```sh
-node bin/python-runtime.js tests/runtime/benchmark_local.py --rows 1000000 --output /private/tmp/charts-performance.json
-```
-
-该命令创建独立临时 SQLite 数据，以两张指标卡、一个分类图和一张明细表检查导入、打开、筛选、聚合、翻页、排序、搜索和完整 CSV 导出，并记录响应体积、进程峰值内存及磁盘大小。结果核对独立计算的行数与合计，测量范围为后端查询和数据导出。首次全字段子串搜索需扫描完整数据；自然字符串排序、多列排序及随机深页使用 OFFSET。缓存绑定不可变数据版本。
-
-
-### 位置批注
-
-位置引用、页面保存、锚点、失效位置及 Codex 读取处理的字段和流程统一见 [位置引用与对话批注](annotation-composer.md)。批注本身不自动触发 Agent，修改看板后保留原批注，除非用户要求修改或删除。
+维护时机：模块边界、配置入口、发现方式或导入/交付边界改变时更新；组件外观、报告语法、项目存储和单次验收结果在各自负责正文维护。

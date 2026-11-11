@@ -166,6 +166,18 @@ def test_csv_import_and_inspect(service):
     )
 
 
+# @wu-test type=boundary | scope=dataset_import | protects=缺失或同时提供两种输入时静默覆盖数据
+@pytest.mark.parametrize('inputs', [{}, {'rows': [{'value': 1}], 'csvText': 'value\n2'}])
+def test_import_requires_one_input_without_changing_revision(service, inputs):
+    with pytest.raises(DashboardError) as error:
+        service.call('dataset_import', {'dashboardId': 'demo', 'expectedRevision': 1,
+                     'datasetId': 'imported', **inputs})
+    assert error.value.code == 'INVALID_ARGUMENT'
+    current = service.call('dashboard_get', {'dashboardId': 'demo'})['document']
+    assert current['revision'] == 1
+    assert 'imported' not in current['manifest']['datasets']
+
+
 @pytest.fixture
 def runner(tmp_path):
     db = tmp_path / "source.sqlite"

@@ -2,10 +2,7 @@
 
 ---
 
-> **当前状态（2026-11-10）**
-> 新 React 组件库和本项目 MCP 应用已建立共享构建路径。筛选器、表格及交互采用 shadcn/ui 与 TanStack Table；40 个图表定义独立维护，16 种指标卡复用同一实现。原生 HTML 生成器和旧单体页面继续下线。
->
-> 当前支持 JSON、CSV、HTML 视图快照与独立静态网页导出。实施状态、构建命令和宿主确认边界见 [UI 整改计划](docs/ui-refactor-plan.md) 与 [组件清单](docs/ui-component-inventory.md)。
+本项目使用共享 React 组件构建 MCP 应用、HTML 快照和静态网页。可用能力与宿主接入状态见 [组件清单](docs/ui-component-inventory.md)，实现与配置见 [Runtime](docs/dashboard-runtime.md)。
 
 文档总览见 [docs/README.md](docs/README.md)，开发与维护的按任务阅读入口见 [AGENTS.md](AGENTS.md)。
 
@@ -30,7 +27,8 @@
 
 4. **MCP 协议服务**：
    - 本地 stdio MCP 与自托管 HTTP 远程 MCP（Streamable HTTP + Bearer 令牌）。
-   - 提供版本化文档获取（`dashboard_get`）、原子批次修改（`dashboard_batch`）、指标计算、Markdown 报告正文维护及数据检查。批次完成时 `edit_finish` 返回 `nextAction=dashboard_preview` 与 `displayPolicy=saved-dashboard-ui`，调用方先核对保存结果，再打开已保存预览。
+   - 腾讯云独立分享副本支持 8 位数字访问密钥、不过期/7 天/30 天；到期由云端 SCF 删除 COS 数据和访问记录。需要部署私有 COS、HTTPS 网关和 SCF 定时任务，见 [腾讯云分享](docs/self-hosted-server.md#腾讯云在线分享与云端清理)。
+   - 提供版本化文档获取（`dashboard_get`）、原子修改（`dashboard_patch`）、指标计算、Markdown 报告正文维护及数据检查。项目编辑使用 `dashboard_edit_begin` → 修改草稿 → `dashboard_edit_finish`；完成检查后返回 `nextAction=dashboard_preview` 与 `displayPolicy=saved-dashboard-ui`，调用方先核对保存结果，再打开已保存预览。检查失败返回 `DOCTOR_FAILED`，保留草稿与批次，不生成检查点。
    - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/self-hosted-server.md)。
 
 5. **Seaborn 统计图后端（可选）**：

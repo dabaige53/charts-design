@@ -1,61 +1,54 @@
 # charts-design 文档
 
-> **当前状态（2026-11-10）**
-> React 组件、设计画布和 MCP 应用已使用独立适配入口。构建与运行资源通过显式打包同步，历史原生生成器继续下线。实际完成情况与检查结果以 [UI 整改计划](ui-refactor-plan.md) 和 [组件清单](ui-component-inventory.md) 为准。
+项目入口与命令见根目录 [README](../README.md)，Agent 的工作顺序见 [AGENTS.md](../AGENTS.md)。本页用于选择负责正文及追溯历史，不重复记录产品状态。新增内容先按 [文件管理](agent/file-management.md) 确定归属。
 
-## 开始使用
+## 项目准则与设计规范
 
-快速开始见根目录 [README](../README.md)。选择生成方式时读 [生成路径](generation-tracks.md)；开发与运行步骤见 [Runtime 说明](dashboard-runtime.md)。Agent 按根目录 [AGENTS.md](../AGENTS.md) 的任务条件读取文档。
-
-## 现行规范与设计参考
-
-| 文档 | 用途与查阅时机 | 更新时机 |
+| 文档 | 何时读取 | 更新时机 |
 | --- | --- | --- |
-| [当前 UI 设计记录](DESIGN.md) | 从 React 源码提取的颜色、字阶、布局、组件与动效规则；配套预览说明位于 `docs/.impeccable/design.json` | 当前实现的视觉规则变化后同步 |
-| [产品上下文](PRODUCT.md) | 产品定位、主要用户、MCP 使用流程与长期边界；产品或设计工作开始时查阅 | 已确认的用户、用途或产品边界变化 |
-| [图表 UI 与设计系统](design-system/project/chart-ui.md) | 重构前查阅保留的 40 个图表定义、视觉、配色与交互参考；PDF 数据色盘与旧项目配色分开 | 图表视觉迁移或来源规范变化 |
-| [文件管理](agent/file-management.md) | 新增、移动或清理文件前，确定位置和维护入口 | 目录职责或保留规则变化 |
-| [指标定义](../skills/executive-charts/references/metric-definitions.md) | 撰写业务说明与统计口径时查阅 | 指标说明要求变化 |
-| [数据格式标准](../skills/executive-charts/references/data_formatting_standards.md) | 处理指标数值、百分比与单位格式化时查阅 | 格式化标准变化 |
-| [标题区与绑定](icon-header-and-bindings.md) | 组件操作区、Lucide 图标与筛选绑定规范；新 UI 的设计与绑定准则 | 界面约定或绑定范围变化 |
-| [设计规范](../skills/executive-charts/references/design_standards.md) | 组件配色、排版、几何与红涨绿跌准则；新 UI 的设计参考 | 设计要求变化 |
-| [指标卡选型](../skills/executive-charts/references/kpi-cards.md) 与 [布局模板](../skills/executive-charts/references/layout_templates.md) | 选择指标卡形态与看板构图时查阅 | 卡片类型、模板或选型规则变化 |
-| [MCP 共享交付流程](../skills/executive-charts/references/mcp-delivery.md) | 数据资产保存、编辑批次与合同检查；协议与宿主显示分别确认 | 交付流程变化 |
+| [产品上下文](PRODUCT.md) | 判断产品目标、用户和强约束 | 已确认的产品决定改变 |
+| [设计规范](DESIGN.md) | 修改视觉、交互、组件复用或迁移保真 | 通用设计要求改变 |
+| [文件管理](agent/file-management.md) | 新增、移动、合并或清理文件 | 目录、正文职责或保留方式改变 |
 
 ## 当前实现与操作
 
-- [UI 整改计划](ui-refactor-plan.md)：范围、阶段、构建路径和完成条件。
-- [UI 组件清单](ui-component-inventory.md)：实际输入、事件、状态、数据与宿主依赖。
-- [产品组件规则盘点](ui-design-rule-audit.md)：代码硬限制、产品强约定、选型建议、库外图表入口与当前规则缺口。
-- [产品 React 组件](design-system/project/react-ui.md)：设计系统与运行变量映射、可运行预览。
-
-| 文档 | 用途与查阅时机 | 当前状态 / 维护说明 |
+| 文档 | 负责内容 | 更新时机 |
 | --- | --- | --- |
-| [Runtime 说明](dashboard-runtime.md) | 状态存储、数据模式、SQLite 与 MCP 协议说明 | 组件与数据协议已接入，宿主显示单独确认 |
-| [生成路径](generation-tracks.md) | 从空白创建数据资产或分析报告源文时查阅 | 数据声明、Markdown 与新 React 预览 |
-| [项目资产与加载](project-runtime.md) | 处理多项目、历史、数据存储和渐进加载时查阅 | 存储、路由与分片协议继续正常维护 |
-| [动态编码](dynamic-encoding.md) | 声明动态系列、散点、比较或下钻时查阅 | 编码能力与绑定规则继续维护 |
-| [ECharts 配置覆盖](echarts-options.md) | 调整原生显示配置时查阅 | 合并与覆盖规则继续维护 |
-| [Seaborn 后端](seaborn-backend.md) | 独立于旧 UI；使用原始观测生成统计图时查阅 | 统计声明、依赖与绘图产物完整可用 |
-| [自托管服务器](self-hosted-server.md) | 部署远程 HTTP MCP 与项目隔离时查阅 | 远程协议与新应用资源路由 |
-| [本地 MCP 更新](local-mcp-update.md) | 更新本地安装包与连接检查时查阅 | 独立构建、资源打包和连接检查 |
-| [传输与诊断](mcp-transport-diagnostics.md) | 排查响应分块、请求日志与性能时查阅 | 诊断接口继续正常维护 |
-| [测试与 CI](testing.md) | 静态检查、后端单元测试与容器镜像冒烟测试 | 仅三层检查；无浏览器验收；全量需授权 |
-| [位置引用与批注](annotation-composer.md) | 批注数据模型与坐标系规范（新 UI 规范） | 数据模型保留；前端宿主实现待新 UI 接入 |
-| [原版组件保真](original-component-fidelity.md) | 历史原版组件提取与保真准则（历史参考） | 旧提取脚本已移除；作为设计保真准则参考 |
-| [静态部署包](static-deployment.md) | 静态网站部署包结构与数据范围 | 共享 React 资源与数据分片 ZIP |
+| [Runtime](dashboard-runtime.md) | 架构、运行配置、工具发现、导入与接口入口 | 模块或运行/接口边界改变 |
+| [项目资产与加载](project-runtime.md) | 项目选择、存储、草稿、历史、本地数据和渐进视图 | 持久化、路由或查询行为改变 |
+| [生成路径](generation-tracks.md) | 看板与报告、Markdown 源文、图号及兼容约定 | 生成与源文规则改变 |
+| [组件清单](ui-component-inventory.md) | 组件源码、输入输出、动态能力与宿主接入状态 | 组件接口或能力改变 |
+| [标题区与绑定](icon-header-and-bindings.md) | 标题、工具栏、图标、普通绑定与切换 | 操作或绑定约定改变 |
+| [动态编码](dynamic-encoding.md) | 动态系列、散点、比例、比较和下钻 | 编码与汇总规则改变 |
+| [渲染与覆盖](echarts-options.md) | 预设、完整 ECharts、自由 HTML/JavaScript、隔离及覆盖 | 渲染入口或合并规则改变 |
+| [统计图后端](seaborn-backend.md) | Seaborn 原始观测声明、产物和依赖 | 统计能力或限制改变 |
+| [位置批注](annotation-composer.md) | 选点、锚点、独立保存、冲突与宿主附件目标 | 批注字段、交互或接入状态改变 |
+| [本地更新](local-mcp-update.md) | 构建、安装更新、进程切换与重连 | 本地交付方式改变 |
+| [传输与诊断](mcp-transport-diagnostics.md) | 预览资源、分块、过期结果与请求日志 | 传输或排查方式改变 |
+| [静态部署包](static-deployment.md) | 独立网页资源、数据分片、下载与离线能力 | 静态交付格式改变 |
+| [自托管服务器](self-hosted-server.md) | 远程 MCP、签名链接、腾讯云密钥分享、COS 与 SCF 清理 | 服务、鉴权或云端交付流程改变 |
+| [测试与 CI](testing.md) | 检查层次、环境、标记与授权边界 | 检查入口或要求改变 |
 
-## 历史记录与证据（已移除旧实现）
+## 生成与设计资产参考
 
-- [早期问题清单](ISSUES.md)：原始缺陷现象。
-- [早期治理复盘](ISSUES_AND_POSTMORTEM.md)：v1.0.3 治理方案与结果；末节为当时的规范。
-- [动态编码验收](dynamic-encoding-validation.md)：2026-10-28 的产品检查和虚拟看板集成。
-- [迭代复盘](retro-20261028.md)：2026-10-28 的改进原因、待办和性能结论。
-- [MCP 优化交付](mcp-improvements-20261028.md)：后续实现、传输体积与安装验收记录。
-- [自托管、构图与指标卡验收](records/2026-11-07-server-layout-kpi.md)：2026-11-07 的性能对比、验证范围与未验证项。
-- [性能原始记录](performance-results.json)：2026-10-20 的环境、测量、验证与限制。
-- [测试清剿记录](records/test-purge-20261106.md)：2026-11-06 的逐用例处置、附属资产清理和局部验证。
-- [测试清剿变基记录](records/test-purge-rebase-20261108.md)：2026-11-08 变基到 PR #6 之后的冲突处理、新增标注、待决定项和验证结果。
-- [零售验收截图](images/dynamic-encoding-retail.png)与[虚拟看板截图](images/transfer-prototype-validation.png)：配套历史附件。
+- [看板 Skill](../skills/executive-charts/SKILL.md)、[报告 Skill](../skills/analytical-reports/SKILL.md)及[共享交付流程](../skills/executive-charts/references/mcp-delivery.md)：随包提供的生成步骤与成果保留要求。
+- [指标定义](../skills/executive-charts/references/metric-definitions.md)、[数据格式](../skills/executive-charts/references/data_formatting_standards.md)：业务对象、范围、计算和显示。
+- [指标卡选型](../skills/executive-charts/references/kpi-cards.md)、[布局模板](../skills/executive-charts/references/layout_templates.md)、[生成设计参考](../skills/executive-charts/references/design_standards.md)：按问题选择，不覆盖当前产品与设计规则。
+- [图表参考](design-system/project/chart-ui.md)、[产品 React 组件](design-system/project/react-ui.md)：图形来源、组件映射、构建与设计资源。
+- `design-system/`、`design-canvas/` 内的 README、API 索引和安装副本随资产维护；不作为项目主规范的重复版本。
 
-已有记录原位保留。新任务的方案和单次验收证据按文件管理规则存放，不覆盖旧记录中的历史事实。
+## 方案
+
+- [UI 组件与 MCP 整改](plans/ui-refactor-plan.md)：原方案范围、阶段与待确认事项；当前能力读取组件清单。
+- [云端托管与版本管理](plans/cloud-hosting-and-version-control.md)：云端部署、API Key、密钥轮换与版本中心的产品方案，未实现部分按文内状态区分。
+
+## 历史记录与附件
+
+- [早期问题清单](records/ISSUES.md)、[治理复盘](records/ISSUES_AND_POSTMORTEM.md)：旧实现的缺陷与治理事实，不作为现行规则。
+- [动态编码验收](records/dynamic-encoding-validation.md)、[迭代复盘](records/retro-20261028.md)、[MCP 优化交付](records/mcp-improvements-20261028.md)：2026-10-28 的对象、测量、改动与验证边界。
+- [自托管、构图与指标卡验收](records/2026-11-07-server-layout-kpi.md)：对应轮次的性能与部署检查。
+- [共享工作区交付检查](records/2026-11-10-polish-validation.md)：共享工作区、UI 分批调整、批注与保真的既有记录。
+- [测试清理](records/test-purge-20261106.md)、[测试清理变基](records/test-purge-rebase-20261108.md)：逐项处置和当次验证结果。
+- [性能原始记录](performance-results.json)、[共享工作区性能结果](records/2026-11-10-polish-performance.json)、[零售截图](images/dynamic-encoding-retail.png)、[虚拟看板截图](images/transfer-prototype-validation.png)：与对应历史记录一起阅读，不替代当前验证。
+
+维护时机：正文职责、位置或方案/记录入口变化时更新。现行正文原处维护；历史材料保留当时事实，新一轮任务不继承旧授权。

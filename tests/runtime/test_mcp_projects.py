@@ -37,7 +37,7 @@ async def call(session, name, project=None, **args):
     return value
 
 
-# @wu-test type=integration | scope=MCP多项目 | protects=同ID看板批注分块跨项目串数据
+# @wu-test type=integration | scope=MCP多项目 | protects=同ID看板批注分块串数据或刷新临时筛选被保存
 def test_one_connection_handles_two_projects_and_restart(tmp_path):
     first, second = tmp_path / 'first', tmp_path / 'second'
 
@@ -66,6 +66,12 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                 views = await asyncio.gather(*[call(session, 'dashboard_view', project,
                     dashboardId='same', componentIds=['total'], responseMode='patch') for project in (first, second)])
                 assert views[0]['computed']['components']['total'] != views[1]['computed']['components']['total']
+                selected_filter = a['document']['manifest']['filters'][0]['id']
+                refreshed = await call(session, 'dashboard_refresh', first, dashboardId='same',
+                    filters=[{'id': selected_filter, 'values': ['East']}])
+                assert next(f for f in refreshed['document']['manifest']['filters'] if f['id'] == selected_filter)['values'] == ['East']
+                saved = await call(session, 'dashboard_get', first, dashboardId='same')
+                assert next(f for f in saved['document']['manifest']['filters'] if f['id'] == selected_filter)['values'] == []
                 exports = await asyncio.gather(*[call(session, 'dataset_export', project,
                     dashboardId='same', datasetId='sales') for project in (first, second)])
                 assert exports[0]['export']['rowCount'] == exports[1]['export']['rowCount'] == 6

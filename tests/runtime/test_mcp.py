@@ -10,7 +10,7 @@ from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
-# @wu-test type=integration | scope=MCP stdio | protects=协议修改报告大响应丢失或构建资源不可读取
+# @wu-test type=integration | scope=MCP stdio | protects=工具调用对象与影响标记错误或编辑报告和分块读取失败
 def test_real_stdio_protocol(tmp_path):
     from dashboard_runtime.store import Store
     Store(tmp_path/'mcp').create('mcp-test', 'MCP')
@@ -23,7 +23,23 @@ def test_real_stdio_protocol(tmp_path):
                 assert 'dashboard_preview' in [t.name for t in tools.tools]
                 by_name = {tool.name: tool for tool in tools.tools}
                 assert not any(name.startswith('dashboard_preview_') for name in by_name)
-                assert all(tool.meta is None for name,tool in by_name.items() if name != 'dashboard_preview')
+                app_only = {'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open'}
+                for name in app_only:
+                    meta = by_name[name].meta
+                    assert meta is not None
+                    assert meta['ui']['visibility'] == ['app']
+                assert all(tool.meta is None for name,tool in by_name.items() if name not in app_only | {'dashboard_preview'})
+                for name in ('dashboard_patch', 'dashboard_restore'):
+                    annotations = by_name[name].annotations
+                    assert annotations is not None
+                    assert annotations.destructiveHint is True
+                read_annotations = by_name['dashboard_get'].annotations
+                assert read_annotations is not None
+                assert read_annotations.readOnlyHint is True
+                assert read_annotations.idempotentHint is True
+                export_annotations = by_name['dashboard_export'].annotations
+                assert export_annotations is not None
+                assert export_annotations.readOnlyHint is False
                 preview_meta = by_name['dashboard_preview'].meta
                 assert preview_meta is not None
                 assert preview_meta['ui']['resourceUri'].startswith('ui://charts-design/')
@@ -36,6 +52,10 @@ def test_real_stdio_protocol(tmp_path):
                 assert result.isError
                 assert result.structuredContent is not None
                 assert result.structuredContent['error']['code'] == 'PROJECT_REQUIRED'
+                invalid_operation = await session.call_tool('dashboard_patch', {
+                    'dashboardId': 'mcp-test', 'expectedRevision': 1,
+                    'operations': [{'op': 'set_title'}]})
+                assert invalid_operation.isError
                 result=await session.call_tool('dashboard_patch',{'dashboardId':'mcp-test','expectedRevision':1,'operations':[{'op':'set_title','value':'Edited over MCP'}]})
                 assert not result.isError
                 assert result.structuredContent is not None
@@ -121,8 +141,72 @@ def test_real_stdio_protocol(tmp_path):
                 assert 'window.__chartsBoot=' in ui.contents[0].text
                 contract=await session.read_resource(AnyUrl('charts://contract'))
                 assert isinstance(contract.contents[0], TextResourceContents)
+                guide = json.loads(contract.contents[0].text)
+                assert guide['tools'] == {name: tool.model_dump(by_alias=True, exclude_none=True, exclude={'name'})
+                    for name, tool in by_name.items()}
                 assert 'set_layout' in contract.contents[0].text
                 assert 'set_report_markdown' in contract.contents[0].text and 'set_report' in contract.contents[0].text and 'set_view_mode' in contract.contents[0].text
+    asyncio.run(check())
+
+
+# @wu-test type=integration | scope=MCP编辑完成与数据检查 | protects=数据文件不可用时被当作保存成功或失败后草稿批次无法继续
+def test_failed_finish_preserves_draft_and_batch_over_stdio(tmp_path):
+    from dashboard_runtime.service import Service
+    from dashboard_runtime.demo import executive_document
+
+    project = tmp_path / 'project'
+    service = Service(tmp_path / 'setup', project_root=project)
+    service.call('dashboard_create', {'dashboardId': 'review', 'document': executive_document('review')})
+
+    async def check():
+        params = StdioServerParameters(command=sys.executable,
+            args=['-m', 'dashboard_runtime', '--project-root', str(project),
+                  '--runtime-root', str(tmp_path / 'runtime'), 'mcp'],
+            env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[2]) + os.pathsep + os.environ.get('PYTHONPATH', '')})
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                batch = await session.call_tool('dashboard_edit_begin', {'dashboardId': 'review', 'expectedRevision': 1})
+                assert not batch.isError
+                assert batch.structuredContent is not None
+                batch_id = batch.structuredContent['batch_id']
+                edited = await session.call_tool('dashboard_patch', {'dashboardId': 'review', 'expectedRevision': 1,
+                    'operations': [{'op': 'set_title', 'value': 'Reviewed draft'}]})
+                assert not edited.isError
+                data_path = project / 'data' / 'data.sqlite3'
+                unavailable = tmp_path / 'unavailable.sqlite3'
+                data_path.rename(unavailable)
+                arguments = {'dashboardId': 'review', 'expectedRevision': 2, 'batchId': batch_id}
+                for name in ('dashboard_edit_finish', 'dashboard_checkpoint'):
+                    failed = await session.call_tool(name, arguments if name == 'dashboard_edit_finish' else
+                                                     {'dashboardId': 'review', 'expectedRevision': 2})
+                    assert failed.isError
+                    value = failed.structuredContent
+                    assert value is not None
+                    assert value['error']['code'] == 'DOCTOR_FAILED'
+                    assert value['doctor']['passed'] is False
+                    assert value['nextAction'] == 'dashboard_get'
+                draft = await session.call_tool('dashboard_get', {'dashboardId': 'review'})
+                assert not draft.isError
+                assert draft.structuredContent is not None
+                assert draft.structuredContent['document']['manifest']['title'] == 'Reviewed draft'
+                assert draft.structuredContent['document']['revision'] == 2
+                history = await session.call_tool('dashboard_history', {'dashboardId': 'review'})
+                assert not history.isError
+                assert history.structuredContent is not None
+                assert [item['revision'] for item in history.structuredContent['history']] == [1]
+                resumed = await session.call_tool('dashboard_edit_begin', {'dashboardId': 'review', 'expectedRevision': 2})
+                assert not resumed.isError
+                assert resumed.structuredContent is not None
+                assert resumed.structuredContent['batch_id'] == batch_id
+                unavailable.replace(data_path)
+                finished = await session.call_tool('dashboard_edit_finish', arguments)
+                assert not finished.isError, finished
+                assert finished.structuredContent is not None
+                assert finished.structuredContent['ok'] is True
+                assert finished.structuredContent['checkpoint']['revision'] == 2
+                assert finished.structuredContent['nextAction'] == 'dashboard_preview'
+
     asyncio.run(check())
 
 

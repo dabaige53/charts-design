@@ -7,7 +7,8 @@ from .lifecycle import IdleLifetime, DEFAULT_IDLE_TIMEOUT
 from . import __version__
 from .assets import MIME_TYPE, render_html, ui_build_id, ui_resource_uri
 from .model import DashboardError, MAX_BYTES
-from .service import READ_ONLY, TOOLS
+from .service import TOOLS
+from .tool_contract import APP_ONLY, tool_annotations
 from .project_routing import ProjectResolver, ProjectServices, project_result, project_schema
 
 def result_text(result):
@@ -56,9 +57,8 @@ def create_server(service, lifetime=None, profile=None):
         raise DashboardError('MCP_NOT_INSTALLED', 'Install the MCP adapter: python3 -m pip install "mcp>=1.28,<2"') from exc
     server = Server('charts-design', version=__version__)
 
-    @server.list_tools()
-    @lifetime.track
-    async def list_tools():
+    def tool_definitions():
+        """Use the same profile-adjusted definitions for both discovery routes."""
         result = []
         tools = {**TOOLS, **profile.extra_tools}
         for name, (description, schema) in tools.items():
@@ -66,11 +66,21 @@ def create_server(service, lifetime=None, profile=None):
                 continue
             description = profile.describe(name, description)
             schema = profile.schema(name, schema)
-            meta = {'ui': {'resourceUri': ui_resource_uri()}} if name == 'dashboard_preview' and ui_build_id() != 'unavailable' else None
+            ui = {}
+            if name == 'dashboard_preview' and ui_build_id() != 'unavailable':
+                ui['resourceUri'] = ui_resource_uri()
+            if name in APP_ONLY:
+                ui['visibility'] = ['app']
+            meta = {'ui': ui} if ui else None
             tool = types.Tool(name=name, description=description, inputSchema=schema, _meta=meta,
-                annotations=types.ToolAnnotations(readOnlyHint=name in READ_ONLY, destructiveHint=False, openWorldHint=False))
+                annotations=types.ToolAnnotations(**tool_annotations(name)))
             result.append(tool)
         return result
+
+    @server.list_tools()
+    @lifetime.track
+    async def list_tools():
+        return tool_definitions()
 
     @server.call_tool()
     @lifetime.track
@@ -88,19 +98,22 @@ def create_server(service, lifetime=None, profile=None):
                 handled = profile.call(name, request, selected)
                 return profile.decorate(name, request, handled if handled is not None else selected.call(name, request), selected)
             result = await asyncio.to_thread(execute)
+            failed = result.get('ok') is False
             text = None
             if name not in UNPACKED:
                 packed, text = selected.transport.encode(result, name)
                 if packed is not result:
                     result, text = profile.decorate('runtime_result_chunk', request, packed, selected), None
             # The measured compact JSON doubles as the text fallback; serialize once.
-            return types.CallToolResult(content=[types.TextContent(type='text', text=text if text is not None else result_text(result))], structuredContent=result)
+            return types.CallToolResult(isError=failed, content=[types.TextContent(type='text', text=text if text is not None else result_text(result))], structuredContent=result)
         except DashboardError as exc:
             selected.transport.log('', name, 'server', exc.code)
             return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=json.dumps(exc.as_dict()))], structuredContent=exc.as_dict())
         except (KeyError, TypeError, ValueError) as exc:
             selected.transport.log('', name, 'server', type(exc).__name__)
-            return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=str(exc))])
+            result = {'ok': False, 'error': {'code': 'INVALID_ARGUMENT', 'message': str(exc),
+                      'recovery': 'Check the tool inputSchema and charts://contract before retrying.'}}
+            return types.CallToolResult(isError=True, content=[types.TextContent(type='text', text=result_text(result))], structuredContent=result)
 
     @server.list_resources()
     @lifetime.track
@@ -129,9 +142,10 @@ def create_server(service, lifetime=None, profile=None):
             return [ReadResourceContents(content=json.dumps(service.call('chart_catalog', {}), ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://contract':
             from .contract import CONTRACT
-            contract = {**CONTRACT, 'tools': {name: {**tool, 'inputSchema': project_schema(tool['inputSchema'])}
-                for name, tool in CONTRACT['tools'].items()}, 'projectRouting': {
-                    'selector': 'projectRoot', 'scope': 'request', 'path': 'absolute asset directory',
+            contract = {**CONTRACT, 'tools': {tool.name: tool.model_dump(by_alias=True, exclude_none=True, exclude={'name'})
+                for tool in tool_definitions()}, 'projectRouting': {
+                    'selector': 'projectRoot', 'scope': 'request',
+                    'description': profile.schema('dashboard_get', {})['properties']['projectRoot']['description'],
                     'omitted': 'startup project default or legacy store; never the last selected project',
                     'preview': 'bind once from result.projectRoot; include it in all subsequent calls, including chunks'}}
             return [ReadResourceContents(content=json.dumps(contract, ensure_ascii=False), mime_type='application/json')]

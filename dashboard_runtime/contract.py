@@ -1,11 +1,13 @@
 """Discoverable operation documentation; the Python validator is authoritative."""
 from .service import TOOLS
 from .statistical import statistical_declarations
+from .tool_contract import OPERATION_SCHEMAS
 CONTRACT = {
     'schemaVersion': 2,
     'presentationStatus': 'React runtime: presets, native ECharts and isolated HTML/JavaScript components',
     'declarationsResource': 'charts://declarations',
     'tools': {key: {'description': value[0], 'inputSchema': value[1]} for key, value in TOOLS.items()},
+    'operationSchemas': OPERATION_SCHEMAS,
     'operations': {
         'put_source': {'id': 'source id', 'value': {'kind': 'file|query|fixture|declared', 'name': 'source description'}},
         'put_dataset': {'id': 'dataset id', 'meta': {'fields': {'field': {'type': 'string|number|date|boolean', 'label': 'Display name'}}, 'sourceId': 'source id'}, 'rows': [{'field': 'value'}]},
@@ -18,9 +20,9 @@ CONTRACT = {
         'set_layout': {'breakpoint': 'desktop|tablet|mobile', 'value': [{'id': 'component id', 'x': 0, 'y': 0, 'w': 6, 'h': 6}]},
         'apply_layout_template': {'template': 'executive|focus|bento|sidebar|grid3|narrative|scorecard (see layout_templates)', 'order': 'optional list of component ids in reading order; others follow in manifest order', 'policy': 'Applied after the other operations of the batch for desktop, tablet and mobile; saved as manifest.layoutTemplate and re-flowed when components are added or removed; a later set_layout replaces it'},
         'set_filters': {'value': [{'id': 'region', 'field': 'region', 'op': 'in|range|contains', 'values': [], 'componentIds': ['component id']}]},
-        'set_annotations': {'value': [{'id': 'unique annotation id', 'componentId': 'existing component id or null for page', 'text': '1-4000 characters', 'createdAt': 'ISO timestamp', 'anchor': 'optional: scope component/text/page, kind element/area, quote (max 1000), rect {x,y,width,height} in 0..1; text scope also requires occurrence'}], 'policy': 'Replaces annotation list; at most 100; persisted with document revision'},
+        'set_annotations': {'value': [{'id': 'unique annotation id', 'componentId': 'existing component id or null for page', 'text': '1-4000 characters', 'createdAt': 'ISO timestamp', 'anchor': 'optional: scope component/text/page, kind element/area, quote (max 1000), rect {x,y,width,height} in 0..1; text scope also requires occurrence'}], 'policy': 'Replaces annotation list; at most 100. Project annotations are independent of design restore; expectedAnnotations enables conflict-checked saves without a design revision.'},
         'set_meta': {'value': {'iconKey': 'chart|plane', 'subtitle': 'Page description', 'org': 'Organization', 'system': 'Business system', 'statusText': 'Business status; each field optional, 0-1000 characters; replaces page metadata'}},
-        'set_title': {'value': 'Dashboard title'}, 'set_theme': {'value': 'light|dark'},
+        'set_title': {'value': 'Dashboard title'}, 'set_theme': {'value': 'light|dark; legacy metadata only, current UI always renders light'},
         'set_view_mode': {'value': 'dashboard|report'},
         'set_report_markdown': {'value': 'Markdown source (0-200000 characters); chart fences require componentId and allow optional caption (string, 0-500 characters) and source (string, 0-1000 characters)'},
         'set_report': {'value': {'subtitle': 'Report subtitle (0-1000 characters)', 'blocks': [{'id': 'unique block id', 'componentId': 'existing component id'}]}},
@@ -30,6 +32,10 @@ CONTRACT = {
     'rules': [
         'contains filters accept zero or one text value, match a declared string field without case sensitivity, and update only explicit componentIds. Local filtering queries the immutable data version; it never reruns the upstream source query.',
         'Read dashboard_get before mutation and supply its expectedRevision.',
+        'Project edits follow dashboard_get -> dashboard_edit_begin -> patch/import/query with the latest revision -> dashboard_edit_finish -> dashboard_preview once. get reads the editable draft; preview reads the latest completed checkpoint.',
+        'DOCTOR_FAILED means the draft and edit batch remain but no checkpoint was created. Fix the issues, read the latest revision, and finish again. REVISION_CONFLICT requires reading and reconciling current content before retrying; never replay an uncertain write blindly.',
+        'Checkpoint published is a retention-protection marker, not website deployment or link sharing. Use dashboard_share on remote MCP only for explicitly requested sharing; static-site export produces a ZIP and does not deploy it.',
+        'Tencent publication uses dashboard_share_publish with expiration=never|7d|30d and an optional eight-digit accessKey. The source must have a completed checkpoint. The configured HTTPS gateway enforces keys and expiry; only cloud SCF executes deletion. dashboard_share_status reports pending jobs; dashboard_share_delete revokes one copy and queues physical deletion. Source projects and other shares remain.',
         'Use dashboard_annotations to read saved review comments, quoted text, relative selection rectangles and target identities without chart datasets. It returns the current revision and raw annotations separately from derived targets. Missing components have componentExists=false; text/area anchors need rendered-page verification when ambiguous.',
         'When the user requests changes based on annotations, read canonical content with dashboard_get and modify the corresponding component, metadata or report Markdown through dashboard_patch. Preserve annotations unless the user asks to edit/delete them. Saving an annotation does not start an agent or authorize unrelated actions.',
         'Every operation object must include its op name.',
@@ -50,13 +56,13 @@ CONTRACT = {
         'KPI descriptions are not allowed in put_component, including subtitle, description, desc, note, detail, rankSub, trendLabel and gaugeSub. Historical prose is hidden; metric definitions remain available in details.',
         'KPI yoy/mom comparisons accept finite numeric values or signed display text. Nonzero unsigned text is rejected; preserve actual direction, units and precision when binding metrics. Zero and missing values stay neutral.',
         'Synthetic prototypes should use the smallest representative dataset covering required filters and states, reused across charts and tables. Do not duplicate calculation/display rows or silently sample real business data. Successful JSON serialization alone does not verify the preview.',
-        'For MCP results containing a document, read the complete artifact from structuredContent.document. The text block is a compact summary with dashboardId, revision, documentBytes and datasetRows; it does not repeat the artifact.',
+        'MCP text content and structuredContent carry the same complete JSON or transport envelope. Read structuredContent.document when inline. For base64-json-v1 read every runtime_result_chunk with the same projectRoot, concatenate in index order, decode once, and check byte count. Do not treat a transport envelope as the saved artifact.',
         'Chart fences accept backticks or tildes, at least three characters, with up to three leading spaces; the closing fence uses the same character and at least the opening length. Unclosed chart fences, invalid JSON, duplicate JSON keys, unknown fields and missing/text references cannot be persisted. Other code blocks are inert text.',
         'set_report_markdown replaces canonical source without changing view mode, components, data or dashboard layouts. Existing legacy subtitle/blocks are retained as inert history.',
         'set_view_mode=report initializes missing Markdown from the title, legacy subtitle/blocks or desktop reading order (y, then x), escaping legacy plain text. Existing Markdown survives view switching.',
         'Legacy set_report still replaces report metadata; old subtitle (0-1000 characters) and blocks (at most 100 unique block IDs and component references) remain supported when Markdown is absent. IDs use the existing 1-80 character rules.',
         'New components never append to canonical Markdown. remove_component rejects deletion while a chart fence still refers to the component; first remove that fence with set_report_markdown. Legacy-only block reports retain their old append/delete behavior.',
-        'CLI writes to files; MCP never accepts arbitrary filesystem paths.',
+        'Local MCP projectRoot selects an absolute project asset directory; remote MCP selects a project inside its workspace. Data connections are operator-configured aliases and exports use managed IDs; tools do not accept arbitrary data/export file paths.',
         'Legacy put_component uses kind=legacy plus explicit family and config: chart uses code/data/presentation, KPI uses type/label/explicit values (mc03 needs sparkData or sparkline), table uses columns/rows. These fields are conditional, not required together.',
         'charts://declarations provides required-field schemas and original family/code requirements with authoritative validator sources and coverage limits.',
         'The original discovery catalog lists chart, KPI and table entries; its installed validator registry has 40 chart codes and 16 KPI types (mc01-mc16). Do not use every catalog entry as a chart code. Choose KPI shapes by question (chart_declarations returns kpiGuide), not mc01 for every metric.',

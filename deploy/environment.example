@@ -16,3 +16,11 @@ CHARTS_DEFAULT_PROJECT=default
 CHARTS_FORWARDED_ALLOW_IPS=127.0.0.1
 # Operator-owned read-only SQLite source aliases (JSON file), optional.
 # CHARTS_SOURCES=/data/sources.json
+# Tencent cloud publications: private COS bucket and HTTPS gateway.
+# Set these through the deployment environment when cloud sharing is enabled.
+# CHARTS_COS_REGION=
+# CHARTS_COS_BUCKET=
+# CHARTS_COS_SHARE_PREFIX=charts-shares/
+# TENCENTCLOUD_SECRETID=
+# TENCENTCLOUD_SECRETKEY=
+# TENCENTCLOUD_SESSIONTOKEN=

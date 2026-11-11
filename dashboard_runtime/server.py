@@ -1,6 +1,6 @@
 """Self-hosted server: Streamable HTTP MCP, browser previews and signed downloads.
 
-One long-running process serves three audiences from the same project storage
+One long-running process serves four audiences from the same project storage
 and the same transport-independent ``Service``:
 
 * MCP clients (Claude Code, Claude Desktop, Codex, IDEs) on ``/mcp`` with a
@@ -10,6 +10,8 @@ and the same transport-independent ``Service``:
   UI bundle and read data through a scoped API using an expiring signed token
   carried in the URL fragment, which browsers never send to servers or proxies.
 * Downloads of exports through signed, expiring ``/files/<token>`` links.
+* Separate Tencent COS publications on ``/s/<shareId>/``, gated by an
+  eight-digit visitor key. Expired copies are removed by cloud SCF, not this process.
 
 Remote callers name a project; they never choose arbitrary server paths. Each
 project is a directory in one workspace with the same layout as local projects.
@@ -22,7 +24,9 @@ import contextlib
 import gzip
 import hashlib
 import hmac
+import html
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -34,11 +38,12 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__
 from .model import ID, DashboardError, MAX_BYTES, require
-from .service import STR, TOOLS, Service, schema as tool_schema
+from .service import TOOLS, Service
+from .tool_contract import BOARD, described, schema as tool_schema
 from .mcp_server import McpProfile
 
 PROJECT_NAME = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$')
@@ -288,12 +293,20 @@ class ServerProfile(McpProfile):
     def __init__(self, projects: WorkspaceProjects, links: Links):
         self.workspace, self.links = projects, links
         self.extra_tools = {
-            'dashboard_share': ('Create an expiring browser link for one dashboard or report on this server. '
-                                'access=view is read-only; access=edit also saves layout and titles. Give the URL to the user; it contains the access token.',
-                                tool_schema({'dashboardId': STR, 'access': {'enum': ['view', 'edit']},
-                                             'expiresInHours': {'type': 'number', 'minimum': 1, 'maximum': 8784}}, ('dashboardId',))),
-            'dashboard_share_revoke': ('Invalidate every browser link previously issued for one dashboard on this server',
-                                       tool_schema({'dashboardId': STR}, ('dashboardId',))),
+            'dashboard_share': ('Create an expiring browser link to the saved dashboard/report checkpoint; does not deploy a site or finish draft edits. '
+                                'Returns url/access/expiresAt; the URL contains an access token. Share only when requested. '
+                                'view permits reading; edit also permits the supported viewer edits. Repeated calls issue new links. '
+                                'For eight-digit visitor keys, never/7d/30d and physical expiry deletion use dashboard_share_publish instead; this signed-link tool does not delete stored data.',
+                                tool_schema({'dashboardId': BOARD['dashboardId'],
+                                    'access': described({'enum': ['view', 'edit'], 'default': 'view'},
+                                        'Permission granted by this link; use edit only when the user requested editing access.'),
+                                    'expiresInHours': described({'type': 'number', 'minimum': 1, 'maximum': 8784},
+                                        'Link lifetime in hours; omit to use the operator-configured server default.')}, ('dashboardId',))),
+            'dashboard_share_revoke': ('Revoke every previously issued browser share link for this dashboard/report; all those readers lose access. '
+                                      'Does not delete the dashboard or revoke unrelated export download links. '
+                                      'Returns revoked=true and generation. Call only for the requested dashboard; use dashboard_share for a new link. '
+                                      'To remove a Tencent COS publication use dashboard_share_delete with its shareId instead.',
+                                      tool_schema({'dashboardId': BOARD['dashboardId']}, ('dashboardId',))),
         }
 
     def projects(self, service):
@@ -361,6 +374,24 @@ class RemoteServer:
         # A long-running service has no idle shutdown.
         self.mcp = create_server(self.projects.service(settings.default_project), IdleLifetime(10 ** 9), self.profile)
         self._gzip: dict[tuple, bytes] = {}
+        self.cloud_shares = None
+        if os.environ.get('CHARTS_COS_BUCKET'):
+            from .cloud_shares import CloudShares
+            self.cloud_shares = CloudShares.from_environment()
+        self._cloud_attempts = {}
+        self._cloud_attempts_lock = threading.Lock()
+
+    def cloud_key_attempt(self, share_id, peer):
+        """Bound online guessing of the deliberately short visitor access key."""
+        now = time.time()
+        with self._cloud_attempts_lock:
+            self._cloud_attempts = {key: value for key, value in self._cloud_attempts.items() if value[1] > now}
+            for key, limit in (((share_id, peer), 5), ((share_id, '*'), 100)):
+                attempts, until = self._cloud_attempts.get(key, (0, now + 900))
+                require(attempts < limit, '尝试次数过多，请 15 分钟后重试', 'SHARE_RATE_LIMITED')
+            for key in ((share_id, peer), (share_id, '*')):
+                attempts, until = self._cloud_attempts.get(key, (0, now + 900))
+                self._cloud_attempts[key] = (attempts + 1, until)
 
     # Authentication -----------------------------------------------------
     def admin(self, token) -> bool:
@@ -583,6 +614,77 @@ def create_app(server: RemoteServer):
             return JSONResponse({'ok': False, 'error': {'code': 'LINK_EXPIRED', 'message': 'Download link is invalid or expired'}}, status_code=404, headers=SECURITY_HEADERS)
         return FileResponse(target, filename=target.name, headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
 
+    async def cloud_publication(request: Request):
+        """Every file stays behind key/session and expiry checks; no public COS URLs."""
+        from .cloud_shares import checked_id
+        from starlette.responses import RedirectResponse
+
+        def access_form(path, message='', status=200):
+            page = ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    '<title>访问分享</title></head><body><main><h1>访问分享</h1>'
+                    + ('<p role="alert">' + html.escape(message) + '</p>' if message else '') +
+                    '<form method="post" action="' + html.escape(path, quote=True) + '">'
+                    '<label for="access-key">8 位数字访问密钥</label>'
+                    '<input id="access-key" name="accessKey" type="password" inputmode="numeric" '
+                    'pattern="[0-9]{8}" minlength="8" maxlength="8" required autocomplete="off">'
+                    '<button type="submit">打开分享</button></form></main></body></html>')
+            headers = {**SECURITY_HEADERS, 'Cache-Control': 'no-store',
+                       'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'"}
+            if status == 429:
+                headers['Retry-After'] = '900'
+            return Response(page, status_code=status, media_type='text/html', headers=headers)
+
+        try:
+            shares = server.cloud_shares
+            if shares is None:
+                raise DashboardError('CLOUD_SHARE_NOT_CONFIGURED', '云端分享未配置')
+            share_id = checked_id(request.path_params['share_id'])
+            control = await asyncio.to_thread(shares.control, share_id)
+            path = base + '/s/' + share_id + '/'
+            cookie = 'charts-share-' + share_id
+            if request.method == 'POST':
+                origin = request.headers.get('origin')
+                public = urlparse(settings.public_url)
+                require(origin is None or origin == public.scheme + '://' + public.netloc,
+                        'Invalid form origin', 'FORBIDDEN')
+                peer = request.client.host if request.client else 'unknown'
+                server.cloud_key_attempt(share_id, peer)
+                body = await read_body(request, 1024)
+                values = parse_qs(body.decode('utf-8'), max_num_fields=4)
+                await asyncio.to_thread(shares.authenticate, share_id, values.get('accessKey', [''])[0])
+                expiry = min(int(time.time()) + 12 * 3600, control['expiresAt'] or int(time.time()) + 12 * 3600)
+                token = server.signer.sign({'k': 'cloud-share', 'shareId': share_id, 'exp': expiry})
+                response = RedirectResponse(path, status_code=303,
+                                            headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store'})
+                response.set_cookie(cookie, token, max_age=max(0, expiry - int(time.time())),
+                                    path=path, secure=True, httponly=True, samesite='strict')
+                return response
+            session = server.signer.verify(request.cookies.get(cookie), 'cloud-share')
+            authorized = session is not None and session.get('shareId') == share_id
+            name = request.path_params.get('name') or 'index.html'
+            if not authorized:
+                require(name == 'index.html', '请先输入访问密钥', 'INVALID_ACCESS_KEY')
+                return access_form(path)
+            raw = await asyncio.to_thread(shares.content, share_id, name, control=control)
+            kind = 'application/gzip' if name.endswith('.gz') else mimetypes.guess_type(name)[0] or 'application/octet-stream'
+            return compressed(request, raw, kind, {
+                'Cache-Control': 'private, no-store, max-age=0',
+                # Custom HTML retains its existing opaque iframe sandbox and
+                # child CSP, including explicitly supported HTTPS resources.
+                'Content-Security-Policy': "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+            })
+        except DashboardError as error:
+            status = {'INVALID_ACCESS_KEY': 401, 'SHARE_RATE_LIMITED': 429,
+                      'SHARE_EXPIRED': 410, 'SHARE_UNAVAILABLE': 410, 'NOT_FOUND': 404,
+                      'FORBIDDEN': 403}.get(error.code, 400)
+            if request.method == 'POST' and error.code in ('INVALID_ACCESS_KEY', 'SHARE_RATE_LIMITED'):
+                return access_form(base + '/s/' + request.path_params['share_id'] + '/', str(error), status)
+            return JSONResponse(error.as_dict(), status_code=status,
+                                headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store'})
+        except Exception as error:
+            return failure(error)
+
     @contextlib.asynccontextmanager
     async def lifespan(app):
         async with manager.run():
@@ -598,6 +700,8 @@ def create_app(server: RemoteServer):
         Route('/api/v1/catalog', admin_catalog, methods=['POST']),
         Route('/api/v1/share', admin_share, methods=['POST']),
         Route('/files/{token}', download, methods=['GET']),
+        Route('/s/{share_id}/', cloud_publication, methods=['GET', 'POST']),
+        Route('/s/{share_id}/{name:path}', cloud_publication, methods=['GET']),
         Route('/mcp', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
         Route('/mcp/{secret}', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
     ]
@@ -614,6 +718,7 @@ class RequestLog:
         (re.compile(r'^/files/[^/]+$'), '/files/<token>'),
         (re.compile(r'^/api/v1/p/[^/]+/tools/([a-z_0-9]+)$'), '/api/v1/p/<project>/tools/{0}'),
         (re.compile(r'^/(view|edit)/[^/]+/[^/]+$'), '/{0}/<project>/<dashboard>'),
+        (re.compile(r'^/s/[^/]+/.*$'), '/s/<share>/<file>'),
     )
 
     def __init__(self, app):

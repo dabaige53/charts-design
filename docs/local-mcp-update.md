@@ -2,7 +2,7 @@
 
 
 > **当前状态（2026-11-10）**
-> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/ui-refactor-plan.md`。
+> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/plans/ui-refactor-plan.md`。
 
 ## 完整打包并更新 analyst-workspace
 

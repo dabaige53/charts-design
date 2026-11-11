@@ -27,7 +27,7 @@ def _write_shards(site, key, rows):
     return files, count
 
 
-def export_site(store, board):
+def export_site(store, board, output_root=None):
     require_preview()
     doc = store.compact(store.readable(board) if getattr(store, 'project_root', None) else store.get(board, hydrate=False))
     doc = copy.deepcopy(doc)
@@ -35,7 +35,7 @@ def export_site(store, board):
     doc['statisticalArtifacts'] = {key: {field: value for field, value in artifact.items() if field != 'provenance'}
                                   for key, artifact in statistical_artifacts(store.statistical_document(doc)).items()}
     export_id = uuid.uuid4().hex
-    directory = store.root / 'exports' / export_id
+    directory = (output_root if output_root is not None else store.root / 'exports') / export_id
     site = directory / 'site'
     (site / 'data').mkdir(mode=0o700, parents=True)
     used = {c.get('datasetId') for c in doc['manifest']['components'].values() if c.get('datasetId')}

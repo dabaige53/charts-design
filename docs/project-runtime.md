@@ -4,7 +4,7 @@
 
 项目内 `charts-project.json` 管理历史和加载参数；`dashboards/dashboards.sqlite3` 是事务索引与权威状态，`dashboards/<id>/draft.json`、`checkpoints/*.json`、`annotations.json` 和 `annotation-history.json` 是自动生成的可读镜像，不能另行手工维护。检查点写入后不再变化，其镜像只在首次出现时写出；迁移改写检查点时整体重写镜像。`data/data.sqlite3` 保存不可变数据版本。运行目录仅用于传输缓存及诊断；删除新运行缓存不删除项目资产。既有集中目录不自动清理。
 
-项目默认配置：普通检查点保留100个，筛选合并150毫秒，最多4个组件查询并发，表格50行。命名和发布检查点保护。数据不自动清理，避免删除仍被历史或批注引用的数据。设计JSON和数据内容不应作为含敏感数据的公共仓库产物提交。
+项目默认配置由 `dashboard_runtime/project.py` 的 `DEFAULTS` 维护。`loading.pageSize` 是后端未显式提供表格状态时的缺省值，不等同于 UI 明确传入的表格页大小。命名检查点及设置 published 保留标记的检查点受到历史清理保护。数据不自动清理，避免删除仍被历史或批注引用的数据。设计JSON和数据内容不应作为含敏感数据的公共仓库产物提交。
 
 ## 单入口多项目
 
@@ -40,7 +40,9 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 `dashboard_edit_begin` 开始或恢复批次；`dashboard_patch` 只保存草稿并发编号。`dashboard_edit_finish` 完整检查后生成一个检查点，成功返回 `nextAction: dashboard_preview`。调用方只在完成后调用一次预览。已有页面通过版本检测原位更新；宿主是否复用打开的侧栏由宿主控制。
 
-`dashboard_history` 分页读取检查点；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建、命名或标记发布当前检查点；`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，不随设计恢复。历史文档中的批注变更保存在独立事件记录。
+`dashboard_get` 读取可编辑草稿；项目预览与刷新读取最近完成的检查点。`dashboard_edit_finish` 和 `dashboard_checkpoint` 检查失败时返回 `DOCTOR_FAILED`，MCP 同时标记 `isError: true`；草稿与批次保留，不生成检查点。调用方检查 Doctor 问题、读取最新草稿并修复，再用最新版本完成。`REVISION_CONFLICT` 要求重新读取并合并当前修改，不能盲目重放写入。
+
+`dashboard_history` 分页读取检查点，默认每页 50 个、最多 100 个；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建或命名当前检查点，也会关闭当前编辑批次，普通 Agent 编辑使用带批次 ID 的 `dashboard_edit_finish`。`published` 仅保护检查点不被自动清理，不代表部署网页或创建分享链接。`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，不随设计恢复。历史文档中的批注变更保存在独立事件记录。
 
 ## 加载
 
@@ -59,3 +61,32 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 `loading.preloadFilterIds` 指定需要随结构返回首页选项的筛选器；每项最多100个值，高基数选项继续搜索分页。选项范围不随当前选择收缩，避免改变筛选语义。预加载结果缓存在运行目录 `filter-options/`，键包含字段和关联数据版本，删除后可重建。
 
 页面以看板、数据版本、字段、数据集、搜索词和页号缓存筛选页，并复用进行中的相同请求；缓存最多256页。失败请求不缓存。大响应最多同时读取4个分块，仍校验顺序、完整字节数和JSON；不截断、抽样或丢弃图表数据。选项接口耗时现在可以在 `runtime_diagnostics` 的 `query_complete` 阶段查询。
+
+
+## 本地数据计算
+
+复用 stdio MCP 进程和本机 SQLite，无需启动 HTTP 服务或增加常驻进程。完整数据保存在 `data.sqlite3`；看板配置及历史只保存不可变版本引用。指标卡与图表读取聚合结果，表格只读取当前页；筛选、排序、分页和全量 CSV 导出在本机执行。比例使用分子合计除以分母合计。
+
+使用配置好的只读 SQLite 来源别名调用 `dataset_attach`；用 `dashboard_view` 读取交互结果，`dashboard_data_inspect` 检查行数、体积与耗时，`dataset_export` 导出全部匹配行。高基数筛选选项可搜索并逐页加载，超出聚合结果上限明确报错，不截断数据。标题与布局修改复用原数据版本。
+
+旧快照可调用 `dashboard_migrate`，先生成备份再迁移全部配置历史；`dashboard_migration_rollback` 将备份恢复为新修订。小数据保留旧快照兼容。详细契约和复测命令见 [local-data.md](../skills/executive-charts/references/local-data.md)。本地 AppBridge 验证与真实 Codex 宿主验证分别记录，不互相替代。
+
+## 局部视图与明细接口
+
+`dashboard_view` 默认返回完整 `document`。交互调用可传 `responseMode: "patch"`、`componentIds` 和 `expectedRevision`，返回 `{id, revision, componentIds, computed, statisticalArtifacts}`。`computed.components`、`tables`、`grouped` 只包含选中的组件；省略字段表示保留已有值，空数组表示清空。省略 `componentIds` 表示全部，空列表表示不计算组件。仅在需要重新加载筛选选项时传 `includeFilterOptions: true`。版本不符返回 `REVISION_CONFLICT`；先刷新最新定义再重试。MCP 结构化结果与文本回退返回相同的小结果；超过阈值时均返回分块描述，消费者读取完整分块。不得把摘要或截断文本当完整响应，详细协议见传输与诊断文档。
+
+`component_data` 接受 `sort: [{field, direction}]` 与 `search`，沿用表格排序和子串搜索规则。指标定义面板展示 `semantic_inspect` 返回的实际结果。图表转表显示对应完整聚合结果，并在自身容器内滚动。主表默认每页 10 行，明确配置继续保留；搜索、排序、分页由后端执行。CSV 导出全部匹配行，HTML 快照保留当前计算视图。
+
+本项目 MCP 中，有数据集绑定的组件在详情面板底部显示“明细数据”，打开面板后通过 `component_data` 读取当前筛选范围内的原始行，并携带当前版本检查。每页默认 10 行，搜索、排序和翻页在后端执行；明细的表格状态独立于看板主表，关闭面板后丢弃。来源与原始定义折叠区保留在明细之后。静态快照、无数据集绑定的组件不调用此接口。
+
+## 独立性能测量
+
+百万行本地数据的独立合成验收：
+
+```sh
+node bin/python-runtime.js tests/runtime/benchmark_local.py --rows 1000000 --output /private/tmp/charts-performance.json
+```
+
+该命令创建独立临时 SQLite 数据，以两张指标卡、一个分类图和一张明细表检查导入、打开、筛选、聚合、翻页、排序、搜索和完整 CSV 导出，并记录响应体积、进程峰值内存及磁盘大小。结果核对独立计算的行数与合计，测量范围为后端查询和数据导出。首次全字段子串搜索需扫描完整数据；自然字符串排序、多列排序及随机深页使用 OFFSET。缓存绑定不可变数据版本。
+
+维护时机：项目选择、持久化、编辑历史、数据版本或渐进查询行为改变时更新；当次测量结果保存为独立证据。

@@ -30,7 +30,8 @@ def _identifier():
     return {'type': 'string', 'pattern': ID.pattern}
 
 
-def _common():
+def common_declarations():
+    """Return fresh shared authoring shapes without loading the chart registry."""
     string = {'type': 'string'}
     field_name = {'type': 'string', 'minLength': 1, 'maxLength': 199}
     field_info = _object({'type': {'enum': ['string', 'number', 'date', 'boolean']},
@@ -295,7 +296,7 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             'A declaration summary cannot also select a chartType or code')
     require(chart_type is None, 'Only original chart codes are supported; select code, not chartType', 'UNSUPPORTED_CHART_FAMILY')
     require(legacy_code is None or isinstance(legacy_code, str), 'Legacy code must be a string')
-    common = _common()
+    common = common_declarations()
     result = {
         'schemaVersion': 1,
         'documentSchemaVersion': 2,
@@ -307,9 +308,11 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
             {'tool': 'dashboard_create', 'purpose': 'Create an empty dashboard, or use an existing dashboard ID.'},
             {'tool': 'dashboard_annotations', 'purpose': 'Read saved comments, selected quotes/regions and target identities when the user asks to review or apply annotations. Preserve comments after modifying their targets.'},
             {'tool': 'dashboard_get', 'purpose': 'Read canonical state and current revision before mutation.'},
+            {'tool': 'dashboard_edit_begin', 'purpose': 'Project mode: begin or resume a batch; retain batch_id for finish.'},
             {'tool': 'dashboard_patch', 'purpose': 'Supply dashboardId, the latest expectedRevision and an operations array. Put source, dataset, metric and component in one atomic batch.'},
             {'tool': 'dashboard_validate', 'purpose': 'Validate the saved dashboard or a complete proposed document.'},
-            {'tool': 'dashboard_preview', 'purpose': 'Open the saved document using the installed React resources; host acceptance is separate from saving.'},
+            {'tool': 'dashboard_edit_finish', 'purpose': 'Project mode: full checks and one checkpoint. DOCTOR_FAILED retains the draft and batch; fix issues before retrying.'},
+            {'tool': 'dashboard_preview', 'purpose': 'After successful finish, open the saved checkpoint once using installed React resources; host acceptance is separate from saving.'},
         ],
         'common': common, 'legacy': _legacy(common),
         'customRenderers': {

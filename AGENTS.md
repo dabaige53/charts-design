@@ -1,42 +1,69 @@
 # charts-design 工作入口
 
-本项目维护经营看板与分析报告的数据资产、声明合同、CLI 与 MCP Runtime。按任务读取下列文档；新增和整理文件前先读文件管理规则。
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
 
-> **当前状态（2026-11-10）**
-> 新 React 组件库使用 Tailwind CSS v4、shadcn/ui、TanStack Table、ECharts、GridStack 和 Lucide。MCP 应用、HTML 快照及静态站点资源通过独立构建与打包步骤交付；原生 HTML 生成器和旧单体界面继续下线。实施状态与检查边界见 [UI 整改计划](docs/ui-refactor-plan.md) 和 [组件清单](docs/ui-component-inventory.md)。
+本项目通过 MCP 和 CLI 创建、维护经营看板与分析报告，管理数据资产、指标定义、组件声明、编辑历史和交付资源。先确认任务影响的层，再读取对应正文。
 
-## 文档阅读
+## 项目职责与源码位置
 
-- 修改新 UI 时先读 [UI 整改计划](docs/ui-refactor-plan.md) 与 [组件清单](docs/ui-component-inventory.md)：组件、画布、应用、宿主及后端边界；本轮不运行 UI 测试或浏览器自动化。
+| 位置 | 职责 |
+| --- | --- |
+| `dashboard_runtime/` | 数据计算、持久化、版本与批注、CLI 后端和 MCP/HTTP 服务 |
+| `dashboard_runtime/tool_contract.py`、`contract.py` | 工具说明、参数结构、操作约定与发现入口 |
+| `runtime-ui/src/` | 共享 React 组件、交互状态、GridStack 布局及宿主适配 |
+| `runtime-ui/src/charts/` | 独立维护的预设图表；其他渲染入口按当前声明约定工作 |
+| `bin/` | CLI、MCP 启动器、安装更新与检查脚本 |
+| `skills/` | 看板与报告生成指引、随包参考及工作区资产管理 |
+| `deploy/` | 自托管服务与腾讯云清理函数的部署源码 |
+| `tests/`、`.github/workflows/` | 局部行为检查、协议检查和 CI 配置 |
+| `docs/design-system/`、`docs/design-canvas/` | 可编辑设计资产、组件预览与归档参考，不作为生产运行源码 |
 
-- 初次了解项目时读 [README.md](README.md)：当前可用入口、重构状态与快速开始。
-- 查找专题或历史证据时读 [文档总览](docs/README.md)：文档职责、维护时机与重构索引。
-- 新增、移动或清理文件时读 [文件管理](docs/agent/file-management.md)：目录职责、维护源码、生成文件和业务资产边界。
-- 修改 Runtime、CLI 或导出时读 [Runtime 说明](docs/dashboard-runtime.md)：状态存储、数据模式、接口和兼容边界。
-- 创建 Dashboard 或分析报告时读 [生成路径](docs/generation-tracks.md)：数据声明、组件编排和 Markdown 写作。
-- 修改项目存储、多项目路由、历史或渐进加载时读 [项目资产与加载](docs/project-runtime.md)：项目参数、检查点和查询流程。
-- 修改操作区、图标或组件绑定时读 [标题区与绑定](docs/icon-header-and-bindings.md)：新 UI 设计体系的操作区排版与筛选绑定规范。
-- 修改原版组件提取、迁移或构建时读 [组件保真](docs/original-component-fidelity.md)：原配置与无损迁移保留要求（历史参考）。
-- 修改动态系列、散点或 KPI 比较时读 [动态编码](docs/dynamic-encoding.md)：字段、比例、排序和下钻。
-- 修改 ECharts 显示配置时读 [原生配置覆盖](docs/echarts-options.md)：合并顺序、覆盖规则和数据边界。
-- 修改统计图时读 [Seaborn 后端](docs/seaborn-backend.md)：独立于旧 UI；原始观测、声明、产物和限制。
-- 修改位置批注或对话附件时读 [批注说明](docs/annotation-composer.md)：批注数据结构与坐标系规范（新 UI 规范）。
-- 更新本地安装或排查旧进程时读 [本地 MCP 更新](docs/local-mcp-update.md)：打包更新、文件清单更新和重连检查。
-- 排查预览、大响应或版本缓存时读 [传输与诊断](docs/mcp-transport-diagnostics.md)：预览入口、分块读取和请求日志。
-- 修改独立网页导出时读 [静态部署包](docs/static-deployment.md)：静态网站部署包规范（历史参考/待新 UI 接入）。
-- 部署远程 MCP、修改服务器或网页预览与分享链接时读 [自托管服务器](docs/self-hosted-server.md)：远程 MCP、令牌、项目隔离与边界。
-- 修改测试、CI 或检查脚本时读 [测试与 CI](docs/testing.md)：三层检查、无浏览器验收、全量测试授权要求。
-- 组织看板资产时读 [executive-charts](skills/executive-charts/SKILL.md)：组件编排、业务数据和合同校验。
-- 生成 Markdown 分析报告时读 [analytical-reports](skills/analytical-reports/SKILL.md)：学术单栏正文与底层数据声明。
-- 使用 MCP 创建、编辑或诊断时读 [共享交付流程](skills/executive-charts/references/mcp-delivery.md)：项目参数、语义保留与批次完成。
-- 重构图表视觉时先读 [图表 UI 保留说明](docs/design-system/project/chart-ui.md)：40 个图表原定义、几何、标签、Tooltip、交互与视觉案例；原始参考保存在该设计系统内，勿当作新 UI 的运行源码。
-- 修改组件视觉时读 [设计规范](skills/executive-charts/references/design_standards.md)：配色、排版、几何和表格要求；Runtime 操作区按标题区与绑定文档执行。
-- 选择或修改指标卡与布局构图时读 [指标卡选型](skills/executive-charts/references/kpi-cards.md) 与 [布局模板](skills/executive-charts/references/layout_templates.md)：按问题选卡、七种构图与避免同质化的规则。
-- 编写指标说明时读 [指标定义](skills/executive-charts/references/metric-definitions.md)：统计对象、范围、单位与计算语义。
-- 追溯早期架构治理时读 [历史治理复盘](docs/ISSUES_AND_POSTMORTEM.md)：当时的原因、方案和版本结果。
-- 复查动态编码验收时读 [验收记录](docs/dynamic-encoding-validation.md)：2026-10-28 的对象、结果和宿主限制。
-- 追溯 MCP 改进原因时读 [迭代复盘](docs/retro-20261028.md)：当时的待办、性能证据与后续记录。
-- 复查 MCP 优化交付时读 [交付记录](docs/mcp-improvements-20261028.md)：改动、响应体积与安装验收边界。
-- 复查自托管、构图与指标卡改动时读 [验收记录](docs/records/2026-11-07-server-layout-kpi.md)：2026-11-07 的性能对比、验证范围与未验证项。
+## 开始任务
+
+1. 检查当前工作区的未提交改动，确认本次任务涉及的代码、文档和业务资产，保留无关改动。
+2. 初次接触项目时读 [README.md](README.md)，了解可用入口与启动方式。
+3. 判断产品目标、能力边界或新增功能时读 [产品上下文](docs/PRODUCT.md)；修改视觉和交互前读 [设计规范](docs/DESIGN.md)。
+4. 新增、移动、合并或删除文件前读 [文件管理](docs/agent/file-management.md)，确定现有负责正文和目标位置。
+5. 按下列任务入口补充阅读；查历史证据时从 [文档总览](docs/README.md) 进入，不把旧轮次要求当成当前规则。
+
+## 按任务阅读
+
+- 修改 Runtime、CLI、MCP 注册或工具定义时读 [Runtime 说明](docs/dashboard-runtime.md)：模块边界、配置、发现、数据导入与接口副作用。
+- 修改项目路由、存储、草稿、检查点、历史或渐进查询时读 [项目资产与加载](docs/project-runtime.md)：项目隔离、版本检查、数据引用和查询状态。
+- 创建看板或分析报告时读 [生成路径](docs/generation-tracks.md)：文档类型、报告源文、图表引用与案例的使用边界。
+- 通过 MCP 交付内容时读 [共享交付流程](skills/executive-charts/references/mcp-delivery.md)：检查现有成果、保留语义、完成编辑批次后展示。
+- 生成经营看板时读 [executive-charts](skills/executive-charts/SKILL.md)：指标拆解、渲染入口与组件编排。
+- 生成 Markdown 分析报告时读 [analytical-reports](skills/analytical-reports/SKILL.md)：学术单栏正文、数据声明与图文核对。
+- 修改 UI 组件及宿主适配时读 [组件清单](docs/ui-component-inventory.md)：组件维护位置、输入输出、动态能力和接入状态。
+- 修改标题、工具栏、图标、图表切换或普通绑定时读 [标题区与绑定](docs/icon-header-and-bindings.md)：操作范围、保存边界与兼容切换。
+- 修改动态系列、散点、比例、KPI 比较或下钻时读 [动态编码](docs/dynamic-encoding.md)：字段、汇总、排序、编码与联动。
+- 修改原生 ECharts 或自由 HTML/JavaScript 组件时读 [渲染与覆盖](docs/echarts-options.md)：三种入口、合并规则、隔离和数据绑定限制。
+- 修改 Seaborn 统计图时读 [统计图后端](docs/seaborn-backend.md)：原始观测、统计声明、产物和依赖。
+- 修改位置批注或宿主对话附件时读 [批注说明](docs/annotation-composer.md)：锚点、独立保存、冲突、宿主能力和未接入部分。
+- 更新本地 MCP 安装或确认运行版本时读 [本地更新](docs/local-mcp-update.md)：构建、指定文件更新、进程切换与重连。
+- 排查预览、分块响应或查询日志时读 [传输与诊断](docs/mcp-transport-diagnostics.md)：完整响应读取、过期资源和请求编号。
+- 修改静态网页导出时读 [静态部署包](docs/static-deployment.md)：资源、数据分片、下载和离线能力。
+- 部署远程 MCP、网页分享或腾讯云到期清理时读 [自托管服务器](docs/self-hosted-server.md)：鉴权、8 位数字密钥、COS 私有副本及云端 SCF 删除。
+- 处理 CloudBase（腾讯云开发）相关问题，包括能力咨询、方案设计、部署、鉴权、存储与排错时，先阅读官方 [CloudBase SKILL.md](https://github.com/TencentCloudBase/cloudbase-skills/blob/main/skills/cloudbase/SKILL.md)，再按任务读取其中对应的参考文档。
+- 修改测试、CI 或选择验证范围时读 [测试与 CI](docs/testing.md)：检查层次、环境、测试标记和全量授权要求。
+- 修改设计画布或追溯原图形时读 [图表参考](docs/design-system/project/chart-ui.md)：几何、标签、Tooltip 和原始资料。
+- 修改设计组件导出或画布安装资源时读 [产品 React 组件](docs/design-system/project/react-ui.md)：组件映射与独立构建、打包入口。
+- 选择指标卡时读 [指标卡选型](skills/executive-charts/references/kpi-cards.md)：按问题选择形态，保留真实比较基准。
+- 选择布局时读 [布局模板](skills/executive-charts/references/layout_templates.md)：构图建议与显式布局，不把模板作为生成上限。
+- 编写指标说明时读 [指标定义](skills/executive-charts/references/metric-definitions.md)：业务对象、范围、单位、公式和待确认事项。
+- 修改显示格式时读 [数据格式标准](skills/executive-charts/references/data_formatting_standards.md)：数值、单位、比例与显示精度。
+- 查阅随包图表视觉建议时读 [生成设计参考](skills/executive-charts/references/design_standards.md)：参考不能覆盖当前产品与设计规则。
+- 调整 UI 重构阶段和待办时读 [UI 整改计划](docs/plans/ui-refactor-plan.md)：方案范围与阶段；当前接入状态以组件清单为准。
 
 ## 修改与检查
+
+- 业务成果先读取当前声明再修改；数据、指标定义、稳定 ID、比较基准、过滤消费者与批注的保留要求按共享交付流程执行。
+- UI 改动从共享 React 维护源码进入；构建只生成 `runtime-ui/dist`，后端资源由 `ui:package` 显式交付，设计资产另行打包。
+- 修改接口时同步工具定义、发现资源和调用方约定；不把返回成功、构建完成或协议检查通过写成目标宿主已验收。
+- 运行前按改动选择必要的局部检查；命令以 `package.json`、`runtime-ui/package.json` 和测试文档为准。当前任务未授权全量测试、UI 测试或浏览器自动化。
+- 纯文档整理只检查内容归属、旧路径引用、Skill 入口和本地链接/锚点，不顺带运行功能测试。
+- 交付说明实际改动、已执行检查和未验证边界；源码、打包资源、安装位置、连接进程及云端部署状态分别确认。
+
+## 文档维护
+
+正文归属和新增条件统一维护在文件管理规则。现行规范原处更新；方案进入 `docs/plans/`，单次证据进入 `docs/records/`。文档路径变化时同步本入口、文档总览、Skill 引用及实际引用它的配置或脚本。

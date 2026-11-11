@@ -2,8 +2,6 @@
 
 `python3 -m dashboard_runtime server` 在一台服务器上同时提供远程 MCP（Streamable HTTP）和看板、分析报告的网页预览。它复用本地 Runtime 的同一套 `Service`、项目存储、Doctor 与前端构建；区别在于长期运行、按项目名隔离存储、用令牌和签名链接控制访问。本地 stdio MCP（`mcp` 命令）和本机编辑器（`serve` 命令）保持不变。
 
-> **当前状态（2026-11-10）**
-> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/ui-refactor-plan.md`。
 
 ## 提供的入口
 
@@ -16,12 +14,13 @@
 | `/` | 默认项目预览入口；跨项目管理通过 API／CLI | 服务器令牌（只保存在当前标签页） |
 | `/files/<令牌>` | 导出文件下载（JSON、CSV、HTML、静态 ZIP） | 24 小时有效的签名链接 |
 | `/health` | 存活检查，返回版本 | 无 |
+| `/s/<shareId>/` 及其资源 | 腾讯云独立只读副本 | 8 位数字密钥与受限会话 |
 
 页面外壳不含业务数据；数据只经由带令牌的接口读取。分享令牌放在 URL 片段中，浏览器不会把片段发送给服务器、代理或 Referer；页面加载后从地址栏移除，只保留在当前标签页的 sessionStorage。
 
 ## 快速开始
 
-服务器依赖只有 `mcp>=1.28,<2`（随附 Starlette 与 uvicorn）；Seaborn 统计图独立于旧 UI，需要另装 `.[statistics]`。
+基础服务器使用 MCP 可选依赖（含 Starlette 与 uvicorn），具体范围以 `pyproject.toml` 为准；腾讯云副本另需 cloud 依赖；Seaborn 统计图独立于旧 UI，需要另装 `.[statistics]`。
 
 本机试用：
 
@@ -95,6 +94,8 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 ## 网页预览与分享
 
+腾讯云独立分享副本见下文“腾讯云在线分享与云端清理”；本节签名链接不创建 COS 副本。
+
 - `dashboard_preview`：除 MCP App 所需文档外，结果附带 `previewUrl` 与 `previewExpiresAt`。不能显示 MCP Apps 的宿主（例如终端中的 Claude Code）把链接交给用户即可。仍按“批次完成后预览一次”的流程调用。
 - `dashboard_share`：`access` 为 `view`（只读）或 `edit`，`expiresInHours` 为 1–8784 小时。
 - `dashboard_share_revoke`：使该看板此前签发的全部链接立即失效。
@@ -110,21 +111,112 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 页面以内容哈希引用 `app.<构建号>.js/css`，设置长期不可变缓存并以 gzip 压缩。响应头包含 CSP（仅允许本站脚本与经哈希固定的启动脚本）、`Referrer-Policy: no-referrer`、`X-Frame-Options: DENY`。
 
-## 边界
+## 签名预览服务的边界
 
-- 访问控制只有服务器令牌与签名链接两层；没有用户账号、角色权限、行级权限或 OAuth。持有服务器令牌即可读写全部项目。
+- 签名预览使用服务器令牌与签名链接；云端独立副本另用下节的数字密钥。没有用户账号、角色权限、行级权限或 OAuth。持有服务器令牌即可读写全部项目。
 - 分享链接是持有即可用的凭据：转发链接等于转发权限。需要撤销时使用 `dashboard_share_revoke`，或更换签名密钥使全部链接失效。
 - 查询能力仍只限运维方配置的只读 SQLite 别名；本地查询限制不是加固的多租户沙箱。
 - 单进程 SQLite 存储适合团队内部规模；多副本部署需要共享同一工作区存储并使用 `--stateless`，未做并发压测。
 - 网页部署包（`dashboard_export_site`）仍是独立的只读静态站点，与本服务器互不依赖，见 [静态部署包](static-deployment.md)。
 
-## 本次验收
+## 历史验收
 
 2026-11-07 在 Linux 容器中验证：官方 MCP Python 客户端经 Streamable HTTP 完成工具列表、创建、越界路径拒绝、预览链接、导出下载与令牌鉴权；Chromium 打开只读与编辑链接，看板与报告图表正常渲染、无脚本或 CSP 错误，伪造令牌显示失效提示，手机宽度无横向溢出。自动测试见 `tests/runtime/test_server.py`。
 
 2026-11-08，`main` 提交 `ae77261` 的 GitHub Actions 运行 40 六个作业全部通过，包含完整 Docker 多阶段构建、以非 root 用户运行镜像、远程 MCP、预览与下载冒烟检查。详细历史见[验收记录](records/2026-11-07-server-layout-kpi.md)。
 
-## 实际部署与客户端验收待办
+## 部署确认
 
 
 真实客户端需提供可访问上述 HTTPS 地址的目标环境，以及对应客户端的远程 MCP 配置入口。按每个目标客户端实际支持的请求头令牌或 URL 令牌方式连接，完成初始化、工具发现、在隔离项目中创建和修改合成看板、打开预览、下载导出、撤销链接与重新连接。Codex、Claude Desktop、Claude Code、claude.ai 的兼容性分别记录，不用官方 Python SDK 的通过结果代替。未实现 OAuth，必须先确认目标客户端支持当前令牌接入方式；只支持 OAuth 的入口不在现有能力内。
+
+
+## 腾讯云在线分享与云端清理
+
+状态：源码已接入；目标 COS、HTTPS 网关与 SCF 定时触发尚未完成云端部署验收。
+
+腾讯云分享保存一份独立、只读的看板或分析报告副本。网页、运行资源、使用中的完整数据集分片和访问控制记录保存在私有 COS。访客通过 HTTPS 网关访问，输入 8 位数字访问密钥后阅读；浏览器不会获得公开 COS 地址。
+
+清理任务由腾讯云 SCF 定时触发执行，不由本地 MCP、用户电脑或网页网关进程执行。删除范围包括该分享副本的对象历史版本、删除标记、密钥哈希与清理任务记录。本地项目原稿和其他分享副本保留。
+
+### MCP 操作
+
+先完成编辑批次，再用最新版本发布：
+
+1. `dashboard_get` 读取草稿与版本。
+2. 有修改时按 `dashboard_edit_begin` → 修改 → `dashboard_edit_finish` 完成检查点。
+3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId` 和 `expectedRevision`。
+4. 将返回的 `url` 和 `accessKey` 分别交给指定读者。
+
+| 参数 | 说明 |
+| --- | --- |
+| `expiration` | `never` 不过期；`7d` 七天后过期，默认值；`30d` 三十天后过期。时间从发布时开始计算 |
+| `accessKey` | 可选，必须是 8 位 ASCII 数字字符串，可包含前导零；省略时随机生成 |
+| `expectedRevision` | 必须同时等于当前草稿和最近已完成检查点的版本，防止分享未完成编辑 |
+
+返回 `shareId`、`url`、`accessKey`、`revision`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。服务只保存加盐哈希，访问密钥不放入 URL、网页数据或日志。
+
+`dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
+
+`dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试，不表示已经删除。清理完成后，该任务从状态列表消失。此操作也适用于不过期分享。
+
+原 `dashboard_share` 和 `dashboard_share_revoke` 继续用于自托管服务的签名预览链接；它们不创建或删除 COS 分享副本。
+
+### 云端组成
+
+| 组成 | 职责 |
+| --- | --- |
+| HTTPS 网关 | 将现有自托管服务器部署在云端；提供 `/s/<shareId>/` 密钥表单、会话和逐文件鉴权。每次请求都检查到期时间 |
+| 私有 COS | 保存独立网页与数据；对象不公开，响应设置 `no-store` |
+| SCF 云函数 | 每分钟扫描清理任务；删除到期、撤销或中断上传的副本；删除失败保留任务并使函数调用失败，后续触发继续重试 |
+
+密钥会话使用 `Secure`、`HttpOnly`、`SameSite=Strict` Cookie。密钥输入有按分享和访客计数的尝试限制。网页资源、Worker 和数据分片均通过网关读取，不能绕过密钥直接访问。
+
+到期即拒绝新的云端读取。SCF 每分钟触发，完成物理删除所需时间由数据量和云端请求决定。清理覆盖当前对象、所有历史版本和删除标记；任何批次删除失败都不能将任务标记为完成。
+
+新发布前会检查 SCF 最近三分钟内是否完成过一次成功清理。没有有效清理状态时返回 `CLOUD_CLEANER_UNAVAILABLE`，不会上传新副本。上传开始前先保存清理任务；中断的上传一小时后由 SCF 回收。发布过程的本地暂存目录位于 `/private/tmp`，上传结束或失败后删除。
+
+### 配置
+
+部署环境使用通用环境变量；SCF 使用执行角色注入的临时凭据。网页中不包含云凭据。
+
+| 环境变量 | 网关/发布进程 | SCF |
+| --- | --- | --- |
+| `CHARTS_PUBLIC_URL` | 必填，已部署网关的 HTTPS 地址，可含路径前缀 | 不需要 |
+| `CHARTS_COS_REGION` | 必填，COS 地域 | 必填，同一地域 |
+| `CHARTS_COS_BUCKET` | 必填，专用于分享的私有存储桶 | 必填，同一存储桶 |
+| `CHARTS_COS_SHARE_PREFIX` | 默认 `charts-shares/`，非空独立前缀 | 必须与发布进程相同 |
+| `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY`、`TENCENTCLOUD_SESSIONTOKEN` | 由运行环境提供；临时凭据需包含 Token | 由 SCF 执行角色自动提供，每次调用重新读取 |
+
+从本仓安装发布进程：`python3 -m pip install '.[mcp,cloud]'`。自托管 Docker 镜像包含 COS SDK。
+
+存储桶必须私有，不设置允许匿名访问的桶策略，也不为分享前缀配置额外复制、备份或 CDN 缓存。发布前检查桶 ACL 和匿名访问策略；本清理程序负责所配置存储桶中的分享对象。桶权限由部署人员配置，程序不修改权限。
+
+### 部署 SCF 定时任务
+
+源码位于 `deploy/tencent-cleaner/`。从项目根目录构建 Linux x86_64 函数包：
+
+```sh
+docker buildx build --platform linux/amd64 \
+  -f deploy/tencent-cleaner/Dockerfile \
+  --output type=local,dest=/private/tmp/charts-cleaner-package .
+```
+
+将生成的 `/private/tmp/charts-cleaner-package/cleaner.zip` 部署为 SCF 事件函数：
+
+- 运行环境：Python 3.10，x86_64；入口：`index.main_handler`。
+- 配置上表中的 COS 地域、桶和前缀。
+- 绑定已有执行角色，权限限于分享前缀：列举当前对象和历史版本、读取清理任务、删除对象及其历史版本、写入 `cleaner-status.json`。函数不创建或扩大角色权限。
+- 添加定时触发器。使用 `deploy/tencent-cleaner/timer.json`，Cron 为 `0 * * * * * *`，每分钟一次，并启用触发器。
+- 开启函数失败告警。部分删除失败时函数抛错，任务继续保留，下一次定时触发重试。
+- 等待首次成功调用，再发布分享。发布工具会检查云函数保存的清理状态。
+
+函数入口要求 `TENCENTCLOUD_RUNENV=SCF`；本地直接执行会拒绝运行。网关和 MCP 中没有清理轮询，也不需要本地进程保持在线。
+
+### 检查边界
+
+后端局部检查覆盖密钥访问、每个文件的鉴权、七天/三十天到期、不过期、主动撤销、物理版本删除、清理失败重试、SCF 环境限制，以及保留原稿和其他副本。
+
+内存存储适配器和本机 HTTP 检查不能替代真实 COS、SCF 定时触发和域名部署验收。上线时须在目标账号验证一次发布、密钥访问、到期删除和重试，并确认云端触发器在本地进程退出后仍执行。
+
+维护时机：服务器配置、鉴权、分享、存储或云端清理方式改变时更新；历史验收结论不替代目标部署确认。
