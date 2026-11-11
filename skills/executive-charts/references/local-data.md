@@ -1,39 +1,42 @@
-# Pure local data for MCP dashboards
+# Local data for MCP dashboards
 
-The existing MCP process queries SQLite in the same process. No HTTP listener, network data engine, cloud connection or extra daemon is required. Full data lives in `data.sqlite3`; `dashboards.sqlite3` stores configurations and their revision history, with immutable content hashes referring to data versions.
+SQLite holds the full data in `data.sqlite3`. `dashboards.sqlite3` stores configurations and revision history with immutable references to data versions.
 
-## Build and preview
+## Attach and inspect data
 
-1. Configure a local SQLite alias in the runtime's operator-owned `--sources` JSON. Each alias declares `engine: "sqlite"` and the existing file's `path`. Tool arguments cannot add arbitrary filesystem access.
-2. Create the dashboard, then call `dataset_attach` with `dashboardId`, `expectedRevision`, `datasetId`, `connection` and `table`. Supply explicit field metadata for dates and booleans. The entire source table is read with a read-only connection and streamed into one immutable version; it is not passed through tool arguments.
-3. Add reviewed metrics and components with `dashboard_patch`. Preset charts and KPIs use their existing codes and bindings; tables use the same dataset. Keep units, precision, ratio numerator/denominator and filter consumers explicit.
-4. Call `dashboard_preview`. The result's `structuredContent.document` has `snapshot.datasetRefs`, an empty `snapshot.datasets`, and `computed` component results. Table results include the current page and the full matching row count. The text block is a summary, not a second artifact.
-5. Use `dashboard_view` for reader-only `filters`, `tableStates` and `granularities`. `tableStates` maps component IDs to `page`, `pageSize`, optional `sortCol`, `sortDir` and `keyword`. Reader changes do not create a revision. Existing explicit filter scopes and ratio recomputation are preserved.
-6. Use `dataset_export` with `componentId` and the active filters to stream all matching table rows to a managed local CSV. Pass displayed column keys, sort and search when exporting the current table view. The result returns the local file path, total rows, bytes and duration; the full CSV is not sent back through MCP.
+Follow [shared delivery](mcp-delivery.md) for project routing, revisions and edit batches.
 
-Large option lists use `dashboard_filter_options` with `filterId`, optional `search`, `offset` and `limit`. The total option universe remains available; the preview only loads the first page. Never interpret the current option page as the full domain.
+1. Read the runtime's configured SQLite connection aliases. Each alias declares `engine: "sqlite"` and an existing file's `path` in the operator-owned `--sources` JSON.
+2. Create or read the dashboard and begin an edit batch. Call `dataset_attach` with `dashboardId`, `expectedRevision`, `datasetId`, `connection` and `table`. Supply explicit field metadata for dates and booleans. The source table streams through a read-only connection into an immutable version.
+3. Inspect fields and row counts with `dashboard_data_inspect`. Add reviewed metrics and components with `dashboard_patch`. Keep units, precision, ratio numerator/denominator and filter consumers explicit.
+4. Inspect calculated values with `dashboard_view`, complete the batch and open `dashboard_preview`. The result's `structuredContent.document` includes `snapshot.datasetRefs` and `computed` component results. Tables return the current page and full matching row count.
 
-## Data and revision invariants
+## Filters and table pages
 
-- A dataset has inline rows or an immutable local reference, never both. Stored configuration revisions use references. Identical data and field contracts share a version across dataset aliases.
-- Formatting belongs to metric/column presentation, not a second display dataset. Bound tables do not persist a duplicate `config.rows`. Unbound tables also store their observations in immutable local versions.
-- A title, layout or filter-default edit reuses existing data versions. Undo restores configuration and its referenced versions; it does not duplicate observations.
-- Metric aggregates share a bounded in-process cache keyed by version, metric definitions, filters, grouping and time grain. New data versions cannot reuse old results accidentally.
-- A high-cardinality aggregate that exceeds result bounds raises an explicit error. No sampling, silent truncation or automatic narrowing of filters occurs. Full matching observations remain exportable as CSV.
-- Statistical components retain their existing 5,000-observation limit and raw-observation validation; the local architecture does not reinterpret them as aggregates.
+Use `dashboard_view` with temporary `filters`, `tableStates` and `granularities`. `tableStates` maps component IDs to `page`, `pageSize`, optional `sortCol`, `sortDir` and `keyword`. Reader changes preserve the saved design revision.
 
-## Snapshot exports and local storage
+Large option lists use `dashboard_filter_options` with `filterId`, optional `search`, `offset` and `limit`. Load additional option pages when the required value is outside the current page.
 
-Small inline artifacts remain supported by the CLI and service. MCP defaults to local result mode; explicit `dataMode: "snapshot"` provides bounded snapshots when the artifact is small and not configured in local mode. It is not a way to embed a million-row dataset.
+Use `dataset_export` with `componentId` and active filters to stream all matching table rows to CSV. Pass displayed column keys, sort and search when exporting the current table view. Download the managed result with `dashboard_export_read` and `format=csv`.
 
-CLI `export <id> --format csv --dataset <datasetId> --output <path>` streams every matching row. Use `--component <tableId>` for a table's filter scope. Bounded JSON/HTML exports explicitly hydrate the snapshot; oversized exports fail with `LOCAL_DATA_REQUIRED` and point to full CSV instead. A standalone component with computed local pages is labelled as a current-page snapshot and disables remote pagination/search/full CSV actions while offline.
+## Data versions and limits
 
-`dashboard_migrate` takes `dashboardId` and `expectedRevision`. It writes a managed backup, then converts the active document and all retained configuration revisions to references without changing business revision numbers. It returns `migration.backupId`. `dashboard_migration_rollback` takes that backup ID and the current expected revision; it restores backed-up content as a new revision, preserving later history. The MCP response remains compact. Backups and old data versions are retained for recovery.
+- Each dataset uses inline rows or an immutable local reference. Reuse returned references across configuration edits and compatible dataset aliases.
+- Store display formatting in metric or column presentation. Bound tables derive rows from their dataset.
+- Title, layout and filter-default changes reuse existing data versions. Restoration uses the selected configuration's references.
+- Aggregates exceeding result bounds return an error. Use filtered aggregates for the visual or export all matching observations as CSV, according to the user's analytical scope.
+- Statistical components accept up to 5,000 raw observations.
 
-Do not migrate or edit a user's source board merely to test performance. Copy its document into an isolated store and read the original database in read-only mode.
+## Snapshots and migration
 
-## Verify and report
+MCP defaults to local result mode. Explicit `dataMode: "snapshot"` supports bounded snapshots for small artifacts outside local mode. Oversized JSON/HTML snapshots return `LOCAL_DATA_REQUIRED`; use full CSV for the observations. Offline component snapshots retain the current computed page.
 
-Use `dashboard_data_inspect` and `document.computed` for source rows, logical data bytes, physical data-file bytes, response bytes, query time and cache hits. Physical SQLite files may grow when indexes are created; do not describe that as data compression. Report source and export row counts and independently recomputed sums and ratios.
+CLI `export <id> --format csv --dataset <datasetId> --output <path>` streams every matching row. Use `--component <tableId>` for a table's filter scope.
 
-Run `tests/runtime/benchmark_local.py --rows 1000000 --output <report.json>` through the project Python entry point. The benchmark records import, preview, filter, aggregate, page, sort, search, export, edit and restore costs.
+When migration is requested, `dashboard_migrate` takes `dashboardId` and `expectedRevision`. It creates a managed backup and converts retained configurations to data references, returning `migration.backupId`. `dashboard_migration_rollback` takes that backup ID and the current revision to restore the content as a new revision.
+
+## Performance investigations
+
+For a requested performance investigation, use an isolated store and read the original source database in read-only mode. Inspect source counts, logical data bytes, physical file sizes, query duration, response size and cache hits with `dashboard_data_inspect` and computed results. Compare independently calculated sums and ratios at the same scope.
+
+The targeted benchmark is `tests/runtime/benchmark_local.py --rows 1000000 --output <report.json>`, run through the project Python entry point. It measures import, preview, filter, aggregate, page, sort, search, export, edit and restore costs.
