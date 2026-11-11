@@ -1,6 +1,6 @@
 # Runtime：架构、配置与接口入口
 
-Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MCP 和网页编辑器提供数据、指标计算、版本与文件导出。看板和报告使用共享 React 应用；视图切换不执行上游 SQL，也不生成业务结论。
+Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MCP 和网页编辑器提供数据、指标计算、版本与文件导出。看板和报告使用共享 React 应用。
 
 ## 模块职责
 
@@ -78,9 +78,9 @@ node /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absol
 
 写操作使用最新 `expectedRevision`，一次 patch 的操作原子提交。项目草稿、检查点、独立批注、恢复及冲突恢复统一由项目存储约定管理；标准交付顺序见 [共享交付流程](../skills/executive-charts/references/mcp-delivery.md)。
 
-`dashboard_get` 读取可编辑草稿，不等于预览当前展示的检查点；实际计算结果通过 `dashboard_view` 取得。检查失败不能报告保存完成。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态，不能盲目重放写入。
+`dashboard_get` 读取可编辑草稿，`dashboard_view` 返回实际计算结果。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态。
 
-预览工具固定名为 `dashboard_preview`，UI 资源 URI 带运行版本与构建标识。宿主决定显示为对话卡片或面板，正常 MCP 连接不等于 MCP App 界面已验收。分块、资源过期和诊断字段见 [传输与诊断](mcp-transport-diagnostics.md)。
+预览工具为 `dashboard_preview`，UI 资源 URI 带运行版本与构建标识。宿主决定显示为对话卡片或面板。分块、资源过期和诊断字段见 [传输与诊断](mcp-transport-diagnostics.md)。
 
 ## 页面元信息与组件声明
 
@@ -88,13 +88,11 @@ node /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absol
 
 组件声明保存稳定 ID、来源、数据集与指标引用、渲染配置和断点布局。预设、完整 ECharts 与自由 HTML/JavaScript 均通过明确声明进入；执行隔离、原生覆盖与绑定限制见 [渲染与覆盖](echarts-options.md)。历史 `kind=chart` 保留兼容读取，新组件遵循当前声明要求。
 
-KPI 内容边界维护在产品规则，形态接口与接入状态维护在组件清单。不能把非 KPI 的 subtitle 规则套到 KPI，也不能从标题推断目标、同比基期或指标公式。
-
 ```sh
 python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
 ```
 
-工作区导入保留原图表、指标卡和表格声明，不把复杂图表替换为普通柱状图或文本。已有快照不会因导入而得到动态筛选能力；历史已丢失字段需要从原资产恢复，不能由 Runtime 推造。
+工作区导入保留原图表、指标卡和表格声明。历史已丢失字段需要从原资产恢复。
 
 ## 数据导入与查询来源
 
@@ -102,9 +100,9 @@ python3 -m dashboard_runtime --root ./boards import-workspace imported --path ./
 python3 -m dashboard_runtime --root ./boards call dataset_import --json-file import.json
 ```
 
-`dataset_import` 明确提供 `rows` 或 `csvText` 其中一种，不能同时提供，也不能都省略。目标数据集存在时替换其数据与元信息。推断得到的数值指标是未复核的默认求和，业务定义、单位和粒度仍需确认。需要保留数字标识或前导零时，用 JSON 字符串明确类型。整份 schema-v2 文档可通过 `import NEW_ID --file artifact.json` 创建新看板。
+`dataset_import` 必须提供 `rows` 或 `csvText` 中的一种。目标数据集存在时替换其数据与元信息。推断得到的数值指标采用默认求和；业务定义、单位和粒度需确认。需要保留数字标识或前导零时，用 JSON 字符串明确类型。整份 schema-v2 文档可通过 `import NEW_ID --file artifact.json` 创建新看板。
 
-SQL 执行只连接运维配置的 SQLite 来源别名；展示其他引擎 SQL 不代表已建立连接。别名配置为：
+SQL 执行只连接运维配置的 SQLite 来源别名。别名配置为：
 
 ```json
 {"analytics":{"engine":"sqlite","path":"/absolute/path/analytics.sqlite3"}}
@@ -131,14 +129,14 @@ python3 -m dashboard_runtime --root ./boards --sources ./sources.json call query
 
 | 交付 | 数据与操作范围 |
 | --- | --- |
-| JSON | 保存配置与不可变本地引用，不等于可移植的全量明细备份 |
+| JSON | 保存配置与不可变本地引用 |
 | HTML | 当前计算视图的只读快照，不连接上游来源 |
 | CSV | 导出全部匹配记录；筛选、排序和列选择在完整结果上执行 |
 | 静态网页 ZIP | 使用中的完整数据集分片及共享应用；格式与离线能力见 [静态部署包](static-deployment.md) |
 | 远程网页与腾讯云副本 | 鉴权、密钥、存储、有效期和 SCF 清理见 [自托管服务器](self-hosted-server.md) |
 
-导出文件使用受管 ID，通过读取工具或远程下载链接交付，不接受任意导出路径。创建文件不意味着已部署；协议通过、目标宿主显示、剪贴板、全屏、下载和云端执行分别确认。
+导出文件使用受管 ID，通过读取工具或远程下载链接交付。
 
-测试层次与授权边界统一见 [测试与 CI](testing.md)。普通维护只运行受影响的局部检查，不从本文复制整套测试命令。OAuth、多用户行级权限、数据仓库连接、企业审批与定时业务刷新不因上述入口存在而自动具备。
+测试层次与授权边界统一见 [测试与 CI](testing.md)。普通维护只运行受影响的局部检查。
 
 维护时机：模块边界、配置入口、发现方式或导入/交付边界改变时更新；组件外观、报告语法、项目存储和单次验收结果在各自负责正文维护。

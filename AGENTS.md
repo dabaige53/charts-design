@@ -24,7 +24,7 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 2. 初次接触项目时读 [README.md](README.md)，了解可用入口与启动方式。
 3. 判断产品目标、能力边界或新增功能时读 [产品上下文](docs/PRODUCT.md)；修改视觉和交互前读 [设计规范](docs/DESIGN.md)。
 4. 新增、移动、合并或删除文件前读 [文件管理](docs/agent/file-management.md)，确定现有负责正文和目标位置。
-5. 按下列任务入口补充阅读；查历史证据时从 [文档总览](docs/README.md) 进入，不把旧轮次要求当成当前规则。
+5. 查历史记录时读 [文档总览](docs/README.md)。
 
 ## 按任务阅读
 
@@ -49,7 +49,6 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 - 修改设计画布或追溯原图形时读 [图表参考](docs/design-system/project/chart-ui.md)：几何、标签、Tooltip 和原始资料。
 - 修改设计组件导出或画布安装资源时读 [产品 React 组件](docs/design-system/project/react-ui.md)：组件映射与独立构建、打包入口。
 - 选择指标卡时读 [指标卡选型](skills/executive-charts/references/kpi-cards.md)：按问题选择形态，保留真实比较基准。
-- 选择布局时读 [布局模板](skills/executive-charts/references/layout_templates.md)：构图建议与显式布局，不把模板作为生成上限。
 - 编写指标说明时读 [指标定义](skills/executive-charts/references/metric-definitions.md)：业务对象、范围、单位、公式和待确认事项。
 - 修改显示格式时读 [数据格式标准](skills/executive-charts/references/data_formatting_standards.md)：数值、单位、比例与显示精度。
 - 查阅随包图表视觉建议时读 [生成设计参考](skills/executive-charts/references/design_standards.md)：参考不能覆盖当前产品与设计规则。
@@ -59,7 +58,6 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 
 - 业务成果先读取当前声明再修改；数据、指标定义、稳定 ID、比较基准、过滤消费者与批注的保留要求按共享交付流程执行。
 - UI 改动从共享 React 维护源码进入；构建只生成 `runtime-ui/dist`，后端资源由 `ui:package` 显式交付，设计资产另行打包。
-- 修改接口时同步工具定义、发现资源和调用方约定；不把返回成功、构建完成或协议检查通过写成目标宿主已验收。
 - 运行前按改动选择必要的局部检查；命令以 `package.json`、`runtime-ui/package.json` 和测试文档为准。当前任务未授权全量测试、UI 测试或浏览器自动化。
 - 纯文档整理只检查内容归属、旧路径引用、Skill 入口和本地链接/锚点，不顺带运行功能测试。
 - 交付说明实际改动、已执行检查和未验证边界；源码、打包资源、安装位置、连接进程及云端部署状态分别确认。

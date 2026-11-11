@@ -14,7 +14,6 @@
 node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 ```
 
-
 每次项目工具调用都传 `projectRoot`，值是报表资产目录的绝对路径，不是 Agent 工作目录。示例：
 
 ```json
@@ -24,7 +23,6 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 相同 `dashboardId` 可存在于不同项目。所有工具，包括 `dashboard_list`、`runtime_info`、分块读取、诊断、编辑、历史和数据导出，都支持该参数。项目路径会规范为绝对真实路径；相对路径和空值被拒绝。首次明确访问新目录时沿用 `ProjectStore` 创建项目资产结构。不提供项目目录枚举、自动发现或跨项目聚合。
 
 每个项目使用固定的 `Service` 和资产目录；运行缓存保存在统一运行目录的 `projects/<项目路径标识>/` 下。不存在“当前项目”，一次调用不会改变下一次调用的项目。传输分块与诊断同样按项目隔离，重启后可用原项目参数继续读取尚未过期的分块。数据源别名继续由启动时的 `--sources` 配置，不允许工具请求另设数据源配置。
-
 
 ### 自托管服务器中的项目
 
@@ -42,7 +40,7 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 `dashboard_get` 读取可编辑草稿；项目预览与刷新读取最近完成的检查点。`dashboard_edit_finish` 和 `dashboard_checkpoint` 检查失败时返回 `DOCTOR_FAILED`，MCP 同时标记 `isError: true`；草稿与批次保留，不生成检查点。调用方检查 Doctor 问题、读取最新草稿并修复，再用最新版本完成。`REVISION_CONFLICT` 要求重新读取并合并当前修改，不能盲目重放写入。
 
-`dashboard_history` 分页读取检查点，默认每页 50 个、最多 100 个；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建或命名当前检查点，也会关闭当前编辑批次，普通 Agent 编辑使用带批次 ID 的 `dashboard_edit_finish`。`published` 仅保护检查点不被自动清理，不代表部署网页或创建分享链接。`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，不随设计恢复。历史文档中的批注变更保存在独立事件记录。
+`dashboard_history` 分页读取检查点，默认每页 50 个、最多 100 个；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建或命名当前检查点，也会关闭当前编辑批次，普通 Agent 编辑使用带批次 ID 的 `dashboard_edit_finish`。`published` 保护检查点免于自动清理。`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，批注变更保存在独立事件记录。
 
 ## 加载
 
@@ -61,7 +59,6 @@ node bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 `loading.preloadFilterIds` 指定需要随结构返回首页选项的筛选器；每项最多100个值，高基数选项继续搜索分页。选项范围不随当前选择收缩，避免改变筛选语义。预加载结果缓存在运行目录 `filter-options/`，键包含字段和关联数据版本，删除后可重建。
 
 页面以看板、数据版本、字段、数据集、搜索词和页号缓存筛选页，并复用进行中的相同请求；缓存最多256页。失败请求不缓存。大响应最多同时读取4个分块，仍校验顺序、完整字节数和JSON；不截断、抽样或丢弃图表数据。选项接口耗时现在可以在 `runtime_diagnostics` 的 `query_complete` 阶段查询。
-
 
 ## 本地数据计算
 

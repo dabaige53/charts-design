@@ -1,6 +1,6 @@
 # charts-design 文档
 
-项目入口与命令见根目录 [README](../README.md)，Agent 的工作顺序见 [AGENTS.md](../AGENTS.md)。本页用于选择负责正文及追溯历史，不重复记录产品状态。新增内容先按 [文件管理](agent/file-management.md) 确定归属。
+项目入口与命令见根目录 [README](../README.md)，Agent 的工作顺序见 [AGENTS.md](../AGENTS.md)。本页用于查找专题文档和历史记录。新增内容先按 [文件管理](agent/file-management.md) 确定归属。
 
 ## 项目准则与设计规范
 
@@ -51,4 +51,4 @@
 - [测试清理](records/test-purge-20261106.md)、[测试清理变基](records/test-purge-rebase-20261108.md)：逐项处置和当次验证结果。
 - [性能原始记录](performance-results.json)、[共享工作区性能结果](records/2026-11-10-polish-performance.json)、[零售截图](images/dynamic-encoding-retail.png)、[虚拟看板截图](images/transfer-prototype-validation.png)：与对应历史记录一起阅读，不替代当前验证。
 
-维护时机：正文职责、位置或方案/记录入口变化时更新。现行正文原处维护；历史材料保留当时事实，新一轮任务不继承旧授权。
+维护时机：正文职责、位置或方案/记录入口变化时更新。

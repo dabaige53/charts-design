@@ -24,7 +24,7 @@ Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原
 
 `runtime-ui/src` 维护 React 组件、应用和宿主适配。`runtime-ui/fixtures` 仅保存设计预览数据，生产构建禁止引用该目录及 `docs`。40 个图表定义维护在 `runtime-ui/src/charts`，不再在构建时提取归档源码。
 
-构建只写 `runtime-ui/dist`；`ui:package` 显式复制应用资源到 `dashboard_runtime/web/dist`，供 MCP、npm 与 Python 包使用；容器在独立 Node 阶段重新构建。`ui:package:design` 单独更新设计系统组件 bundle，画板资源另行维护。不要把构建步骤与设计文档编辑串联。
+构建输出为 `runtime-ui/dist`。`ui:package` 将应用资源交付到 `dashboard_runtime/web/dist`，供 MCP、npm 与 Python 包使用；容器在独立 Node 阶段构建。`ui:package:design` 更新设计系统组件 bundle。
 
 ## 业务资产与临时文件
 
@@ -58,7 +58,7 @@ Skill 的 `SKILL.md`、组件旁使用说明和随包参考材料继续保留原
 | 阶段安排、技术方案与待办 | `docs/plans/` | 对应方案调整；不承载长期规范 |
 | 构建编号、运行环境、当次检查结果与历史事实 | `docs/records/` | 同一轮次证据补全；不反向改写当时事实 |
 
-`AGENTS.md` 负责工作顺序与按任务阅读入口，`docs/README.md` 负责文档分类和历史索引。两者不复制正文中的字段、默认值或整段规则。设计资产中的组件 README、API 索引和画布安装副本随资产维护，不并入项目主文档，也不因数量多而清除。
+`AGENTS.md` 负责工作顺序与按任务阅读入口，`docs/README.md` 负责文档分类和历史索引。设计资产中的组件 README、API 索引和画布安装副本随资产维护。
 
 ### 新增与整理
 

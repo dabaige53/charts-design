@@ -2,7 +2,6 @@
 
 `python3 -m dashboard_runtime server` 在一台服务器上同时提供远程 MCP（Streamable HTTP）和看板、分析报告的网页预览。它复用本地 Runtime 的同一套 `Service`、项目存储、Doctor 与前端构建；区别在于长期运行、按项目名隔离存储、用令牌和签名链接控制访问。本地 stdio MCP（`mcp` 命令）和本机编辑器（`serve` 命令）保持不变。
 
-
 ## 提供的入口
 
 | 路径 | 用途 | 鉴权 |
@@ -91,7 +90,6 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 远程模式隐藏 `dashboard_export_open`（它会在服务器桌面上打开文件）；导出结果改为附带 `downloadUrl`，网页部署包另带 `siteDownloadUrl`。其余工具、操作合同、编辑批次与 Doctor 规则与本地相同，见 [Runtime 说明](dashboard-runtime.md) 与 [项目资产与加载](project-runtime.md)。
 
-
 ## 网页预览与分享
 
 腾讯云独立分享副本见下文“腾讯云在线分享与云端清理”；本节签名链接不创建 COS 副本。
@@ -116,7 +114,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 - 签名预览使用服务器令牌与签名链接；云端独立副本另用下节的数字密钥。没有用户账号、角色权限、行级权限或 OAuth。持有服务器令牌即可读写全部项目。
 - 分享链接是持有即可用的凭据：转发链接等于转发权限。需要撤销时使用 `dashboard_share_revoke`，或更换签名密钥使全部链接失效。
 - 查询能力仍只限运维方配置的只读 SQLite 别名；本地查询限制不是加固的多租户沙箱。
-- 单进程 SQLite 存储适合团队内部规模；多副本部署需要共享同一工作区存储并使用 `--stateless`，未做并发压测。
+- 单进程 SQLite 存储适合团队内部规模，应使用同一主机上的持久磁盘。当前数据库使用 WAL，不能通过网络文件系统共享工作区来支持多主机副本；`--stateless` 只改变 MCP 会话方式，不解决业务数据持久化和多副本协调。部署 CloudBase 云托管前需先适配外部数据库与对象存储，见[云端托管方案](plans/cloud-hosting-and-version-control.md#当前部署目标cloudbase)。
 - 网页部署包（`dashboard_export_site`）仍是独立的只读静态站点，与本服务器互不依赖，见 [静态部署包](static-deployment.md)。
 
 ## 历史验收
@@ -127,9 +125,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 ## 部署确认
 
-
 真实客户端需提供可访问上述 HTTPS 地址的目标环境，以及对应客户端的远程 MCP 配置入口。按每个目标客户端实际支持的请求头令牌或 URL 令牌方式连接，完成初始化、工具发现、在隔离项目中创建和修改合成看板、打开预览、下载导出、撤销链接与重新连接。Codex、Claude Desktop、Claude Code、claude.ai 的兼容性分别记录，不用官方 Python SDK 的通过结果代替。未实现 OAuth，必须先确认目标客户端支持当前令牌接入方式；只支持 OAuth 的入口不在现有能力内。
-
 
 ## 腾讯云在线分享与云端清理
 
@@ -158,7 +154,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 `dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
 
-`dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试，不表示已经删除。清理完成后，该任务从状态列表消失。此操作也适用于不过期分享。
+`dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试。清理完成后，该任务从状态列表消失。此操作也适用于不过期分享。
 
 原 `dashboard_share` 和 `dashboard_share_revoke` 继续用于自托管服务的签名预览链接；它们不创建或删除 COS 分享副本。
 
@@ -190,7 +186,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 从本仓安装发布进程：`python3 -m pip install '.[mcp,cloud]'`。自托管 Docker 镜像包含 COS SDK。
 
-存储桶必须私有，不设置允许匿名访问的桶策略，也不为分享前缀配置额外复制、备份或 CDN 缓存。发布前检查桶 ACL 和匿名访问策略；本清理程序负责所配置存储桶中的分享对象。桶权限由部署人员配置，程序不修改权限。
+存储桶必须私有；禁止匿名访问，分享前缀禁用额外复制、备份和 CDN 缓存。发布前检查桶 ACL 和匿名访问策略。桶权限由部署人员配置；清理程序删除配置存储桶中的分享对象。
 
 ### 部署 SCF 定时任务
 
@@ -217,6 +213,6 @@ docker buildx build --platform linux/amd64 \
 
 后端局部检查覆盖密钥访问、每个文件的鉴权、七天/三十天到期、不过期、主动撤销、物理版本删除、清理失败重试、SCF 环境限制，以及保留原稿和其他副本。
 
-内存存储适配器和本机 HTTP 检查不能替代真实 COS、SCF 定时触发和域名部署验收。上线时须在目标账号验证一次发布、密钥访问、到期删除和重试，并确认云端触发器在本地进程退出后仍执行。
+上线时须在目标账号验证一次发布、密钥访问、到期删除和重试，并确认云端触发器在本地进程退出后仍执行。
 
 维护时机：服务器配置、鉴权、分享、存储或云端清理方式改变时更新；历史验收结论不替代目标部署确认。

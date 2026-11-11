@@ -2,11 +2,29 @@
 
 日期：2026-11-11。状态：产品方案；本文件中的版本中心、正式发布状态和分享密钥轮换尚待实施，不代表已部署。
 
+## 当前部署目标：CloudBase
+
+2026-11-11 起按 CloudBase 云托管推进部署；下文 CVM / Lighthouse 安装方式保留为原方案。当前尚未创建云端服务，也没有可交付的远程 MCP 地址。
+
+已确认现有服务可以作为 Python 容器运行，启动命令为 `python -m dashboard_runtime server`，监听 `0.0.0.0:8000`，存活检查为 `/health`，客户端调用 `/mcp` 并使用 Bearer API Key。部署时明确设置服务端口与 `CHARTS_PORT=8000`，不能只依赖平台的 `PORT` 变量。
+
+进入真实部署前还需完成：
+
+1. 确认国内站或国际站、完整环境 ID 和地域；使用明确的环境 ID 查询云托管开通状态。
+2. 提供具有部署权限的云端身份。CloudBase CLI 的环境凭据变量为 `CLOUDBASE_API_KEY` 与 `CLOUDBASE_ENV_ID`；它们与本服务的 `CHARTS_SERVER_TOKENS`、`CHARTS_SERVER_SECRET` 用途不同，不能互相替代。
+3. 先适配持久化，再发布可保存业务数据的服务。现有草稿、历史和数据依赖本地 SQLite 文件；CloudBase 云托管实例的本地文件不能作为长期存储。`Store` 和传输存储使用 WAL，也不能直接把这些数据库挂到网络文件系统并开启多副本。需要将事务状态接入外部数据库，将独立业务文件接入对象存储；适配范围包含项目数据、版本历史及分享撤销状态。
+4. 配置 HTTPS 对外地址、服务运行密钥与访问入口，再执行云端构建和启动检查。
+5. 验证 API Key 拒绝未授权访问、MCP 初始化与工具发现、隔离项目中的读写，以及实例更换后的数据与历史保留。
+
+COS 与 SCF 的分享、过期清理仍需分别部署和验收；启动 MCP 服务不代表这两项已完成。
+
+部署依据：[CloudBase 官方入口](https://github.com/TencentCloudBase/cloudbase-skills/blob/main/skills/cloudbase/SKILL.md)、其中的 `cloudrun-development` 和 `cloudbase-cli` 指引，以及 [SQLite WAL 限制](https://sqlite.org/wal.html)。
+
 ## 产品入口
 
 MCP、页面编辑器、项目资产和版本历史统一托管在腾讯云。客户端通过 HTTPS 调用远程 MCP，不再依赖用户电脑上的常驻 Python 进程。
 
-首期采用单台 Linux CVM 或 Lighthouse 运行现有 Docker 容器。项目数据库和数据文件挂载持久卷；COS 保存独立分享副本；SCF 执行到期删除。保留当前 SQLite 和项目目录模型，不在首期引入多实例数据库迁移。
+原方案采用单台 Linux CVM 或 Lighthouse 运行现有 Docker 容器。项目数据库和数据文件挂载持久卷；COS 保存独立分享副本；SCF 执行到期删除。该方式保留当前 SQLite 和项目目录模型；切换 CloudBase 时按上节先适配持久化。
 
 | 云端组成 | 内容 |
 | --- | --- |
@@ -88,7 +106,7 @@ API Key 更新采用先同时接受新旧值、更新客户端、再撤销旧值
 5. 分享更新支持原子切换目标版本和授权代次，旧会话立即失效。
 6. 统一 MCP、浏览器编辑器、版本中心与云端分享对状态的称呼和返回结果。
 
-## 云端安装顺序
+## 原 CVM / Lighthouse 安装顺序
 
 1. 确定地域、已有或新建 Linux 实例、HTTPS 域名、私有 COS 桶及 SCF 执行角色。
 2. 将本仓源码或构建镜像部署到实例；使用现有 `deploy/docker-compose.yml` 挂载 `/data` 持久卷。

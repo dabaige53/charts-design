@@ -21,11 +21,11 @@ Choose a preset, native ECharts, or custom HTML/JavaScript route. `chart_recomme
 1. Resolve the project's durable assets and the disposable runtime directory. Keep data references, design checkpoints and annotations in the project. Prefer existing immutable data versions over duplicate copies.
 2. Begin an edit batch, apply draft changes with the latest revision, and finish it. Resolve Doctor errors before automatic display. If checks are explicitly waived, preserve the draft and report the skipped gate; do not label it validated.
 3. After a successful finish, call `dashboard_preview` once with the same projectRoot and dashboardId. Component-scoped `dashboard_view` patches verify actual data; JSON exports preserve canonical state. Build and package the React resources before previewing.
-4. Verify document revisions, component references, dataset integrity, and Doctor check results directly. Record host rendering acceptance separately; this refactor does not run UI tests or browser automation.
+4. Verify document revisions, component references, dataset integrity, and Doctor check results directly. Record host rendering acceptance separately.
 
 Annotations remain independent of design restoration. Preserve their original context when anchors become unavailable.
 
-`dashboard_get` returns the editable draft; project preview/refresh reads the latest completed checkpoint. Failed finish/checkpoint checks return `DOCTOR_FAILED` and MCP `isError: true`; the draft and batch remain. Read the latest draft, fix the Doctor issues, then finish again. On `REVISION_CONFLICT`, reconcile current content before retrying. A checkpoint's `published` flag only protects history from pruning; it does not deploy a site or create a share link.
+`dashboard_get` returns the editable draft; project preview/refresh reads the latest completed checkpoint. Failed finish/checkpoint checks return `DOCTOR_FAILED` and MCP `isError: true`; the draft and batch remain. Read the latest draft, fix the Doctor issues, then finish again. On `REVISION_CONFLICT`, reconcile current content before retrying. A checkpoint's `published` flag protects history from pruning.
 
 Read `tools/list` and `charts://contract` for the same installed, transport-specific definitions and typed operation schemas. `runtime_keepalive`, `runtime_report_error` and local `dashboard_export_open` are App-only; agents read diagnostics and download managed exports instead. Supply exactly one of `rows` or `csvText` to `dataset_import`; connection aliases must come from operator configuration.
 
@@ -33,7 +33,7 @@ Read `tools/list` and `charts://contract` for the same installed, transport-spec
 
 Use request IDs with `runtime_diagnostics`. Distinguish backend query, serialization, chunk transport, client decoding and rendering. Retain the failing response and error position when available. Record version, phase, elapsed time and payload size; keep raw business rows and credentials out of logs.
 
-For a performance claim, compare equivalent data, filters and outputs; record cold/warm cache conditions and repeat alternating baseline/candidate runs. Report median and range, query count, response size and failures. Separate menu-ready, query-complete and rendered-result timings. Identify the actual Python import location as well as the installed entry point: inherited working directories can shadow the installed module. A UI build ID alone does not identify backend code.
+For a performance claim, compare equivalent data, filters and outputs; record cold/warm cache conditions and repeat alternating baseline/candidate runs. Report median and range, query count, response size and failures. Separate menu-ready, query-complete and rendered-result timings. Identify the actual Python import location as well as the installed entry point: inherited working directories can shadow the installed module.
 
 Read the repository's check scripts and CI before adding checks. Attach mechanical regressions to existing automated checks; use visual review for hierarchy and reference fidelity. Bound source searches to the relevant modules, excluding generated bundles and business output.
 
