@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { release, releaseVersion } from '../../bin/release.mjs';
-import { completedGrayRelease, includeSource, matchesRelease, runtimeConfig, taskReady, validateTag } from '../../bin/cloudbase-deploy.mjs';
+import { cloudrunDeployArgs, completedGrayRelease, includeSource, matchesRelease, runtimeConfig, taskReady, validateTag } from '../../bin/cloudbase-deploy.mjs';
 
 // @wu-test type=boundary | scope=releaseVersion | protects=重复降级或非法版本创建发布标签
 test('release version must be a newer stable semantic version', () => {
@@ -77,6 +77,14 @@ test('active tasks block deployment except the exact completed gray version', ()
   assert.equal(taskReady({ ...task, Steps: [{ Name: 'CreateVersion', Status: 'running' }] }, 'service-009'), false);
   assert.equal(taskReady({ Status: 'finished' }), true);
   assert.equal(taskReady(undefined), false);
+});
+
+// @wu-test type=regression | scope=CloudBase CI 发布参数 | protects=CI-42976060980 中已有服务的灰度确认提示使无终端发布中断
+test('full deployment selects the noninteractive CLI path', () => {
+  const args = cloudrunDeployArgs('charts-design-mcp', '/tmp/source', { EXAMPLE: 'value' }, 0, 1);
+  assert.ok(args.includes('--yes'), 'CloudBase CLI must skip its separate gray-release prompt');
+  assert.ok(args.includes('--force'));
+  assert.ok(args.includes('--wait'));
 });
 
 function repository(t) {

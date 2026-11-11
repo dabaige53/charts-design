@@ -55,6 +55,12 @@ export function taskReady(task, completedGrayVersion) {
       || ['finished', 'notInvolve'].includes(step.Status)));
 }
 
+export function cloudrunDeployArgs(service, stage, runtimeEnv, minNum, maxNum) {
+  return ['cloudrun', 'deploy', '--service-name', service, '--source', stage,
+    '--port', '8000', '--open-access-types', 'PUBLIC', '--env-params', JSON.stringify(runtimeEnv),
+    '--min-num', String(minNum), '--max-num', String(maxNum), '--force', '--wait', '--yes'];
+}
+
 function parseOutput(output) {
   // CLI progress precedes its JSON result. Never print raw service configuration.
   for (let index = 0; index < output.length; index++) {
@@ -98,9 +104,9 @@ export async function deploy() {
       clearInterval(heartbeat); clearTimeout(timeout);
       reject(new Error('无法启动 CloudBase CLI。'));
     });
-    child.on('close', code => {
+    child.on('close', (code, signal) => {
       clearInterval(heartbeat); clearTimeout(timeout);
-      if (code !== 0) return reject(new Error(`CloudBase ${args.slice(0, 2).join(' ')} 失败（退出码 ${code}）；请查看云端构建记录。`));
+      if (code !== 0) return reject(new Error(`CloudBase ${args.slice(0, 2).join(' ')} 失败（${signal ? `信号 ${signal}` : `退出码 ${code}`}）；请查看云端构建记录。`));
       try { accept(json ? parseOutput(output) : undefined); } catch (error) { reject(error); }
     });
     child.stdin.on('error', () => { /* Process exit supplies the failure above. */ });
@@ -152,10 +158,8 @@ export async function deploy() {
     const dockerfile = readFileSync(join(root, 'deploy/Dockerfile'), 'utf8');
     writeFileSync(join(stage, 'Dockerfile'), `${dockerfile}\nENV CHARTS_RELEASE_VERSION=${pkg.version} CHARTS_RELEASE_COMMIT=${commit}\n`);
     console.log(`提交 ${tag}（${commit.slice(0, 12)}），${files.length} 个源文件；云端构建并发布。`);
-    await cli(['cloudrun', 'deploy', ...serviceArgs, '--source', stage,
-      '--port', '8000', '--open-access-types', 'PUBLIC', '--env-params', JSON.stringify(runtimeEnv),
-      '--min-num', String(detail.ServerConfig.MinNum), '--max-num', String(detail.ServerConfig.MaxNum),
-      '--force', '--wait']);
+    await cli(cloudrunDeployArgs(env.CLOUDBASE_SERVICE, stage, runtimeEnv,
+      detail.ServerConfig.MinNum, detail.ServerConfig.MaxNum));
     const healthUrl = new URL('health', `${endpoint.href.replace(/\/$/, '')}/`);
     for (let attempt = 0; attempt < 18; attempt++) {
       try {
