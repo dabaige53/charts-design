@@ -128,8 +128,8 @@ class CloudData(LocalData):
                     checked = LocalData.import_rows(self, rows(), fields)
                     require(checked == ref, 'Transferred data checksum mismatch', 'DATA_CONFLICT')
                     progress('saving', 0, (count + CHUNK_ROWS - 1) // CHUNK_ROWS)
-                    saved_ref = self.import_rows(LocalData.iter_rows(self, checked), fields,
-                                                 lambda part: progress('saving', part, (count + CHUNK_ROWS - 1) // CHUNK_ROWS))
+                    saved_ref = self._persist_cached(
+                        checked, lambda part: progress('saving', part, (count + CHUNK_ROWS - 1) // CHUNK_ROWS))
                     require(saved_ref == ref, 'Remote data metadata differs', 'DATA_CONFLICT')
                 progress('cleanup', 0, 1)
                 self.transfer_cleanup(upload)
@@ -162,6 +162,9 @@ class CloudData(LocalData):
 
     def import_rows(self, rows, fields, progress=None):
         ref = super().import_rows(rows, fields)
+        return self._persist_cached(ref, progress)
+
+    def _persist_cached(self, ref, progress=None):
         if self.database.call('data_get', self.project, version=ref['version']) is not None:
             return ref
         chunk, part = [], 0
