@@ -135,3 +135,54 @@ def test_transfer_rejects_wrong_content_and_can_restart(tmp_path):
     assert wait(restarted, upload, ref)['state'] == 'complete'
     assert not storage.objects
 
+
+
+# @wu-test type=integration | scope=CloudProjectStore.create | protects=迁移批注时丢失原始版本和筛选上下文
+def test_cloud_import_keeps_annotation_context(tmp_path):
+    from dashboard_runtime.cloud_project import CloudProjectStore
+    from dashboard_runtime.model import new_document
+    from dashboard_runtime.project import DEFAULTS
+
+    class Database:
+        def call(self, action, project, **args):
+            if action == 'ensure':
+                return DEFAULTS
+            if action == 'create':
+                return args['document']
+            raise AssertionError(action)
+
+    doc = new_document('board', 'Synthetic')
+    original = {'designRevision': 42, 'dataVersions': {}, 'filters': []}
+    doc['manifest']['annotations'] = [{'id': 'note', 'componentId': None, 'text': 'Synthetic note',
+                                      'createdAt': '2026-11-11', 'context': original}]
+    store = CloudProjectStore(tmp_path / 'fixture', tmp_path / 'cache', Database())
+    result = store.create('board', 'Synthetic', doc)
+    assert result['manifest']['annotations'][0]['context'] == original
+
+
+
+# @wu-test type=integration | scope=transfer-project MCP response | protects=页面配置超过传输上限时丢失内容或误判已有页面
+def test_client_reassembles_large_mcp_response():
+    import asyncio
+    import base64
+    import json
+    import runpy
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    call = runpy.run_path(str(Path(__file__).parents[2] / 'bin' / 'transfer-project.py'))['call_tool']
+    raw = json.dumps({'document': {'title': 'x' * 50000}}).encode()
+    encoded = base64.b64encode(raw).decode()
+    pages = [encoded[i:i+24000] for i in range(0, len(encoded), 24000)]
+    class Session:
+        async def call_tool(self, tool, args):
+            assert args['projectRoot'] == 'fixture'
+            if tool == 'dashboard_get':
+                result = {'transport': {'encoding': 'base64-json-v1', 'requestId': 'token',
+                                        'chunks': len(pages), 'bytes': len(raw)}}
+            else:
+                assert tool == 'runtime_result_chunk'
+                result = {'requestId': 'token', 'index': args['index'], 'data': pages[args['index']]}
+            return SimpleNamespace(isError=False, structuredContent=result, content=[])
+    assert asyncio.run(call(Session(), 'fixture', 'dashboard_get', {}))['document']['title'] == 'x' * 50000
+

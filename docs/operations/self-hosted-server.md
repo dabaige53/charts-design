@@ -260,12 +260,16 @@ docker buildx build --platform linux/amd64 \
 
 `bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具顺序传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
 
-通过项目 1Password 入口注入 `CHARTS_MCP_URL`（HTTPS MCP 地址）和 `CHARTS_SERVER_TOKEN`（该服务令牌），不要将值写入命令、文件或仓库。使用专门的状态文件记录可续传 ID，不包含令牌：
+通过项目 1Password 入口注入 `CHARTS_SERVER_TOKENS`，脚本使用列表中的第一个令牌；`CHARTS_MCP_URL` 是 HTTPS MCP 地址。不要将令牌值写入命令、文件或仓库。项目入口会切换到登记的项目目录，运行前切换到需要使用的源码目录。使用专门的状态文件记录可续传 ID，不包含令牌：
 
 ```sh
-project-run <项目目录名> -- bun run python -- bin/transfer-project.py \
-  --manifest /absolute/path/online-migration-manifest.json \
-  --project <远程项目名> --state /private/tmp/charts-transfer-state.json
+project-run <项目目录名> -- /bin/sh -c '
+  cd /absolute/path/charts-design
+  export CHARTS_MCP_URL="$(gh variable get CLOUDBASE_SERVICE_URL)/mcp"
+  bun run python -- bin/transfer-project.py \
+    --manifest /absolute/path/online-migration-manifest.json \
+    --project <远程项目名> --state /private/tmp/charts-transfer-state.json
+'
 ```
 
 迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过，再运行 `dashboard_version_publish`；之后才能通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。

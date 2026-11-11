@@ -2,6 +2,7 @@
 """Transfer explicitly selected current dashboard datasets to a cloud MCP server."""
 import argparse
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -92,16 +93,45 @@ def normalized(doc):
     for key in ('dataVersion', 'computed', 'progressive', 'loading'):
         doc.pop(key, None)
     doc['revision'] = 1
-    for note in doc['manifest'].get('annotations', []):
-        note.pop('context', None)
     return doc
+
+
+async def call_tool(session, project, name, arguments):
+    async def request(tool, payload):
+        result = await session.call_tool(tool, {'projectRoot': project, **payload})
+        if result.isError or not isinstance(result.structuredContent, dict):
+            raise RuntimeError(f'{tool}: {result.structuredContent or result.content}')
+        value = result.structuredContent
+        if value.get('ok') is False:
+            raise RuntimeError(f'{tool}: {value.get("error")}')
+        return value
+    result = await request(name, arguments)
+    transport = result.get('transport')
+    if transport:
+        if transport.get('encoding') != 'base64-json-v1':
+            raise ValueError('Unknown MCP response encoding')
+        chunks = []
+        for index in range(transport['chunks']):
+            page = await request('runtime_result_chunk', {'requestId': transport['requestId'], 'index': index})
+            if page.get('requestId') != transport['requestId'] or page.get('index') != index:
+                raise ValueError('MCP response chunk does not match the request')
+            chunks.append(page['data'])
+        raw = base64.b64decode(''.join(chunks), validate=True)
+        if len(raw) != transport['bytes']:
+            raise ValueError('MCP response byte count does not match')
+        result = json.loads(raw)
+        if not isinstance(result, dict) or result.get('ok') is False:
+            raise RuntimeError(f'{name}: invalid or failed MCP response')
+    return result
 
 
 async def run(args):
     manifest = json.loads(Path(args.manifest).read_text())
     root, docs, refs = read_project(manifest)
     endpoint = os.environ['CHARTS_MCP_URL']
-    token = os.environ['CHARTS_SERVER_TOKEN']
+    token = os.environ['CHARTS_SERVER_TOKENS'].split(',')[0].strip()
+    if not token:
+        raise ValueError('CHARTS_SERVER_TOKENS must contain a server token')
     if urlparse(endpoint).scheme != 'https':
         raise ValueError('CHARTS_MCP_URL must use HTTPS')
     state_path = Path(args.state)
@@ -123,13 +153,7 @@ async def run(args):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 async def call(name, arguments):
-                    result = await session.call_tool(name, {'projectRoot': args.project, **arguments})
-                    if result.isError or not isinstance(result.structuredContent, dict):
-                        raise RuntimeError(f'{name}: {result.structuredContent}')
-                    result = result.structuredContent
-                    if result.get('ok') is False:
-                        raise RuntimeError(f'{name}: {result.get("error")}')
-                    return result
+                    return await call_tool(session, args.project, name, arguments)
                 existing = {item['id'] for item in (await call('dashboard_list', {}))['dashboards']}
                 for board in existing & docs.keys():
                     actual = (await call('dashboard_get', {'dashboardId': board}))['document']
