@@ -13,8 +13,8 @@ type StructureDiagram = {
 };
 
 /** Saved geometry, never reconstructed from chart type or filtered values. */
-export function SemanticStructure({ diagram, metrics }: {
-  diagram?: StructureDiagram; metrics: Config;
+export function SemanticStructure({ diagram, metrics, compact = false }: {
+  diagram?: StructureDiagram; metrics: Config; compact?: boolean;
 }) {
   const [selected, setSelected] = useState("");
   const definitionId = useId();
@@ -31,6 +31,7 @@ export function SemanticStructure({ diagram, metrics }: {
     const metric = item.metricId ? metrics[item.metricId] : undefined;
     return { ...item,
       name: item.metricId ? metric?.label || metric?.name || item.metricId : item.name,
+      unit: item.metricId ? metric?.unit || (metric?.format === "percent" ? "%" : "") : "",
       description: item.metricId
         ? metric ? metric.definition || metric.businessDefinition || metric.description || "尚未提供业务定义。" : "关联指标已不存在，请更新结构说明。"
         : item.description || "尚未提供业务定义。",
@@ -38,7 +39,8 @@ export function SemanticStructure({ diagram, metrics }: {
   });
   const active = parts.find((part) => part.id === selected);
   return <div className="space-y-3">
-    <div className="semantic-diagram" style={{ aspectRatio: `${width} / ${height}` }}>
+    <div className="semantic-diagram-container">
+    <div className={`semantic-diagram${compact ? " semantic-diagram-compact" : ""}`} style={{ aspectRatio: `${width} / ${height}` }}>
       <img src={image} alt="图表结构示意" className="absolute inset-0 h-full w-full" />
       <svg viewBox={diagram.viewBox.join(" ")} className="absolute inset-0 pointer-events-none" aria-hidden="true">
         {parts.map((part) => {
@@ -58,8 +60,9 @@ export function SemanticStructure({ diagram, metrics }: {
         style={{ position: "absolute", left: `${part.label[0] / width * 100}%`, top: `${part.label[1] / height * 100}%`,
           transform: `translate(${part.align === "left" ? "0" : part.align === "right" ? "-100%" : "-50%"}, -50%)`,
           maxWidth: "26%", textAlign: part.align || "center" }}>
-        {part.name}
+        {part.name}{part.unit && <span className="semantic-callout-unit"> {part.unit}</span>}
       </button>)}
+    </div>
     </div>
     <div id={definitionId} aria-live="polite" aria-atomic="true">
       {active && <aside key={active.id} className="semantic-definition rounded-lg bg-muted/50 p-4 text-xs">

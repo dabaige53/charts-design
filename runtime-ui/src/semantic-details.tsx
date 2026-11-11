@@ -15,6 +15,35 @@ const fieldTypes: Record<string, string> = {
   date: "日期", string: "文本", number: "数值", boolean: "是／否",
 };
 
+function comparableMetric(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(comparableMetric);
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => [key, comparableMetric(item)]));
+  return value;
+}
+
+function distinctMetricIds(ids: string[], component: Config, metrics: Config): string[] {
+  const measures: Config = component.binding?.measures || {};
+  const comparisons = Object.values(component.binding?.comparisons || {}) as Config[];
+  const baselines = new Set(comparisons.map((comparison) => comparison.baseline));
+  const currents = new Set(comparisons.map((comparison) => comparison.current));
+  const signature = (metric: Config) => {
+    const { field, numerator, denominator, ...description } = metric;
+    return JSON.stringify(comparableMetric(description));
+  };
+  const redundant = new Set<string>();
+  for (const comparison of comparisons) {
+    const baseline = measures[comparison.baseline];
+    const current = measures[comparison.current];
+    if (!baseline || !current || baseline === current || !metrics[baseline] || !metrics[current]) continue;
+    if (Object.entries(measures).some(([target, id]) =>
+      id === baseline && (!baselines.has(target) || currents.has(target)))) continue;
+    if (signature(metrics[baseline]) === signature(metrics[current])) redundant.add(baseline);
+  }
+  return ids.filter((id) => !redundant.has(id));
+}
+
 function calculation(metric: Config, fields: Config) {
   if (metric.formula || metric.calculation) return metric.formula || metric.calculation;
   const label = (field: string) => fields[field]?.label || field;
@@ -56,8 +85,8 @@ function MetricDefinition({ metric, fields, scope, period }: {
   const unit = metric.unit || (percent ? "%" : "未配置单位");
   return <details className="semantic-metric" open>
     <summary>
-      <h4>{metric.label || metric.name || metric.id || "未命名指标"}</h4>
-      <span className="flex items-center gap-2 text-muted-foreground">{unit}<ChevronDown className="size-3.5" /></span>
+      <h4>{metric.label || metric.name || metric.id || "未命名指标"}<span className="semantic-metric-unit">（{unit}）</span></h4>
+      <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
     </summary>
     <dl className="semantic-metric-fields">
       <div className="semantic-wide"><dt>业务定义</dt><dd>
@@ -70,7 +99,7 @@ function MetricDefinition({ metric, fields, scope, period }: {
         {!scope.length && <span className="semantic-tag">当前数据集 · 未附加筛选</span>}
         {metric.scope && <span className="semantic-tag">{String(metric.scope)}</span>}
       </dd></div>
-      <div className="semantic-wide"><dt>计算公式</dt><dd className="semantic-formula">
+      <div><dt>计算公式</dt><dd className="semantic-formula">
         {metric.aggregation === "ratio" && !metric.formula && !metric.calculation
           ? <span className="inline-flex flex-col text-center">
             <span className="border-b border-muted-foreground px-3 py-1">{fieldLabel(metric.numerator)}合计</span>
@@ -78,7 +107,7 @@ function MetricDefinition({ metric, fields, scope, period }: {
           </span>
           : formula || "尚未提供计算方式"}
       </dd></div>
-      <div className="semantic-wide"><dt>汇总方式</dt><dd className="flex flex-wrap items-center gap-2">
+      <div><dt>汇总方式</dt><dd className="flex flex-wrap items-center gap-2">
         {ratio ? <><span>{metric.aggregation === "entity_ratio" ? "按实体汇总并计数" : "分子、分母分别求和"}</span><ArrowRight className="size-3.5 text-muted-foreground" /><span>相除</span></>
           : aggregations[metric.aggregation] || metric.aggregation || "未配置"}
       </dd></div>
@@ -125,10 +154,10 @@ export function SemanticDetails({
   const sourceId = dataset.sourceId || component.sourceId;
   const source = sources[sourceId];
   const scope = filterScope(document, filters, componentId);
-  const metricIds = [...new Set([
+  const metricIds = distinctMetricIds([...new Set([
     ...(component.measures || []),
     ...Object.values(component.binding?.measures || {}),
-  ])] as string[];
+  ])] as string[], component, document.manifest.metrics);
   const bound = Object.fromEntries(metricIds
     .filter((id) => document.manifest.metrics[id])
     .map((id) => [id, document.manifest.metrics[id]]));
@@ -182,7 +211,7 @@ export function SemanticDetails({
       )}
       <section id={`${prefix}-structure`} className="semantic-section">
         <h3>图表结构</h3>
-        <SemanticStructure diagram={presentation.structureDiagram} metrics={document.manifest.metrics} />
+        <SemanticStructure diagram={presentation.structureDiagram} metrics={document.manifest.metrics} compact={component.family === "kpi"} />
       </section>
       {shownMetrics.length > 0 && (
         <section id={`${prefix}-metrics`} className="semantic-section">
@@ -271,10 +300,7 @@ function DetailData({ fields, onReadData, sectionId }: {
   const keys = Object.keys(fields).length ? Object.keys(fields) : Object.keys(result?.rows?.[0] || {});
   return (
     <section id={sectionId} className="semantic-section" aria-label="明细数据" aria-busy={loading}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h3>明细数据</h3>
-        <span className="text-xs text-muted-foreground">最多 10 行</span>
-      </div>
+      <h3>明细数据</h3>
       {error ? (
         <RecoveryAlert title="明细数据未能加载" message={error} onRetry={() => setAttempt((count) => count + 1)} busy={loading} />
       ) : (
@@ -295,7 +321,6 @@ function DetailData({ fields, onReadData, sectionId }: {
               )) : <TableRow><TableCell colSpan={Math.max(1, keys.length)} className="py-6 text-center text-xs text-muted-foreground">{loading ? "正在读取明细数据…" : "当前筛选范围暂无数据"}</TableCell></TableRow>}
             </TableBody>
           </Table>
-          {result && <p className="mt-2 text-xs text-muted-foreground">展示 {result.rows?.length ?? 0} 行，当前筛选共 {Number(result.totalRows ?? 0).toLocaleString()} 行</p>}
         </div>
       )}
     </section>
