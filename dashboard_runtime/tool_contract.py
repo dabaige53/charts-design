@@ -174,7 +174,7 @@ TOOLS = {
     'dataset_transfer_finish': ('Start or resume background verification and durable import. Poll dataset_transfer_status; do not create dashboard references before complete. Successful completion removes the COS staging prefix.', schema({
         'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
     }, ('uploadId', 'ref'))),
-    'dataset_transfer_status': ('Check durable completion of a transfer. If unknown after a server restart, call dataset_transfer_finish again; if failed, correct the error and resume.', schema({
+    'dataset_transfer_status': ('Check durable completion and running phase (reading, saving or cleanup) with completed and total chunk counts. If unknown after a server restart, call dataset_transfer_finish again; if failed, correct the error and resume.', schema({
         'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
     }, ('uploadId', 'ref'))),
     'dataset_transfer_cleanup': ('Remove only this transfer staging prefix and all object versions; do not call while uploading or finalizing.', schema({

@@ -280,3 +280,5 @@ project-run <项目目录名> -- /bin/sh -c '
 ```
 
 迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过，再运行 `dashboard_version_publish`；之后才能通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。
+
+合并时，`dataset_transfer_status` 的 `phase` 标明读取暂存分块、保存数据库分块或清理；`completed` 和 `total` 对应当前阶段。脚本会记录已完整暂存的版本，恢复时不再发送这些数据行。使用旧版脚本时，只有在已确认某个版本全部分块均已暂存的情况下，才在恢复命令中加 `--resume-staged <完整数据版本号>`；缺块时合并报错，不会创建不完整的数据版本。

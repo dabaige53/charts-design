@@ -10,6 +10,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 import sys
+import time
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -142,6 +143,9 @@ async def run(args):
             raise ValueError('State file belongs to a different source or destination')
     else:
         state = {'identity': identity, 'uploads': {}, 'created': []}
+    staged = state.setdefault('staged', [])
+    if args.resume_staged and (args.resume_staged not in refs or args.resume_staged not in state['uploads']):
+        raise ValueError('The requested staged version must exist in both manifest and state file')
     def save():
         temporary = state_path.with_name(state_path.name + '.tmp')
         fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -163,19 +167,31 @@ async def run(args):
                     upload = state['uploads'].setdefault(version, secrets.token_hex(32))
                     save()
                     print(f'Transferring {version[:12]}: {ref["rowCount"]} rows', flush=True)
-                    for part, rows in enumerate(batches(root, ref)):
-                        result = await call('dataset_transfer_chunk', {'uploadId': upload, 'ref': ref, 'part': part, 'rows': rows})
-                        if result['complete']:
-                            break
-                        if (part + 1) % 50 == 0:
-                            print(f'  {min((part + 1) * 250, ref["rowCount"])} rows staged', flush=True)
+                    if version not in staged and version != args.resume_staged:
+                        for part, rows in enumerate(batches(root, ref)):
+                            result = await call('dataset_transfer_chunk', {'uploadId': upload, 'ref': ref, 'part': part, 'rows': rows})
+                            if result['complete']:
+                                break
+                            if (part + 1) % 50 == 0:
+                                print(f'  {min((part + 1) * 250, ref["rowCount"])} rows staged', flush=True)
+                        staged.append(version)
+                        save()
+                    else:
+                        print('  Resuming staged data without resending rows', flush=True)
+                        if version not in staged:
+                            staged.append(version)
+                            save()
                     result = await call('dataset_transfer_finish', {'uploadId': upload, 'ref': ref})
+                    last_progress = 0.0
                     while result['state'] != 'complete':
                         if result['state'] == 'failed':
                             raise RuntimeError(f'Transfer failed: {result.get("code")}')
                         if result['state'] in ('unknown', 'cleanup_required'):
                             result = await call('dataset_transfer_finish', {'uploadId': upload, 'ref': ref})
                         else:
+                            if result.get('phase') and time.monotonic() - last_progress >= 20:
+                                print(f'  {result["phase"]}: {result["completed"]}/{result["total"]} chunks', flush=True)
+                                last_progress = time.monotonic()
                             await asyncio.sleep(2)
                             result = await call('dataset_transfer_status', {'uploadId': upload, 'ref': ref})
                 for board, doc in docs.items():
@@ -192,6 +208,7 @@ def main():
     parser.add_argument('--manifest', required=True)
     parser.add_argument('--project', required=True)
     parser.add_argument('--state', required=True, help='Private resumable state file')
+    parser.add_argument('--resume-staged', help='One existing data version already fully staged by an older client')
     args = parser.parse_args()
     try:
         asyncio.run(run(args))

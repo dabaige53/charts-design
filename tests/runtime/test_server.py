@@ -280,22 +280,29 @@ def test_viewer_api_refuses_oversized_bodies_before_reading(tmp_path):
 
 # @wu-test type=boundary | scope=多页面签名分享 | protects=分享页面被遗漏或未选页面可访问或撤销后仍可访问
 def test_multi_page_share_scope_and_revocation(tmp_path):
+    from typing import cast
+
     server = RemoteServer(settings(tmp_path))
     service = server.projects.service('sales')
     for board in ('first', 'second', 'private'):
         service.call('dashboard_create', {'dashboardId': board, 'title': board})
     result = server.profile.call('dashboard_share', {'dashboardId': 'first', 'dashboardIds': ['second']}, service)
+    assert result is not None
     token = result['url'].split('#token=')[1]
     principal = server.principal(token, 'sales')
     assert principal is not None
-    assert {item['id'] for item in server.call_viewer('sales', 'dashboard_list', {}, principal)['dashboards']} == {'first', 'second'}
-    assert server.call_viewer('sales', 'dashboard_get', {'dashboardId': 'second'}, principal)['document']['id'] == 'second'
+    dashboards = cast(list[dict], server.call_viewer('sales', 'dashboard_list', {}, principal)['dashboards'])
+    assert {item['id'] for item in dashboards} == {'first', 'second'}
+    document = cast(dict, server.call_viewer('sales', 'dashboard_get', {'dashboardId': 'second'}, principal)['document'])
+    assert document['id'] == 'second'
     with pytest.raises(DashboardError) as error:
         server.call_viewer('sales', 'dashboard_get', {'dashboardId': 'private'}, principal)
     assert error.value.code == 'FORBIDDEN'
+    edit_principal = server.principal(server.links.share('sales', 'first', 'edit', dashboards=['second'])['url'].split('#token=')[1], 'sales')
+    assert edit_principal is not None
     with pytest.raises(DashboardError) as error:
         server.call_viewer('sales', 'dashboard_share_publish', {'dashboardId': 'first', 'pages': [{'dashboardId': 'private'}]},
-                           server.principal(server.links.share('sales', 'first', 'edit', dashboards=['second'])['url'].split('#token=')[1], 'sales'))
+                           edit_principal)
     assert error.value.code == 'FORBIDDEN'
     server.state.revoke('sales', 'second')
     assert server.principal(token, 'sales') is None

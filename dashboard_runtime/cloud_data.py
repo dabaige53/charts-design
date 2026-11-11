@@ -9,6 +9,8 @@ import threading
 import re
 import json
 import gzip
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 
 from .local_data import LocalData
 from .model import json_bytes, require
@@ -91,25 +93,45 @@ class CloudData(LocalData):
             if current and current['state'] == 'running':
                 require(current['ref'] == ref, 'Upload already in use', 'DATA_CONFLICT')
                 return {'state': 'running'}
-            self.transfers[upload] = {'state': 'running', 'ref': ref}
+            self.transfers[upload] = {'state': 'running', 'ref': ref, 'phase': 'reading',
+                                      'completed': 0, 'total': (count + TRANSFER_ROWS - 1) // TRANSFER_ROWS}
+
+        def progress(phase, completed, total):
+            with self.transfer_lock:
+                self.transfers[upload].update(phase=phase, completed=completed, total=total)
 
         def finish():
             try:
                 def rows():
-                    for part in range((count + TRANSFER_ROWS - 1) // TRANSFER_ROWS):
-                        raw = self._transfer_storage().get(self._transfer_prefix(upload) + str(part))
-                        chunk = json.loads(gzip.decompress(raw)) if raw is not None else None
-                        expected = min(TRANSFER_ROWS, count - part * TRANSFER_ROWS)
-                        require(isinstance(chunk, list) and len(chunk) == expected,
-                                'A transfer chunk is missing', 'DATA_INCOMPLETE')
-                        yield from chunk
+                    total = (count + TRANSFER_ROWS - 1) // TRANSFER_ROWS
+                    storage = self._transfer_storage()
+                    prefix = self._transfer_prefix(upload)
+                    with ThreadPoolExecutor(max_workers=4) as executor:
+                        pending = deque()
+                        next_part = 0
+                        while pending or next_part < total:
+                            while next_part < total and len(pending) < 4:
+                                pending.append((next_part, executor.submit(storage.get, prefix + str(next_part))))
+                                next_part += 1
+                            part, future = pending.popleft()
+                            raw = future.result()
+                            chunk = json.loads(gzip.decompress(raw)) if raw is not None else None
+                            expected = min(TRANSFER_ROWS, count - part * TRANSFER_ROWS)
+                            require(isinstance(chunk, list) and len(chunk) == expected,
+                                    'A transfer chunk is missing', 'DATA_INCOMPLETE')
+                            assert isinstance(chunk, list)
+                            progress('reading', part + 1, total)
+                            yield from chunk
                 fields = {key: ref['fields'][key] for key in ref['fieldOrder']}
                 # LocalData uses a staging table; serialize transfers and cache restores.
                 with self.restore_lock:
                     checked = LocalData.import_rows(self, rows(), fields)
                     require(checked == ref, 'Transferred data checksum mismatch', 'DATA_CONFLICT')
-                    saved_ref = self.import_rows(LocalData.iter_rows(self, checked), fields)
+                    progress('saving', 0, (count + CHUNK_ROWS - 1) // CHUNK_ROWS)
+                    saved_ref = self.import_rows(LocalData.iter_rows(self, checked), fields,
+                                                 lambda part: progress('saving', part, (count + CHUNK_ROWS - 1) // CHUNK_ROWS))
                     require(saved_ref == ref, 'Remote data metadata differs', 'DATA_CONFLICT')
+                progress('cleanup', 0, 1)
                 self.transfer_cleanup(upload)
                 result = {'state': 'complete', 'ref': ref}
             except Exception as error:
@@ -130,7 +152,7 @@ class CloudData(LocalData):
             with self.transfer_lock:
                 state = self.transfers.get(upload)
             if state and state['state'] == 'running':
-                return {'state': 'running'}
+                return {key: value for key, value in state.items() if key != 'ref'}
             if state and state['state'] == 'complete':
                 return {'state': 'complete', 'ref': saved}
             return {'state': 'cleanup_required', 'ref': saved}
@@ -138,7 +160,7 @@ class CloudData(LocalData):
             state = self.transfers.get(upload, {'state': 'unknown'})
             return {key: value for key, value in state.items() if key != 'ref'}
 
-    def import_rows(self, rows, fields):
+    def import_rows(self, rows, fields, progress=None):
         ref = super().import_rows(rows, fields)
         if self.database.call('data_get', self.project, version=ref['version']) is not None:
             return ref
@@ -149,9 +171,13 @@ class CloudData(LocalData):
             if len(chunk) == CHUNK_ROWS:
                 self.database.call('data_chunk_put', self.project, version=ref['version'], part=part, rows=chunk)
                 part += 1
+                if progress:
+                    progress(part)
                 chunk = []
         if chunk:
             self.database.call('data_chunk_put', self.project, version=ref['version'], part=part, rows=chunk)
+            if progress:
+                progress(part + 1)
         saved = self.database.call('data_finish', self.project, metadata=ref)
         require(saved == ref, 'Remote data metadata differs from this version', 'DATA_CONFLICT')
         return ref

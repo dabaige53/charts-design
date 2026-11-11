@@ -53,13 +53,14 @@ def wait(data, upload, ref):
 
 
 # @wu-test type=integration | scope=CloudData transfer | protects=重传重复数据或分块缺失时发布不完整版本
-def test_transfer_resume_verification_and_cleanup(tmp_path):
+def test_transfer_resume_verification_and_cleanup(tmp_path, monkeypatch):
     fields = {'value': {'type': 'number'}, 'label': {'type': 'string'}}
     rows = [{'value': i, 'label': str(i)} for i in range(503)]
     source = LocalData(tmp_path / 'source')
     ref = source.import_rows(rows, fields)
     data = CloudData(tmp_path / 'remote', MemoryDatabase(), 'fixture')
-    data.transfer_storage = MemoryStorage()
+    storage = MemoryStorage()
+    monkeypatch.setattr(data, 'transfer_storage', storage)
     upload = 'a' * 64
     data.transfer_chunk(upload, ref, 0, rows[:250])
     data.transfer_chunk(upload, ref, 0, rows[:250])
@@ -72,7 +73,7 @@ def test_transfer_resume_verification_and_cleanup(tmp_path):
     data.transfer_chunk(upload, ref, 2, rows[500:])
     data.transfer_finish(upload, ref)
     assert wait(data, upload, ref)['state'] == 'complete'
-    assert not data.transfer_storage.objects
+    assert not storage.objects
     assert data.describe(ref['version']) == ref
     assert list(data.iter_rows(ref)) == rows
 
@@ -116,12 +117,12 @@ def test_manifest_retains_components_and_excludes_unselected_data(tmp_path):
 
 
 # @wu-test type=boundary | scope=CloudData transfer checksum | protects=分块内容损坏时错误数据被登记为已完成版本
-def test_transfer_rejects_wrong_content_and_can_restart(tmp_path):
+def test_transfer_rejects_wrong_content_and_can_restart(tmp_path, monkeypatch):
     fields = {'value': {'type': 'number'}}
     ref = LocalData(tmp_path / 'source').import_rows([{'value': 1}], fields)
     database, storage = MemoryDatabase(), MemoryStorage()
     data = CloudData(tmp_path / 'cache', database, 'fixture')
-    data.transfer_storage = storage
+    monkeypatch.setattr(data, 'transfer_storage', storage)
     upload = 'b' * 64
     data.transfer_chunk(upload, ref, 0, [{'value': 2}])
     data.transfer_finish(upload, ref)
@@ -130,7 +131,7 @@ def test_transfer_rejects_wrong_content_and_can_restart(tmp_path):
     data.transfer_cleanup(upload)
     data.transfer_chunk(upload, ref, 0, [{'value': 1}])
     restarted = CloudData(tmp_path / 'other-cache', database, 'fixture')
-    restarted.transfer_storage = storage
+    monkeypatch.setattr(restarted, 'transfer_storage', storage)
     assert restarted.transfer_status(upload, ref)['state'] == 'unknown'
     restarted.transfer_finish(upload, ref)
     assert wait(restarted, upload, ref)['state'] == 'complete'
@@ -186,4 +187,88 @@ def test_client_reassembles_large_mcp_response():
                 result = {'requestId': 'token', 'index': args['index'], 'data': pages[args['index']]}
             return SimpleNamespace(isError=False, structuredContent=result, content=[])
     assert asyncio.run(call(Session(), 'fixture', 'dashboard_get', {}))['document']['title'] == 'x' * 50000
+
+
+
+# @wu-test type=integration | scope=CloudData transfer progress | protects=合并期间无法区分暂存读取和持久化进度
+def test_transfer_reports_reading_progress(tmp_path, monkeypatch):
+    import threading
+
+    fields = {'value': {'type': 'number'}}
+    ref = LocalData(tmp_path / 'source').import_rows([{'value': 1}], fields)
+    started, release = threading.Event(), threading.Event()
+    class BlockingStorage(MemoryStorage):
+        def get(self, key):
+            started.set()
+            assert release.wait(5)
+            return super().get(key)
+
+    storage = BlockingStorage()
+    data = CloudData(tmp_path / 'remote', MemoryDatabase(), 'fixture')
+    monkeypatch.setattr(data, 'transfer_storage', storage)
+    upload = 'c' * 64
+    # Populate before the blocking reader is enabled.
+    MemoryStorage.put(storage, data._transfer_prefix(upload) + '0', __import__('gzip').compress(b'[{"value":1}]'), 'application/gzip')
+    data.transfer_finish(upload, ref)
+    try:
+        assert started.wait(5)
+        status = data.transfer_status(upload, ref)
+        assert (status['state'], status['phase'], status['completed'], status['total']) == ('running', 'reading', 0, 1)
+        assert 'ref' not in status
+    finally:
+        release.set()
+    assert wait(data, upload, ref)['state'] == 'complete'
+
+
+
+# @wu-test type=integration | scope=transfer-project resume | protects=服务重启后重新发送已经完整暂存的数据行
+def test_client_resumes_staged_version_without_rows(tmp_path, monkeypatch):
+    import asyncio
+    from contextlib import asynccontextmanager
+    import hashlib
+    import json
+    from pathlib import Path
+    import runpy
+    from types import SimpleNamespace
+
+    run = runpy.run_path(str(Path(__file__).parents[2] / 'bin' / 'transfer-project.py'))['run']
+    namespace = run.__globals__
+    version = 'd' * 64
+    root = tmp_path / 'source'
+    endpoint = 'https://example.test/mcp'
+    state_path = tmp_path / 'state.json'
+    identity = hashlib.sha256((endpoint + '\0fixture\0' + str(root)).encode()).hexdigest()
+    state_path.write_text(json.dumps({'identity': identity, 'uploads': {version: 'e' * 64}, 'created': []}))
+    manifest_path = tmp_path / 'manifest.json'
+    manifest_path.write_text('{}')
+    monkeypatch.setenv('CHARTS_MCP_URL', endpoint)
+    monkeypatch.setenv('CHARTS_SERVER_TOKENS', 'synthetic-token')
+    monkeypatch.setitem(namespace, 'read_project', lambda _: (root, {}, {version: {'rowCount': 1}}))
+    def forbidden_batches(*_):
+        raise AssertionError('Already staged rows must not be read or sent')
+    monkeypatch.setitem(namespace, 'batches', forbidden_batches)
+    class Http:
+        def __init__(self, **_): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_): pass
+    class Session:
+        def __init__(self, *_): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_): pass
+        async def initialize(self): pass
+    @asynccontextmanager
+    async def stream(*_, **__):
+        yield None, None, None
+    calls = []
+    async def call(_session, _project, tool, _args):
+        calls.append(tool)
+        return {'dashboards': []} if tool == 'dashboard_list' else {'state': 'complete'}
+    monkeypatch.setitem(namespace, 'httpx', SimpleNamespace(AsyncClient=Http))
+    monkeypatch.setitem(namespace, 'ClientSession', Session)
+    monkeypatch.setitem(namespace, 'streamable_http_client', stream)
+    monkeypatch.setitem(namespace, 'call_tool', call)
+    args = SimpleNamespace(manifest=str(manifest_path), project='fixture', state=str(state_path), resume_staged=version)
+    asyncio.run(run(args))
+    assert calls == ['dashboard_list', 'dataset_transfer_finish']
+    assert json.loads(state_path.read_text())['staged'] == [version]
 
