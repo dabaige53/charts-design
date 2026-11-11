@@ -3850,7 +3850,7 @@
   scroll-margin-top: 72px;
 }
 .semantic-section {
-  padding: 24px 0;
+  padding: 24px 0 20px;
   border-bottom: 1px solid var(--border);
 }
 .semantic-section:last-child {
@@ -3858,9 +3858,11 @@
   padding-bottom: 0;
 }
 .semantic-section h3 {
-  margin: 0 0 16px;
+  margin: 0 0 12px;
+  color: var(--foreground);
   font-size: 14px;
   font-weight: 600;
+  line-height: 1.4;
 }
 .semantic-details dt,
 .semantic-details dd {
@@ -3930,7 +3932,7 @@
   text-align: left;
   font-size: 12px;
   line-height: 1.5;
-  background: var(--background);
+  background: transparent;
   overflow-wrap: anywhere;
 }
 .semantic-callout:hover {
@@ -3940,6 +3942,13 @@
   border-color: var(--border);
   background: var(--muted);
   font-weight: 600;
+}
+.semantic-diagram-container {
+  border-radius: 8px;
+  background: var(--muted);
+  @supports (color: color-mix(in lab, red, red)) {
+    background: color-mix(in oklch, var(--muted) 55%, var(--background));
+  }
 }
 .semantic-diagram {
   position: relative;
