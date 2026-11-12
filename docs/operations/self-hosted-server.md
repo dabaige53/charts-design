@@ -104,6 +104,8 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 `dashboard_preview` 在支持 MCP Apps 的宿主中打开已保存检查点；需要浏览器链接时使用 `dashboard_share`。
 
+MCP 和服务程序升级遵循[产品兼容约束](../agent/PRODUCT.md#capabilities-and-constraints)，沿用原项目、版本历史和全部既有分享地址。部署升级保留原访问域名、路由、签名配置、分享记录与 COS 副本；不得通过重新签发或替换分享完成升级。独立分享仍展示原发布副本，原有效期和撤销规则继续生效。升级检查见[本地 MCP 更新](local-mcp-update.md#升级兼容要求)。
+
 - `dashboard_share`：`access` 为 `view`（只读）或 `edit`，`expiresInHours` 为 1–8784 小时。
 - `dashboard_share_revoke`：使该看板此前签发的全部链接立即失效。
 - 命令行：`bun bin/python-runtime.js -m dashboard_runtime share <项目> <看板> --workspace ... --public-url ... [--access edit] [--hours 24]`，只需能读取签名密钥。
@@ -198,6 +200,8 @@ bun run release -- 1.2.1
 `dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
 
 `dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；多页面分享替换时保留页面范围，并使用各页面当前正式发布版本。其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
+
+该操作会改变地址，仅用于明确要求替换分享的业务操作，不属于 MCP 升级流程。需要保留原分享地址时，不调用此操作。
 
 `dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试。清理完成后，该任务从状态列表消失。此操作也适用于不过期分享。
 
