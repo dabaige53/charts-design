@@ -1,10 +1,16 @@
 """The same compiled React UI is served by this project's MCP and local preview."""
+import base64
 import json
 from pathlib import Path
 from .model import DashboardError
 
 DIST = Path(__file__).parent / 'web' / 'dist'
 MIME_TYPE = 'text/html;profile=mcp-app'
+FAVICON_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+               '<rect x="2" y="2" width="60" height="60" rx="14" fill="#1016bf"/>'
+               '<path d="M15 45 32 34 49 19" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'
+               '<g fill="#fff"><circle cx="15" cy="45" r="5"/><circle cx="32" cy="34" r="5"/><circle cx="49" cy="19" r="5"/></g></svg>')
+FAVICON_LINK = '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,' + base64.b64encode(FAVICON_SVG.encode()).decode() + '"' + '>'
 
 
 def ui_build_id():
@@ -31,14 +37,14 @@ def render_html(mode='web', document=None, legacy=None, idle_timeout: float = 60
     script = (DIST / 'app.js').read_text().replace('</script', '<\\/script')
     return ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Charts Design</title><style>' + css + '</style></head>'
+            '<title>Charts Design</title>' + FAVICON_LINK + '<style>' + css + '</style></head>'
             '<body><div id="root"></div><script>window.__chartsBoot=' + boot
             + ';</script><script>' + script + '</script></body></html>')
 
 
 def bundle_assets():
     require_preview()
-    return {'app.js': (DIST / 'app.js').read_bytes(), 'app.css': (DIST / 'app.css').read_bytes()}
+    return {name: (DIST / name).read_bytes() for name in ('app.js', 'app.css', 'static-worker.js')}
 
 
 def export_document(document):

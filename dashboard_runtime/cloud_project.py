@@ -25,7 +25,41 @@ class CloudProjectStore(Store):
         self.project = self.project_root.name
         self.database = database or CloudDatabase()
         self.config = self.database.call('ensure', self.project, config=DEFAULTS)
-        self.data = CloudData(self.runtime_root / 'data-cache', self.database, self.project)
+        from .cloud_assets import CloudAssets
+        self.assets = CloudAssets(self.project)
+        self.cos_enabled = self.config.get('storageFormat') == 'cos-v1'
+        self.data = CloudData(self.runtime_root / 'data-cache', self.database, self.project,
+                              self.assets, self.cos_enabled)
+        self.data.partition_fields = self.config.get('storage', {}).get('partitionFields', [])
+        from .local_view import LocalView
+        self.prepared_views = LocalView(self.data)
+
+    def _encode(self, doc, previous=None):
+        if not self.cos_enabled:
+            return doc
+        from .statistical import statistical_artifacts
+        changed = None
+        if previous and previous.get('computed'):
+            old, new = previous['manifest'], doc['manifest']
+            same_inputs = all(old.get(key) == new.get(key) for key in ('metrics', 'datasets', 'filters')) and all(
+                previous['snapshot'].get(key) == doc['snapshot'].get(key) for key in ('datasetRefs', 'componentDataRefs'))
+            if same_inputs:
+                changed = [key for key, component in new['components'].items() if component != old['components'].get(key)]
+        prepared = self.prepared_views.prepare(doc, component_ids=changed, include_filter_options=False)
+        computed = prepared['computed']
+        if previous is not None and changed is not None:
+            for group in ('components', 'tables', 'grouped'):
+                computed[group] = {**{key: value for key, value in previous['computed'].get(group, {}).items()
+                                     if key in doc['manifest']['components'] and key not in changed},
+                                   **computed[group]}
+        doc = {**doc, 'computed': computed,
+               'statisticalArtifacts': statistical_artifacts(self.statistical_document(doc))}
+        return self.assets.save_document(doc)
+
+    def _decode(self, doc):
+        if doc and 'cosObject' in doc:
+            self.cos_enabled = self.data.cos_enabled = True
+        return self.assets.hydrate_document(doc)
 
     def connect(self):
         raise DashboardError('UNSUPPORTED_OPERATION', 'Cloud projects use PostgreSQL transactions')
@@ -43,14 +77,17 @@ class CloudProjectStore(Store):
         doc = self.compact(doc)
         notes = doc['manifest'].setdefault('annotations', [])
         self._note_context(doc, notes, [], preserve_incoming=document is not None)
-        return self.database.call('create', self.project, board=board_id, document=doc, at=utcnow())
+        return self._decode(self.database.call('create', self.project, board=board_id,
+                                              document=self._encode(doc), at=utcnow()))
 
     def get(self, board_id, hydrate=True):
         identifier(board_id)
-        return self.database.call('get', self.project, board=board_id)
+        return self._decode(self.database.call('get', self.project, board=board_id))
 
     def readable(self, board):
-        return self.database.call('readable', self.project, board=board)
+        doc = self.database.call('readable', self.project, board=board)
+        require(doc is not None, '暂无已保存版本', 'NO_SAVED_VERSION')
+        return self._decode(doc)
 
     def display_revision(self, board):
         return self.readable(board)['revision']
@@ -83,7 +120,8 @@ class CloudProjectStore(Store):
                     'Independent annotation saves may only replace annotations')
             require(previous_notes == expected_annotations, 'Reload annotations', 'ANNOTATION_CONFLICT')
         if restore_revision is not None:
-            doc = self.database.call('revision_get', self.project, board=board_id, revision=restore_revision)
+            from .versions import Versions
+            doc = Versions(self).read(board_id, restore_revision)
             doc['manifest']['annotations'] = copy.deepcopy(previous_notes)
             if use_current_data:
                 doc['snapshot'] = copy.deepcopy(current['snapshot'])
@@ -95,14 +133,15 @@ class CloudProjectStore(Store):
                 doc['manifest']['annotations'] = copy.deepcopy(previous_notes)
         doc['revision'] = expected_revision
         doc = self.compact(doc)
-        if doc == current:
+        comparable = {key: value for key, value in current.items() if key != 'computed'}
+        if doc == comparable:
             return current
         if expected_annotations is None:
             doc['revision'] += 1
         self._note_context(doc, doc['manifest'].get('annotations', []), previous_notes)
-        return self.database.call('commit', self.project, board=board_id, expected=expected_revision,
-                                  document=doc, previousNotes=previous_notes, at=utcnow(),
-                                  restore=restore_revision is not None, revision=restore_revision)
+        return self._decode(self.database.call('commit', self.project, board=board_id, expected=expected_revision,
+                                  document=self._encode(doc, current), previousNotes=previous_notes, at=utcnow(),
+                                  restore=restore_revision is not None, revision=restore_revision))
 
     def begin(self, board, expected):
         return self.database.call('begin', self.project, board=board, expected=expected, batch=uuid.uuid4().hex)
@@ -129,7 +168,7 @@ class CloudProjectStore(Store):
         for revision in (first, second):
             current = self.get(board)
             docs.append(current if current['revision'] == revision else
-                        self.database.call('revision_get', self.project, board=board, revision=revision))
+                        self._decode(self.database.call('revision_get', self.project, board=board, revision=revision)))
         from .semantic_diff import semantic_diff
         lines = [json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2).splitlines() for doc in docs]
         return {'diff': '\n'.join(difflib.unified_diff(*lines, fromfile=str(first), tofile=str(second))),

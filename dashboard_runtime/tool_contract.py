@@ -23,8 +23,8 @@ BOARD = {
 }
 EXPECTED = described(INT, 'Latest revision: document.revision from dashboard_get/full results, or top-level revision from an MCP write summary. On REVISION_CONFLICT read dashboard_get and reconcile changes before retrying.')
 TARGET = {**BOARD, 'componentId': described(ID, 'Existing component key from document.manifest.components, not its display title.')}
-PUBLISHED = described({'type': 'boolean', 'default': False}, 'Protect this checkpoint from automatic history pruning. This is a retention marker; it does not deploy a website or create a share link.')
-NAME = described(STR, 'Optional checkpoint label. A non-empty name protects the checkpoint from automatic pruning.')
+PUBLISHED = described({'type': 'boolean', 'default': False}, 'Legacy retention marker. Saved content is immutable, but explicit confirmed deletion is allowed. Does not deploy a website or create a share link.')
+NAME = described(STR, 'Optional checkpoint label. Naming a version does not prevent explicit confirmed deletion.')
 common = common_declarations()
 FILTER = common['filterSchema']
 FILTER['description'] = 'Complete filter declaration. values=[] clears its condition; include explicit componentIds. Read existing definitions from dashboard_get.'
@@ -143,6 +143,8 @@ READ_ONLY = {
     'runtime_diagnostics', 'dashboard_export_read', 'dashboard_doctor', 'dashboard_history_diff',
     'dashboard_share_status',
     'dashboard_version_status', 'dashboard_version_get',
+    'dashboard_version_delete_status',
+    'dashboard_version_query',
     'dataset_transfer_status',
     'dataset_storage_inventory',
 }
@@ -156,6 +158,7 @@ DESTRUCTIVE = {
     'dashboard_share_replace',
     'dashboard_version_publish',
     'dashboard_version_delete',
+    'dashboard_version_delete_retry',
     'dataset_transfer_cleanup',
 }
 
@@ -377,6 +380,11 @@ TOOLS = {
     'dashboard_version_get': ('Read one saved or previously published version without changing the draft or publication. Returns version, including immutable dataset references; use for historical inspection.', schema({
         **BOARD, 'revision': described(INT, 'Saved revision from dashboard_history or a release revision from dashboard_version_status.'),
     }, ('dashboardId', 'revision'))),
+    'dashboard_version_query': ('Read or export data pinned to a saved version without replacing the draft. Used by historical previews before COS migration; returns bounded views, options or detail pages.', schema({
+        **BOARD, 'revision': INT,
+        'operation': {'enum': ['view', 'options', 'details', 'semantic', 'export']},
+        'request': {'type': 'object'},
+    }, ('dashboardId', 'revision', 'operation'))),
     'dashboard_version_publish': ('Make one saved version the current formal publication and append a release record. Requires the latest draft expectedRevision to reject stale actions. Repeating the current publication does not append a duplicate. Preserves the draft and existing independent shares; explicitly create or update a share afterward.', schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'revision': described(INT, 'Saved revision to publish; may be an older version for a release rollback.'),
@@ -386,9 +394,19 @@ TOOLS = {
         'revision': described(INT, 'Existing checkpoint from dashboard_history to label.'),
         'name': NAME, 'published': PUBLISHED,
     }, ('dashboardId', 'expectedRevision', 'revision'))),
-    'dashboard_version_delete': ('Delete one historical checkpoint after explicit confirmation. The latest saved checkpoint and all published versions are retained; data versions and shares are not deleted. Requires the current draft revision.', schema({
-        **BOARD, 'expectedRevision': EXPECTED,
-        'revision': described(INT, 'Historical checkpoint revision to delete.'),
+    'dashboard_version_delete_preview': ('Inspect the exact impact of deleting any saved version, including frozen and published versions. Returns a confirmation token, associated shares to revoke, exclusive files to delete and references that retain shared data. Does not delete content.', schema({
+        **BOARD, 'expectedRevision': EXPECTED, 'revision': INT,
     }, ('dashboardId', 'expectedRevision', 'revision'))),
+    'dashboard_version_delete_status': ('Read a persistent version deletion task. Completion means physical cleanup finished; failed tasks retain retry details.', schema({
+        **BOARD, 'jobId': STR,
+    }, ('dashboardId', 'jobId'))),
+    'dashboard_version_delete_retry': ('Retry only the already-confirmed scope of a version deletion task. Does not expand its deletion scope.', schema({
+        **BOARD, 'jobId': STR,
+    }, ('dashboardId', 'jobId'))),
+    'dashboard_version_delete': ('Execute the exact impact confirmed from dashboard_version_delete_preview. Revokes associated shares and physically deletes exclusive COS objects and PostgreSQL payloads. Shared data and the current draft remain. A changed project requires a fresh preview.', schema({
+        **BOARD, 'expectedRevision': EXPECTED,
+        'revision': described(INT, 'Saved version to delete, including latest or published versions.'),
+        'confirmation': described(STR, 'Token from the user-reviewed deletion preview.'),
+    }, ('dashboardId', 'expectedRevision', 'revision', 'confirmation'))),
     'dashboard_export_site': ('Create a managed ZIP containing an independent static React site and used immutable dataset shards. Project mode exports the latest completed checkpoint; legacy storage exports the current document. Does not deploy, share or complete an edit batch. Returns export metadata; download with dashboard_export_read(format=zip). Static sites have no live backend.', schema(BOARD, ('dashboardId',))),
 }

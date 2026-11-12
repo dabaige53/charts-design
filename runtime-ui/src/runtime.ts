@@ -71,6 +71,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
         const component = doc.manifest.components[id];
         return component && component.kind !== "text" &&
           (component.kind !== "legacy" || component.binding) &&
+          !loaded.current.has(id) &&
           !pending.current.has(id);
       });
       if (!keys.length) return Promise.resolve();
@@ -182,6 +183,10 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
       pending.current.clear();
       versions.current.clear();
       loaded.current.clear();
+      if (!preserveView && doc.storageFormat === "cos-v1") {
+        for (const id of [...Object.keys(doc.computed?.components || {}), ...Object.keys(doc.computed?.grouped || {})])
+          loaded.current.add(id);
+      }
       setLoading([]);
       setError("");
       setErrors({});

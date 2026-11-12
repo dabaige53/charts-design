@@ -9,7 +9,7 @@ RUN uv export --locked --no-dev --extra cloud --no-emit-project --format require
  && uv pip install --python /usr/local/bin/python --target /package --require-hashes -r /build/requirements.txt
 WORKDIR /package
 COPY deploy/tencent-cleaner/index.py /package/index.py
-COPY dashboard_runtime/__init__.py dashboard_runtime/model.py dashboard_runtime/cloud_storage.py dashboard_runtime/cloud_shares.py dashboard_runtime/cloud_credentials.py /package/dashboard_runtime/
+COPY dashboard_runtime/__init__.py dashboard_runtime/model.py dashboard_runtime/cloud_storage.py dashboard_runtime/cloud_shares.py dashboard_runtime/cloud_credentials.py dashboard_runtime/cloud_database.py dashboard_runtime/cloud_assets.py dashboard_runtime/cloud_files.py /package/dashboard_runtime/
 RUN python -c 'import pathlib,zipfile; output=zipfile.ZipFile("/cleaner.zip","w",zipfile.ZIP_DEFLATED); [output.write(path,path.relative_to("/package")) for path in pathlib.Path("/package").rglob("*") if path.is_file() and "__pycache__" not in path.parts]; output.close()'
 FROM scratch
 COPY --from=package /cleaner.zip /cleaner.zip

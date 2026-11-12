@@ -74,6 +74,7 @@ export function StaticSite() {
           if (name === "runtime_info")
             return { dashboardRevision: current.revision };
           if (name === "dashboard_view") return query.query(args);
+          if (name === "component_data") return query.query({ ...args, detail: true });
           if (name === "dashboard_filter_options")
             return query.query({ ...args, filters: [] });
           if (name === "semantic_inspect") {

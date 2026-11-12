@@ -48,6 +48,7 @@ class ProjectStore(Store):
         revision=self.display_revision(board)
         with self.connect() as db:
             row=db.execute('SELECT document FROM revisions WHERE board_id=? AND revision=?',(board,revision)).fetchone()
+            require(row is not None, '暂无已保存版本', 'NO_SAVED_VERSION')
             doc=json.loads(row[0])
             doc['manifest']['annotations']=self._notes(db,board)
             return doc
@@ -125,7 +126,11 @@ class ProjectStore(Store):
                         '批注已被其他页面更新，请重试以保留最新批注。', 'ANNOTATION_CONFLICT')
             if restore_revision is not None:
                 saved = db.execute('SELECT document FROM revisions WHERE board_id=? AND revision=?', (board_id, restore_revision)).fetchone()
-                require(saved is not None, 'Checkpoint not found')
+                if saved is None and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='releases'").fetchone():
+                    saved = db.execute('SELECT document FROM releases WHERE board_id=? AND revision=? ORDER BY id DESC LIMIT 1',
+                                       (board_id, restore_revision)).fetchone()
+                if saved is None:
+                    raise DashboardError('INVALID_DOCUMENT', 'Checkpoint not found')
                 doc = json.loads(saved[0])
                 doc['manifest']['annotations'] = copy.deepcopy(current['manifest']['annotations'])
                 if use_current_data:
@@ -173,8 +178,6 @@ class ProjectStore(Store):
             if name or published:
                 db.execute('INSERT OR REPLACE INTO checkpoint_meta VALUES(?,?,?,?)', (board, expected, name, int(published)))
             db.execute('DELETE FROM batches WHERE board_id=?', (board,))
-            obsolete = list(db.execute('SELECT r.revision FROM revisions r LEFT JOIN checkpoint_meta m ON r.board_id=m.board_id AND r.revision=m.revision WHERE r.board_id=? AND coalesce(m.name,\'\')=\'\' AND coalesce(m.published,0)=0 ORDER BY r.revision DESC LIMIT -1 OFFSET ?', (board, self.config['history']['keepCheckpoints'])))
-            db.executemany('DELETE FROM revisions WHERE board_id=? AND revision=?', [(board, r[0]) for r in obsolete])
         self._files(board)
         return {'dashboardId': board, 'revision': expected, 'name': name, 'published': published}
 

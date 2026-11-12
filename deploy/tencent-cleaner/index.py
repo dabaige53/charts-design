@@ -13,6 +13,12 @@ def main_handler(event, context):
         raise RuntimeError('This cleanup handler must run in Tencent SCF')
     storage = CosShareStorage.from_environment()
     result = cleanup_due(storage)
+    from dashboard_runtime.cloud_database import cloud_enabled
+    if cloud_enabled() or os.environ.get('CLOUDBASE_API_KEY'):
+        from dashboard_runtime.cloud_assets import cleanup_asset_jobs
+        assets = cleanup_asset_jobs()
+        result['removed'] += assets['removed']
+        result['failed'].extend(assets['failed'])
     if result['failed']:
         print({'removed': result['removed'], 'failed': result['failed']})
         raise RuntimeError('Cloud share cleanup failed; jobs retained for retry')

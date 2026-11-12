@@ -1,7 +1,7 @@
-"""Durable PostgreSQL datasets with rebuildable SQLite query caches.
+"""Cloud datasets with PostgreSQL metadata and immutable SQLite query files.
 
-Query semantics remain identical to local mode. PostgreSQL owns metadata and
-ordered immutable row chunks; a cache miss rebuilds only the requested version.
+Migrated projects download the COS query file. Legacy projects retain ordered
+PostgreSQL chunks until their explicit migration completes.
 """
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ import json
 import gzip
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from typing import cast
 
+from .cloud_assets import CloudAssets
 from .local_data import LocalData
 from .model import json_bytes, require
 
@@ -20,8 +22,10 @@ TRANSFER_ROWS = 250
 
 
 class CloudData(LocalData):
-    def __init__(self, root, database, project):
+    def __init__(self, root, database, project, assets: CloudAssets | None = None, cos_enabled=False):
         self.database, self.project = database, project
+        self.assets, self.cos_enabled = assets, cos_enabled
+        self.partition_fields: list[str] = []
         self.restore_lock = threading.RLock()
         self.transfer_lock = threading.Lock()
         self.transfers = {}
@@ -165,6 +169,11 @@ class CloudData(LocalData):
         return self._persist_cached(ref, progress)
 
     def _persist_cached(self, ref, progress=None):
+        if self.cos_enabled:
+            cast(CloudAssets, self.assets).save_dataset(self, ref)
+            if progress:
+                progress((ref['rowCount'] + CHUNK_ROWS - 1) // CHUNK_ROWS)
+            return ref
         if self.database.call('data_get', self.project, version=ref['version']) is not None:
             return ref
         chunk, part = [], 0
@@ -197,9 +206,13 @@ class CloudData(LocalData):
         version = ref.get('version') if isinstance(ref, dict) else None
         require(isinstance(version, str) and re.fullmatch('[0-9a-f]{64}', version),
                 'Invalid data version')
+        if self.cos_enabled:
+            return self._cos_version(db, ref)
         if db.execute('SELECT 1 FROM versions WHERE version=?', (version,)).fetchone():
             return super()._version(db, ref)
         with self.restore_lock:
+            if db.execute('SELECT 1 FROM versions WHERE version=?', (version,)).fetchone():
+                return super()._version(db, ref)
             metadata = self.database.call('data_get', self.project, version=version)
             require(metadata is not None, 'Unknown data version', 'NOT_FOUND')
 
@@ -213,3 +226,31 @@ class CloudData(LocalData):
             restored = super().import_rows(rows(), fields)
             require(restored == metadata, 'Remote dataset checksum mismatch', 'DATA_CONFLICT')
         return super()._version(db, ref)
+
+    def _cos_version(self, db, ref):
+        import uuid
+        version = ref['version']
+        assets = cast(CloudAssets, self.assets)
+        obj = assets.call('object_get', version=version)
+        require(obj is not None, 'Data version is unavailable', 'ASSET_UNAVAILABLE')
+        require(obj['descriptor'].get('queryFormat') == 1, 'Unsupported query file format', 'DATA_CONFLICT')
+        # A new object generation gets a new cache file even for identical data.
+        alias = 'v_' + obj['id']
+        if alias not in {row[1] for row in db.execute('PRAGMA database_list')}:
+            target = self.root / (obj['id'] + '.sqlite3')
+            with self.restore_lock:
+                if not target.exists():
+                    raw = assets.read_file(obj, 'query.sqlite3')
+                    temporary = target.with_suffix('.' + uuid.uuid4().hex + '.tmp')
+                    try:
+                        temporary.write_bytes(raw)
+                        temporary.replace(target)
+                    finally:
+                        temporary.unlink(missing_ok=True)
+            db.execute(f'ATTACH DATABASE ? AS {alias}', (target.as_uri() + '?mode=ro',))
+        return alias + '.d_' + version, self._metadata(json.dumps(obj['descriptor']['metadata']))
+
+    def _indexes(self, db, table, fields, filters, sort=None):
+        if table.startswith('v_') and '.d_' in table:
+            return  # The immutable query file already contains field indexes.
+        return super()._indexes(db, table, fields, filters, sort)

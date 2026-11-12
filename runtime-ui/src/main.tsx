@@ -11,6 +11,7 @@ import { resolveToolResult } from "./tool-result.mjs";
 import { createRequestQueue } from "../../dashboard_runtime/web/request-queue.mjs";
 import { browserDownload, type Download } from "./host";
 import { WebAccess } from "./web-access";
+import { createCosTools } from "./cos-client";
 import type { Config, Document, ToolCall } from "./types";
 declare global {
   interface Window {
@@ -62,15 +63,18 @@ const send = (name: string, args: Config) =>
     });
     const value = await response.json();
     if (response.status === 401) throw new WebAuthError();
-    if (!response.ok) throw Error(value.error?.message || "请求失败");
+    if (!response.ok) throw Object.assign(Error(value.error?.message || "请求失败"), { code: value.error?.code });
     return value;
   });
 const context = createProjectContext(send);
-const call: ToolCall = async (name, args = {}) =>
+const remoteCall: ToolCall = async (name, args = {}) =>
   resolveToolResult(
     await context.call(name, args),
     (name: string, args: Config) => context.call(name, args),
   );
+const cosTools = createCosTools(remoteCall, (boot.apiBase || "").split("/api/")[0] + "/assets/static-worker.js",
+  () => ({ Authorization: "Bearer " + webToken }));
+const call: ToolCall = boot.mode === "web" ? cosTools.call : remoteCall;
 const download: Download = async (file) => {
   if (boot.mode !== "mcp") return browserDownload(file);
   if (!app?.getHostCapabilities()?.downloadFile)
@@ -235,6 +239,7 @@ function Root() {
   if (boot.mode === "snapshot") return <SnapshotApp document={boot.document} />;
   if (boot.mode === "static") return <StaticSite />;
   if (accessRequired && !doc) return <WebAccess onAccess={(token) => {
+    cosTools.destroy();
     webToken = token;
     sessionStorage.setItem(webTokenKey, token);
     setAccessRequired(false);

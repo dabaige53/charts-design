@@ -10,6 +10,7 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 | `tool_contract.py`、`contract.py` | 工具用途、参数说明、操作结构与发现资源 |
 | `mcp_server.py`、`project_routing.py` | MCP 协议适配、请求项目选择与结果传输 |
 | `store.py`、`project.py`、`local_data.py` | 事务状态、草稿/检查点、批注与不可变数据 |
+| `cloud_assets.py`、`cos_view.py`、`cos_migrate.py` | COS 内容包与引用登记、统一网页描述、显式项目迁移 |
 | `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
 | `server.py`、`http_app.py` | 自托管远程服务与本机网页入口 |
 | `runtime-ui/src/` | 展示组件、应用状态、布局和宿主能力适配 |

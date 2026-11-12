@@ -115,7 +115,7 @@ class LocalData:
 
     @contextmanager
     def _connect(self):
-        db = sqlite3.connect(self.path, timeout=30)
+        db = sqlite3.connect(self.path, timeout=30, uri=True)
         db.create_function('contains_text', 3, _contains, deterministic=True)
         db.create_function('grain', 2, self._grain, deterministic=True)
         db.create_function('search_text', 3, _search_text, deterministic=True)
@@ -336,7 +336,7 @@ class LocalData:
         expressions = []
         for k in fields:
             col = self._column(fields, k)
-            if k in (calculated or {}):
+            if calculated and k in calculated:
                 spec = calculated[k]
                 n = self._column(fields, spec['numerator'])
                 d = self._column(fields, spec['denominator'])

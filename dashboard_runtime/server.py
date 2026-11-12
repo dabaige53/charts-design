@@ -41,6 +41,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__
+from .assets import FAVICON_LINK
 from .model import ID, DashboardError, MAX_BYTES, require
 from .service import TOOLS, Service
 from .tool_contract import BOARD, described, schema as tool_schema
@@ -65,6 +66,8 @@ EDIT_TOOLS = VIEW_TOOLS | frozenset({
     'dashboard_validate', 'dashboard_doctor', 'dashboard_history', 'dashboard_history_diff',
     'dashboard_restore', 'dashboard_version_label', 'runtime_diagnostics', 'dashboard_export_site',
     'dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish', 'dashboard_version_delete',
+    'dashboard_version_delete_preview', 'dashboard_version_delete_status', 'dashboard_version_delete_retry',
+    'dashboard_version_query',
     'dashboard_share_status', 'dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_replace',
 })
 # Acts on the server's desktop session; meaningless and unsafe remotely.
@@ -474,7 +477,17 @@ class RemoteServer:
                 if requested not in principal.dashboards:
                     raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
                 args['dashboardId'] = requested
-        result = self.profile.decorate(name, args, service.call(name, args), service)
+        actual_name = 'dashboard_preview' if name == 'dashboard_get' and principal.access != 'edit' else name
+        result = self.profile.decorate(name, args, service.call(actual_name, args), service)
+        if getattr(service.store, 'cos_enabled', False):
+            from .cos_view import web_document
+            for field in ('document', 'version'):
+                if isinstance(result.get(field), dict):
+                    doc = result[field]
+                    prefix = self.settings.base_path + '/api/v1/p/' + quote(project) + '/content/' + quote(doc['id']) + '/' + str(doc['revision']) + '/'
+                    result[field] = web_document(service.store, doc,
+                        lambda object_id, filename: prefix + object_id + '/' + filename,
+                        editable=principal.access == 'edit' and field != 'version')
         if name == 'runtime_info' and not principal.admin:
             result = {key: result[key] for key in SANITIZED_INFO if key in result} | {'projectRoot': project}
         export = result.get('export')
@@ -609,7 +622,7 @@ def create_app(server: RemoteServer):
     async def asset(request: Request):
         from .assets import bundle_assets
         name = request.path_params['name']
-        if name not in ('app.js', 'app.css'):
+        if name not in ('app.js', 'app.css', 'static-worker.js'):
             return JSONResponse({'error': 'not found'}, status_code=404)
         try:
             return compressed(request, bundle_assets()[name], 'text/javascript' if name.endswith('.js') else 'text/css',
@@ -635,6 +648,35 @@ def create_app(server: RemoteServer):
             raw = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
             return compressed(request, raw, 'application/json', {'Cache-Control': 'no-store'})
         except Exception as error:  # noqa: BLE001 - mapped to bounded JSON errors
+            return failure(error)
+
+    async def content(request: Request):
+        try:
+            project, board = request.path_params['project'], request.path_params['dashboard']
+            require(PROJECT_NAME.fullmatch(project) is not None and re.fullmatch(ID, board) is not None,
+                    'Invalid project or dashboard', 'INVALID_ARGUMENT')
+            principal = server.principal(bearer(request), project)
+            if principal is None:
+                raise DashboardError('UNAUTHORIZED', '访问令牌失效', 401)
+            require(not principal.dashboard or board in principal.dashboards,
+                    'File belongs to another dashboard', 'FORBIDDEN')
+            revision = int(request.path_params['revision'])
+            def read():
+                from .cos_view import authorized_file
+                from .versions import Versions
+                store = server.projects.service(project).store
+                require(getattr(store, 'cos_enabled', False), 'Project has not migrated', 'NOT_FOUND')
+                if principal.access == 'edit' and store.revision(board) == revision:
+                    doc = store.get(board, hydrate=False)
+                else:
+                    if principal.access != 'edit':
+                        require(store.display_revision(board) == revision, 'Version no longer available', 'REVISION_CONFLICT')
+                    doc = Versions(store).read(board, revision)
+                return authorized_file(store, doc, request.path_params['object'], request.path_params['name'])
+            raw = await asyncio.to_thread(read)
+            return Response(raw, media_type='application/gzip',
+                            headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
+        except Exception as error:  # noqa: BLE001
             return failure(error)
 
     async def admin_catalog(request: Request):
@@ -682,7 +724,7 @@ def create_app(server: RemoteServer):
             invalid = ' aria-invalid="true"' if status == 401 else ''
             page = ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
                     '<meta name="viewport" content="width=device-width,initial-scale=1">'
-                    '<title>访问分享 · Charts Design</title><style nonce="' + nonce + '">' + """
+                    '<title>访问分享 · Charts Design</title>' + FAVICON_LINK + '<style nonce="' + nonce + '">' + """
                 :root{color-scheme:light;--canvas:#f5f5f4;--surface:#fff;--ink:#1c1917;
                     --muted:#57534e;--border:#d6d3d1;--primary:#123b5d;--focus:#2c6485;--error:#b42318}
                 *{box-sizing:border-box}
@@ -737,7 +779,7 @@ def create_app(server: RemoteServer):
                        'Referrer-Policy': 'same-origin',
                        'Content-Security-Policy': "default-src 'none'; style-src 'nonce-" + nonce +
                            "'; script-src 'nonce-" + nonce +
-                           "'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}
+                           "'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}
             if status == 429:
                 headers['Retry-After'] = '900'
             return Response(page, status_code=status, media_type='text/html', headers=headers)
@@ -805,6 +847,7 @@ def create_app(server: RemoteServer):
         Route('/view/{project}/{dashboard}', viewer, methods=['GET']),
         Route('/edit/{project}/{dashboard}', viewer, methods=['GET']),
         Route('/api/v1/p/{project}/tools/{name}', tool, methods=['POST']),
+        Route('/api/v1/p/{project}/content/{dashboard}/{revision}/{object}/{name}', content, methods=['GET']),
         Route('/api/v1/catalog', admin_catalog, methods=['POST']),
         Route('/api/v1/share', admin_share, methods=['POST']),
         Route('/files/{token}', download, methods=['GET']),

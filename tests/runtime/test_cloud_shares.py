@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from dashboard_runtime.assets import FAVICON_LINK
 from dashboard_runtime.cloud_shares import CloudShares, cleanup_due
 from dashboard_runtime.cloud_storage import CosShareStorage
 from dashboard_runtime.demo import executive_document
@@ -302,7 +303,7 @@ def test_scf_handler_requires_cloud_and_preserves_failures(tmp_path, monkeypatch
     assert json.loads(heartbeat)['executor'] == 'tencent-scf'
 
 
-# @wu-test type=integration | scope=云端网页密钥和到期访问 | protects=未输入密钥直接读取数据或已登录页面过期后仍从云端获取文件
+# @wu-test type=integration | scope=云端网页密钥和到期访问 | protects=分享图标丢失或未授权及过期后仍可读取云端文件
 def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeypatch):
     pytest.importorskip('mcp')
     from starlette.testclient import TestClient
@@ -315,14 +316,19 @@ def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeyp
     server.cloud_shares = shares
     root = '/s/' + published['shareId'] + '/'
     with TestClient(create_app(server), base_url='https://charts.example.com') as client:
-        assert '8 位数字访问密钥' in client.get(root).text
+        form = client.get(root)
+        assert '8 位数字访问密钥' in form.text
+        assert FAVICON_LINK in form.text
+        assert 'img-src data:' in form.headers['content-security-policy']
         assert client.get(root + 'document.json').status_code == 401
         assert client.get(root + 'app.js').status_code == 401
         assert client.post(root, data={'accessKey': '00000000'}).status_code == 401
         response = client.post(root, data={'accessKey': '01234567'}, follow_redirects=False)
         assert response.status_code == 303
         assert 'HttpOnly' in response.headers['set-cookie'] and 'Secure' in response.headers['set-cookie']
-        assert 'mode:"static"' in client.get(root).text
+        page = client.get(root).text
+        assert 'mode:"static"' in page
+        assert FAVICON_LINK in page
         content = client.get(root + 'document.json')
         assert content.status_code == 200 and 'no-store' in content.headers['cache-control']
         assert '01234567' not in content.text

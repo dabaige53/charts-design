@@ -71,8 +71,9 @@ class Service:
             doc['dataVersion'] = data_version(doc)
             doc['loading'] = self.store.config['loading']
             doc['progressive'] = True
-            doc['computed'] = {'components': {}, 'tables': {}, 'grouped': {}, 'filterOptions': {}, 'filterPages': {}}
-            if tool in ('dashboard_preview', 'dashboard_refresh', 'dashboard_get'):
+            if not getattr(self.store, 'cos_enabled', False):
+                doc['computed'] = {'components': {}, 'tables': {}, 'grouped': {}, 'filterOptions': {}, 'filterPages': {}}
+            if not getattr(self.store, 'cos_enabled', False) and tool in ('dashboard_preview', 'dashboard_refresh', 'dashboard_get'):
                 preload=set(doc['loading'].get('preloadFilterIds', []))
                 for f in doc['manifest']['filters']:
                     if f['id'] in preload and f['op']=='in':
@@ -166,16 +167,34 @@ class Service:
                 raise DashboardError('CLOUD_STORAGE_FAILED',
                     'Tencent COS request failed. Check cloud service permissions and dashboard_share_status before retrying a publish.',
                     503) from error
-        if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish', 'dashboard_version_delete'):
+        if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish',
+                    'dashboard_version_delete', 'dashboard_version_delete_preview',
+                    'dashboard_version_delete_status', 'dashboard_version_delete_retry', 'dashboard_version_query'):
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             from .versions import Versions
             versions = Versions(self.store)
             if tool == 'dashboard_version_status':
                 return versions.status(board)
             if tool == 'dashboard_version_get':
-                return {'version': versions.read(board, args['revision'])}
+                doc = versions.read(board, args['revision'])
+                return {'version': doc}
+            if tool == 'dashboard_version_query':
+                operations = {'view': 'dashboard_view', 'options': 'dashboard_filter_options',
+                              'details': 'component_data', 'semantic': 'semantic_inspect', 'export': 'dataset_export'}
+                require(args.get('operation') in operations, 'Unsupported historical operation')
+                doc = versions.read(board, args['revision'])
+                pinned = copy.copy(self)
+                pinned.store = copy.copy(self.store)
+                pinned.store.get = lambda board_id, hydrate=True: copy.deepcopy(doc)
+                pinned.store.readable = lambda board_id: copy.deepcopy(doc)
+                request = {**args.get('request', {}), 'dashboardId': board, 'expectedRevision': doc['revision']}
+                return pinned._execute(operations[args['operation']], request)
+            if tool == 'dashboard_version_delete_preview':
+                return versions.delete_preview(board, args['expectedRevision'], args['revision'])
+            if tool in ('dashboard_version_delete_status', 'dashboard_version_delete_retry'):
+                return versions.delete_status(board, args['jobId'], tool.endswith('_retry'))
             if tool == 'dashboard_version_delete':
-                return versions.delete_checkpoint(board, args['expectedRevision'], args['revision'])
+                return versions.delete_checkpoint(board, args['expectedRevision'], args['revision'], args.get('confirmation'))
             return versions.publish(board, args['expectedRevision'], args['revision'])
         if tool == 'dataset_storage_inventory':
             require(self.project_root is not None and hasattr(self.store, 'database'),
@@ -183,7 +202,10 @@ class Service:
             from .cloud_database import CloudDatabase
             database = CloudDatabase()
             database.url = database.url.rsplit('/', 1)[0] + '/charts_data_inventory'
-            return database.call('inventory', self.store.project)
+            result = database.call('inventory', self.store.project)
+            inventory = self.store.assets.call('inventory')
+            result['cos'] = {key: value for key, value in inventory.items() if key != 'documents'}
+            return result
         if tool == 'dashboard_version_label':
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             return self.store.label_checkpoint(board,args['expectedRevision'],args['revision'],args.get('name',''),args.get('published',False))
@@ -206,7 +228,13 @@ class Service:
                         'message': 'Draft checks failed; no checkpoint was created. Read dashboard_get, fix the reported issues, then retry with the latest revision.'},
                         'doctor': report, 'nextAction': 'dashboard_get'}
             from .semantic_diff import semantic_diff
-            changes = semantic_diff(self.store.readable(board), self.store.get(board, hydrate=False))
+            try:
+                previous = self.store.readable(board)
+            except DashboardError as error:
+                if error.code != 'NO_SAVED_VERSION':
+                    raise
+                previous = self.store.get(board, hydrate=False)
+            changes = semantic_diff(previous, self.store.get(board, hydrate=False))
             checkpoint = self.store.checkpoint(board, args['expectedRevision'], args.get('name', ''), args.get('published', False), args.get('batchId'))
             return {'ok': True, 'checkpoint': checkpoint, 'doctor': report, 'semanticChanges': changes, 'nextAction': 'dashboard_preview', 'displayPolicy': 'saved-dashboard-ui'}
         if tool == 'runtime_info':

@@ -265,7 +265,7 @@ docker buildx build --platform linux/amd64 \
 
 ### 从本地项目迁移选定数据
 
-云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。每个数据版本分成最多 250 行、JSON 不超过 2 MiB 的批次；相同传输 ID 和批次重试时内容必须一致。批次先放在私有 COS，服务端重算原始数据版本并写入 PostgreSQL 后才可引用。完成后删除该传输的 COS 暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 指定该传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 也重新调用 finish 完成清理。迁移需要现有服务凭据对分享桶执行读取、写入、列举对象版本和删除该暂存前缀的权限；不会自动更改权限。
+云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。每个数据版本分成最多 250 行、JSON 不超过 2 MiB 的批次；相同传输 ID 和批次重试时内容必须一致。批次先放在私有 COS，服务端重算原始数据版本并持久保存后才可引用：未切换项目写入 PostgreSQL 业务分块，`cos-v1` 项目生成 COS 数据包并登记 PostgreSQL 元信息。完成后删除该传输的 COS 暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 指定该传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 也重新调用 finish 完成清理。迁移需要现有服务凭据对分享桶执行读取、写入、列举对象版本和删除该暂存前缀的权限；不会自动更改权限。
 
 `bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具顺序传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
 
@@ -284,3 +284,24 @@ project-run <项目目录名> -- /bin/sh -c '
 迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过，再运行 `dashboard_version_publish`；之后才能通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。
 
 合并时，`dataset_transfer_status` 的 `phase` 标明读取暂存分块、保存数据库分块或清理；`completed` 和 `total` 对应当前阶段。脚本会记录已完整暂存的版本，恢复时不再发送这些数据行。使用旧版脚本时，只有在已确认某个版本全部分块均已暂存的情况下，才在恢复命令中加 `--resume-staged <完整数据版本号>`；缺块时合并报错，不会创建不完整的数据版本。
+
+## COS 业务内容迁移与删除任务
+
+上线时先应用 `20261112020000_cos_assets.sql`，再部署兼容版本的 Runtime，使删除按钮和确认接口同时生效。原项目在显式迁移前仍使用 PostgreSQL 业务行；项目切换状态由迁移记录确认。
+
+迁移工具接收项目名和工作区根目录，凭据由运行环境提供。默认输出元数据清单，不上传或删除业务内容：
+
+```sh
+bun run python -- -m dashboard_runtime.cos_migrate \
+  --project <项目名> --workspace <工作区绝对路径>
+```
+
+明确安排迁移后才能加 `--apply`。可重复传入 `--partition-field <字段名>`，将匹配的字符串或日期字段保存为项目分片索引配置。工具复用已上传的数据包，检查数据校验值、上传分片行数、查询文件和配置内容，并在项目状态仍一致时原子切换指针。切换事务删除 PostgreSQL 中已迁移的业务分块；原草稿、检查点及发布配置改为 COS 引用。未完成分块没有可验证的数据版本时，必须先处理传输状态，不能直接清空。
+
+迁移失败时保留源数据。新上传但尚未引用的对象保留在清单中，清理前检查其引用和迁移状态。全部切换后，重新加载兼容版本的服务进程以读取项目分片配置。回退时先完成反向数据迁移，再切换旧镜像。迁移期间暂停编辑；工具检查项目状态，并拒绝提交已经变化的快照。
+
+历史版本删除由 `dashboard_version_delete_preview` 生成确认清单，再以返回的标识执行。最新、冻结及发布过的版本均可主动删除；关联多页面分享整体撤销。分享在最终登记成功后允许访问。上传与版本删除冲突时发布失败，暂存清理期限继续生效；“不过期”选项只在正式分享登记成功后生效。
+
+删除任务保存在 PostgreSQL，先撤销访问，再删除 COS 对象的全部物理版本，最后清除业务行。失败任务可从版本中心继续清理。SCF 每 6 小时处理到期分享与失败删除任务，发布前继续要求最近 7 小时的成功清理记录。清理函数需要同一环境的 PostgreSQL 服务凭据及 COS 权限。函数仅在全部清理成功后更新成功心跳。部署后读取云端配置，确认告警和触发器的实际状态。
+
+独立分享保持私有网关鉴权，新分享的数据文件引用统一 COS 包；到期清理只删除分享自身内容，不删除项目数据包。分享撤销阻止后续请求，不收回已经下载到浏览器的数据。物理数据清理以确认清单中的引用关系为准，不等同于数据库计费空间立即下降。

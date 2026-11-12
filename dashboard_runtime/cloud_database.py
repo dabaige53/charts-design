@@ -39,13 +39,17 @@ class CloudDatabase:
             codes = {'REVISION_CONFLICT': 409, 'ANNOTATION_CONFLICT': 409,
                      'ALREADY_EXISTS': 409, 'NOT_FOUND': 404,
                      'DATA_CONFLICT': 409, 'DATA_INCOMPLETE': 409,
-                     'INVALID_BATCH': 400, 'CHECKPOINT_IN_USE': 409}
+                     'INVALID_BATCH': 400, 'CHECKPOINT_IN_USE': 409,
+                     'PLAN_CHANGED': 409, 'ASSET_UNAVAILABLE': 409,
+                     'REVISION_DELETED': 409, 'CONFIRMATION_REQUIRED': 409,
+                     'STORAGE_MIGRATED': 409, 'NO_SAVED_VERSION': 404}
             try:
                 message = json.loads(raw).get('message', '')
             except (ValueError, AttributeError):
                 message = ''
             if message in codes:
-                raise DashboardError(message, message, codes[message]) from None
+                label = '暂无已保存版本' if message == 'NO_SAVED_VERSION' else message
+                raise DashboardError(message, label, codes[message]) from None
             raise DashboardError('CLOUD_DATABASE_FAILED',
                                  f'PostgreSQL gateway returned HTTP {error.code}', 503) from None
         except (URLError, TimeoutError):

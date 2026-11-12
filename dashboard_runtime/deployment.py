@@ -5,7 +5,7 @@ import shutil
 import uuid
 import zipfile
 
-from .assets import DIST, require_preview, ui_build_id
+from .assets import DIST, FAVICON_LINK, require_preview, ui_build_id
 from .build import BACKEND_BUILD_ID
 from .model import MAX_BYTES, json_bytes, require
 
@@ -70,7 +70,7 @@ def export_site(store, board, output_root=None, document=None):
         require((DIST / name).is_file(), 'Static UI resource missing: ' + name, 'UI_UNAVAILABLE')
         shutil.copyfile(DIST / name, site / name)
     (site / 'document.json').write_bytes(json_bytes(doc))
-    (site / 'index.html').write_text('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Charts Design</title><link rel="stylesheet" href="app.css"></head><body><div id="root"></div><script>window.__chartsBoot={mode:"static"};</script><script src="app.js"></script></body></html>', encoding='utf-8')
+    (site / 'index.html').write_text('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Charts Design</title>' + FAVICON_LINK + '<link rel="stylesheet" href="app.css"></head><body><div id="root"></div><script>window.__chartsBoot={mode:"static"};</script><script src="app.js"></script></body></html>', encoding='utf-8')
     manifest = {'dashboardId': board, 'revision': doc['revision'], 'uiBuildId': ui_build_id(), 'backendBuildId': BACKEND_BUILD_ID, 'datasets': counts}
     (site / 'export-manifest.json').write_bytes(json_bytes(manifest))
     (site / 'README.txt').write_text('将此目录放入普通静态 HTTP 服务。网页按组件加载 data/ 分片，在浏览器本地筛选，不连接 MCP。数据包含使用中的数据集全部记录。\n', encoding='utf-8')

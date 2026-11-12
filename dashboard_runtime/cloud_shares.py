@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
-from .model import identifier, require
+from .model import DashboardError, identifier, require
 
 SHARE_ID = re.compile(r'^[0-9a-f]{32}$')
 ACCESS_KEY = re.compile(r'^[0-9]{8}$')
@@ -53,6 +53,13 @@ class CloudShares:
         raw = self.storage.get('shares/' + share_id + '/control.json')
         require(raw is not None, '分享不存在或已删除', 'SHARE_UNAVAILABLE')
         control = json.loads(raw)
+        from .cloud_database import cloud_enabled
+        if cloud_enabled():
+            from .cloud_assets import AssetDatabase
+            registered = AssetDatabase().call('share_access', id=share_id)
+            require((registered is None and not control.get('registered')) or
+                    (registered is not None and registered['state'] == 'active'),
+                    '分享已撤销或尚未完成', 'SHARE_EXPIRED')
         require(control['state'] == 'active' and
                 (control['expiresAt'] is None or time.time() < control['expiresAt']),
                 '分享已过期或已撤销', 'SHARE_EXPIRED')
@@ -94,13 +101,20 @@ class CloudShares:
                 'Deploy the SCF six-hour timer and confirm a successful cloud cleanup invocation before publishing',
                 'CLOUD_CLEANER_UNAVAILABLE')
         self.storage.check_private()
+        if getattr(service.store, 'cos_enabled', False):
+            return self._publish_cos(service, documents, expiration, access_key)
         share_id, now = uuid.uuid4().hex, int(time.time())
         lifetime = EXPIRATIONS[expiration]
         expires = now + lifetime if lifetime is not None else None
         owner = hashlib.sha256(str(Path(service.project_root or service.store.root).resolve()).encode()).hexdigest()
+        registered_pages = [{'id': page_id, 'revision': page_doc['revision']} for page_id, page_doc in documents]
         job = {'shareId': share_id, 'state': 'uploading', 'cleanupAfter': now + 3600,
-               'expiresAt': expires, 'owner': owner, 'dashboardId': board, 'revision': doc['revision']}
+               'stagingUntil': now + 3600, 'expiresAt': expires, 'owner': owner, 'dashboardId': board,
+               'revision': doc['revision'], 'pages': registered_pages}
         self._put_json('jobs/' + share_id + '.json', job)
+        registry = getattr(service.store, 'assets', None)
+        if registry:
+            registry.call('share_register', id=share_id, pages=registered_pages, state='uploading', expiresAt=expires)
         # Only SCF deletes remote content. The upload staging directory is
         # local temporary data and is removed even if export/upload fails.
         with tempfile.TemporaryDirectory(prefix='charts-share-') as temporary:
@@ -154,13 +168,83 @@ class CloudShares:
             control = {'shareId': share_id, 'state': 'active', 'dashboardId': board,
                        'revision': doc['revision'], 'owner': owner, 'createdAt': now,
                        'expiresAt': expires, 'salt': salt, 'keyHash': key_digest(access_key, salt),
-                       'files': files, 'pages': entries}
+                       'files': files, 'pages': entries, 'registered': registry is not None}
             self._put_json('shares/' + share_id + '/control.json', control)
             self._put_json('jobs/' + share_id + '.json', {**job, 'state': 'active', 'cleanupAfter': expires, 'pages': entries})
+            if registry:
+                registry.call('share_register', id=share_id, pages=registered_pages, state='active',
+                              expiresAt=expires, bytes=sum(path.stat().st_size for path in site.rglob('*') if path.is_file()))
         url = self.public_url + '/s/' + share_id + '/'
         return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
                 'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
                 'revision': doc['revision'], 'pages': entries, 'cleanupExecutor': 'tencent-scf'}
+
+    def index_project(self, store):
+        """Register old publications, including every page of a multi-page share."""
+        owner = hashlib.sha256(str(store.project_root.resolve()).encode()).hexdigest()
+        for key in self.storage.list('jobs/'):
+            raw = self.storage.get(key)
+            if raw is None:
+                continue
+            job = json.loads(raw)
+            if job.get('owner') != owner:
+                continue
+            existing = store.assets.database.call('share_access', id=job['shareId'])
+            if existing is not None:
+                continue
+            pages = job.get('pages') or [{'id': job['dashboardId'], 'revision': job['revision']}]
+            # Listing metadata estimates current object bytes without reading business rows.
+            size = self.storage.size_prefix('shares/' + job['shareId'] + '/')
+            store.assets.call('share_register', id=job['shareId'], pages=pages, state=job['state'],
+                              expiresAt=job['expiresAt'], bytes=size,
+                              stagingUntil=job.get('stagingUntil', job.get('cleanupAfter')))
+
+    def _publish_cos(self, service, documents, expiration, access_key):
+        from .assets import DIST, FAVICON_LINK, require_preview
+        from .cos_view import web_document
+        require_preview()
+        share_id, now = uuid.uuid4().hex, int(time.time())
+        lifetime = EXPIRATIONS[expiration]
+        expires = now + lifetime if lifetime is not None else None
+        owner = hashlib.sha256(str(Path(service.project_root).resolve()).encode()).hexdigest()
+        pages = [{'id': board, 'title': doc['manifest']['title'], 'revision': doc['revision'],
+                  'path': 'document.json' if index == 0 else f'pages/{board}/document.json'}
+                 for index, (board, doc) in enumerate(documents)]
+        assets = service.store.assets
+        assets.call('share_register', id=share_id, pages=pages, state='uploading', expiresAt=expires)
+        job = {'shareId': share_id, 'state': 'uploading', 'cleanupAfter': now + 3600,
+               'stagingUntil': now + 3600, 'expiresAt': expires, 'owner': owner, 'dashboardId': pages[0]['id'],
+               'revision': pages[0]['revision'], 'pages': pages}
+        self._put_json('jobs/' + share_id + '.json', job)
+        files, asset_files, total = [], {}, 0
+        def put(name, raw, kind):
+            nonlocal total
+            self.storage.put('shares/' + share_id + '/site/' + name, raw, kind)
+            files.append(name)
+            total += len(raw)
+        for index, ((board, doc), page) in enumerate(zip(documents, pages)):
+            def url_for(object_id, name):
+                path = f'data/{object_id}/{name}'
+                asset_files[path] = {'object': object_id, 'name': name, 'board': board, 'revision': doc['revision']}
+                return path if index == 0 else '../../' + path
+            web = web_document(service.store, doc, url_for)
+            if index == 0:
+                web['staticPages'] = pages
+            put(page['path'], json.dumps(web, ensure_ascii=False).encode(), 'application/json')
+        for name in ('app.js', 'app.css', 'static-worker.js'):
+            put(name, (DIST / name).read_bytes(), 'text/css' if name.endswith('.css') else 'text/javascript')
+        put('index.html', ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + FAVICON_LINK + '<link rel="stylesheet" href="app.css"></head><body><div id="root"></div><script>window.__chartsBoot={mode:"static"}</script><script src="app.js"></script></body></html>').encode(), 'text/html')
+        salt = secrets.token_hex(16)
+        control = {**job, 'state': 'active', 'createdAt': now, 'salt': salt,
+                   'keyHash': key_digest(access_key, salt), 'files': files + list(asset_files),
+                   'assetFiles': asset_files, 'project': service.store.project, 'registered': True}
+        self._put_json('shares/' + share_id + '/control.json', control)
+        self._put_json('jobs/' + share_id + '.json', {**job, 'state': 'active', 'cleanupAfter': expires})
+        assets.call('share_register', id=share_id, pages=pages, state='active', expiresAt=expires, bytes=total)
+        url = self.public_url + '/s/' + share_id + '/'
+        return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
+                'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
+                'revision': pages[0]['revision'], 'pages': pages, 'cleanupExecutor': 'tencent-scf'}
 
     def authenticate(self, share_id, key):
         control = self.control(share_id)
@@ -202,14 +286,22 @@ class CloudShares:
                     'warning': {'code': 'PREVIOUS_SHARE_REVOKE_FAILED', 'type': type(error).__name__}}
         return {**result, 'previousShareId': share_id, 'previousRevoked': True}
 
-    def content(self, share_id, name, *, control=None):
+    def content(self, share_id, name, *, control=None) -> bytes:
         # The gateway may reuse the control checked earlier in this request.
         control = self.control(share_id) if control is None else control
         path = PurePosixPath(name)
         require(not path.is_absolute() and '..' not in path.parts and name in control['files'],
                 '分享文件不存在', 'NOT_FOUND')
+        if name in control.get('assetFiles', {}):
+            from .cloud_assets import CloudAssets
+            assets = CloudAssets(control['project'])
+            entry = control['assetFiles'][name]
+            obj = assets.call('object_get', id=entry['object'])
+            require(obj is not None, '分享数据已删除', 'SHARE_UNAVAILABLE')
+            return assets.read_file(obj, entry['name'])
         raw = self.storage.get('shares/' + checked_id(share_id) + '/site/' + name)
-        require(raw is not None, '分享文件不存在', 'NOT_FOUND')
+        if raw is None:
+            raise DashboardError('NOT_FOUND', '分享文件不存在')
         return raw
 
     def revoke(self, service, board, share_id):
@@ -217,6 +309,9 @@ class CloudShares:
         owner = hashlib.sha256(str(Path(service.project_root or service.store.root).resolve()).encode()).hexdigest()
         require(control['owner'] == owner and control['dashboardId'] == board,
                 'Share belongs to another project/dashboard', 'FORBIDDEN')
+        if getattr(service.store, 'assets', None):
+            self.index_project(service.store)
+            service.store.assets.call('share_revoke', id=share_id)
         self._put_json('shares/' + share_id + '/control.json', {**control, 'state': 'revoked'})
         self._put_json('jobs/' + share_id + '.json', {
             'shareId': share_id, 'state': 'revoked', 'expiresAt': control['expiresAt'],
@@ -250,6 +345,7 @@ class CloudShares:
 
 def cleanup_due(storage, now=None):
     """Called by the SCF timer, never scheduled by a local MCP or web server."""
+    from .cloud_assets import AssetDatabase
     now = time.time() if now is None else now
     removed, failed = 0, []
     # Snapshot only the small job-key list; objects are deleted in bounded pages.
@@ -262,8 +358,23 @@ def cleanup_due(storage, now=None):
             share_id = checked_id(job['shareId'])
             require(key == 'jobs/' + share_id + '.json', 'Invalid cleanup job', 'INVALID_ARGUMENT')
             deadline = job['cleanupAfter']
+            registered = None
+            from .cloud_database import cloud_enabled
+            if cloud_enabled() or os.environ.get('CLOUDBASE_API_KEY'):
+                registered = AssetDatabase().call('share_access', id=share_id)
+                if registered and registered['state'] == 'uploading':
+                    deadline = registered['stagingUntil']
+                elif registered and registered['state'] == 'revoked':
+                    deadline = 0
+                elif registered and registered['state'] == 'active':
+                    deadline = registered['expiresAt']
             if deadline is None or deadline > now:
                 continue
+            if registered:
+                claimed = AssetDatabase().call('share_cleanup_claim', registered['project'],
+                                               id=share_id, now=int(now))
+                if not claimed:
+                    continue
             storage.delete_prefix('shares/' + share_id + '/')
             # Delete access metadata, job and their historical versions only
             # after every content object has been physically deleted.

@@ -119,3 +119,13 @@ class CosShareStorage:
                 break
             result = self.client.delete_objects(Bucket=self.bucket, Delete={'Quiet': 'true', 'Object': objects})
             require(not result.get('Error'), 'COS object deletion failed; cleanup will retry', 'COS_DELETE_FAILED')
+
+    def size_prefix(self, prefix):
+        total, marker = 0, ''
+        while True:
+            response = self.client.list_objects(Bucket=self.bucket, Prefix=self.prefix + prefix,
+                                                Marker=marker, MaxKeys=1000)
+            total += sum(int(entry.get('Size', 0)) for entry in response.get('Contents', []))
+            if str(response.get('IsTruncated', 'false')).lower() != 'true':
+                return total
+            marker = response['NextMarker']

@@ -20,6 +20,7 @@ import {
   Button,
 } from "./ui";
 import { Input } from "./components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
 import { Field, FieldLabel } from "./components/ui/field";
 import { Badge } from "./components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
@@ -106,6 +107,7 @@ export function DashboardApp({
     [title, setTitle] = useState(initial.manifest.title),
     [boards, setBoards] = useState<Config[]>([]),
     [versionsOpen, setVersionsOpen] = useState(false),
+    [versionSwitchOpen, setVersionSwitchOpen] = useState(false),
     [switchingId, setSwitchingId] = useState<string | null>(null),
     [notesOpen, setNotesOpen] = useState(false),
     [annotationBusy, setAnnotationBusy] = useState(false),
@@ -239,7 +241,7 @@ export function DashboardApp({
         onInspect={() =>
           call("semantic_inspect", { dashboardId: doc.id, componentId: id })
         }
-        onReadData={!staticMode && (doc.manifest.components[id].datasetId || doc.manifest.components[id].binding?.datasetId)
+        onReadData={(doc.manifest.components[id].datasetId || doc.manifest.components[id].binding?.datasetId || doc.staticComponentDatasets?.[id])
           ? (state) => call("component_data", {
               dashboardId: doc.id,
               componentId: id,
@@ -350,9 +352,9 @@ export function DashboardApp({
           {(
             <IconAction
               label="版本与分享"
-              disabled={readOnly || editing || runtime.saving || annotationBusy || notesOpen}
+              disabled={readOnly || runtime.saving || annotationBusy || notesOpen}
               unavailable={readOnly ? editUnavailable : "请先完成当前编辑"}
-              onClick={() => setVersionsOpen(true)}
+              onClick={() => editing ? setVersionSwitchOpen(true) : setVersionsOpen(true)}
             >
               <History />
             </IconAction>
@@ -499,12 +501,33 @@ export function DashboardApp({
         onOpenChange={setVersionsOpen}
         document={doc}
         call={call}
-        onSaved={async () => { await runtime.reload(); }}
+        onSaved={async () => {
+          const result = await call("dashboard_get", { dashboardId: doc.id });
+          runtime.accept(result.document);
+        }}
         onRestore={async (revision) => {
           await runtime.restore(revision);
           setLayoutKey((value) => value + 1);
         }}
       />}
+      <Dialog open={versionSwitchOpen} onOpenChange={setVersionSwitchOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>打开历史版本前处理当前编辑</DialogTitle>
+            <DialogDescription>历史预览不会覆盖草稿。请选择如何处理当前尚未保存的布局和标题。</DialogDescription></DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVersionSwitchOpen(false)}>取消</Button>
+            <Button variant="outline" onClick={() => {
+              setEditing(false); draft.current = {}; setTitle(doc.manifest.title); setLayoutKey(value => value + 1);
+              setVersionSwitchOpen(false); setVersionsOpen(true);
+            }}>放弃修改并切换</Button>
+            <Button disabled={runtime.saving} onClick={() => guard(async () => {
+              if (await runtime.save(layoutOperations(title, draft.current))) {
+                setEditing(false); draft.current = {}; setVersionSwitchOpen(false); setVersionsOpen(true);
+              }
+            })}>保存后切换</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -692,11 +715,15 @@ function FilterBar({
           </IconAction>
         )}
       </div>
-      {expanded && (
-        <div id={advancedId} aria-label="更多筛选条件" className="flex flex-wrap items-center gap-2">
-          {advanced.map((f) => (
-            <FilterControl key={f.id} filter={f} document={doc} call={call} onChange={onChange} />
-          ))}
+      {!!advanced.length && (
+        <div className="filter-advanced-row" data-expanded={expanded} inert={!expanded}>
+          <div className="min-h-0 overflow-hidden">
+            <div id={advancedId} aria-label="更多筛选条件" className="flex flex-wrap items-center gap-2">
+              {advanced.map((f) => (
+                <FilterControl key={f.id} filter={f} document={doc} call={call} onChange={onChange} />
+              ))}
+            </div>
+          </div>
         </div>
       )}
       <div className="filter-active-row" data-active={!!active.length} inert={!active.length}>

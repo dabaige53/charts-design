@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Eye, RotateCcw, Save, Send, Trash2 } from "lucide-react";
 import { Button } from "./ui";
 import { Input } from "./components/ui/input";
 import { Badge } from "./components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./components/ui/sheet";
 import type { Config, Document, ToolCall } from "./types";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./components/ui/dialog";
+import { DashboardApp } from "./dashboard";
+import { createVersionReader } from "./cos-client";
 
 export function VersionCenter({ open, onOpenChange, document, call, onRestore, onSaved }: {
   open: boolean; onOpenChange: (open: boolean) => void; document: Document;
@@ -17,6 +20,9 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<Document | null>(null);
   const [deleteRevision, setDeleteRevision] = useState<number | null>(null);
+  const [deletePlan, setDeletePlan] = useState<Config | null>(null);
+  const [deleteResult, setDeleteResult] = useState<Config | null>(null);
+  const previewSequence = useRef(0);
   const [tab, setTab] = useState<"versions" | "shares">("versions");
   const [availablePages, setAvailablePages] = useState<Config[]>([]);
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
@@ -29,13 +35,29 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
       call("dashboard_history", { dashboardId: document.id, limit: 100 }),
     ]);
     setStatus(versions);
-    setHistory(saved.history);
+    const entries = new Map<number, Config>((saved.history || []).map((item: Config) => [item.revision, item]));
+    for (const release of versions.releases || []) {
+      if (!entries.has(release.revision)) entries.set(release.revision, { ...release, name: "", action: "release" });
+    }
+    setHistory([...entries.values()].sort((a, b) => b.revision - a.revision));
   }, [call, document.id]);
   useEffect(() => {
     if (!open) return;
-    setError(""); setPreview(null); setDeleteRevision(null); setNewShare(null);
+    setError(""); setPreview(null); setDeleteRevision(null); setDeletePlan(null); setNewShare(null);
+    previewSequence.current++;
     void refresh().catch((e) => setError(String(e.message || e)));
+    return () => { previewSequence.current++; };
   }, [open, refresh]);
+  useEffect(() => {
+    if (!open || !deleteResult?.id || deleteResult.state !== "deleting") return;
+    let live = true;
+    const timer = setTimeout(() => {
+      void call("dashboard_version_delete_status", { dashboardId: document.id, jobId: deleteResult.id })
+        .then(async (result) => { if (live) { setDeleteResult(result); await refresh(); } })
+        .catch((e) => { if (live) setError(String(e.message || e)); });
+    }, 1500);
+    return () => { live = false; clearTimeout(timer); };
+  }, [open, deleteResult, call, document.id, refresh]);
   const run = async (work: () => Promise<void>) => {
     setBusy(true); setError("");
     try { await work(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -47,7 +69,7 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
     const list = await call("dashboard_list");
     setAvailablePages(list.dashboards.filter((page: Config) => page.id !== document.id));
   };
-  return <Sheet open={open} onOpenChange={onOpenChange}>
+  return <><Sheet open={open} onOpenChange={onOpenChange}>
     <SheetContent className="overflow-y-auto sm:max-w-xl">
       <SheetHeader>
         <SheetTitle>版本与分享</SheetTitle>
@@ -61,6 +83,15 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
             disabled={busy} onClick={() => { setTab("shares"); void run(loadShares); }}>分享</Button>
         </div>
         {error && <p role="alert" className="text-destructive">{error}</p>}
+        {deleteResult?.state === "complete" && <p role="status">已删除，专属文件清理完成。</p>}
+        {(status?.deletionJobs || []).map((job: Config) => <div key={job.id} role="status" className="rounded-lg border p-3">
+          <p>版本 {job.revision} · {job.state === "failed" ? "访问已撤销，文件清理未完成" : "正在删除文件"}</p>
+          {job.error && <p className="text-sm text-destructive">{job.error}</p>}
+          <Button variant="outline" disabled={busy} onClick={() => void run(async () => {
+            setDeleteResult(await call("dashboard_version_delete_retry", { dashboardId: document.id, jobId: job.id }));
+            await refresh();
+          })}>继续清理</Button>
+        </div>)}
         {tab === "versions" ? <>
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">草稿 {status?.draftRevision ?? document.revision}</Badge>
@@ -79,14 +110,16 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
             {history.map((item) => <article key={item.revision} className="rounded-lg border p-3">
               <div className="flex items-center justify-between gap-2">
                 <strong>{item.name || `版本 ${item.revision}`}</strong>
+                <Badge variant="outline">已冻结</Badge>
                 {status?.publishedRevision === item.revision && <Badge><Check />当前发布</Badge>}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">版本 {item.revision} · {item.created_at}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => {
+                  const sequence = ++previewSequence.current;
                   const result = await call("dashboard_version_get", { dashboardId: document.id, revision: item.revision });
-                  setPreview(result.version);
-                })}><Eye />查看内容</Button>
+                  if (sequence === previewSequence.current) setPreview(result.version);
+                })}><Eye />查看版本</Button>
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => {
                   await onRestore(item.revision); await refresh(); setPreview(null);
                 })}><RotateCcw />恢复为草稿</Button>
@@ -94,31 +127,19 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
                   await call("dashboard_version_publish", { dashboardId: document.id, expectedRevision: status?.draftRevision, revision: item.revision });
                   await refresh();
                 })}><Send />发布此版本</Button>
-                <Button size="sm" variant="outline"
-                  disabled={busy || !status || status.savedRevision === item.revision || status.releases?.some((release: Config) => release.revision === item.revision)}
-                  onClick={() => setDeleteRevision(item.revision)}><Trash2 />删除版本</Button>
+                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive"
+                  disabled={busy}
+                  onClick={() => void run(async () => {
+                    const current = await call("dashboard_version_status", { dashboardId: document.id });
+                    setStatus(current);
+                    const plan = await call("dashboard_version_delete_preview", {
+                      dashboardId: document.id, expectedRevision: current.draftRevision, revision: item.revision,
+                    });
+                    setDeleteRevision(item.revision); setDeletePlan(plan); setDeleteResult(null);
+                  })}><Trash2 />删除版本</Button>
               </div>
-              {deleteRevision === item.revision && <div className="mt-3 space-y-2" role="group" aria-label={`删除版本 ${item.revision}`}>
-                <p className="text-sm">删除后无法恢复此保存版本。草稿、已发布版本、分享和数据集保留。</p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" disabled={busy} onClick={() => setDeleteRevision(null)}>取消</Button>
-                  <Button size="sm" variant="destructive" disabled={busy} onClick={() => void run(async () => {
-                    await call("dashboard_version_delete", { dashboardId: document.id, expectedRevision: status?.draftRevision, revision: item.revision });
-                    if (preview?.revision === item.revision) setPreview(null);
-                    setDeleteRevision(null); await refresh();
-                  })}>确认删除</Button>
-                </div>
-              </div>}
             </article>)}
           </div>
-          {preview && <section className="rounded-lg border bg-muted/30 p-3" aria-label="历史版本内容">
-            <h3 className="font-medium">版本 {preview.revision} · {preview.manifest.title}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">只读内容摘要 · {Object.keys(preview.manifest.components).length} 个组件 · {Object.keys(preview.manifest.datasets).length} 个数据集</p>
-            <ul className="mt-3 space-y-1">
-              {Object.entries(preview.manifest.components).map(([id, component]) =>
-                <li key={id}>{component.title || component.config?.title || id}</li>)}
-            </ul>
-          </section>}
           {!!status?.releases?.length && <section>
             <h3 className="mb-2 font-medium">发布记录</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">{status.releases.map((event: Config) =>
@@ -173,5 +194,82 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
         </>}
       </div>
     </SheetContent>
-  </Sheet>;
+  </Sheet>
+  <Dialog open={deletePlan !== null} onOpenChange={(value) => { if (!value && !busy) { setDeletePlan(null); setDeleteRevision(null); } }}>
+    <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>删除版本 {deleteRevision}</DialogTitle>
+        <DialogDescription>确认后立即撤销关联分享并删除专属文件。此操作无法恢复，当前草稿保留。</DialogDescription>
+      </DialogHeader>
+      {deletePlan && <div className="space-y-3 text-sm">
+        <p>{history.find(item => item.revision === deleteRevision)?.name || "未命名版本"} · {history.find(item => item.revision === deleteRevision)?.created_at}</p>
+        <p>{status?.savedRevision === deleteRevision ? "这是最新保存版本。" : ""}{deletePlan.clearsPublication ? "删除后清空当前发布状态。" : ""}</p>
+        <p>{deletePlan.nextSavedRevision ? `在线只读将使用版本 ${deletePlan.nextSavedRevision}。` : "删除后暂无已保存版本；在线只读不会显示草稿。"}</p>
+        <p>将删除 {deletePlan.objects.length} 组专属文件及 {deletePlan.datasets.length} 个无引用数据版本。</p>
+        <p>COS 预计删除 {(deletePlan.cosBytes / 1024 / 1024).toFixed(2)} MB；PostgreSQL 内容估算 {(deletePlan.postgresBytes / 1024).toFixed(1)} KB。</p>
+        {deletePlan.shares.length > 0 && <div><p>以下分享将整体撤销：</p><ul className="list-disc pl-5">{deletePlan.shares.map((share: Config) =>
+          <li key={share.shareId}>{share.url ? <a href={share.url} target="_blank" rel="noreferrer" className="break-all underline">{share.url}</a> : share.shareId} · {share.pages.length} 个页面</li>)}</ul></div>}
+        {deletePlan.retained.length > 0 && <div><p>以下数据仍被使用，保留：</p><ul className="list-disc pl-5">{deletePlan.retained.map((item: Config, index: number) =>
+          <li key={item.id || item.version || index} className="break-all">{item.version || item.id}：{item.references.map((ref: Config) => `${ref.dashboardId || ""} ${referenceLabel(ref.source)}${ref.revision ? ` ${ref.revision}` : ""}`).join("、")}</li>)}</ul></div>}
+        <p className="text-muted-foreground">检查时间：{new Date(deletePlan.checkedAt).toLocaleString()}。数据库内容删除不代表计费空间立即下降。</p>
+        {error && <p role="alert" className="text-destructive">{error}</p>}
+      </div>}
+      <DialogFooter>
+        <Button variant="outline" disabled={busy} onClick={() => { setDeletePlan(null); setDeleteRevision(null); }}>取消</Button>
+        <Button variant="destructive" disabled={busy} onClick={() => void run(async () => {
+          try {
+            const result = await call("dashboard_version_delete", {
+              dashboardId: document.id, expectedRevision: status?.draftRevision, revision: deleteRevision, confirmation: deletePlan?.token,
+            });
+            setDeleteResult(result); if (preview?.revision === deleteRevision) setPreview(null);
+            setDeletePlan(null); setDeleteRevision(null); await refresh(); await onSaved();
+          } catch (failure) {
+            if (failure instanceof Error && "code" in failure && failure.code === "PLAN_CHANGED") {
+              const current = await call("dashboard_version_status", { dashboardId: document.id });
+              setStatus(current);
+              setDeletePlan(await call("dashboard_version_delete_preview", {
+                dashboardId: document.id, expectedRevision: current.draftRevision, revision: deleteRevision,
+              }));
+              throw Error("删除影响已变化，已更新清单，请重新确认。");
+            }
+            throw failure;
+          }
+        })}>{busy ? "正在删除…" : "确认删除"}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+  <Dialog open={preview !== null} onOpenChange={(value) => { if (!value) { previewSequence.current++; setPreview(null); } }}>
+    <DialogContent className="h-[92vh] max-w-[96vw] overflow-y-auto sm:max-w-[96vw]">
+      <DialogHeader><DialogTitle>正在查看版本 {preview?.revision}</DialogTitle>
+        <DialogDescription>只读历史内容；筛选不会修改草稿或发布状态。</DialogDescription></DialogHeader>
+      {preview && <HistoryPreview key={`${preview.id}:${preview.revision}`} document={preview} remote={call} />}
+    </DialogContent>
+  </Dialog></>;
+}
+
+function referenceLabel(source: string) {
+  return ({ draft: "当前草稿", checkpoint: "保存版本", release: "发布版本", annotations: "批注",
+    "annotation-history": "批注历史", "local-data": "本地数据资产" } as Record<string, string>)[source] || source;
+}
+
+function HistoryPreview({ document, remote }: { document: Document; remote: ToolCall }) {
+  const [reader, setReader] = useState<ReturnType<typeof createVersionReader> | null>(null);
+  useEffect(() => {
+    const boot = window.__chartsBoot || {};
+    const tokenKey = `charts-design-token:${boot.apiBase || "/api/tools/"}:${boot.projectRoot || ""}:${boot.dashboardId || ""}`;
+    const token = sessionStorage.getItem(tokenKey) || "";
+    const browser = createVersionReader(document, (boot.apiBase || "").split("/api/")[0] + "/assets/static-worker.js",
+      token ? { Authorization: "Bearer " + token } : {});
+    const operations: Record<string, string> = { dashboard_view: "view", dashboard_filter_options: "options",
+      component_data: "details", semantic_inspect: "semantic", dataset_export: "export" };
+    const value = document.storageFormat === "cos-v1" ? browser : {
+      destroy: browser.destroy,
+      call: (name: string, request: Config = {}) => operations[name]
+        ? remote("dashboard_version_query", { dashboardId: document.id, revision: document.revision, operation: operations[name], request })
+        : browser.call(name, request),
+    };
+    setReader(value);
+    return () => value.destroy();
+  }, [document, remote]);
+  return reader ? <DashboardApp initial={document} call={reader.call} readOnly staticMode /> : <p>正在打开历史版本…</p>;
 }
