@@ -92,7 +92,12 @@ jobs:
         working-directory: runtime-ui
         run: |
           mkdir -p reports
-          bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
+          failed=0
+          for test in src/*.test.ts src/*.test.tsx; do
+            [ -f "$test" ] || continue
+            bun test "$test" --reporter=junit --reporter-outfile="reports/$(basename "$test").xml" || failed=1
+          done
+          exit "$failed"
       - uses: actions/upload-artifact@v5
         if: always()
         with:

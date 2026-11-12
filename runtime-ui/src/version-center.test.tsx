@@ -4,8 +4,8 @@ import React from "react";
 import { VersionCenter } from "./version-center";
 import type { Config, Document } from "./types";
 
-Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
-Object.defineProperty(globalThis, "NodeFilter", { configurable: true, value: window.NodeFilter });
+Object.defineProperty(globalThis, "CustomEvent", { configurable: true, writable: true, value: window.CustomEvent });
+Object.defineProperty(globalThis, "NodeFilter", { configurable: true, writable: true, value: window.NodeFilter });
 afterEach(cleanup);
 
 // @wu-test type=integration | scope=VersionCenter 删除历史 | protects=删除影响未返回时无反馈或未确认就删除最新版本
