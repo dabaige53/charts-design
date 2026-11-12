@@ -25,6 +25,7 @@ export type ComponentSpec = {
   [key: string]: any;
 };
 export type Document = {
+  staticPages?: { id: string; title: string; path: string }[];
   id: string;
   revision: number;
   dataVersion?: string;

@@ -15,6 +15,35 @@ const fieldTypes: Record<string, string> = {
   date: "日期", string: "文本", number: "数值", boolean: "是／否",
 };
 
+function comparableMetric(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(comparableMetric);
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => [key, comparableMetric(item)]));
+  return value;
+}
+
+function distinctMetricIds(ids: string[], component: Config, metrics: Config): string[] {
+  const measures: Config = component.binding?.measures || {};
+  const comparisons = Object.values(component.binding?.comparisons || {}) as Config[];
+  const baselines = new Set(comparisons.map((comparison) => comparison.baseline));
+  const currents = new Set(comparisons.map((comparison) => comparison.current));
+  const signature = (metric: Config) => {
+    const { field, numerator, denominator, ...description } = metric;
+    return JSON.stringify(comparableMetric(description));
+  };
+  const redundant = new Set<string>();
+  for (const comparison of comparisons) {
+    const baseline = measures[comparison.baseline];
+    const current = measures[comparison.current];
+    if (!baseline || !current || baseline === current || !metrics[baseline] || !metrics[current]) continue;
+    if (Object.entries(measures).some(([target, id]) =>
+      id === baseline && (!baselines.has(target) || currents.has(target)))) continue;
+    if (signature(metrics[baseline]) === signature(metrics[current])) redundant.add(baseline);
+  }
+  return ids.filter((id) => !redundant.has(id));
+}
+
 function calculation(metric: Config, fields: Config) {
   if (metric.formula || metric.calculation) return metric.formula || metric.calculation;
   const label = (field: string) => fields[field]?.label || field;
@@ -125,10 +154,10 @@ export function SemanticDetails({
   const sourceId = dataset.sourceId || component.sourceId;
   const source = sources[sourceId];
   const scope = filterScope(document, filters, componentId);
-  const metricIds = [...new Set([
+  const metricIds = distinctMetricIds([...new Set([
     ...(component.measures || []),
     ...Object.values(component.binding?.measures || {}),
-  ])] as string[];
+  ])] as string[], component, document.manifest.metrics);
   const bound = Object.fromEntries(metricIds
     .filter((id) => document.manifest.metrics[id])
     .map((id) => [id, document.manifest.metrics[id]]));

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {clearFilterValues} from '../../dashboard_runtime/web/local-filter.mjs';
 

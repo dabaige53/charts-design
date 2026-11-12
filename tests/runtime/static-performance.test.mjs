@@ -1,7 +1,7 @@
-import test from 'node:test';import assert from 'node:assert/strict';
+import { test } from 'bun:test';import assert from 'node:assert/strict';
 import {visibleRows,aggregate} from '../../dashboard_runtime/web/engine.mjs';
 const document=rows=>({dataVersion:'v1',manifest:{components:{a:{datasetId:'sales'},b:{datasetId:'sales'}},metrics:{},datasets:{},filters:[{field:'carrier',op:'in',values:['HO'],componentIds:['a','b']}]},snapshot:{datasets:{sales:rows},componentData:{}}});
-// @wu-test type=behavior | scope=filtered row cache | protects=筛选或数据变化后使用过期结果 | debt=D6
+// @wu-test type=behavior | scope=filtered row cache | protects=筛选或数据变化后使用过期结果 | debt=impl-detail
 test('same filter scopes share rows, changing filters or snapshots invalidates results',()=>{
  const doc=document([{carrier:'HO',v:2},{carrier:'MU',v:7}]);const a=visibleRows(doc,'a');assert.equal(a,visibleRows(doc,'b'));assert.equal(aggregate(a,{aggregation:'sum',field:'v'}),2);
  doc.manifest.filters[0].values=['MU'];assert.equal(aggregate(visibleRows(doc,'a'),{aggregation:'sum',field:'v'}),7);

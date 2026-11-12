@@ -10,6 +10,7 @@ import { createProjectContext } from "./project-context.mjs";
 import { resolveToolResult } from "./tool-result.mjs";
 import { createRequestQueue } from "../../dashboard_runtime/web/request-queue.mjs";
 import { browserDownload, type Download } from "./host";
+import { WebAccess } from "./web-access";
 import type { Config, Document, ToolCall } from "./types";
 declare global {
   interface Window {
@@ -19,21 +20,22 @@ declare global {
 }
 const boot = window.__chartsBoot || { mode: "mcp" };
 let app: App | undefined;
+const webTokenKey = `charts-design-token:${boot.apiBase || "/api/tools/"}:${boot.projectRoot || ""}:${boot.dashboardId || ""}`;
 function readWebToken() {
   if (boot.mode !== "web") return "";
-  const key = `charts-design-token:${boot.apiBase || "/api/tools/"}:${boot.projectRoot || ""}:${boot.dashboardId || ""}`;
-  const stored = sessionStorage.getItem(key) || "";
+  const stored = sessionStorage.getItem(webTokenKey) || "";
   const fragment = location.hash.slice(1);
   const token =
     new URLSearchParams(fragment).get("token") ||
     (!stored && /^[A-Za-z0-9_.-]{33,}$/.test(fragment) ? fragment : "");
   if (token) {
-    sessionStorage.setItem(key, token);
+    sessionStorage.setItem(webTokenKey, token);
     history.replaceState(history.state, "", location.pathname + location.search);
   }
   return token || stored;
 }
-const webToken = readWebToken();
+let webToken = readWebToken();
+class WebAuthError extends Error {}
 const queue = createRequestQueue(4);
 // Editors immediately consume the updated document; Agent calls default to receipts.
 const documentWrites = new Set([
@@ -59,6 +61,7 @@ const send = (name: string, args: Config) =>
       body: JSON.stringify(args),
     });
     const value = await response.json();
+    if (response.status === 401) throw new WebAuthError();
     if (!response.ok) throw Error(value.error?.message || "请求失败");
     return value;
   });
@@ -115,6 +118,7 @@ class RenderBoundary extends Component<
 function Root() {
   const [doc, setDoc] = useState<Document | null>(boot.document || null),
     [error, setError] = useState(""),
+    [accessRequired, setAccessRequired] = useState(false),
     [attempt, setAttempt] = useState(0),
     [fullscreen, setFullscreen] = useState(false),
     [hostFullscreen, setHostFullscreen] = useState(false);
@@ -140,7 +144,10 @@ function Root() {
           );
         }
       } catch (e) {
-        if (live) setError(String(e));
+        if (live) {
+          if (e instanceof WebAuthError) setAccessRequired(true);
+          else setError(String(e));
+        }
       }
     };
     if (boot.mode === "mcp") {
@@ -194,7 +201,10 @@ function Root() {
               setError("尚无已保存的看板，请通过本项目 MCP 创建。");
           })
           .catch((e) => {
-            if (live) setError(String(e));
+            if (live) {
+              if (e instanceof WebAuthError) setAccessRequired(true);
+              else setError(String(e));
+            }
           });
     }
     return () => {
@@ -224,6 +234,12 @@ function Root() {
   };
   if (boot.mode === "snapshot") return <SnapshotApp document={boot.document} />;
   if (boot.mode === "static") return <StaticSite />;
+  if (accessRequired && !doc) return <WebAccess onAccess={(token) => {
+    webToken = token;
+    sessionStorage.setItem(webTokenKey, token);
+    setAccessRequired(false);
+    setAttempt((value) => value + 1);
+  }} />;
   if (error && !doc)
     return (
       <RecoveryAlert

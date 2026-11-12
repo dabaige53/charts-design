@@ -42,7 +42,7 @@ class CloudProjectStore(Store):
             validate_component_content(component, key)
         doc = self.compact(doc)
         notes = doc['manifest'].setdefault('annotations', [])
-        self._note_context(doc, notes, [])
+        self._note_context(doc, notes, [], preserve_incoming=document is not None)
         return self.database.call('create', self.project, board=board_id, document=doc, at=utcnow())
 
     def get(self, board_id, hydrate=True):
@@ -62,13 +62,15 @@ class CloudProjectStore(Store):
         return self.database.call('list', self.project)
 
     @staticmethod
-    def _note_context(doc, notes, previous):
+    def _note_context(doc, notes, previous, preserve_incoming=False):
         old = {n['id']: n for n in previous}
         for note in notes:
-            note['context'] = copy.deepcopy(old[note['id']].get('context', {})) if note['id'] in old else {
-                'designRevision': doc['revision'],
-                'dataVersions': doc['snapshot'].get('datasetRefs', {}),
-                'filters': doc['manifest']['filters']}
+            if note['id'] in old:
+                note['context'] = copy.deepcopy(old[note['id']].get('context', {}))
+            elif not (preserve_incoming and isinstance(note.get('context'), dict)):
+                note['context'] = {'designRevision': doc['revision'],
+                                   'dataVersions': doc['snapshot'].get('datasetRefs', {}),
+                                   'filters': doc['manifest']['filters']}
 
     def mutate(self, board_id, expected_revision, operations=None, restore_revision=None,
                use_current_data=False, expected_annotations=None):

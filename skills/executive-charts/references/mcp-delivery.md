@@ -1,57 +1,57 @@
-# Shared MCP delivery workflow
+# Shared MCP delivery
 
-Use this workflow for executive dashboards and analytical reports. Read current tool schemas before forming calls; capabilities depend on the connected runtime.
+Use this flow for dashboards and Markdown reports. Read the connected tools' schemas and `charts://contract` before forming calls.
 
-One MCP registration can serve multiple projects. Pass the absolute asset directory as `projectRoot` on every project call, including list, diagnostics and chunk reads; never assume a previous call selected a current project. The preview retains its own project for subsequent UI calls. Existing startup `--project-root` remains a default for compatibility. See package-root `docs/project-runtime.md` for the unified entry point and router requirements; do not create per-project MCP registrations.
+## Project and data
 
-## Preserve the accepted artifact
+Pass `projectRoot` on every project call, including discovery, diagnostics and chunk reads. Locally it is the absolute durable asset directory; on the self-hosted server it is the configured project name. One MCP registration serves multiple projects.
 
-Inspect the current artifact before editing. Record the requested changes and retain stable dashboard/component IDs. For each affected component compare the before/after configuration: data and metric references, aggregation, comparison baselines, units, explanations, tooltip fields, filter consumers, sorting and drilldown.
+Read `dashboard_get` before editing. Keep the returned revision, stable component IDs, data references and comments. For affected components, retain the metric scope, aggregation, baseline, units, tooltip fields, sorting, drilldown and filter consumers.
 
-For KPI comparisons, bind real prior-period data at the same scope and grain. Compute aggregate values or ratios before their changes; distinguish relative percent changes from percentage-point differences. Missing baselines remain missing. KPI cards forbid descriptions and subtitles; retain business explanations in metric definitions and the detail view.
+Use `dataset_import` with exactly one of `rows` or `csvText` for small data. Use `dataset_attach` for configured SQLite sources; take connection aliases from operator configuration. Inspect imported fields and inferred metrics before binding them. Reuse immutable references returned by the tools.
 
-For tooltip references, inspect content and interaction together: heading, aggregate total, denominator, units, series order/colors, value/share rows and pointer placement. When showing only top series, state whether totals include hidden series; verify that the tooltip and table use that same definition. Loading, empty results and errors are distinct states; a completed empty result clears the previous result.
+For KPI comparisons, aggregate each period at the same scope and grain before calculating the change. Distinguish percentage changes from percentage-point differences. Tooltip totals, shares and detail tables must use the same denominator, including the declared treatment of hidden series.
 
-## Compose before writing
+## Edit, check and display
 
-Choose a preset, native ECharts, or custom HTML/JavaScript route. `chart_recommend`, `kpiGuide` and `layout_templates` are optional aids. Use explicit `set_layout` or a suitable template. KPI cards never contain narrative descriptions.
+1. For a new artifact call `dashboard_create`; for an existing one read `dashboard_get`.
+2. Call `dashboard_edit_begin` with the latest `expectedRevision` and retain its `batch_id`.
+3. Apply related operations with `dashboard_patch`, using each successful receipt's `revision` as the next `expectedRevision`. Writes default to compact summaries. Request `responseMode=full` or use `dashboard_get` when the updated declarations are needed. Replacement operations must include all fields being retained.
+4. Use `dashboard_view` for affected computed results. Match its revision and data version to the document being inspected. Verify source totals, units, ratios, baselines, filter scope and figure references.
+5. Call `dashboard_edit_finish` with the batch ID and current revision. This runs Doctor checks and creates the completed checkpoint.
+6. After success, call `dashboard_preview` once with the same project and dashboard. Deliver the saved result and relevant source details.
 
-## Save and display
+`dashboard_get` reads the editable draft; project previews read the latest completed checkpoint. On `DOCTOR_FAILED`, read the issues, correct the draft and finish again. On `REVISION_CONFLICT`, read the current document and reconcile the requested changes before retrying.
 
-1. Resolve the project's durable assets and the disposable runtime directory. Keep data references, design checkpoints and annotations in the project. Prefer existing immutable data versions over duplicate copies.
-2. Begin an edit batch, apply draft changes with the latest revision, and finish it. Resolve Doctor errors before automatic display. If checks are explicitly waived, preserve the draft and report the skipped gate; do not label it validated.
-3. After a successful finish, call `dashboard_preview` once with the same projectRoot and dashboardId. Component-scoped `dashboard_view` patches verify actual data; JSON exports preserve canonical state. Build and package the React resources before previewing.
-4. Verify document revisions, component references, dataset integrity, and Doctor check results directly. Record host rendering acceptance separately.
+Use `dashboard_data_inspect` for dataset counts and version references. Refreshing data creates a new dataset version; authored prose must be recalculated for that version or remain explicitly tied to its earlier snapshot.
 
-Annotations remain independent of design restoration. Preserve their original context when anchors become unavailable.
+## Comments and history
 
-MCP document-writing tools default to `responseMode=summary`. Successful receipts contain a top-level `revision`; use it as the next `expectedRevision` without re-reading the entire document after every write. Receipts preserve operation metadata but omit `document` and rendered artifacts. `affectedComponentIds` includes potentially affected components, including removals; it is not a complete field-level diff or proof of full validation. When you need newly inferred metric definitions or the actual updated configuration, read `dashboard_get` or explicitly request `responseMode=full`. Finish/checkpoint checks and preview remain required as appropriate.
+Read `dashboard_annotations` for comments and their original targets, then inspect the current document. Use stable component IDs to locate the affected content. When a visual anchor is ambiguous, confirm its location before editing.
 
-`dashboard_get` returns the editable draft; project preview/refresh reads the latest completed checkpoint. Failed finish/checkpoint checks return `DOCTOR_FAILED` and MCP `isError: true`; the draft and batch remain. Read the latest draft, fix the Doctor issues, then finish again. On `REVISION_CONFLICT`, reconcile current content before retrying. A checkpoint's `published` flag protects history from pruning.
+Annotations save independently of design revisions. Preserve their original context across restoration. To change comments when requested, use `set_annotations` with the exact previously read `expectedAnnotations`.
 
-Read `tools/list` and `charts://contract` for the same installed, transport-specific definitions and typed operation schemas. `runtime_keepalive`, `runtime_report_error` and local `dashboard_export_open` are App-only; agents read diagnostics and download managed exports instead. Supply exactly one of `rows` or `csvText` to `dataset_import`; connection aliases must come from operator configuration.
+Read `dashboard_history` or `dashboard_version_status` for saved versions. `dashboard_version_get` reads a historical version. A requested `dashboard_restore` creates a new draft; complete its checkpoint before opening the restored preview.
 
-## Locate failures and performance work
+## Export and publication
 
-Use request IDs with `runtime_diagnostics`. Distinguish backend query, serialization, chunk transport, client decoding and rendering. Retain the failing response and error position when available. Record version, phase, elapsed time and payload size; keep raw business rows and credentials out of logs.
+| Requested result | Route |
+| --- | --- |
+| JSON configuration or HTML snapshot | `dashboard_export`, then `dashboard_export_read` |
+| Full matching CSV rows | `dataset_export`, then `dashboard_export_read` with `format=csv` |
+| Standalone static website ZIP | `dashboard_export_site`, then `dashboard_export_read` with `format=zip` |
+| Formal publication of a saved version | Read `dashboard_version_status`, then `dashboard_version_publish` |
+| Tencent cloud share | Publish the intended version, then `dashboard_share_publish` |
+| Replace or revoke an existing cloud share | `dashboard_share_replace` or `dashboard_share_delete` using its returned share ID |
 
-For a performance claim, compare equivalent data, filters and outputs; record cold/warm cache conditions and repeat alternating baseline/candidate runs. Report median and range, query count, response size and failures. Separate menu-ready, query-complete and rendered-result timings. Identify the actual Python import location as well as the installed entry point: inherited working directories can shadow the installed module.
+Run publication and sharing operations when requested. Cloud shares are independent copies with their own access key and expiration. Static website ZIPs contain the React application and used dataset shards. Remote file exports return managed download links.
 
-Read the repository's check scripts and CI before adding checks. Attach mechanical regressions to existing automated checks; use visual review for hierarchy and reference fidelity. Bound source searches to the relevant modules, excluding generated bundles and business output.
+Details: [static website export](../../../docs/operations/static-deployment.md), [self-hosted service and sharing](../../../docs/operations/self-hosted-server.md).
 
-## Source navigation
+## Diagnose a failed delivery
 
-Paths below are relative to the package root:
+Use `runtime_info` to locate the installed backend, UI build and project assets. `UI_UNAVAILABLE` requires building and packaging the UI resources using the repository's [local update procedure](../../../docs/operations/local-mcp-update.md).
 
-- `dashboard_runtime/web/`: shared data, statistical calculation and local filter modules (pure data and static-query modules).
-- `dashboard_runtime/local_data.py`, `local_view.py`, `bindings.py`: option queries, component calculations and binding validation.
-- `dashboard_runtime/service.py`: MCP operations and diagnostics.
-- `docs/project-runtime.md`: storage, loading and edit lifecycle; `docs/mcp-transport-diagnostics.md`: transport diagnosis; `docs/dynamic-encoding.md`: dynamic bindings.
+Use request IDs with `runtime_diagnostics` to locate query, serialization, transport or rendering failures. Read the reported data and configuration, correct the cause and repeat the failed step. Keep credentials and raw business rows out of logs.
 
-## Self-hosted server
-
-`python3 -m dashboard_runtime server` serves Streamable HTTP MCP on `/mcp` with bearer tokens and browser previews of dashboards and reports. `projectRoot` is then a project name inside the server workspace, never an arbitrary server path. Desktop file actions (`dashboard_export_open`) are unavailable remotely; exports return signed `downloadUrl` links instead. See package-root `docs/self-hosted-server.md` for deployment, tokens, share links and limits.
-
-## Standalone hosting
-
-Static website export via `dashboard_export_site` returns the shared React application and used dataset shards as a managed ZIP. See package-root `docs/static-deployment.md`.
+For a requested performance investigation, read [local data](local-data.md) and [transport diagnostics](../../../docs/operations/mcp-transport-diagnostics.md). Compare equivalent data and filters, and separate query duration from rendering duration.

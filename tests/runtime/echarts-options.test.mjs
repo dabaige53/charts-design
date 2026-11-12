@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {applyEChartsOptions} from '../../dashboard_runtime/web/echarts-options.mjs';
 import {resolveOriginal} from '../../dashboard_runtime/web/bindings.mjs';

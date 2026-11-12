@@ -1,42 +1,47 @@
-# Self-hosted Charts Design server with the shared React MCP application.
-# Build from the repository root:  docker build -f deploy/Dockerfile -t charts-design .
-# Optional Seaborn statistics:     docker build -f deploy/Dockerfile --build-arg EXTRAS=statistics -t charts-design .
+# Build from the repository root; all dependency versions come from lockfiles.
+FROM ghcr.io/astral-sh/uv:0.12.13 AS uv
 
-FROM python:3.11-slim AS cloud-dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
-RUN pip install --no-cache-dir --target /cloud-dependencies 'cos-python-sdk-v5>=1.9,<2'
+FROM python:3.11-slim AS dependencies
+COPY --from=uv /uv /usr/local/bin/uv
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md ./
+ARG EXTRAS=""
+ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+RUN if [ -n "$EXTRAS" ]; then \
+      uv sync --locked --no-dev --no-install-project --extra mcp --extra cloud --extra "$EXTRAS"; \
+    else \
+      uv sync --locked --no-dev --no-install-project --extra mcp --extra cloud; \
+    fi
 
-FROM node:22-slim AS ui
-WORKDIR /build
-RUN corepack enable
-COPY runtime-ui/package.json runtime-ui/pnpm-lock.yaml ./runtime-ui/
+FROM oven/bun:1.3.8 AS ui
 WORKDIR /build/runtime-ui
-RUN pnpm install --frozen-lockfile
+COPY runtime-ui/package.json runtime-ui/bun.lock ./
+RUN bun install --frozen-lockfile
 COPY runtime-ui/ ./
 COPY dashboard_runtime/web/ /build/dashboard_runtime/web/
-RUN pnpm build && pnpm package:runtime
+RUN bun run build && bun run package:runtime
 
 FROM python:3.11-slim
-ARG EXTRAS=""
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV PATH=/app/.venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
+    PYTHON=/app/.venv/bin/python \
     MPLCONFIGDIR=/tmp/matplotlib \
     CHARTS_WORKSPACE=/data/projects \
     CHARTS_RUNTIME_ROOT=/data/runtime \
     CHARTS_HOST=0.0.0.0 \
     CHARTS_PORT=8000
 WORKDIR /app
-COPY --from=cloud-dependencies /cloud-dependencies /usr/local/lib/python3.11/site-packages/
-RUN pip install --no-cache-dir 'mcp>=1.28,<2' \
- && if [ "$EXTRAS" = "statistics" ]; then pip install --no-cache-dir 'seaborn>=0.13.2,<0.14' 'matplotlib>=3.8,<4' 'pandas>=2.1,<3'; fi
+COPY --from=dependencies /app/.venv/ /app/.venv/
 COPY dashboard_runtime/ dashboard_runtime/
 COPY --from=ui /build/dashboard_runtime/web/dist/ dashboard_runtime/web/dist/
 COPY skills/executive-charts/ skills/executive-charts/
 COPY skills/analytical-reports/ skills/analytical-reports/
 COPY bin/ bin/
 COPY docs/ docs/
-COPY package.json pyproject.toml README.md ./
+COPY package.json pyproject.toml uv.lock README.md ./
 RUN useradd --system --uid 10001 --home-dir /data charts \
  && mkdir -p /data/projects /data/runtime && chown -R charts /data
 USER charts

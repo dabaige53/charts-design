@@ -3,19 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    paths:
-      - 'dashboard_runtime/**'
-      - 'runtime-ui/**'
-      - 'tests/**'
-      - 'skills/**'
-      - 'docs/**'
-      - 'bin/**'
-      - 'deploy/**'
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'package.json'
-      - 'pyproject.toml'
-      - '.github/workflows/dashboard-runtime.yml'
   workflow_dispatch:
 concurrency:
   group: dashboard-runtime-${{ github.event.pull_request.number || github.ref }}
@@ -26,9 +13,32 @@ env:
   PYTHONUNBUFFERED: '1'
   FORCE_COLOR: '1'
 
-# Jobs run in parallel so one failing layer never hides the others' results.
-# Layers: static checks, backend/data unit tests, and the deployable container.
+# Documentation checks always run. Executable changes share one UI artifact.
 jobs:
+  changes:
+    name: Select checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tests: ${{ steps.scope.outputs.tests }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] || [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo 'tests=true' >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only -z "$BASE" HEAD | bun bin/ci-scope.mjs >> "$GITHUB_OUTPUT"
+          fi
+
   checks:
     name: Static checks
     runs-on: ubuntu-latest
@@ -38,60 +48,101 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - uses: actions/setup-node@v5
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
+          bun-version-file: .bun-version
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.13'
+          enable-cache: true
+      - run: uv sync --locked --only-group dev --no-install-project --python 3.11
       - name: Lint Python (pyflakes rules)
-        run: |
-          python -m pip install 'ruff==0.16.9'
-          ruff check --output-format=github
+        run: bun bin/python-runtime.js -m ruff check --output-format=github
       - name: Syntax, skill links and documentation links/anchors
-        run: npm run check
+        run: bun run check
+      - name: Development workflow checks
+        run: bun test ./tests/development ./tests/deploy
+
+  ui:
+    name: Shared UI build
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-1.3.8-${{ hashFiles('runtime-ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-1.3.8-
+      - run: bun run ui:install
+      - run: bun run ui:typecheck
+      - run: bun run ui:build
+      - uses: actions/upload-artifact@v5
+        with:
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: React component and interaction tests
+        working-directory: runtime-ui
+        run: bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: component-reports
+          path: runtime-ui/reports/
+          retention-days: 14
 
   unit:
     name: Unit tests (Python ${{ matrix.python }})
+    needs: [changes, ui]
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        # The supported floor from pyproject.toml and the newest release.
-        python: ['3.10', '3.13']
+        # Compatibility floor, production baseline, and the existing upper CI target.
+        python: ['3.10', '3.11', '3.13']
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - uses: actions/setup-node@v5
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
-      - name: Install backend test dependencies
-        run: |
-          python -m pip install '.[statistics,mcp,test]'
-      - name: Build shared React resources for backend protocol checks
-        working-directory: runtime-ui
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile
-          pnpm typecheck
-          pnpm build
-          pnpm package:runtime
+          bun-version-file: .bun-version
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.13'
+          enable-cache: true
+      - name: Install locked backend dependencies
+        run: uv sync --locked --all-extras --no-install-project --python ${{ matrix.python }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
+      - name: Package shared UI for backend protocol checks
+        run: bun runtime-ui/scripts/package.mjs
       - name: Runtime, MCP protocol and server tests (no browser)
         run: >-
-          python -m pytest tests/runtime -q
+          bun bin/python-runtime.js -m pytest tests/runtime -q
           --junitxml=reports/runtime-unit.xml
           --cov=dashboard_runtime --cov-report=xml:reports/coverage.xml
           --cov-report=term:skip-covered --cov-fail-under=84
-      - name: Shared data modules (Node)
-        run: node --test tests/runtime/*.test.mjs
+      - name: Shared data modules (Bun)
+        run: bun test ./tests/runtime
       - name: Workspace and data contracts
-        run: python -m pytest tests --ignore=tests/runtime -q --junitxml=reports/workspace.xml
+        run: bun bin/python-runtime.js -m pytest tests --ignore=tests/runtime -q --junitxml=reports/workspace.xml
       - name: Coverage summary
         if: always()
         run: |
-          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          bun bin/python-runtime.js - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
           import pathlib, xml.etree.ElementTree as ET
           path = pathlib.Path('reports/coverage.xml')
           if path.exists():
@@ -111,13 +162,18 @@ jobs:
 
   container:
     name: Container image smoke test
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.13'
       - name: Add fake environment files to detect image leaks
         run: |
-          python3 - <<'EOF'
+          uv run --no-project --python 3.11 python - <<'EOF'
           from pathlib import Path
           for name in ('deploy/charts.env', '.env', 'dashboard_runtime/.env'):
               Path(name).write_text('CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n')
@@ -125,4 +181,4 @@ jobs:
       - name: Build the deployable image
         run: docker build -f deploy/Dockerfile -t charts-design:ci .
       - name: Run the image and exercise remote MCP and JSON downloads
-        run: python3 tests/deploy/container_smoke.py --image charts-design:ci
+        run: uv run --no-project --python 3.11 python tests/deploy/container_smoke.py --image charts-design:ci

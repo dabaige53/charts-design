@@ -132,6 +132,22 @@ class Service:
             self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
+        if tool in ('dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
+            from .cloud_data import CloudData
+            require(isinstance(self.store.data, CloudData), 'Transfer requires cloud project storage', 'UNSUPPORTED_OPERATION')
+            from qcloud_cos.cos_exception import CosClientError, CosServiceError
+            data = self.store.data
+            try:
+                if tool == 'dataset_transfer_chunk':
+                    return data.transfer_chunk(args['uploadId'], args['ref'], args['part'], args['rows'])
+                if tool == 'dataset_transfer_finish':
+                    return data.transfer_finish(args['uploadId'], args['ref'])
+                if tool == 'dataset_transfer_status':
+                    return data.transfer_status(args['uploadId'], args['ref'])
+                data.transfer_cleanup(args['uploadId'])
+                return {'ok': True}
+            except (CosClientError, CosServiceError) as error:
+                raise DashboardError('CLOUD_STORAGE_FAILED', 'Transfer storage request failed; check the configured COS permissions.', 503) from error
         if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
             from .cloud_shares import CloudShares
             shares = CloudShares.from_environment()
@@ -139,7 +155,7 @@ class Service:
             try:
                 if tool == 'dashboard_share_publish':
                     return shares.publish(self, board, args['expectedRevision'],
-                                          args.get('expiration', '7d'), args.get('accessKey'))
+                                          args.get('expiration', '7d'), args.get('accessKey'), args.get('pages'))
                 if tool == 'dashboard_share_replace':
                     return shares.replace(self, board, args['shareId'], args['expectedRevision'],
                                           args.get('expiration', '7d'))
@@ -150,7 +166,7 @@ class Service:
                 raise DashboardError('CLOUD_STORAGE_FAILED',
                     'Tencent COS request failed. Check cloud service permissions and dashboard_share_status before retrying a publish.',
                     503) from error
-        if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish'):
+        if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish', 'dashboard_version_delete'):
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             from .versions import Versions
             versions = Versions(self.store)
@@ -158,7 +174,16 @@ class Service:
                 return versions.status(board)
             if tool == 'dashboard_version_get':
                 return {'version': versions.read(board, args['revision'])}
+            if tool == 'dashboard_version_delete':
+                return versions.delete_checkpoint(board, args['expectedRevision'], args['revision'])
             return versions.publish(board, args['expectedRevision'], args['revision'])
+        if tool == 'dataset_storage_inventory':
+            require(self.project_root is not None and hasattr(self.store, 'database'),
+                    'CloudBase project required', 'PROJECT_REQUIRED')
+            from .cloud_database import CloudDatabase
+            database = CloudDatabase()
+            database.url = database.url.rsplit('/', 1)[0] + '/charts_data_inventory'
+            return database.call('inventory', self.store.project)
         if tool == 'dashboard_version_label':
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             return self.store.label_checkpoint(board,args['expectedRevision'],args['revision'],args.get('name',''),args.get('published',False))

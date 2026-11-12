@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -21,7 +21,7 @@ export function includeSource(path) {
   if (/^docs\/(design-system|design-canvas|images)\//.test(path)) return false;
   return /^(dashboard_runtime|runtime-ui|bin|docs)\//.test(path)
     || /^skills\/(executive-charts|analytical-reports)\//.test(path)
-    || /^(package\.json|pyproject\.toml|README\.md)$/.test(path);
+    || /^(package\.json|pyproject\.toml|uv\.lock|README\.md)$/.test(path);
 }
 
 export function matchesRelease(health, version, commit) {
@@ -85,7 +85,7 @@ export async function deploy() {
   if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
     throw new Error('CLOUDBASE_SERVICE_URL 必须是无凭据的 HTTPS 地址。');
   }
-  const moduleRoot = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim();
+  const moduleRoot = join(root, 'node_modules');
   const installed = JSON.parse(readFileSync(join(moduleRoot, '@cloudbase/cli/package.json'), 'utf8'));
   if (installed.version !== CLI_VERSION) throw new Error(`请安装 @cloudbase/cli@${CLI_VERSION}。`);
   const stage = mkdtempSync(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'charts-cloudbase-'));

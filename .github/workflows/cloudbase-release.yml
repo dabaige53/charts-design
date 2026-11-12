@@ -27,17 +27,17 @@ jobs:
           ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
+          bun-version-file: .bun-version
       - name: Validate release tag and scripts
         env:
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          node --input-type=module -e 'import {validateTag} from "./bin/cloudbase-deploy.mjs"; import fs from "node:fs"; validateTag(process.env.RELEASE_TAG, JSON.parse(fs.readFileSync("package.json")).version)'
-          node --test tests/deploy/cloudbase-release.test.mjs
-      - name: Install pinned CloudBase CLI
-        run: npm install --global @cloudbase/cli@3.9.1
+          bun -e 'import {validateTag} from "./bin/cloudbase-deploy.mjs"; import fs from "node:fs"; validateTag(process.env.RELEASE_TAG, JSON.parse(fs.readFileSync("package.json")).version)'
+          bun test ./tests/deploy
+      - name: Install locked CloudBase CLI
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Build and deploy on CloudBase
         env:
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -46,4 +46,4 @@ jobs:
           CLOUDBASE_SERVICE: ${{ vars.CLOUDBASE_SERVICE }}
           CLOUDBASE_REGION: ${{ vars.CLOUDBASE_REGION }}
           CLOUDBASE_SERVICE_URL: ${{ vars.CLOUDBASE_SERVICE_URL }}
-        run: node bin/cloudbase-deploy.mjs "$RELEASE_TAG"
+        run: bun bin/cloudbase-deploy.mjs "$RELEASE_TAG"

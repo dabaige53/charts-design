@@ -1,8 +1,8 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {createRequestQueue} from '../../dashboard_runtime/web/request-queue.mjs';
 import {expandRecords} from '../../dashboard_runtime/web/tool-result.mjs';
-// @wu-test type=behavior | scope=request queue | protects=并发超限或失败后队列阻塞 | debt=D9
+// @wu-test type=behavior | scope=request queue | protects=并发超限或失败后队列阻塞 | debt=flaky
 test('one budget bounds multiple callers and failures release slots',async()=>{
  const queue=createRequestQueue(4);let active=0,peak=0;
  const results=await Promise.allSettled(Array.from({length:20},(_,i)=>queue(async()=>{

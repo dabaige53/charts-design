@@ -7,23 +7,28 @@ import zipfile
 
 from .assets import DIST, require_preview, ui_build_id
 from .build import BACKEND_BUILD_ID
-from .model import json_bytes, require
+from .model import MAX_BYTES, json_bytes, require
 
 
 def _write_shards(site, key, rows):
-    files, batch, count = [], [], 0
-    for row in rows:
-        batch.append(row)
-        count += 1
-        if len(batch) == 5000:
-            name = 'data/' + key + '-' + str(len(files)) + '.json.gz'
-            (site / name).write_bytes(gzip.compress(json_bytes(batch), mtime=0))
-            files.append(name)
-            batch = []
-    if batch:
+    files, batch, count, size = [], [], 0, 2
+
+    def flush():
         name = 'data/' + key + '-' + str(len(files)) + '.json.gz'
-        (site / name).write_bytes(gzip.compress(json_bytes(batch), mtime=0))
+        (site / name).write_bytes(gzip.compress(b'[' + b','.join(batch) + b']', mtime=0))
         files.append(name)
+
+    for row in rows:
+        encoded = json_bytes(row)
+        require(len(encoded) + 2 <= MAX_BYTES, 'A single export row exceeds the 16 MiB limit', 'PAYLOAD_TOO_LARGE')
+        if batch and (len(batch) == 5000 or size + 1 + len(encoded) > MAX_BYTES):
+            flush()
+            batch, size = [], 2
+        size += len(encoded) + bool(batch)
+        batch.append(encoded)
+        count += 1
+    if batch:
+        flush()
     return files, count
 
 

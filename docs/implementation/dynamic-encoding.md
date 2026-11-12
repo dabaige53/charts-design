@@ -1,0 +1,72 @@
+# 动态图表声明
+
+`chart_declarations` 返回 `dynamicEncoding`。在原有 `r02`、`c03`、`r03`、`k01` 或 `f02` 的 `config.encoding` 中启用；组件仍使用稳定 ID，原有编辑、批注和历史记录继续保留。旧声明不需要迁移。
+
+```json
+{
+  "kind": "legacy", "family": "chart", "title": "门店商品销售",
+  "datasetId": "sales",
+  "config": {
+    "code": "c03", "data": {}, "presentation": {},
+    "encoding": {"orientation": "horizontal", "stacked": true,
+      "colors": {"Coffee": "#123B5D", "Tea": "#A4453C"}}
+  },
+  "binding": {"datasetId": "sales", "categoryField": "store", "seriesField": "product",
+    "measures": {"value": "sales-total"},
+    "orderBy": {"target": "value", "direction": "desc"}}
+}
+```
+
+`categoryField` 可换成区域、代理、部门或其他已声明字段。系列从筛选后的数据产生，没有固定系列数。堆叠为绝对值，仅接受 sum/count；不自动归一化为百分比。缺失组合保留 null，零值保留 0。长标签在轴上截短，提示框和数据表保留全文。
+
+散点使用 `r02`，绑定 `categoryField` 与 `measures.x/y`。`symbolSize` 默认 18，所有点等大；只有明确指定 `sizeBy` 才启用面积编码。`colorBy` 指向已绑定字段，`colors` 映射分类值到颜色。`tooltip` 是已绑定键的有序数组；显示格式来自指标的 format、unit 和 decimals。提示框不执行 JavaScript 字符串。`showLabels` 控制点标签。
+
+描述字段放在 `binding.attributes`：例如 `minutes: {field: "minutes", aggregation: "min", label: "最短时间", unit: "分钟"}`。`min/max` 仅用于数值并忽略 null；`unique` 仅在组内每行非空且值一致时返回该值，否则返回 null。分类缺失显示“缺失”。缺少 x 或 y 的观测不生成散点；空结果显示“当前筛选无数据”。
+
+
+跨数据集下钻需要组件明确配置相同 `linkGroup`，目标还必须有同名字段。单击散点按分类字段联动，再次单击或清除联动恢复。只有业务含义一致的字段才应放入同一联动组。
+
+## 覆盖范围
+
+| 场景 | 声明路径 | 本次验证 |
+| --- | --- | --- |
+| 数值卡 | 既有 KPI 与指标绑定 | 既有回归测试 |
+| 比较、排名 | c01/c02；c03 动态编码 | 动态分类排序 |
+| 横纵分组/堆叠柱 | c03 + orientation/stacked | 零值、缺失组合、三系列、筛选后系列变化 |
+| 趋势、多指标 | 既有 t 系列及绑定 | 未扩展其声明边界 |
+| 散点、固定点、气泡 | r02 动态编码 | 等大、显式 sizeBy、缺失、比例重算 |
+| 占比 | 既有占比图；ratio 指标 | 零分母与加权比例 |
+| 明细表 | 既有 table | 沿用明细分页；不是自动聚合表 |
+| 筛选、下钻 | 显式消费者、linkGroup | 同字段跨数据集需显式加入 |
+
+新编码暂不支持 timeGrain、双轴或自动聚合服务状态表。无需时间归并的日期可直接作为分类字段。不是所有 ECharts 组合都属于已验证范围。业务规则、行业颜色及评级排序由调用方声明，产品不内置航空规则。
+
+## 复验入口
+
+- `bun test ./tests/runtime/encoding.test.mjs`：固定点、比例、空结果、描述字段冲突、动态系列及零售分组。
+- `bun bin/python-runtime.js -m pytest tests/runtime/test_encoding.py -q`：SQL 聚合、字段校验和工具发现。
+- `bun bin/python-runtime.js -m pytest tests/runtime/test_encoding_browser.py -q`：零售场景真实浏览器渲染、筛选后系列减少、明细同步、跨数据集下钻及清除。
+- `bun run runtime:test`：现有运行时兼容回归。测试使用项目登记的 Python 依赖和 Chromium；macOS 沙盒可能需要允许启动无界面浏览器。
+- `bun pm pack --destination /private/tmp`：按项目正式入口生成安装包。安装包中的 `runtime_info.uiBuildId` 用于区分开发构建；本次不发布新版本。
+
+![零售通用场景验收](../images/dynamic-encoding-retail.png)
+
+## 排名展示与无结果状态
+
+`c03` 支持 `topSeries`（按当前筛选净值合计降序取前 N 个系列）、`pinnedSeries`（在 N 个名额内优先保留的系列）、`visibleCount`（默认显示 10 行，超出时启用分类轴滑条）、`barWidth` 和 `adjustableBarWidth`（阅读时调节条形宽度）。这些选项仅影响图形，原数据和完整数据表不裁剪；默认不合并未展示系列；设置 `otherSeriesLabel` 后将剩余系列合并为该名称，使柱长保留全部净值。`seriesRanking="category"` 按每个分类分别选取前 N 个系列；默认 `global` 按当前筛选范围整体选取。组件描述应说明展示范围。
+
+`emptyText` 设置无结果提示。保留卡片和操作区，以居中灰色文本提示，无旧点、旧柱或旧明细；恢复有结果时移除提示。动态提示框显示在指针附近，边界不足时换边。
+
+## KPI 同比与环比
+
+KPI `binding.comparisons` 可以将 `yoy`/`mom` 声明为绑定值之间的相对变化：`{"mom":{"current":"value","baseline":"mom","mode":"relative"}}`。`binding.measures.mom` 指向基期原值指标，先在当前筛选范围聚合本期和基期，再计算 `(本期-基期)/基期`；基期缺失或为零显示破折号。份额指标先分别汇总分子分母，禁止平均行级份额变化。业务口径需写明基期、固定范围和百分比与百分点区别。
+
+## 矩阵、环形和顺序流程
+
+`r03` 以 `categoryField` 为行、`seriesField` 为列，`value` 为每格指标；可绑定 `numerator`、`denominator` 展示依据。`seriesOrder` 固定列顺序，缺失组合显示无记录，零比例仍显示零。`visibleCount` 控制可见行数，其他行可滚动查看。
+
+`k01` 按分类与 `value` 绘制环形分布。`f02` 在动态编码下绘制等大节点和箭头，按 `categoryOrder` 展示业务流程；节点显示原指标及记录数，连线只表达顺序，不表达数量或转化。窄画布自动折行。节点数量不作为漏斗转化量。
+
+比例和均值条形图的提示框只显示各项指标值，不相加或计算份额。加总指标保持合计与份额。分组条形按分类槽位自动缩小，避免固定宽度造成重叠。
+
+聚合表可声明 `presentation.calculatedColumns`，例如 `{"rate":{"numerator":"numerator","denominator":"denominator","unitField":"unit","decimals":1}}`。分子、分母及目标列须为 `sumFields` 中的数值列，单位须为 `groupBy` 中的文字列。先筛选、汇总，再计算分子除以分母；单位 `%` 显示百分比，其他单位显示数值加单位；零分母或缺失分子显示 `—`。MCP 分页、排序、导出与独立网页均使用此计算；CSV 保留数值及独立单位列。

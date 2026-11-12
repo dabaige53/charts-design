@@ -1,4 +1,6 @@
 from dashboard_runtime.service import Service
+from dashboard_runtime.model import DashboardError
+import pytest
 
 
 # @wu-test type=integration | scope=项目草稿检查点 | protects=编辑恢复删除运行缓存后丢批注
@@ -62,3 +64,48 @@ def test_checkpoint_retention_protects_named_and_migration(tmp_path):
         store.checkpoint('board',revision+1)
     assert {item['revision'] for item in store.history('board')}=={1,4}
     assert legacy.revision('board')==1
+
+
+# @wu-test type=integration | scope=dashboard_version_delete | protects=删除历史时误删最新保存版本、发布版本或因草稿变化删除错误内容
+def test_delete_checkpoint_preserves_latest_and_published_versions(tmp_path):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    service.call('dashboard_create', {'dashboardId': 'board', 'title': 'Original'})
+    service.call('dashboard_version_publish', {'dashboardId': 'board', 'expectedRevision': 1, 'revision': 1})
+    for revision in (1, 2):
+        service.call('dashboard_patch', {'dashboardId': 'board', 'expectedRevision': revision,
+                                      'operations': [{'op': 'set_title', 'value': f'Title {revision}'}]})
+        service.store.checkpoint('board', revision + 1)
+    for revision in (1, 3):
+        with pytest.raises(DashboardError) as error:
+            service.call('dashboard_version_delete', {'dashboardId': 'board', 'expectedRevision': 3, 'revision': revision})
+        assert error.value.code == 'CHECKPOINT_IN_USE'
+    with pytest.raises(DashboardError) as error:
+        service.call('dashboard_version_delete', {'dashboardId': 'board', 'expectedRevision': 2, 'revision': 2})
+    assert error.value.code == 'REVISION_CONFLICT'
+    assert service.call('dashboard_version_delete', {'dashboardId': 'board', 'expectedRevision': 3, 'revision': 2})['deleted']
+    assert {item['revision'] for item in service.store.history('board')} == {1, 3}
+    assert not (tmp_path / 'project/dashboards/board/checkpoints/2.json').exists()
+    assert service.call('dashboard_version_status', {'dashboardId': 'board'})['publishedRevision'] == 1
+
+
+# @wu-test type=boundary | scope=dataset_storage_inventory | protects=跨项目盘点或将只读盘点注册成修改操作
+def test_storage_inventory_routes_to_selected_cloud_project(tmp_path, monkeypatch):
+    from dashboard_runtime import cloud_database
+    from dashboard_runtime.tool_contract import tool_annotations
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    service.store.database = object()
+    calls = []
+
+    class Database:
+        def __init__(self):
+            self.url = 'https://example.invalid/rpc/charts_runtime'
+
+        def call(self, action, project):
+            calls.append((self.url, action, project))
+            return {'versions': []}
+
+    monkeypatch.setattr(cloud_database, 'CloudDatabase', Database)
+    service.store.project = 'selected-project'
+    assert service.call('dataset_storage_inventory', {}) == {'versions': []}
+    assert calls == [('https://example.invalid/rpc/charts_data_inventory', 'inventory', 'selected-project')]
+    assert tool_annotations('dataset_storage_inventory')['readOnlyHint']

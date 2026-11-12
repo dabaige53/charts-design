@@ -1,7 +1,7 @@
 """Smoke-test the self-hosted server as deployed: a built image or a running URL.
 
-    python3 tests/deploy/container_smoke.py --image charts-design:ci
-    python3 tests/deploy/container_smoke.py --url http://127.0.0.1:8000 --token <token>
+    uv run --no-project --python 3.11 python tests/deploy/container_smoke.py --image charts-design:ci
+    uv run --no-project --python 3.11 python tests/deploy/container_smoke.py --url http://127.0.0.1:8000 --token <token>
 
 Exercises health, bearer enforcement, MCP authoring, scoped viewer APIs and
 signed JSON downloads. With --image it also checks the non-root user and

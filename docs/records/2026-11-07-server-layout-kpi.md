@@ -24,7 +24,7 @@
 ## CI 与测试流程（同日追加）
 
 - `main` 上最近三次 CI 均在前端依赖审计处失败（dompurify 3.4.16 严重、markdown-it 14.3.2 高危及 5 个传递依赖），构建与测试步骤从未执行。升级后审计为 0，GitHub 运行器上 390 通过、2 失败，失败项见下。
-- 工作流拆为静态检查、依赖审计、快速测试（Python 3.10 与 3.13）、Chromium 验收、部署镜像五个并行作业，层次与命令见 [测试与 CI](../testing.md)。
+- 工作流拆为静态检查、依赖审计、快速测试（Python 3.10 与 3.13）、Chromium 验收、部署镜像五个并行作业，层次与命令见 [测试与 CI](../operations/testing.md)。
 - 修复后 GitHub 运行 38（提交 `8764145`）六个作业全部通过，其中部署镜像作业在 GitHub 运行器上完成 `deploy/Dockerfile` 的完整多阶段构建并通过冒烟检查；浏览器截图、JUnit 与覆盖率报告作为产物上传。
 - Python 3.10 首次纳入检查后发现并修复：SQLite 多语句在 3.11 以下抛出 `sqlite3.Warning`（不是 `sqlite3.Error`），未被转换为 `QUERY_REJECTED`；`bin/update_local_mcp.py` 依赖 3.11 的 `tomllib`，现给出明确提示，其测试在 3.10 上带原因跳过。
 - 部署镜像：本沙箱的出口策略拒绝 Debian 软件源，无法在本地执行前端构建阶段的 `apt-get`；以 `deploy/Dockerfile` 的运行阶段（注入沙箱证书、使用本地已构建前端）构建镜像，`tests/deploy/container_smoke.py --image` 全部通过，容器以 uid 10001 运行。完整多阶段构建由 CI 的部署镜像作业执行。

@@ -1,8 +1,8 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {createProgressiveLoader} from '../../dashboard_runtime/web/progressive.mjs';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,10));
-// @wu-test type=behavior | scope=progressive loader | protects=旧筛选响应覆盖新结果或请求不可见组件 | debt=D9
+// @wu-test type=behavior | scope=progressive loader | protects=旧筛选响应覆盖新结果或请求不可见组件 | debt=flaky
 test('visible requests only; stale filter response cannot apply',async()=>{
   const jobs=[],applied=[];const visible=new Set(['a']);
   const loader=createProgressiveLoader({delay:0,concurrency:1,visible:id=>visible.has(id),loading(){},failed(){},query:(id,seq)=>new Promise(resolve=>jobs.push({id,seq,resolve})),apply:(id,value)=>applied.push(value)});

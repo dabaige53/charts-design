@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {createProjectContext} from '../../dashboard_runtime/web/project-context.mjs';
 import {resolveToolResult} from '../../dashboard_runtime/web/tool-result.mjs';
