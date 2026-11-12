@@ -144,7 +144,7 @@ class Service:
                 if tool == 'dataset_transfer_finish':
                     return data.transfer_finish(args['uploadId'], args['ref'])
                 if tool == 'dataset_transfer_status':
-                    return data.transfer_status(args['uploadId'], args['ref'])
+                    return data.transfer_status(args['uploadId'], args['ref'], args.get('parts'))
                 data.transfer_cleanup(args['uploadId'])
                 return {'ok': True}
             except (CosClientError, CosServiceError) as error:

@@ -1,26 +1,18 @@
 #!/usr/bin/env python3
 """Transfer explicitly selected current dashboard datasets to a cloud MCP server."""
 import argparse
-import asyncio
-import base64
-import hashlib
 import json
-import os
 from pathlib import Path
-import secrets
 import sqlite3
 import sys
-import time
-from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
-
-from dashboard_runtime.local_data import LocalData
 from dashboard_runtime.model import validate
+from dashboard_runtime.remote_client import (
+    TRANSFER_TOOLS, TransferClient, call_tool, check_source,
+    connect, connection_settings, require_tools, run_command,
+)
 
 
 def read_project(manifest):
@@ -67,28 +59,6 @@ def read_project(manifest):
     return root, docs, refs
 
 
-def batches(root, ref):
-    uri = (root / 'data' / 'data.sqlite3').as_uri() + '?mode=ro'
-    version = ref['version']
-    fields = ref['fields']
-    keys = ref['fieldOrder']
-    if not all(isinstance(k, str) for k in keys) or set(keys) != set(fields):
-        raise ValueError('Invalid field order')
-    # Version is validated by model.validate before it is used in SQL.
-    with sqlite3.connect(uri, uri=True) as db:
-        columns = ','.join('c' + str(i) for i in range(len(keys)))
-        cursor = db.execute(f'SELECT {columns}, _missing FROM d_{version} ORDER BY rowid')
-        count = 0
-        while True:
-            values = cursor.fetchmany(250)
-            if not values:
-                break
-            count += len(values)
-            yield [LocalData._decode(keys, row[:-1], fields, row[-1]) for row in values]
-        if count != ref['rowCount']:
-            raise ValueError('Local data row count differs from manifest')
-
-
 def normalized(doc):
     doc = json.loads(json.dumps(doc))
     for key in ('dataVersion', 'computed', 'progressive', 'loading'):
@@ -97,110 +67,40 @@ def normalized(doc):
     return doc
 
 
-async def call_tool(session, project, name, arguments):
-    async def request(tool, payload):
-        result = await session.call_tool(tool, {'projectRoot': project, **payload})
-        if result.isError or not isinstance(result.structuredContent, dict):
-            raise RuntimeError(f'{tool}: {result.structuredContent or result.content}')
-        value = result.structuredContent
-        if value.get('ok') is False:
-            raise RuntimeError(f'{tool}: {value.get("error")}')
-        return value
-    result = await request(name, arguments)
-    transport = result.get('transport')
-    if transport:
-        if transport.get('encoding') != 'base64-json-v1':
-            raise ValueError('Unknown MCP response encoding')
-        chunks = []
-        for index in range(transport['chunks']):
-            page = await request('runtime_result_chunk', {'requestId': transport['requestId'], 'index': index})
-            if page.get('requestId') != transport['requestId'] or page.get('index') != index:
-                raise ValueError('MCP response chunk does not match the request')
-            chunks.append(page['data'])
-        raw = base64.b64decode(''.join(chunks), validate=True)
-        if len(raw) != transport['bytes']:
-            raise ValueError('MCP response byte count does not match')
-        result = json.loads(raw)
-        if not isinstance(result, dict) or result.get('ok') is False:
-            raise RuntimeError(f'{name}: invalid or failed MCP response')
-    return result
-
-
 async def run(args):
     manifest = json.loads(Path(args.manifest).read_text())
     root, docs, refs = read_project(manifest)
-    endpoint = os.environ['CHARTS_MCP_URL']
-    token = os.environ['CHARTS_SERVER_TOKENS'].split(',')[0].strip()
-    if not token:
-        raise ValueError('CHARTS_SERVER_TOKENS must contain a server token')
-    if urlparse(endpoint).scheme != 'https':
-        raise ValueError('CHARTS_MCP_URL must use HTTPS')
-    state_path = Path(args.state)
-    identity = hashlib.sha256((endpoint + '\0' + args.project + '\0' + str(root)).encode()).hexdigest()
-    if state_path.exists():
-        state = json.loads(state_path.read_text())
-        if state['identity'] != identity:
-            raise ValueError('State file belongs to a different source or destination')
-    else:
-        state = {'identity': identity, 'uploads': {}, 'created': []}
-    staged = state.setdefault('staged', [])
-    if args.resume_staged and (args.resume_staged not in refs or args.resume_staged not in state['uploads']):
-        raise ValueError('The requested staged version must exist in both manifest and state file')
-    def save():
-        temporary = state_path.with_name(state_path.name + '.tmp')
-        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, 'w') as out:
-            json.dump(state, out)
-        os.replace(temporary, state_path)
-    async with httpx.AsyncClient(headers={'Authorization': 'Bearer ' + token}, timeout=120) as http:
-        async with streamable_http_client(endpoint, http_client=http) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                async def call(name, arguments):
-                    return await call_tool(session, args.project, name, arguments)
-                existing = {item['id'] for item in (await call('dashboard_list', {}))['dashboards']}
-                for board in existing & docs.keys():
-                    actual = (await call('dashboard_get', {'dashboardId': board}))['document']
-                    if normalized(actual) != normalized(docs[board]):
-                        raise ValueError(f'{board}: destination exists and differs; refusing to overwrite')
-                for version, ref in refs.items():
-                    upload = state['uploads'].setdefault(version, secrets.token_hex(32))
-                    save()
-                    print(f'Transferring {version[:12]}: {ref["rowCount"]} rows', flush=True)
-                    if version not in staged and version != args.resume_staged:
-                        for part, rows in enumerate(batches(root, ref)):
-                            result = await call('dataset_transfer_chunk', {'uploadId': upload, 'ref': ref, 'part': part, 'rows': rows})
-                            if result['complete']:
-                                break
-                            if (part + 1) % 50 == 0:
-                                print(f'  {min((part + 1) * 250, ref["rowCount"])} rows staged', flush=True)
-                        staged.append(version)
-                        save()
-                    else:
-                        print('  Resuming staged data without resending rows', flush=True)
-                        if version not in staged:
-                            staged.append(version)
-                            save()
-                    result = await call('dataset_transfer_finish', {'uploadId': upload, 'ref': ref})
-                    last_progress = 0.0
-                    while result['state'] != 'complete':
-                        if result['state'] == 'failed':
-                            raise RuntimeError(f'Transfer failed: {result.get("code")}')
-                        if result['state'] in ('unknown', 'cleanup_required'):
-                            result = await call('dataset_transfer_finish', {'uploadId': upload, 'ref': ref})
-                        else:
-                            if result.get('phase') and time.monotonic() - last_progress >= 20:
-                                print(f'  {result["phase"]}: {result["completed"]}/{result["total"]} chunks', flush=True)
-                                last_progress = time.monotonic()
-                            await asyncio.sleep(2)
-                            result = await call('dataset_transfer_status', {'uploadId': upload, 'ref': ref})
-                for board, doc in docs.items():
-                    if board not in existing:
-                        await call('dashboard_create', {'dashboardId': board, 'document': doc})
-                    if board not in state['created']:
-                        state['created'].append(board)
-                        save()
-                    print(f'Imported {board}; run dashboard_checkpoint before publishing', flush=True)
+    endpoint, token = connection_settings()
+    for ref in refs.values():
+        check_source(root, ref)
+    async with connect(endpoint, token) as session:
+        await require_tools(session, {**TRANSFER_TOOLS,
+            'dashboard_list': set(), 'dashboard_get': {'dashboardId'},
+            'runtime_result_chunk': {'requestId', 'index'},
+            'dashboard_create': {'dashboardId', 'document'}})
+        async def call(name, arguments):
+            return await call_tool(session, args.project, name, arguments)
+        client = TransferClient(call, root, endpoint, args.project, args.state,
+                                concurrency=args.concurrency)
+        if args.resume_staged and args.resume_staged not in refs:
+            raise ValueError('The staged version must exist in the manifest')
+        existing = {item['id'] for item in (await call('dashboard_list', {}))['dashboards']}
+        for board in existing & docs.keys():
+            actual = (await call('dashboard_get', {'dashboardId': board}))['document']
+            if normalized(actual) != normalized(docs[board]):
+                raise ValueError(f'{board}: destination exists and differs; refusing to overwrite')
+        if args.check_only:
+            print(json.dumps({'checkedPages': len(docs), 'checkedDatasets': len(refs)}))
+            return
+        for version, ref in refs.items():
+            await client.transfer(ref, resume_staged=version == args.resume_staged)
+        for board, doc in docs.items():
+            if board not in existing:
+                await call('dashboard_create', {'dashboardId': board, 'document': doc})
+            if board not in client.state['created']:
+                client.state['created'].append(board)
+                client.save()
+            print(f'Imported {board}; run dashboard_checkpoint before publishing', flush=True)
 
 
 def main():
@@ -209,12 +109,10 @@ def main():
     parser.add_argument('--project', required=True)
     parser.add_argument('--state', required=True, help='Private resumable state file')
     parser.add_argument('--resume-staged', help='One existing data version already fully staged by an older client')
+    parser.add_argument('--concurrency', type=int, choices=range(1, 5), default=4)
+    parser.add_argument('--check-only', action='store_true', help='Validate source and remote capabilities without uploading')
     args = parser.parse_args()
-    try:
-        asyncio.run(run(args))
-    except (OSError, KeyError, ValueError, RuntimeError) as error:
-        print(str(error), file=sys.stderr)
-        raise SystemExit(1) from error
+    run_command(run(args), args.state)
 
 
 if __name__ == '__main__':

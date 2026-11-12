@@ -180,8 +180,11 @@ TOOLS = {
     'dataset_transfer_finish': ('Start or resume background verification and durable import. Poll dataset_transfer_status; do not create dashboard references before complete. Successful completion removes the COS staging prefix.', schema({
         'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
     }, ('uploadId', 'ref'))),
-    'dataset_transfer_status': ('Check durable completion and running phase (reading, saving or cleanup) with completed and total chunk counts. If unknown after a server restart, call dataset_transfer_finish again; if failed, correct the error and resume.', schema({
+    'dataset_transfer_status': ('Read state (not status): unknown, running, cleanup_required, complete or failed. Running includes phase and completed/total counts. After all chunks are staged, call dataset_transfer_finish for unknown or cleanup_required; correct failures before resuming. Optional parts returns receivedParts, mapping staged part numbers to SHA-256 of uncompressed JSON, for verified resume. Only complete permits binding the returned ref.', schema({
         'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
+        'parts': described({'type': 'array', 'maxItems': 128, 'uniqueItems': True,
+                            'items': {'type': 'integer', 'minimum': 0}},
+                           'Optional receipt query for up to 128 zero-based parts; missing parts are omitted from receivedParts.'),
     }, ('uploadId', 'ref'))),
     'dataset_transfer_cleanup': ('Remove only this transfer staging prefix and all object versions; do not call while uploading or finalizing.', schema({
         'uploadId': described(STR, 'Exact transfer ID to remove.'),

@@ -11,6 +11,7 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 | `mcp_server.py`、`project_routing.py` | MCP 协议适配、请求项目选择与结果传输 |
 | `store.py`、`project.py`、`local_data.py` | 事务状态、草稿/检查点、批注与不可变数据 |
 | `cloud_assets.py`、`cos_view.py`、`cos_migrate.py` | COS 内容包与引用登记、统一网页描述、显式项目迁移 |
+| `remote_client.py`、`bin/remote-project.py`、`bin/transfer-project.py` | 远程完整响应读取、上传前检查、分块续传与首次项目迁移 |
 | `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
 | `server.py`、`http_app.py` | 自托管远程服务与本机网页入口 |
 | `runtime-ui/src/` | 展示组件、应用状态、布局和宿主能力适配 |
@@ -104,6 +105,8 @@ bun bin/python-runtime.js -m dashboard_runtime --root ./boards call dataset_impo
 ```
 
 `dataset_import` 必须提供 `rows` 或 `csvText` 中的一种。目标数据集存在时替换其数据与元信息。推断得到的数值指标采用默认求和；业务定义、单位和粒度需确认。需要保留数字标识或前导零时，用 JSON 字符串明确类型。整份 schema-v2 文档可通过 `import NEW_ID --file artifact.json` 创建新看板。
+
+大型本地数据更新使用[独立上传入口](../operations/self-hosted-server.md#更新已有看板的数据)，取得验证完成的引用后再更新页面；首次迁移使用同页的清单迁移入口。修改大型组件前可[下载完整配置](../operations/mcp-transport-diagnostics.md#完整配置下载)，复用共用客户端的响应分块处理。
 
 SQL 执行只连接运维配置的 SQLite 来源别名。别名配置为：
 

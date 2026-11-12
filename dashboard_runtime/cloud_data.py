@@ -9,6 +9,7 @@ import threading
 import re
 import json
 import gzip
+import hashlib
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import cast
@@ -146,7 +147,25 @@ class CloudData(LocalData):
         threading.Thread(target=finish, daemon=True).start()
         return {'state': 'running'}
 
-    def transfer_status(self, upload, ref):
+    def transfer_status(self, upload, ref, parts=None):
+        result = self._transfer_status(upload, ref)
+        if parts is not None:
+            total = (ref['rowCount'] + TRANSFER_ROWS - 1) // TRANSFER_ROWS
+            require(isinstance(parts, list) and len(parts) <= 128
+                    and all(type(part) is int and 0 <= part < total for part in parts)
+                    and len(set(parts)) == len(parts), 'Invalid transfer receipt parts')
+            received = {}
+            if result['state'] not in ('complete', 'cleanup_required'):
+                storage = self._transfer_storage()
+                prefix = self._transfer_prefix(upload)
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    for part, raw in zip(parts, executor.map(lambda part: storage.get(prefix + str(part)), parts)):
+                        if raw is not None:
+                            received[str(part)] = hashlib.sha256(gzip.decompress(raw)).hexdigest()
+            result['receivedParts'] = received
+        return result
+
+    def _transfer_status(self, upload, ref):
         version, _ = self.transfer_ref(ref)
         require(isinstance(upload, str) and re.fullmatch('[0-9a-f]{64}', upload),
                 'Invalid upload ID')

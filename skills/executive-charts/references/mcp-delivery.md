@@ -10,6 +10,8 @@ Read `dashboard_get` before editing. Keep the returned revision, stable componen
 
 Use `dataset_import` with exactly one of `rows` or `csvText` for small data. Use `dataset_attach` for configured SQLite sources; take connection aliases from operator configuration. Inspect imported fields and inferred metrics before binding them. Reuse immutable references returned by the tools.
 
+For large local data, use the [remote upload client](../../../docs/operations/self-hosted-server.md#更新已有看板的数据): `bin/remote-project.py upload` transfers a data version for an existing dashboard; `bin/transfer-project.py` imports selected new pages. Both share preflight, bounded concurrency and verified resume. Keep the state file after interruption. Bind the verified output ref with `put_dataset_ref` and the current revision, preserving dataset metadata and metric definitions. For a large component configuration, use [complete configuration download](../../../docs/operations/mcp-transport-diagnostics.md#完整配置下载) before editing.
+
 For KPI comparisons, aggregate each period at the same scope and grain before calculating the change. Distinguish percentage changes from percentage-point differences. Tooltip totals, shares and detail tables must use the same denominator, including the declared treatment of hidden series.
 
 ## Edit, check and display

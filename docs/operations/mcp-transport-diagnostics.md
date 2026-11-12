@@ -15,6 +15,20 @@
 
 结构化结果和纯文本回退路径使用相同的小结果。不得从损坏的 JSON 截取前缀、跳过坏行，或用减少业务行数的方法隐藏传输失败。单次响应保留完整数据语义；本地 transport-results.sqlite3 保存完整响应 24 小时，同一运行目录的进程共享，进程重启不丢失；每次写入清理到期响应。超过 24 小时返回 RESULT_EXPIRED，需重新发起原读取。修改操作不能因响应过期而自动重放。
 
+## 完整配置下载
+
+修改含大型数据快照的组件时，使用正式客户端将完整 `dashboard_get` 结果保存到文件：
+
+```sh
+bun run python -- bin/remote-project.py read \
+  --project <远程项目名> --dashboard <页面ID> \
+  --output /private/tmp/dashboard-current.json
+```
+
+连接由 `CHARTS_MCP_URL` 和 `CHARTS_SERVER_TOKENS` 环境变量提供。客户端自动读取全部响应分块，检查请求编号、索引、编码和总字节数；失败时不保存本次结果。完整配置位于输出 JSON 的 `document` 中，终端只输出文件位置、修订号和组件 ID。文件仅当前用户可读写。
+
+自定义消费者复用 `dashboard_runtime.remote_client.call_tool`；上传和页面读取使用同一解析逻辑。读取结果过期时重新执行 read。修改仍通过正常的编辑批次和最新修订号提交，完整下载不自动修改页面。
+
 ## 查询日志
 
 - `runtime_diagnostics({limit:30})`：最近记录。

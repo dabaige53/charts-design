@@ -267,7 +267,7 @@ docker buildx build --platform linux/amd64 \
 
 云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。每个数据版本分成最多 250 行、JSON 不超过 2 MiB 的批次；相同传输 ID 和批次重试时内容必须一致。批次先放在私有 COS，服务端重算原始数据版本并持久保存后才可引用：未切换项目写入 PostgreSQL 业务分块，`cos-v1` 项目生成 COS 数据包并登记 PostgreSQL 元信息。完成后删除该传输的 COS 暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 指定该传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 也重新调用 finish 完成清理。迁移需要现有服务凭据对分享桶执行读取、写入、列举对象版本和删除该暂存前缀的权限；不会自动更改权限。
 
-`bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具顺序传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
+`bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
 
 通过项目 1Password 入口注入 `CHARTS_SERVER_TOKENS`，脚本使用列表中的第一个令牌；`CHARTS_MCP_URL` 是 HTTPS MCP 地址。不要将令牌值写入命令、文件或仓库。项目入口会切换到登记的项目目录，运行前切换到需要使用的源码目录。使用专门的状态文件记录可续传 ID，不包含令牌：
 
@@ -284,6 +284,30 @@ project-run <项目目录名> -- /bin/sh -c '
 迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过，再运行 `dashboard_version_publish`；之后才能通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。
 
 合并时，`dataset_transfer_status` 的 `phase` 标明读取暂存分块、保存数据库分块或清理；`completed` 和 `total` 对应当前阶段。脚本会记录已完整暂存的版本，恢复时不再发送这些数据行。使用旧版脚本时，只有在已确认某个版本全部分块均已暂存的情况下，才在恢复命令中加 `--resume-staged <完整数据版本号>`；缺块时合并报错，不会创建不完整的数据版本。
+
+### 更新已有看板的数据
+
+使用 `bin/remote-project.py upload` 单独上传数据版本。它与首次迁移共用 `dashboard_runtime/remote_client.py`，完成后保存可用于 `put_dataset_ref` 的完整引用。页面的组件、指标、筛选和发布版本由后续编辑流程维护。
+
+```sh
+bun run python -- bin/remote-project.py upload \
+  --project <远程项目名> --root <本地项目目录> \
+  --ref /private/tmp/dataset-ref.json \
+  --state /private/tmp/dataset-upload-state.json \
+  --output /private/tmp/verified-ref.json
+```
+
+已有本地数据版本使用 `--ref`；新数据使用 `--rows /path/rows.jsonl --fields /path/fields.json` 替换 `--ref`，按字段定义导入 `--root/data` 后上传。`--rows` 接受 JSON 数组或 `.jsonl` 文件；大型来源优先 JSONL。准备新数据时指定独立的本地工作目录，避免与业务加工进程同时写同一数据仓库。
+
+两个上传入口均支持 `--check-only`：检查本地引用、全部分块大小、行数和目标工具能力，检查完成后退出。使用 `--rows` 时仍会准备本地数据版本。远程续传要求 `dataset_transfer_status` 支持 `parts`；旧服务会在发送数据前收到升级提示。依赖缺失时使用项目环境安装入口，运行时不临时改用其他解释器。
+
+上传默认并发 4 块，`--concurrency 1` 可用于单请求排错，最大值为 4；数据集之间顺序执行。首次上传直接发送；中途恢复时按窗口查询服务端 `receivedParts`，比较暂存 JSON 的 SHA-256，仅发送缺失块。客户端即使在收到确认前退出，也能恢复。校验值不一致时报告 `DATA_CONFLICT`。每个状态文件由一个上传进程使用，恢复沿用同一文件、来源和目标。
+
+状态字段为 `state`。全部暂存后，`unknown` 和 `cleanup_required` 重新调用 finish；`running` 读取进度；`failed` 报告错误码。仅在 `complete` 且返回引用与来源完全相同时写入输出文件。合并报告 `DATA_INCOMPLETE` 时清除本地“已完整暂存”标记，下次运行重新检查远程缺块。
+
+stderr 输出 JSON 进度，包括本地准备、分块编码、请求耗时、复用块数、合并阶段和状态文件位置。请求耗时统计网络往返与远程处理的合计时间。状态和输出文件使用仅当前用户可读写权限。页面写入继续通过正常编辑流程提交。
+
+上传完成后先读取目标页面，保留现有数据集元信息和指标定义，以最新 `expectedRevision` 提交 `put_dataset_ref`，再按常规编辑批次完成检查和发布。完整页面读取命令见 [MCP 完整配置下载](mcp-transport-diagnostics.md#完整配置下载)。
 
 ## COS 业务内容迁移与删除任务
 
