@@ -17,6 +17,7 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   const [history, setHistory] = useState<Config[]>([]);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<Document | null>(null);
   const [deleteRevision, setDeleteRevision] = useState<number | null>(null);
@@ -58,10 +59,10 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
     }, 1500);
     return () => { live = false; clearTimeout(timer); };
   }, [open, deleteResult, call, document.id, refresh]);
-  const run = async (work: () => Promise<void>) => {
-    setBusy(true); setError("");
+  const run = async (work: () => Promise<void>, message = "") => {
+    setBusy(true); setError(""); setPendingAction(message);
     try { await work(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setPendingAction(""); }
   };
   const loadShares = async () => {
     const result = await call("dashboard_share_status", { dashboardId: document.id });
@@ -83,6 +84,7 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
             disabled={busy} onClick={() => { setTab("shares"); void run(loadShares); }}>分享</Button>
         </div>
         {error && <p role="alert" className="text-destructive">{error}</p>}
+        {pendingAction && <p role="status">{pendingAction}</p>}
         {deleteResult?.state === "complete" && <p role="status">已删除，专属文件清理完成。</p>}
         {(status?.deletionJobs || []).map((job: Config) => <div key={job.id} role="status" className="rounded-lg border p-3">
           <p>版本 {job.revision} · {job.state === "failed" ? "访问已撤销，文件清理未完成" : "正在删除文件"}</p>
@@ -136,7 +138,7 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
                       dashboardId: document.id, expectedRevision: current.draftRevision, revision: item.revision,
                     });
                     setDeleteRevision(item.revision); setDeletePlan(plan); setDeleteResult(null);
-                  })}><Trash2 />删除版本</Button>
+                  }, "正在检查删除影响…")}><Trash2 />删除版本</Button>
               </div>
             </article>)}
           </div>

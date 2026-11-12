@@ -11,6 +11,8 @@ Write a report that answers the user's question with traceable data and figures.
 
 Read [shared MCP delivery](../executive-charts/references/mcp-delivery.md) for project routing and the editing flow. On an existing report, read `dashboard_get`, its Markdown, referenced components and data before changing it.
 
+Use `cos-v1` for cloud projects by default. Follow shared delivery's storage check and migration flow before importing data; verify the saved editor document's format before delivery.
+
 Inspect the source's grain, time range, units and calculations. Register sources, datasets and metrics so figures and prose use the same definitions. Read [metric definitions](../executive-charts/references/metric-definitions.md) when defining calculations.
 
 For a new report, `generation_examples` with `{"caseId":"academic-report"}` returns the master Markdown and a complete synthetic declaration batch. Read [the academic master](references/academic-master.md) for its reading structure. Replace case-specific sources, data, IDs and claims with the current report's evidence.

@@ -14,6 +14,14 @@ For large local data, use the [remote upload client](../../../docs/operations/se
 
 For KPI comparisons, aggregate each period at the same scope and grain before calculating the change. Distinguish percentage changes from percentage-point differences. Tooltip totals, shares and detail tables must use the same denominator, including the declared treatment of hidden series.
 
+## Cloud storage
+
+Cloud projects default to `cos-v1`; local workspaces keep their local storage. Before cloud imports, call `dataset_storage_inventory` and inspect `cos.format`. For an existing dashboard, also check the returned document's `storageFormat` after saving. COS-backed shares alone do not establish that the editor uses COS.
+
+If an existing project reports `postgres`, use the [COS migration procedure](../../../docs/operations/self-hosted-server.md#cos-业务内容迁移与删除任务). Read its inventory first. Within the user's migration authorization, upload and verify datasets and all draft/checkpoint/release documents, then switch references atomically. Retain drafts, stable IDs, annotations and history unless the user explicitly requests deletion. Never change the format flag by itself or silently continue through the legacy path.
+
+Before handover, confirm `storageFormat: "cos-v1"`, data references and row counts, saved values and filter behavior. Distinguish application deployment, project migration, and editor verification in the result.
+
 ## Edit, check and display
 
 1. For a new artifact call `dashboard_create`; for an existing one read `dashboard_get`.

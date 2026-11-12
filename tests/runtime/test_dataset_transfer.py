@@ -43,6 +43,37 @@ class MemoryStorage:
                 del self.objects[key]
 
 
+# @wu-test type=integration | scope=CloudData legacy restore | protects=并发恢复分块乱序改变数据校验值或重复读取已缓存版本
+def test_legacy_restore_fetches_four_chunks_and_preserves_order(tmp_path):
+    import threading
+    rows = [{'value': i} for i in range(2501)]
+    source = LocalData(tmp_path / 'source')
+    ref = source.import_rows(rows, {'value': {'type': 'number'}})
+    barrier = threading.Barrier(4)
+
+    class Database:
+        def __init__(self):
+            self.parts = []
+
+        def call(self, action, project, **args):
+            if action == 'data_get':
+                return ref
+            assert action == 'data_chunk_get'
+            part = args['part']
+            self.parts.append(part)
+            if part < 4:
+                barrier.wait(timeout=5)
+            return rows[part * 500:(part + 1) * 500]
+
+    database = Database()
+    data = CloudData(tmp_path / 'cache', database, 'test')
+    with data._connect() as db:
+        _, restored = data._version(db, ref)
+        assert restored == ref
+        data._version(db, ref)
+    assert sorted(database.parts) == list(range(6))
+
+
 def wait(data, upload, ref):
     for _ in range(500):
         status = data.transfer_status(upload, ref)

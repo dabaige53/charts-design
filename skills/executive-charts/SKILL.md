@@ -27,6 +27,8 @@ Read `charts://contract` for the connected server's operations. `chart_declarati
 
 Read [shared delivery](references/mcp-delivery.md) for revisions, batches, comments and publication.
 
+For cloud delivery, use `cos-v1` by default. Check the project's actual storage format before importing data and verify the saved editor document uses COS before handing it over. An existing PostgreSQL project needs the explicit migration flow in shared delivery; a deployed server upgrade alone does not migrate its contents.
+
 ## Create and fill a dashboard
 
 1. **Read the data.** Inspect the supplied file or query the named source. Establish fields, row grain, time range, units and missing values. Record provenance in sources and calculation rules in metrics. Use existing business definitions when available; label synthetic examples. [Metric definitions](references/metric-definitions.md) covers scope and formulas.

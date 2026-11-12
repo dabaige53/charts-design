@@ -236,10 +236,21 @@ class CloudData(LocalData):
             require(metadata is not None, 'Unknown data version', 'NOT_FOUND')
 
             def rows():
-                for part in range((metadata['rowCount'] + CHUNK_ROWS - 1) // CHUNK_ROWS):
-                    chunk = self.database.call('data_chunk_get', self.project, version=version, part=part)
-                    require(isinstance(chunk, list), 'Remote data chunk is missing', 'DATA_INCOMPLETE')
-                    yield from chunk
+                parts = iter(range((metadata['rowCount'] + CHUNK_ROWS - 1) // CHUNK_ROWS))
+                # Bound both requests and buffered chunks, retaining checksum order.
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    def fetch(part):
+                        return pool.submit(self.database.call, 'data_chunk_get',
+                                           self.project, version=version, part=part)
+                    pending = deque(fetch(part) for part in (next(parts, None) for _ in range(4))
+                                    if part is not None)
+                    while pending:
+                        chunk = pending.popleft().result()
+                        require(isinstance(chunk, list), 'Remote data chunk is missing', 'DATA_INCOMPLETE')
+                        yield from chunk
+                        part = next(parts, None)
+                        if part is not None:
+                            pending.append(fetch(part))
 
             fields = {key: metadata['fields'][key] for key in metadata['fieldOrder']}
             restored = super().import_rows(rows(), fields)

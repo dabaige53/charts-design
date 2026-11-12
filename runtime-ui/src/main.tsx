@@ -8,7 +8,7 @@ import { RecoveryAlert } from "./recovery-alert";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { createProjectContext } from "./project-context.mjs";
 import { resolveToolResult } from "./tool-result.mjs";
-import { createRequestQueue } from "../../dashboard_runtime/web/request-queue.mjs";
+import { createToolQueue } from "../../dashboard_runtime/web/request-queue.mjs";
 import { browserDownload, type Download } from "./host";
 import { WebAccess } from "./web-access";
 import { createCosTools } from "./cos-client";
@@ -31,7 +31,7 @@ function readWebToken() {
 }
 let webToken = readWebToken();
 class WebAuthError extends Error {}
-const queue = createRequestQueue(4);
+const queue = createToolQueue();
 // Editors immediately consume the updated document; Agent calls default to receipts.
 const documentWrites = new Set([
   "dashboard_create", "dashboard_patch", "dashboard_restore",
@@ -39,7 +39,7 @@ const documentWrites = new Set([
   "dashboard_migrate", "dashboard_migration_rollback",
 ]);
 const send = (name: string, args: Config) =>
-  queue(async () => {
+  queue(name, async () => {
     if (boot.mode === "mcp") {
       if (!app) throw Error("MCP 宿主尚未连接");
       return app.callServerTool({
