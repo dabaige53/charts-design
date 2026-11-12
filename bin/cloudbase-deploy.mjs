@@ -31,8 +31,10 @@ export function matchesRelease(health, version, commit) {
 export function annotationMigrationPending(remote) {
   const versions = new Set((remote?.items ?? []).map(item => item.version));
   if (versions.has('20261112050000')) return false;
-  if (!versions.has('20261112040000') || [...versions].some(version => version > '20261112050000'))
-    throw new Error('数据库迁移基线不匹配；停止发布，需先核对已应用的迁移。');
+  // Annotation commands depend on the COS registry/reference guard, not the
+  // separate draft-object collector added by the 040000 migration.
+  if (!versions.has('20261112020000') || [...versions].some(version => version > '20261112050000'))
+    throw new Error(`数据库迁移基线不匹配；已登记版本：${[...versions].sort().join(', ')}。`);
   return true;
 }
 

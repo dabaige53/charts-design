@@ -45,6 +45,8 @@
 
 ## 历史记录与附件
 
+- [集中加载与并发批注发布](records/2026-11-12-loading-and-comments-release.md)：定向 CI、数据库事务检查、发布状态和原分享链接适配。
+
 - [编辑页优先展示保存结果](records/2026-11-12-editor-first-view.md)：首屏直达看板、数据目录按需加载、版本隔离与本轮发布检查。
 - [急转看板筛选加载盘点](records/2026-11-12-filter-loading-inventory.md)：候选条件与月份数据加载路径对比、已确认行为、待测量问题及后续修复验收要求。
 - [必选月份筛选恢复修复](records/2026-11-12-required-month-filter.md)：浏览器候选项校验、必选交互和本轮发布检查。
