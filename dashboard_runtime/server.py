@@ -58,10 +58,11 @@ VIEW_TOOLS = frozenset({
     'dashboard_get', 'dashboard_view', 'dashboard_refresh', 'dashboard_filter_options',
     'component_data', 'query_inspect', 'semantic_inspect', 'statistical_render',
     'dashboard_annotations', 'dashboard_list', 'dashboard_preview', 'runtime_info', 'runtime_keepalive',
-    'runtime_report_error', 'dashboard_export', 'dashboard_export_read', 'dataset_export', 'legacy_render',
+    'runtime_report_error', 'dashboard_export', 'dataset_export', 'legacy_render',
 })
 # An edit link additionally saves layout, titles, descriptions and checkpoints.
 EDIT_TOOLS = VIEW_TOOLS | frozenset({
+    'dashboard_export_read',
     'dashboard_patch', 'dashboard_edit_begin', 'dashboard_edit_finish', 'dashboard_checkpoint',
     'dashboard_validate', 'dashboard_doctor', 'dashboard_history', 'dashboard_history_diff',
     'dashboard_restore', 'dashboard_version_label', 'runtime_diagnostics', 'dashboard_export_site',
@@ -470,7 +471,19 @@ class RemoteServer:
                 require(all(page['id'] in principal.dashboards for page in control.get('pages', [])),
                         'This link cannot replace a share containing other pages', 'FORBIDDEN')
             if name == 'dashboard_list':
-                return {'dashboards': [item for item in service.call('dashboard_list', {})['dashboards'] if item['id'] in principal.dashboards], 'projectRoot': project}
+                items = [item for item in service.call('dashboard_list', {})['dashboards'] if item['id'] in principal.dashboards]
+                if principal.access != 'edit':
+                    saved = []
+                    for item in items:
+                        try:
+                            doc = service.store.readable(item['id'])
+                        except DashboardError as error:
+                            if error.code != 'NO_SAVED_VERSION':
+                                raise
+                            continue
+                        saved.append({'id': doc['id'], 'revision': doc['revision'], 'title': doc['manifest']['title']})
+                    items = saved
+                return {'dashboards': items, 'projectRoot': project}
             properties = TOOLS.get(name, ('', {}))[1].get('properties', {})
             if 'dashboardId' in properties or 'dashboardId' in args:
                 requested = args.get('dashboardId', principal.dashboard)
@@ -478,7 +491,9 @@ class RemoteServer:
                     raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
                 args['dashboardId'] = requested
         actual_name = 'dashboard_preview' if name == 'dashboard_get' and principal.access != 'edit' else name
-        result = self.profile.decorate(name, args, service.call(actual_name, args), service)
+        # This selection is trusted server context, never a caller-supplied argument.
+        selected = service.store.readable(args['dashboardId']) if principal.access != 'edit' and args.get('dashboardId') else None
+        result = self.profile.decorate(name, args, service.call(actual_name, args, read_document=selected), service)
         if getattr(service.store, 'cos_enabled', False):
             from .cos_view import web_document
             for field in ('document', 'version'):

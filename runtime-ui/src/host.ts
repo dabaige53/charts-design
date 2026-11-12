@@ -39,7 +39,7 @@ export async function deliverExport(
   download: Download,
   read?: (offset: number, limit: number) => Promise<Config>,
 ) {
-  if (value.id && read) {
+  if (value.id && read && !value.downloadUrl) {
     const size = 262144,
       total = value.bytes,
       parts = new Array<Uint8Array>(Math.ceil(total / size));

@@ -234,7 +234,7 @@ TOOLS = {
     }, anyOf=[{'required': ['dashboardId']}, {'required': ['document']}])),
     'dashboard_patch': ('Apply 1-200 atomic operations to the latest draft. Begin with dashboard_get and dashboard_edit_begin; preserve unmodified definitions and stable IDs. Returns the updated revision and semanticChanges; replacement operations remove omitted content. Read charts://contract for operations.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED, 'operations': OPERATIONS,
-        'expectedAnnotations': described(ANNOTATIONS, 'Project-only independent comment save: provide the exact annotation list read earlier and use only set_annotations operations. Conflicts fail; successful independent saves do not increment the design revision.'),
+        'expectedAnnotations': described(ANNOTATIONS, 'Required for every project set_annotations operation: provide the exact annotation list read earlier and use only set_annotations operations. Conflicts fail; successful independent saves do not increment the design revision.'),
     }, ('dashboardId', 'expectedRevision', 'operations'))),
     'dashboard_history': ('Read retained design checkpoints, newest first; project mode pages with offset/limit (default 50, maximum 100 per page). Legacy storage returns its retained history without paging. Draft edits are not checkpoints. Returns history; choose revisions for diff or restore.', schema({
         **BOARD, 'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based checkpoint offset, project mode only.'),
@@ -306,6 +306,7 @@ TOOLS = {
     'dashboard_data_inspect': ('Read immutable dataset references, row counts, shared versions and file/config sizes without full rows. Returns datasets and sharedVersions; use this to check imports before computing views. Does not verify metric business definitions.', schema(BOARD, ('dashboardId',))),
     'dashboard_filter_options': ('Search/page all candidate values of a declared filter; does not narrow candidates by current reader conditions or save a selection. Returns values and paging metadata. Read every page before claiming all values are selected.', schema({
         **BOARD, 'filterId': described(ID, 'Existing manifest.filters ID, not its field name or display label.'),
+        'expectedRevision': EXPECTED,
         'search': described(STR, 'Candidate-label search; omit or empty to read all candidates.'),
         'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based candidate offset.'),
         'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 1000, 'default': 100}, 'Maximum candidate values in one response.'),

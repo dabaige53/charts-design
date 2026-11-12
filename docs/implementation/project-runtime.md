@@ -12,11 +12,13 @@
 
 网页编辑、在线只读、历史预览和新的独立分享复用同一查询 worker。鉴权网关转发 COS 字节，普通网页筛选不调用 PostgreSQL 业务行查询。MCP 保留服务端 SQLite 查询语义，冷实例下载对应对象代次的查询文件并直接打开，不再逐块恢复业务行。查询文件、数据分片和字段索引会增加 COS 持久存储；实际时长、流量与费用变化仍需另行测量。
 
-配置保存先写 COS，再提交 PostgreSQL 指针；未被提交引用的上传包仍登记在对象清单，不能按年龄推断为可删除业务内容。未迁移项目仍使用原分块恢复路径。迁移和回退边界见[自托管服务器](../operations/self-hosted-server.md#cos-业务内容迁移与删除任务)。
+配置保存先写 COS，再提交 PostgreSQL 指针。SCF 在项目锁内检查超过一小时的已完成文档对象；仅当草稿、检查点和发布记录均不再引用该对象时，才登记到现有删除任务，由清理器删除文件并记录结果。该流程不清理数据集或未完成上传；失败任务保留重试，已领取删除的对象不能被新的提交重新引用。未迁移项目仍使用原分块恢复路径。迁移和回退边界见[自托管服务器](../operations/self-hosted-server.md#cos-业务内容迁移与删除任务)。
 
 远程导出下载使用 COS 保存字节、PostgreSQL 保存文件引用；签名下载在新实例上可恢复文件。`CHARTS_COS_ASSET_PREFIX` 默认为 `charts-assets/`，不能与可过期分享的 `CHARTS_COS_SHARE_PREFIX` 重叠。项目资产不参与分享过期清理。本地 JSON 镜像不作为云端状态源。
 
 项目内 `charts-project.json` 管理历史和加载参数；`dashboards/dashboards.sqlite3` 是事务索引与权威状态，`dashboards/<id>/draft.json`、`checkpoints/*.json`、`annotations.json` 和 `annotation-history.json` 是自动生成的可读镜像，不能另行手工维护。检查点写入后不再变化，其镜像只在首次出现时写出；迁移改写检查点时整体重写镜像。`data/data.sqlite3` 保存不可变数据版本。运行目录仅用于传输缓存及诊断；删除新运行缓存不删除项目资产。既有集中目录不自动清理。
+
+本地镜像读取与写出使用同一个 SQLite 写事务锁，避免并发保存时旧内容覆盖新内容；每个输出使用独立临时文件，再原子替换目标。
 
 项目默认配置由 `dashboard_runtime/project.py` 的 `DEFAULTS` 维护。`loading.pageSize` 是后端未显式提供表格状态时的缺省值，不等同于 UI 明确传入的表格页大小。保存版本固定内容；命名及旧 published 保留标记不阻止用户主动删除。项目检查点不再随保存隐式裁剪。设计 JSON 和业务数据不应作为公共仓库产物提交。
 
@@ -51,6 +53,8 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 ### 自托管服务器中的项目
 
 `server` 命令以一个工作区目录承载全部项目。远程调用的 `projectRoot` 是项目名（字母、数字、`-`、`_`），对应 `<workspace>/<项目名>/`，目录结构与本地项目相同；运行缓存在 `<workspace>/.runtime/projects/<项目名>/`。工作区直接子目录的绝对路径也被接受，其他路径以 `PROJECT_OUTSIDE_WORKSPACE` 拒绝。结果中的 `projectRoot` 返回项目名。部署、令牌与分享链接见 [自托管服务器](../operations/self-hosted-server.md)。
+
+只读签名链接的列表、查询、筛选候选、明细和导出均由服务器选择已保存版本；调用方不能指定未保存草稿。只读导出通过本次导出返回的签名 URL 下载，不接受读取任意已有导出 ID。编辑链接和 MCP 继续读取草稿。筛选候选请求携带页面的 `expectedRevision`，与页面计算使用同一版本。
 
 ### 兼容与 Router
 

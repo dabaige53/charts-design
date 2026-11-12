@@ -32,12 +32,12 @@ class Service:
         from .transport import ResultTransport
         self.transport = ResultTransport(getattr(self.store, "runtime_root", self.store.root))
 
-    def call(self, tool, args):
+    def call(self, tool, args, *, read_document=None):
         import uuid
         request_id = uuid.uuid4().hex
         started = time.perf_counter()
         try:
-            result = self._execute(tool, args)
+            result = self._execute(tool, args, read_document=read_document)
             if tool in ('dashboard_view', 'dashboard_filter_options'):
                 result['requestId'] = request_id
                 if args.get('compactRecords'):
@@ -51,9 +51,9 @@ class Service:
             self.transport.log(request_id, tool, 'failed', getattr(error, 'code', type(error).__name__), dashboard_id=args.get('dashboardId'), duration_ms=(time.perf_counter()-started)*1000)
             raise
 
-    def _execute(self, tool, args):
+    def _execute(self, tool, args, *, read_document=None):
         started = time.perf_counter()
-        result = self._call(tool, args)
+        result = self._call(tool, args, read_document=read_document)
         from .cloud_database import cloud_enabled
         if cloud_enabled() and isinstance(result.get('export'), dict):
             from .cloud_files import CloudFiles
@@ -115,7 +115,15 @@ class Service:
             result['computed']['totalDurationMs'] = (time.perf_counter()-started)*1000
         return result
 
-    def _call(self, tool, args):
+    def _read_document(self, board, args, selected=None):
+        doc = copy.deepcopy(selected) if selected is not None else self.store.get(board, hydrate=False)
+        expected = args.get('expectedRevision', doc['revision'])
+        if selected is None and self.project_root and expected != doc['revision'] and expected == self.store.display_revision(board):
+            doc = self.store.readable(board)
+        require(expected == doc['revision'], 'Data changed; reload the dashboard', 'REVISION_CONFLICT')
+        return doc
+
+    def _call(self, tool, args, *, read_document=None):
         require(isinstance(args, dict), 'Tool arguments must be an object')
         if tool == 'runtime_keepalive':
             return {'ok': True}
@@ -246,7 +254,7 @@ class Service:
                     'runtimeRoot': str(Path(getattr(self.store, 'runtime_root', self.store.root)).resolve()),
                     'dashboardRevision': (self.store.display_revision(board) if self.project_root else self.store.revision(board)) if board else None}
         if tool == 'dashboard_refresh':
-            doc = self.store.readable(board) if self.project_root else self.store.get(board, hydrate=False)
+            doc = copy.deepcopy(read_document) if read_document is not None else self.store.readable(board) if self.project_root else self.store.get(board, hydrate=False)
             incoming = args.get('filters')
             if incoming is not None:
                 require(isinstance(incoming, list), 'Filter overrides must be an array')
@@ -267,7 +275,7 @@ class Service:
             return {'document': doc}
         if tool == 'statistical_render':
             from .statistical import render_statistical
-            doc = self.store.statistical_document(self.store.get(board, hydrate=False))
+            doc = self.store.statistical_document(self._read_document(board, args, read_document))
             return render_statistical(doc, args.get('componentId'), args.get('format', 'svg'))
         if tool == 'generation_examples':
             from .generation import generation_examples
@@ -294,20 +302,16 @@ class Service:
             return export_site(self.store, board)
         if tool == 'dashboard_export':
             from .exports import export_dashboard
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._read_document(board, args, read_document))
             view = self.views.prepare(doc, args.get('filters'), args.get('tableStates'), args.get('granularities'))
             if args.get('format') == 'html':
                 from .statistical import statistical_artifacts
                 view['statisticalArtifacts'] = statistical_artifacts(self.store.statistical_document(view))
             return export_dashboard(self.store.root, view, args.get('format'), self.store.data)
         if tool == 'dashboard_view':
-            doc = self.store.get(board, hydrate=False)
-            if self.project_root and args.get('expectedRevision') != doc['revision'] and args.get('expectedRevision') == self.store.display_revision(board):
-                doc = self.store.readable(board)
+            doc = self._read_document(board, args, read_document)
             from .doctor import data_version
             require(args.get('dataVersion', data_version(doc)) == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
-            if args.get('expectedRevision', doc['revision']) != doc['revision']:
-                raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
             require(args.get('responseMode', 'full') in ('full', 'patch'), 'Invalid response mode')
             if args.get('responseMode') == 'patch':
                 ids = args.get('componentIds', list(doc['manifest']['components']))
@@ -331,7 +335,7 @@ class Service:
                 return result
             return {'document': doc}
         if tool == 'dashboard_filter_options':
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._read_document(board, args, read_document))
             return self.views.filter_options(doc, args.get('filterId'), args.get('search', ''), args.get('offset', 0), args.get('limit', 100))
         if tool == 'dashboard_data_inspect':
             doc = self.store.compact(self.store.get(board, hydrate=False))
@@ -359,8 +363,7 @@ class Service:
                    {'op': 'set_data_mode', 'value': 'local'}]
             return {'document': self.store.mutate(board, args.get('expectedRevision'), ops), 'import': {'rowCount': ref['rowCount'], 'logicalBytes': ref['bytes'], 'durationMs': (time.perf_counter()-imported_at)*1000}}
         if tool == 'component_data':
-            doc = self.store.compact(self.store.get(board, hydrate=False))
-            require(args.get('expectedRevision', doc['revision']) == doc['revision'], 'Data changed; reopen the component explanation')
+            doc = self.store.compact(self._read_document(board, args, read_document))
             key = args.get('componentId')
             component = doc['manifest']['components'].get(key)
             require(component is not None, 'Component not found')
@@ -377,7 +380,7 @@ class Service:
             return self.store.data.rows(ref, active, sort=args.get('sort'), search=search, offset=offset, limit=limit)
         if tool == 'dataset_export':
             import uuid
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._read_document(board, args, read_document))
             key = args.get('componentId')
             component = doc['manifest']['components'].get(key) if key else None
             ds = component.get('datasetId') if component else args.get('datasetId')
@@ -408,7 +411,7 @@ class Service:
                     source['verification'] = 'supplied'
             return {'document': self.store.create(args['dashboardId'], args.get('title', 'Dashboard'), doc)}
         if tool == 'dashboard_annotations':
-            doc = self.store.get(board, hydrate=False)
+            doc = self._read_document(board, args, read_document)
             manifest = doc['manifest']
             notes = copy.deepcopy(manifest.get('annotations', []))
             targets = {}
@@ -431,9 +434,9 @@ class Service:
         if tool == 'dashboard_preview':
             from .assets import require_preview
             require_preview()
-            return {'document': self.store.readable(board) if self.project_root else self.store.get(board, hydrate=False)}
+            return {'document': copy.deepcopy(read_document) if read_document is not None else self.store.readable(board) if self.project_root else self.store.get(board, hydrate=False)}
         if tool == 'dashboard_get':
-            return {'document': self.store.get(board, hydrate=args.get('dataMode') != 'local')}
+            return {'document': self._read_document(board, args, read_document) if read_document is not None else self.store.get(board, hydrate=args.get('dataMode') != 'local')}
         if tool == 'dashboard_validate':
             return {'valid': bool(validate(args.get('document') or self.store.get(board, hydrate=False)))}
         if tool == 'dashboard_patch':
@@ -471,7 +474,7 @@ class Service:
                     'kpiGuide': kpi_guide(kpis), 'kpiPatterns': PATTERNS,
                     'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
-            doc = self.store.get(board, hydrate=False)
+            doc = self._read_document(board, args, read_document)
             c = doc['manifest']['components'].get(args.get('componentId'))
             require(c is not None, 'Component not found')
             meta = doc['manifest']['datasets'].get(c.get('datasetId'), {})
@@ -484,7 +487,7 @@ class Service:
             return {'metrics': {key: doc['manifest']['metrics'][key] for key in c.get('measures', [])}, 'dataset': meta, 'originalPresentation': c.get('config',{}).get('presentation'), 'originalExplanation': c.get('config',{}).get('explanation'), 'statisticalAnalysis': c.get('analysis'), 'certified': False}
         if tool == 'legacy_render':
             from .assets import export_component
-            doc = self.store.get(board)
+            doc = self._read_document(board, args, read_document)
             if doc['snapshot'].get('datasetRefs'):
                 doc = self.views.prepare(self.store.compact(doc))
             key = args.get('componentId')

@@ -111,6 +111,9 @@ class CloudProjectStore(Store):
 
     def mutate(self, board_id, expected_revision, operations=None, restore_revision=None,
                use_current_data=False, expected_annotations=None):
+        if operations and any(isinstance(op, dict) and op.get('op') == 'set_annotations' for op in operations):
+            require(expected_annotations is not None, 'Read comments and provide expectedAnnotations before replacing them',
+                    'ANNOTATION_CONFLICT')
         current = self.get(board_id)
         require(current['revision'] == expected_revision, 'Reload before editing', 'REVISION_CONFLICT')
         previous_notes = current['manifest'].get('annotations', [])

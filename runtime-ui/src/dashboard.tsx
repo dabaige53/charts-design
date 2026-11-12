@@ -537,17 +537,20 @@ function SelectionFilter({
   call,
   onChange,
   dashboardId,
+  revision,
 }: {
   filter: Filter;
   options: any[];
   call: ToolCall;
   onChange: (values: any[]) => void;
   dashboardId: string;
+  revision: number;
 }) {
   const load: ChoiceLoader = React.useCallback(
     async (search, offset) => {
       const result = await call("dashboard_filter_options", {
         dashboardId,
+        expectedRevision: revision,
         filterId: filter.id,
         search,
         offset,
@@ -562,7 +565,7 @@ function SelectionFilter({
         total: result.totalValues,
       };
     },
-    [call, dashboardId, filter.id],
+    [call, dashboardId, revision, filter.id],
   );
   return (
     <MultiSelect
@@ -602,6 +605,7 @@ function FilterControl({
         options={doc.computed?.filterOptions?.[f.id] || []}
         call={call}
         dashboardId={doc.id}
+        revision={doc.revision}
         onChange={(values) => onChange(f.id, values)}
       />
     );

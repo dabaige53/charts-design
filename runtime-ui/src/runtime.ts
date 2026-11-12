@@ -131,6 +131,8 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
                       [id]: {
                         ...reader.current.tables[id],
                         ...patch.computed.tables[id],
+                        visible: reader.current.tables[id]?.visible,
+                        columns: reader.current.tables[id]?.columns,
                       },
                     },
                   };

@@ -112,6 +112,37 @@ it("queries only the table when its page changes", async () => {
   expect(call.mock.calls[0][1]!.tableStates.details.page).toBe(2);
 });
 
+// @wu-test type=regression | scope=useDashboardRuntime table response | protects=防止 audit-6 复发：分页返回覆盖等待期间修改的列顺序和显隐
+it("preserves newer column settings when a pending page response arrives", async () => {
+  let complete: ((value: Config) => void) | undefined;
+  const call = mock(async (_name: string, args: Config = {}) => {
+    if (args.tableStates.details.page === 2) {
+      return new Promise<Config>(resolve => { complete = resolve; });
+    }
+    return patch("details");
+  });
+  const initial = document();
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => result.current.activate("details"));
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  act(() => result.current.setTable("details", {
+    page: 2, pageSize: 10, columns: ["a", "b"], visible: ["a", "b"],
+  }));
+  await waitFor(() => expect(complete).toBeDefined());
+  act(() => result.current.setTable("details", {
+    page: 2, pageSize: 10, columns: ["b", "a"], visible: ["b"],
+  }));
+  await act(async () => complete!({
+    ...patch("details"), computed: { tables: { details: {
+      page: 2, pageSize: 10, totalRows: 30, columns: ["a", "b"], visible: ["a", "b"],
+    } } },
+  }));
+  expect(result.current.view.tables.details).toMatchObject({
+    page: 2, totalRows: 30, columns: ["b", "a"], visible: ["b"],
+  });
+  expect(call).toHaveBeenCalledTimes(2);
+});
+
 // @wu-test type=integration | scope=useDashboardRuntime.link | protects=柱图联动把来源图本身过滤成单根柱子或刷新无关组件
 it("preserves the source chart when applying linkage to other components", async () => {
   const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));

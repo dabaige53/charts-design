@@ -199,6 +199,7 @@ class CloudAssets:
 
 def cleanup_asset_jobs():
     database = AssetDatabase()
+    database.call('collect_drafts')
     result = {'removed': 0, 'failed': []}
     for entry in database.call('pending'):
         assets = CloudAssets(entry['project'], database)

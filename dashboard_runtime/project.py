@@ -12,9 +12,12 @@ DEFAULTS = {'history': {'keepCheckpoints': 100}, 'loading': {'debounceMs': 150, 
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2))
-    temporary.replace(path)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+    try:
+        temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 class ProjectStore(Store):
     def __init__(self, project_root, runtime_root):
@@ -79,6 +82,8 @@ class ProjectStore(Store):
         """Portable readable mirrors; SQLite is the transactional project index."""
         folder = self.root / board
         with self.connect() as db:
+            # Serialize the snapshot and its mirrors across threads/processes.
+            db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT document FROM boards WHERE id=?', (board,)).fetchone()
             write_json(folder / 'draft.json', json.loads(row[0]))
             write_json(folder / 'annotations.json', self._notes(db, board))
@@ -112,6 +117,9 @@ class ProjectStore(Store):
         return self.get(board_id)
 
     def mutate(self, board_id, expected_revision, operations=None, restore_revision=None, use_current_data=False, expected_annotations=None):
+        if operations and any(isinstance(op, dict) and op.get('op') == 'set_annotations' for op in operations):
+            require(expected_annotations is not None, 'Read comments and provide expectedAnnotations before replacing them',
+                    'ANNOTATION_CONFLICT')
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT document,revision FROM boards WHERE id=?', (board_id,)).fetchone()

@@ -306,3 +306,51 @@ def test_multi_page_share_scope_and_revocation(tmp_path):
     assert error.value.code == 'FORBIDDEN'
     server.state.revoke('sales', 'second')
     assert server.principal(token, 'sales') is None
+
+
+# @wu-test type=regression | scope=RemoteServer read-only views | protects=防止 audit-1 复发：只读查询导出候选值和列表泄露未保存草稿
+def test_read_only_tools_use_saved_content_even_when_a_newer_draft_exists(tmp_path):
+    from typing import cast
+    from dashboard_runtime.demo import executive_document
+    server = RemoteServer(settings(tmp_path))
+    service = server.projects.service('sales')
+    service.call('dashboard_create', {'dashboardId': 'exec', 'document': executive_document('exec')})
+    saved = service.store.readable('exec')
+    component = next(key for key, value in saved['manifest']['components'].items() if value.get('datasetId'))
+    saved_rows = service.call('component_data', {'dashboardId': 'exec', 'componentId': component})['rows']
+    filter_id = saved['manifest']['filters'][0]['id']
+    saved_options = service.call('dashboard_filter_options', {'dashboardId': 'exec', 'filterId': filter_id})['values']
+    token = server.links.share('sales', 'exec', 'view')['url'].split('#token=')[1]
+    principal = server.principal(token, 'sales')
+    assert principal is not None
+    service.call('dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [
+        {'op': 'set_title', 'value': 'PRIVATE DRAFT'}, {'op': 'set_filters', 'value': []},
+    ]})
+
+    def view(name, **args):
+        return cast(dict, server.call_viewer('sales', name, {'dashboardId': 'exec', **args}, principal))
+
+    assert view('dashboard_get')['document']['revision'] == 1
+    assert view('dashboard_view')['document']['manifest']['title'] == saved['manifest']['title']
+    assert view('component_data', componentId=component)['rows'] == saved_rows
+    assert view('dashboard_filter_options', filterId=filter_id)['values'] == saved_options
+    assert service.call('dashboard_filter_options', {'dashboardId': 'exec', 'filterId': filter_id,
+                                                    'expectedRevision': 1})['values'] == saved_options
+    for name in ('dashboard_view', 'component_data', 'dashboard_filter_options', 'dashboard_export'):
+        with pytest.raises(DashboardError) as error:
+            view(name, expectedRevision=2, componentId=component, filterId=filter_id, format='json')
+        assert error.value.code == 'REVISION_CONFLICT'
+    export = view('dashboard_export', format='json')['export']
+    target = server.file_path(export['downloadUrl'].rsplit('/', 1)[-1])
+    assert target is not None
+    assert json.loads(target.read_text())['manifest']['title'] == saved['manifest']['title']
+    # Raw IDs may refer to an editor's private export; readers use their signed download URL.
+    with pytest.raises(DashboardError) as error:
+        view('dashboard_export_read', exportId=export['id'], format='json')
+    assert error.value.code == 'FORBIDDEN'
+    listed = server.call_viewer('sales', 'dashboard_list', {}, principal)['dashboards']
+    assert listed == [{'id': 'exec', 'revision': 1, 'title': saved['manifest']['title']}]
+    editor = server.principal(server.links.share('sales', 'exec', 'edit')['url'].split('#token=')[1], 'sales')
+    assert editor is not None
+    edited = cast(dict, server.call_viewer('sales', 'dashboard_view', {'dashboardId': 'exec'}, editor)['document'])
+    assert edited['revision'] == 2

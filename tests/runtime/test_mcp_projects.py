@@ -89,7 +89,9 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                 batch = await call(session, 'dashboard_edit_begin', first, dashboardId='same', expectedRevision=1)
                 note = {'id': 'note', 'componentId': None, 'text': 'First only', 'createdAt': '2026-11-02'}
                 await call(session, 'dashboard_patch', first, dashboardId='same', expectedRevision=1,
-                    operations=[{'op': 'set_title', 'value': 'Updated first'}, {'op': 'set_annotations', 'value': [note]}])
+                    operations=[{'op': 'set_title', 'value': 'Updated first'}])
+                await call(session, 'dashboard_patch', first, dashboardId='same', expectedRevision=2,
+                    expectedAnnotations=[], operations=[{'op': 'set_annotations', 'value': [note]}])
                 done = await call(session, 'dashboard_edit_finish', first, dashboardId='same',
                     expectedRevision=2, batchId=batch['batch_id'])
                 assert done['ok']

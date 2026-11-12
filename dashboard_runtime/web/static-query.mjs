@@ -75,23 +75,34 @@ export function createStaticQuery(document,read){
     if(p.groupBy){const groups=new Map();for(const row of rows){const key=JSON.stringify(p.groupBy.map(k=>row[k]??null));if(!groups.has(key))groups.set(key,Object.fromEntries([...p.groupBy.map(k=>[k,row[k]]),...(p.sumFields||[]).map(k=>[k,null])]));const target=groups.get(key);for(const k of p.sumFields||[])if(row[k]!=null)target[k]=(target[k]??0)+row[k];}rows=[...groups.values()];}
     return calculateTableRows(rows,p,false);
   }
-  const groupedCache=new Map();
+  const groupedCache=new Map(),optionCache=new Map();
   async function query(args){
     const filters=args.filters||document.manifest.filters,computed={components:{},tables:{},grouped:{}};
     if(args.filterId){
       const filter=document.manifest.filters.find(f=>f.id===args.filterId);
       if(!filter||filter.op!=='in')throw Error('Unknown selection filter');
-      const values=new Map();
-      for(const id of filter.componentIds){
-        const dataset=datasetFor(id),url=document.staticOptions?.[dataset]?.[filter.field];
-        if(url){
-          if(!loaded.has(url))loaded.set(url,queue(()=>read(url)).catch(error=>{loaded.delete(url);throw error;}));
-          for(const value of await loaded.get(url))values.set(JSON.stringify(value),value);
-        }else for(const row of await rowsFor(id,[])){
-          const value=row[filter.field]??null;values.set(JSON.stringify(value),value);
-        }
+      const search=(args.search||'').toLocaleLowerCase();
+      let cached=optionCache.get(filter.id);
+      if(!cached||cached.search!==search){
+        const promise=(async()=>{
+          const values=new Map();
+          for(const id of filter.componentIds){
+            const dataset=datasetFor(id),url=document.staticOptions?.[dataset]?.[filter.field];
+            if(url){
+              if(!loaded.has(url))loaded.set(url,queue(()=>read(url)).catch(error=>{loaded.delete(url);throw error;}));
+              for(const value of await loaded.get(url))values.set(JSON.stringify(value),value);
+            }else for(const row of await rowsFor(id,[])){
+              const value=row[filter.field]??null;values.set(JSON.stringify(value),value);
+            }
+          }
+          return [...values.values()].filter(v=>String(v).toLocaleLowerCase().includes(search)).sort(compareValue);
+        })().catch(error=>{
+          if(optionCache.get(filter.id)?.promise===promise)optionCache.delete(filter.id);
+          throw error;
+        });
+        cached={search,promise};optionCache.set(filter.id,cached);
       }
-      const matches=[...values.values()].filter(v=>String(v).toLocaleLowerCase().includes((args.search||'').toLocaleLowerCase())).sort(compareValue);
+      const matches=await cached.promise;
       const offset=args.offset||0,limit=args.limit||100;
       return {values:matches.slice(offset,offset+limit),offset,totalValues:matches.length,hasMore:offset+limit<matches.length};
     }

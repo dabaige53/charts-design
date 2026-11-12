@@ -39,8 +39,8 @@ def test_publish_requires_current_draft_and_saved_revision(tmp_path):
     assert unsaved.value.code == 'NOT_FOUND'
 
 
-# @wu-test type=behavior | scope=Versions release archive | protects=保存历史清理后正式发布记录丢失并无法回退发布
-def test_release_remains_readable_after_checkpoint_pruning(tmp_path):
+# @wu-test type=behavior | scope=Versions release archive | protects=保留新检查点后旧发布记录丢失或不能回退发布
+def test_release_and_checkpoint_remain_readable_after_later_saves(tmp_path):
     store = ProjectStore(tmp_path / 'project', tmp_path / 'runtime')
     store.create('board', 'Original')
     versions = Versions(store)
@@ -48,7 +48,7 @@ def test_release_remains_readable_after_checkpoint_pruning(tmp_path):
     store.config['history']['keepCheckpoints'] = 1
     store.mutate('board', 1, [{'op': 'set_title', 'value': 'Next'}])
     store.checkpoint('board', 2)
-    assert [item['revision'] for item in store.history('board')] == [2]
+    assert [item['revision'] for item in store.history('board')] == [2, 1]
     assert versions.read('board', 1)['manifest']['title'] == 'Original'
     versions.publish('board', 2, 2)
     assert versions.publish('board', 2, 1)['publishedRevision'] == 1

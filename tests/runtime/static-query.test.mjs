@@ -26,3 +26,20 @@ test('table calculates ratio after grouping and after filtering',async()=>{
  let result=await query.query({componentIds:['table']});assert.deepEqual(result.computed.components.table.rows.map(r=>r.rate),['30.0%','12.0 分钟','—']);
  result=await query.query({componentIds:['table'],filters:[{field:'agent',op:'in',values:['B'],componentIds:['table']}]});assert.equal(result.computed.components.table.rows[0].rate,'12.0 分钟');
 });
+
+// @wu-test type=performance | scope=static filter option paging | protects=防止 audit-9 复发：读取后续候选页重复遍历完整候选集
+test('option pages reuse prepared values and search changes invalidate that result',async()=>{
+ const d=make();d.manifest.filters=[{id:'agent',field:'agent',op:'in',values:[],componentIds:['table']}];
+ d.staticOptions={sales:{agent:'options'}};
+ let visits=0;
+ const values=Array.from({length:301},(_,i)=>`Agent ${String(i).padStart(3,'0')}`);
+ values[Symbol.iterator]=function*(){for(let i=0;i<this.length;i++){visits++;yield this[i];}};
+ const query=createStaticQuery(d,async()=>values);
+ const first=await query.query({filterId:'agent',limit:100});
+ const second=await query.query({filterId:'agent',offset:100,limit:100});
+ const last=await query.query({filterId:'agent',offset:300,limit:100});
+ assert.equal(visits,301);
+ assert.equal(first.totalValues,301);assert.equal(second.values[0],'Agent 100');
+ assert.deepEqual(last.values,['Agent 300']);assert.equal(last.hasMore,false);
+ assert.deepEqual((await query.query({filterId:'agent',search:'299'})).values,['Agent 299']);
+});

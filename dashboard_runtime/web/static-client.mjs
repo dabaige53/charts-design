@@ -7,22 +7,56 @@ export function staticPartitionScope(doc,filters){
   }));
 }
 export function createStaticClient(doc,base,workerUrl,WorkerClass=Worker,headers={}){
-  let worker,ready,sequence=0,activeScope;const pending=new Map();
-  function stop(message){worker?.terminate();worker=null;ready=null;for(const task of pending.values())task.reject(Object.assign(Error(message),{name:'AbortError'}));pending.clear();}
+  let worker,ready,sequence=0,activeScope,activeFilters,closed=false;const pending=new Map();
+  const partitionFields=new Set([...Object.values(doc.staticPartitions||{}),...Object.values(doc.staticPartitionIndexes||{})].map(p=>p.field));
+  function scopeError(){return Object.assign(Error('筛选范围已切换'),{name:'AbortError',code:'PARTITION_CHANGED'});}
+  function stop(error){
+    worker?.terminate();worker=null;ready=null;
+    for(const task of pending.values())task.reject(error);pending.clear();
+  }
   function call(type,args){const id=++sequence;return new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});worker.postMessage({id,type,args});});}
   function start(){
     if(ready)return ready;
     worker=new WorkerClass(new URL(workerUrl,base),{type:'module'});
-    worker.onmessage=({data})=>{const task=pending.get(data.id);if(!task)return;pending.delete(data.id);if(data.error)task.reject(Error(data.error));else task.resolve(data.result);};
-    worker.onerror=event=>{for(const task of pending.values())task.reject(Error(event.message||'后台计算失败'));pending.clear();};
+    const current=worker;
+    worker.onmessage=({data})=>{
+      if(worker!==current)return;
+      const task=pending.get(data.id);if(!task)return;pending.delete(data.id);
+      if(data.error)task.reject(Error(data.error));else task.resolve(data.result);
+    };
+    worker.onerror=event=>{if(worker===current)stop(Error(event.message||'后台计算失败'));};
     const {computed,...definition}=doc;
-    ready=call('init',{document:definition,base,headers});return ready;
+    ready=call('init',{document:definition,base,headers}).catch(error=>{
+      if(worker===current)stop(error);
+      throw error;
+    });return ready;
+  }
+  function relevantScope(filters,args){
+    if(args.filterId)return '';
+    const ids=args.componentIds||(args.detail?[args.componentId]:null);
+    return JSON.stringify(filters.filter(f=>f.required&&partitionFields.has(f.field)&&
+      (!ids||!f.componentIds||f.componentIds.some(id=>ids.includes(id)))).map(f=>[f.id,f.values]));
   }
   return {async query(args){
-    if(args.filterId){await start();return call('query',args);}
-    const scope=staticPartitionScope(doc,args.filters||doc.manifest.filters);
-    if(activeScope!==undefined&&scope!==activeScope)stop('筛选范围已切换');activeScope=scope;
-    await start();if(scope!==activeScope)throw Object.assign(Error('筛选范围已切换'),{name:'AbortError'});
-    return call('query',args);
-  },destroy(){stop('页面已关闭');}};
+    if(closed)throw Object.assign(Error('页面已关闭'),{name:'AbortError'});
+    const filters=args.filters||doc.manifest.filters;
+    if(!args.filterId){
+      const scope=staticPartitionScope(doc,filters);
+      if(activeScope!==undefined&&scope!==activeScope)stop(scopeError());
+      activeScope=scope;activeFilters=filters;
+    }
+    const requested=relevantScope(filters,args);
+    for(;;){
+      try{
+        await start();
+        if(closed)throw Object.assign(Error('页面已关闭'),{name:'AbortError'});
+        if(activeFilters&&requested!==relevantScope(activeFilters,args))throw scopeError();
+        return await call('query',args);
+      }catch(error){
+        if(closed||error.code!=='PARTITION_CHANGED'||requested!==relevantScope(activeFilters,args))throw error;
+        // A partition restart also interrupts unrelated components/options.
+        // Only replay requests whose own data selection is still current.
+      }
+    }
+  },destroy(){closed=true;stop(Object.assign(Error('页面已关闭'),{name:'AbortError'}));}};
 }
