@@ -13,7 +13,7 @@ mock.module("./dashboard", () => ({
 import { StaticSite } from "./static";
 
 const originalFetch = globalThis.fetch;
-afterEach(() => { cleanup(); globalThis.fetch = originalFetch; mock.restore(); });
+afterEach(() => { cleanup(); globalThis.fetch = originalFetch; delete window.__chartsDocument; mock.restore(); });
 
 // @wu-test type=integration | scope=StaticSite 页面切换 | protects=多页面分享无法读取所选页面或误加载未选页面
 it("loads selected pages from the shared site", async () => {
@@ -29,4 +29,14 @@ it("loads selected pages from the shared site", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "second" }));
   await waitFor(() => expect(screen.getByText("第二页")).toBeTruthy());
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+// @wu-test type=performance | scope=StaticSite 首屏数据 | protects=应用启动后重复请求HTML已经开始加载的页面声明
+it("consumes the document request started by the page shell", async () => {
+  window.__chartsDocument = Promise.resolve({ id: "first", manifest: { title: "提前加载的页面" } } as any);
+  const fetchMock = mock(async () => { throw Error("unexpected duplicate fetch"); });
+  globalThis.fetch = fetchMock as any;
+  render(<StaticSite />);
+  await screen.findByText("提前加载的页面");
+  expect(fetchMock).not.toHaveBeenCalled();
 });

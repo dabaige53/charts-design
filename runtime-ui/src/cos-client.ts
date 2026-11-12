@@ -17,7 +17,8 @@ export function createVersionReader(doc: Document, workerUrl: string, headers: R
   let preparing: Promise<void> | undefined;
   let closed = false;
   const controller = new AbortController();
-  const query = async (args: Config) => {
+  const query = async (args: Config, options?: { signal?: AbortSignal }) => {
+    options?.signal?.throwIfAborted();
     if (closed) throw Object.assign(Error("页面已关闭"), { name: "AbortError" });
     if (doc.browserDataUrl && !worker) {
       preparing ??= (async () => {
@@ -31,17 +32,17 @@ export function createVersionReader(doc: Document, workerUrl: string, headers: R
       })().catch(error => { preparing = undefined; throw error; });
       await preparing;
     }
-    return worker ? worker.query(args) : embedded!.query(args);
+    return worker ? worker.query(args, options) : embedded!.query(args, options);
   };
-  const call: ToolCall = async (name, args = {}) => {
+  const call: ToolCall = async (name, args = {}, options) => {
     if (args.expectedRevision != null && args.expectedRevision !== doc.revision)
       throw Error("版本已切换，请重新读取");
     if (name === "dashboard_list") return { dashboards: [{ id: doc.id, title: doc.manifest.title }] };
     if (name === "dashboard_get" || name === "dashboard_preview") return { document: doc };
     if (name === "runtime_info") return { dashboardRevision: doc.revision };
-    if (name === "dashboard_view") return query(args);
-    if (name === "dashboard_filter_options") return query({ ...args, filters: [] });
-    if (name === "component_data") return query({ ...args, detail: true });
+    if (name === "dashboard_view") return query(args, options);
+    if (name === "dashboard_filter_options") return query({ ...args, filters: [] }, options);
+    if (name === "component_data") return query({ ...args, detail: true }, options);
     if (name === "semantic_inspect") {
       const component = doc.manifest.components[args.componentId];
       const ids: string[] = component.binding ? Object.values(component.binding.measures) : component.measures || [];
@@ -71,10 +72,10 @@ export function createCosTools(remote: ToolCall, workerUrl: string, headers: () 
   const readers = new Map<string, ReturnType<typeof createVersionReader>>();
   const keys = new Map<string, string>();
   const localTools = new Set(["dashboard_view", "dashboard_filter_options", "component_data", "dataset_export", "semantic_inspect"]);
-  const call: ToolCall = async (name, args = {}) => {
+  const call: ToolCall = async (name, args = {}, options) => {
     const reader = readers.get(args.dashboardId);
-    if (reader && localTools.has(name)) return reader.call(name, args);
-    const result = await remote(name, args);
+    if (reader && localTools.has(name)) return reader.call(name, args, options);
+    const result = await remote(name, args, options);
     const doc = result.document as Document | undefined;
     if (doc?.storageFormat === "cos-v1") {
       const key = JSON.stringify([headers(), doc.versionKey, doc.manifest, doc.staticFiles, doc.browserDataUrl]);

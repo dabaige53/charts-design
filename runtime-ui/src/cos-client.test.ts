@@ -1,4 +1,5 @@
 import { afterEach, expect, it, mock } from "bun:test";
+import { createStaticResources } from "../../dashboard_runtime/web/static-resources.mjs";
 import { createStaticQuery } from "../../dashboard_runtime/web/static-query.mjs";
 import { createVersionReader, loadWebDashboard } from "./cos-client";
 import type { Config, Document } from "./types";
@@ -51,16 +52,18 @@ it("renders saved results without loading files and shares one directory request
   let workers = 0;
   class QueryWorker {
     engine: any;
+    resources = createStaticResources({fetcher: async (url: string) => {
+      files.push(new URL(url).pathname.split("/").pop()!);
+      return new Response(JSON.stringify([{ value: 7 }, { value: 9 }]));
+    }});
     onmessage: any;
     terminated = false;
     constructor() { workers++; }
     postMessage({ id, type, args }: any) {
+      if (!["init", "query"].includes(type)) return;
       void Promise.resolve().then(async () => {
         if (type === "init") {
-          this.engine = createStaticQuery(args.document, async (file: string) => {
-            files.push(file);
-            return [{ value: 7 }, { value: 9 }];
-          });
+          this.engine = createStaticQuery(args.document, (file: string) => this.resources.json(new URL(file, args.base).href));
           return { ready: true };
         }
         return this.engine.query(args);
@@ -70,7 +73,7 @@ it("renders saved results without loading files and shares one directory request
   }
   globalThis.Worker = QueryWorker as any;
   const fetcher = mock(async () => new Response(JSON.stringify({
-    id: "board", revision: 3, staticFiles: { sales: ["rows.gz"] },
+    id: "board", revision: 3, staticFiles: { sales: ["rows.json"] },
   })));
   globalThis.fetch = fetcher as unknown as typeof fetch;
   const reader = createVersionReader(doc, "/worker.js", { Authorization: "Bearer test" });
@@ -86,7 +89,7 @@ it("renders saved results without loading files and shares one directory request
     expect(second.totalRows).toBe(2);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(workers).toBe(1);
-    expect(files).toEqual(["rows.gz"]);
+    expect(files).toEqual(["rows.json"]);
     await expect(reader.call("dashboard_view", { expectedRevision: 2 })).rejects.toThrow("版本已切换");
   } finally { reader.destroy(); }
 });

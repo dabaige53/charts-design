@@ -194,7 +194,7 @@ export function MultiSelect({
     if (!open || !loadOptions) return;
     setBusy(true);
     setError("");
-    const timer = setTimeout(() => {
+    const load = () => {
       void loadOptions(query, 0)
         .then((page) => {
           if (request === sequence.current) setRemote(page);
@@ -205,7 +205,10 @@ export function MultiSelect({
         .finally(() => {
           if (request === sequence.current) setBusy(false);
         });
-    }, 150);
+    };
+    // Opening the menu has no typing to debounce.
+    const timer = query ? setTimeout(load, 150) : undefined;
+    if (!query) load();
     return () => {
       clearTimeout(timer);
       sequence.current++;

@@ -172,6 +172,18 @@ await writeFile(
 );
 const js = app.outputFiles[0].text;
 await writeFile(path.join(out, "app.js"), js);
+const staticApp = await build({
+  entryPoints: [path.join(root, "src/static-main.tsx")],
+  bundle: true,
+  write: false,
+  format: "iife",
+  target: "es2022",
+  minify: true,
+  legalComments: "inline",
+  define: { "process.env.NODE_ENV": '"production"' },
+});
+const staticJs = staticApp.outputFiles[0].text;
+await writeFile(path.join(out, "static-app.js"), staticJs);
 await writeFile(path.join(out, "app.css"), css.css);
 await build({
   entryPoints: [path.join(root, "../dashboard_runtime/web/static-worker.mjs")],
@@ -186,6 +198,7 @@ const id = createHash("sha256")
   .update(js)
   .update(css.css)
   .update(worker)
+  .update(staticJs)
   .digest("hex")
   .slice(0, 16);
 await writeFile(
@@ -193,7 +206,7 @@ await writeFile(
   JSON.stringify({
     id,
     format: 1,
-    entries: ["app.js", "app.css", "static-worker.js"],
+    entries: ["app.js", "app.css", "static-worker.js", "static-app.js"],
     components: 40,
     metrics: 16,
   }) + "\n",
@@ -203,6 +216,7 @@ console.log(
     output: out,
     id,
     appBytes: Buffer.byteLength(js) + Buffer.byteLength(css.css),
+    staticAppBytes: Buffer.byteLength(staticJs),
     designBytes: gallery.outputFiles[0].contents.length,
   }),
 );

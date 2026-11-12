@@ -1,6 +1,7 @@
 """The same compiled React UI is served by this project's MCP and local preview."""
 import base64
 import json
+from functools import lru_cache
 from pathlib import Path
 from .model import DashboardError
 
@@ -42,9 +43,34 @@ def render_html(mode='web', document=None, legacy=None, idle_timeout: float = 60
             + ';</script><script>' + script + '</script></body></html>')
 
 
-def bundle_assets():
+@lru_cache(maxsize=12)
+def _asset_bytes(path, mtime_ns, size):
+    return path.read_bytes()
+
+
+def bundle_asset(name, *, static=False):
     require_preview()
-    return {name: (DIST / name).read_bytes() for name in ('app.js', 'app.css', 'static-worker.js')}
+    path = DIST / ('static-app.js' if static and name == 'app.js' else name)
+    stat = path.stat()
+    return _asset_bytes(path, stat.st_mtime_ns, stat.st_size)
+
+
+def bundle_assets(*, static=False):
+    return {name: bundle_asset(name, static=static) for name in ('app.js', 'app.css', 'static-worker.js')}
+
+
+def static_html():
+    # Start the document alongside CSS/JS. The app consumes this same promise;
+    # attach an early rejection handler until its visible error UI is mounted.
+    return ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>Charts Design</title>' + FAVICON_LINK + '<script>'
+            'window.__chartsBoot={mode:"static"};'
+            'window.__chartsDocument=fetch("document.json").then(r=>{'
+            'if(!r.ok)throw Error("网页数据加载失败（"+r.status+"）");return r.json()});'
+            'window.__chartsDocument.catch(()=>{});</script>'
+            '<link rel="stylesheet" href="app.css"><script defer src="app.js"></script>'
+            '</head><body><div id="root"></div></body></html>')
 
 
 def export_document(document):

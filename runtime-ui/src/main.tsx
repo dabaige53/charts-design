@@ -1,11 +1,9 @@
-import { Component, useEffect, useState, type ReactNode } from "react";
-import { createRoot } from "react-dom/client";
+import { useEffect, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
-import { Toaster } from "sonner";
+import { mountApp } from "./app-root";
 import { DashboardApp } from "./dashboard";
 import { SnapshotApp, StaticSite } from "./static";
 import { RecoveryAlert } from "./recovery-alert";
-import { TooltipProvider } from "./components/ui/tooltip";
 import { createProjectContext } from "./project-context.mjs";
 import { resolveToolResult } from "./tool-result.mjs";
 import { createToolQueue } from "../../dashboard_runtime/web/request-queue.mjs";
@@ -92,28 +90,6 @@ const download: Download = async (file) => {
   });
   if (result.isError) throw Error("宿主未完成下载，请重新操作。");
 };
-class RenderBoundary extends Component<
-  { children: ReactNode },
-  { error: string }
-> {
-  state = { error: "" };
-  static getDerivedStateFromError(error: Error) {
-    return { error: error.message || String(error) };
-  }
-  render() {
-    if (this.state.error)
-      return (
-        <RecoveryAlert
-          className="m-6"
-          title="页面暂时无法显示"
-          message={this.state.error}
-          retryLabel="重新打开页面"
-          onRetry={() => location.reload()}
-        />
-      );
-    return this.props.children;
-  }
-}
 function Root() {
   const [doc, setDoc] = useState<Document | null>(boot.document || null),
     [initialBoards, setInitialBoards] = useState<Config[] | undefined>(),
@@ -219,12 +195,6 @@ function Root() {
     }, 20000);
     return () => clearInterval(interval);
   }, [!!doc]);
-  window.__chartsReady = async () => {
-    await document.fonts.ready;
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-  };
   if (boot.mode === "snapshot") return <SnapshotApp document={boot.document} />;
   if (boot.mode === "static") return <StaticSite />;
   if (accessRequired && !doc) return <WebAccess onAccess={(token) => {
@@ -283,11 +253,4 @@ function Root() {
     </>
   );
 }
-createRoot(document.getElementById("root")!).render(
-  <RenderBoundary>
-    <TooltipProvider>
-      <Root />
-      <Toaster closeButton />
-    </TooltipProvider>
-  </RenderBoundary>,
-);
+mountApp(<Root />);

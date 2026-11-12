@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from concurrent.futures import ThreadPoolExecutor
 
 from .model import DashboardError, require
 
@@ -10,7 +11,7 @@ def browser_data(store, document, url_for):
     doc = document
     result = {'id': doc['id'], 'revision': doc['revision'],
               'staticFiles': {}, 'staticOptions': {}, 'staticPartitionIndexes': {},
-              'staticComponentDatasets': {}, 'staticDatasetFields': {}}
+              'staticComponentDatasets': {}, 'staticDatasetFields': {}, 'staticResourceKeys': {}}
     used = {component.get('datasetId') or component.get('binding', {}).get('datasetId')
             for component in doc['manifest']['components'].values()}
     refs = {key: ref for key, ref in doc['snapshot'].get('datasetRefs', {}).items() if key in used}
@@ -21,16 +22,18 @@ def browser_data(store, document, url_for):
             refs[key] = ref
             result['staticComponentDatasets'][component_id] = key
             result['staticDatasetFields'][key] = ref['fields']
-    objects = {}
+    versions = list(dict.fromkeys(ref['version'] for ref in refs.values()))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        objects = dict(zip(versions, pool.map(lambda version: store.assets.call('object_get', version=version), versions)))
     for key, ref in refs.items():
-        if ref['version'] not in objects:
-            objects[ref['version']] = store.assets.call('object_get', version=ref['version'])
         obj = objects[ref['version']]
         require(obj is not None, 'Dataset files unavailable', 'ASSET_UNAVAILABLE')
         descriptor = obj['descriptor']
         result['staticFiles'][key] = [url_for(obj['id'], name) for name in descriptor['shards']]
         result['staticOptions'][key] = {field: url_for(obj['id'], name)
                                        for field, name in descriptor['options'].items()}
+        for name in [*descriptor['shards'], *descriptor['options'].values()]:
+            result['staticResourceKeys'][url_for(obj['id'], name)] = obj['id'] + '/' + name
         if descriptor.get('partitionIndex'):
             index = descriptor['partitionIndex']
             result['staticPartitionIndexes'][key] = {'field': index['field'],

@@ -2,14 +2,14 @@ import zipfile
 import gzip
 import json
 
-from dashboard_runtime.assets import FAVICON_LINK, render_html
+from dashboard_runtime.assets import FAVICON_LINK, bundle_asset, render_html
 from dashboard_runtime.demo import executive_document
 from dashboard_runtime.deployment import _write_shards
 from dashboard_runtime.model import MAX_BYTES
 from dashboard_runtime.service import Service
 
 
-# @wu-test type=integration | scope=静态部署入口 | protects=导出缺少运行资源和网页图标或改写已保存文档
+# @wu-test type=integration | scope=静态部署入口 | protects=导出缺少运行资源或选项索引并改写已保存文档
 def test_site_export_contains_runtime_and_preserves_document(tmp_path):
     service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
     service.call('dashboard_create', {'dashboardId': 'demo', 'document': executive_document('demo')})
@@ -18,6 +18,18 @@ def test_site_export_contains_runtime_and_preserves_document(tmp_path):
     with zipfile.ZipFile(result['path']) as archive:
         assert {'index.html', 'app.js', 'app.css', 'static-worker.js', 'document.json', 'export-manifest.json'} <= set(archive.namelist())
         assert FAVICON_LINK in archive.read('index.html').decode()
+        assert archive.read('app.js') == bundle_asset('app.js', static=True)
+        assert 'window.__chartsDocument=fetch(' in archive.read('index.html').decode()
+        doc = json.loads(archive.read('document.json'))
+        for selection in doc['manifest']['filters']:
+            if selection['op'] != 'in':
+                continue
+            for component in selection['componentIds']:
+                dataset = doc['manifest']['components'][component]['datasetId']
+                options = json.loads(gzip.decompress(archive.read(doc['staticOptions'][dataset][selection['field']])))
+                rows = [row for path in doc['staticFiles'][dataset]
+                        for row in json.loads(gzip.decompress(archive.read(path)))]
+                assert set(options) == {row.get(selection['field']) for row in rows}
     assert FAVICON_LINK in render_html()
     assert service.store.get('demo', hydrate=False) == before
 

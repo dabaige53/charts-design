@@ -135,7 +135,7 @@ class CloudShares:
                     target = site / 'pages' / page_id
                     target.mkdir(parents=True)
                     page_document = json.loads((page_site / 'document.json').read_bytes())
-                    for dataset, paths in page_document['staticFiles'].items():
+                    def reuse(paths):
                         reused = []
                         for name in paths:
                             source = page_site / name
@@ -147,7 +147,11 @@ class CloudShares:
                                 shutil.copyfile(source, destination)
                                 shards[digest] = destination
                             reused.append(Path(os.path.relpath(destination, target)).as_posix())
-                        page_document['staticFiles'][dataset] = reused
+                        return reused
+                    for dataset, paths in page_document['staticFiles'].items():
+                        page_document['staticFiles'][dataset] = reuse(paths)
+                    for dataset, options in page_document.get('staticOptions', {}).items():
+                        page_document['staticOptions'][dataset] = dict(zip(options, reuse(options.values())))
                     (target / 'document.json').write_text(json.dumps(page_document, ensure_ascii=False), encoding='utf-8')
                     entries.append({'id': page_id, 'title': page_doc['manifest']['title'],
                                     'path': 'pages/' + page_id + '/document.json', 'revision': page_doc['revision']})
@@ -200,7 +204,7 @@ class CloudShares:
                               stagingUntil=job.get('stagingUntil', job.get('cleanupAfter')))
 
     def _publish_cos(self, service, documents, expiration, access_key):
-        from .assets import DIST, FAVICON_LINK, require_preview
+        from .assets import bundle_assets, static_html, require_preview
         from .cos_view import web_document
         require_preview()
         share_id, now = uuid.uuid4().hex, int(time.time())
@@ -231,9 +235,9 @@ class CloudShares:
             if index == 0:
                 web['staticPages'] = pages
             put(page['path'], json.dumps(web, ensure_ascii=False).encode(), 'application/json')
-        for name in ('app.js', 'app.css', 'static-worker.js'):
-            put(name, (DIST / name).read_bytes(), 'text/css' if name.endswith('.css') else 'text/javascript')
-        put('index.html', ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + FAVICON_LINK + '<link rel="stylesheet" href="app.css"></head><body><div id="root"></div><script>window.__chartsBoot={mode:"static"}</script><script src="app.js"></script></body></html>').encode(), 'text/html')
+        for name, raw in bundle_assets(static=True).items():
+            put(name, raw, 'text/css' if name.endswith('.css') else 'text/javascript')
+        put('index.html', static_html().encode(), 'text/html')
         salt = secrets.token_hex(16)
         control = {**job, 'state': 'active', 'createdAt': now, 'salt': salt,
                    'keyHash': key_digest(access_key, salt), 'files': files + list(asset_files),
@@ -292,6 +296,14 @@ class CloudShares:
         path = PurePosixPath(name)
         require(not path.is_absolute() and '..' not in path.parts and name in control['files'],
                 '分享文件不存在', 'NOT_FOUND')
+        if name == 'index.html':
+            from .assets import static_html
+            return static_html().encode()
+        if name in ('app.js', 'app.css', 'static-worker.js'):
+            # The renderer is application code, not the frozen business content.
+            # Upgrade existing share URLs without republishing their documents.
+            from .assets import bundle_asset
+            return bundle_asset(name, static=True)
         if name in control.get('assetFiles', {}):
             from .cloud_assets import CloudAssets
             assets = CloudAssets(control['project'])

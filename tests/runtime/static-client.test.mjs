@@ -7,12 +7,15 @@ test('required partition cannot query all months or multiple months',()=>{
  assert.throws(()=>staticPartitionScope(doc,[]),/必须选择一项/);assert.throws(()=>staticPartitionScope(doc,[{...month('2026-09'),values:[]}]),/必须选择一项/);assert.throws(()=>staticPartitionScope(doc,[{...month('2026-09'),values:['2026-08','2026-09']}]),/必须选择一项/);
  assert.throws(()=>staticPartitionScope(doc,[{...month('2026-09'),op:'range',values:['2026-08','2026-09']}]),/必须选择一项/);
 });
-// @wu-test type=integration | scope=static worker lifecycle | protects=切换月份后旧数据继续响应或资源不释放 | debt=impl-detail
-test('same-month queries reuse worker; switching month terminates old data owner',async()=>{
- const instances=[];class FakeWorker{constructor(){instances.push(this);this.messages=[];}postMessage(data){this.messages.push(data);queueMicrotask(()=>{if(!this.dead)this.onmessage({data:{id:data.id,result:{ready:true}}});});}terminate(){this.dead=true;}}
- const client=createStaticClient(doc,'https://site.example/document.json','./assets/worker.js',FakeWorker);
- await client.query({filters:[month('2026-09')]});await client.query({filters:[month('2026-09')]});assert.equal(instances.length,1);
- await client.query({filters:[month('2026-08')]});assert.equal(instances.length,2);assert.equal(instances[0].dead,true);assert.equal(instances[1].messages[1].args.filters[0].values[0],'2026-08');client.destroy();assert.equal(instances[1].dead,true);
+// @wu-test type=integration | scope=static worker lifecycle | protects=切换任意分区时销毁共享资源或关闭一个读取器影响其他读取器
+test('partition changes preserve the worker and readers share its authorized lifetime',async()=>{
+ const instances=[];class FakeWorker{constructor(){instances.push(this);this.messages=[];}postMessage(data){this.messages.push(data);if(!['init','query'].includes(data.type))return;queueMicrotask(()=>{if(!this.dead)this.onmessage({data:{id:data.id,result:{ready:true}}});});}terminate(){this.dead=true;}}
+ const definition={manifest:{filters:[{id:'segment',field:'segment',op:'in',values:['A'],required:true}]},staticPartitions:{sales:{field:'segment'}}};
+ const client=createStaticClient(definition,'https://site.example/document.json','./assets/worker.js',FakeWorker);
+ const other=createStaticClient(definition,'https://site.example/other.json','./assets/worker.js',FakeWorker);
+ await client.query({});await client.query({filters:[{...definition.manifest.filters[0],values:['B']}]});await other.query({});
+ assert.equal(instances.length,1);client.destroy();assert.ok(!instances[0].dead);
+ await other.query({});other.destroy();assert.equal(instances[0].dead,true);
 });
 
 // @wu-test type=regression | scope=static client filter options | protects=防止 required-month-20261112 复发：必选月份为空时无法读取候选项恢复且选项请求重置当前月份
@@ -62,31 +65,73 @@ test('a failed worker initialization can be retried with a new worker',async()=>
  }finally{client.destroy();}
 });
 
-// @wu-test type=regression | scope=static worker partition restart | protects=防止 audit-5 复发：分区变化中断无关组件和候选项或重放旧筛选
-test('partition restarts replay unrelated queries but reject stale consumers',async()=>{
+// @wu-test type=regression | scope=static query cancellation | protects=防止 audit-5 复发：条件变化中断无关查询或旧结果覆盖当前选择
+test('query changes cancel only stale consumers without replaying unrelated work',async()=>{
  const instances=[];
- const definition={...doc,manifest:{filters:[{...month('2026-09'),componentIds:['affected']}]}};
+ const selection=value=>({id:'area',field:'area',op:'in',values:[value],componentIds:['affected']});
+ const definition={manifest:{filters:[selection('A')]}};
  class Worker{
-   constructor(){instances.push(this);this.number=instances.length;}
-   postMessage({id,type,args}){
-     if(type==='init'||this.number>1||args.componentIds?.length===0){
-       queueMicrotask(()=>this.onmessage({data:{id,result:{componentIds:args.componentIds}}}));
-     }
-   }
+   constructor(){instances.push(this);this.messages=[];}
+   postMessage(message){this.messages.push(message);if(message.type==='init')queueMicrotask(()=>this.finish(message));}
+   finish(message){this.onmessage({data:{id:message.id,result:{componentIds:message.args?.componentIds}}});}
    terminate(){this.dead=true;}
  }
  const client=createStaticClient(definition,'https://site.example/','worker.js',Worker);
  try{
-   await client.query({componentIds:[]});
    const unrelated=client.query({componentIds:['other']});
-   const options=client.query({filterId:'period'});
+   const mixed=client.query({componentIds:['affected','other']});
+   const options=client.query({filterId:'area'});
    const stale=assert.rejects(client.query({componentIds:['affected']}),{name:'AbortError'});
-   await Promise.resolve();
-   await client.query({filters:[{...month('2026-08'),componentIds:['affected']}],componentIds:['affected']});
-   assert.deepEqual((await unrelated).componentIds,['other']);
-   await options;await stale;
-   assert.equal(instances.length,2);
+   for(let i=0;i<5;i++)await Promise.resolve();
+   const latest=client.query({filters:[selection('B')],componentIds:['affected']});
+   for(let i=0;i<5;i++)await Promise.resolve();
+   const worker=instances[0];
+   for(const message of worker.messages.filter(m=>m.type==='query'))worker.finish(message);
+   assert.deepEqual((await unrelated).componentIds,['other']);await options;await stale;await latest;
+   assert.deepEqual((await mixed).componentIds,['affected','other']);
+   assert.equal(instances.length,1);
+   assert.equal(worker.messages.filter(m=>m.type==='query'&&m.args.componentIds?.[0]==='other').length,1);
  }finally{client.destroy();}
  await assert.rejects(client.query({componentIds:['other']}),/页面已关闭/);
- assert.equal(instances.length,2);
+});
+
+// @wu-test type=boundary | scope=static client authorization | protects=服务端确认权限失效后仍从共享缓存返回数据
+test('a denied resource invalidates all readers in its authorization pool',async()=>{
+ const instances=[];
+ class Worker{
+  constructor(){instances.push(this);}
+  postMessage(message){
+   if(message.type==='init')queueMicrotask(()=>this.onmessage({data:{id:message.id,result:{ready:true}}}));
+   if(message.type==='query')queueMicrotask(()=>this.onmessage({data:{id:message.id,error:'access revoked',status:403}}));
+  }
+  terminate(){this.dead=true;}
+ }
+ const definition={manifest:{filters:[]}};
+ const first=createStaticClient(definition,'https://site.example/','worker.js',Worker);
+ const second=createStaticClient(definition,'https://site.example/','worker.js',Worker);
+ try{
+  await assert.rejects(first.query({componentIds:['card']}),/access revoked/);
+  await assert.rejects(second.query({componentIds:['card']}),/access revoked/);
+  assert.equal(instances.length,1);
+  assert.equal(instances[0].dead,true);
+ }finally{first.destroy();second.destroy();}
+});
+
+// @wu-test type=integration | scope=static client AbortSignal | protects=界面取消旧查询后仍占据请求名额直到Worker计算完成
+test('an external abort immediately releases a pending worker query',async()=>{
+ const messages=[];
+ class Worker{
+  postMessage(message){messages.push(message);if(message.type==='init')queueMicrotask(()=>this.onmessage({data:{id:message.id,result:{ready:true}}}));}
+  terminate(){}
+ }
+ const client=createStaticClient({manifest:{filters:[]}},'https://site.example/','worker.js',Worker);
+ const controller=new AbortController();
+ try{
+  const pending=assert.rejects(client.query({componentIds:['card']},{signal:controller.signal}),{name:'AbortError'});
+  for(let i=0;i<5;i++)await Promise.resolve();
+  const request=messages.find(message=>message.type==='query');assert.ok(request);
+  controller.abort();await pending;
+  assert.ok(messages.some(message=>message.type==='cancel'&&message.id===request.id));
+  assert.equal('signal' in request.args,false);
+ }finally{client.destroy();}
 });

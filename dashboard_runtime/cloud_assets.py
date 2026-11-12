@@ -9,11 +9,53 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import uuid
+import threading
+from collections import OrderedDict
+from concurrent.futures import Future
 from contextlib import closing
 
 from .cloud_database import CloudDatabase
 from .cloud_files import CloudFiles
 from .model import DashboardError, json_bytes, require
+
+
+class ImmutableFileCache:
+    """Bounded immutable bytes; access/registry checks remain with the caller."""
+    def __init__(self, max_bytes=64 * 1024 * 1024):
+        self.max_bytes, self.bytes = max_bytes, 0
+        self.values, self.pending = OrderedDict(), {}
+        self.lock = threading.Lock()
+
+    def get(self, key, read):
+        with self.lock:
+            if key in self.values:
+                self.values.move_to_end(key)
+                return self.values[key]
+            future = self.pending.get(key)
+            owner = future is None
+            if owner:
+                future = self.pending[key] = Future()
+        if not owner:
+            return future.result()
+        try:
+            raw = read()
+            with self.lock:
+                if len(raw) <= self.max_bytes:
+                    self.values[key] = raw
+                    self.bytes += len(raw)
+                    while self.bytes > self.max_bytes:
+                        self.bytes -= len(self.values.popitem(last=False)[1])
+            future.set_result(raw)
+            return raw
+        except BaseException as error:
+            future.set_exception(error)
+            raise
+        finally:
+            with self.lock:
+                self.pending.pop(key, None)
+
+
+_files = ImmutableFileCache()
 
 
 class AssetDatabase(CloudDatabase):
@@ -40,12 +82,17 @@ class CloudAssets:
     def read_file(self, obj, name) -> bytes:
         entry = obj['descriptor']['files'].get(name)
         require(entry is not None, 'Object file is not registered', 'NOT_FOUND')
-        raw = self.storage.get(obj['prefix'] + name)
-        if raw is None:
-            raise DashboardError('CLOUD_FILE_MISSING', 'COS object is missing')
-        require(hashlib.sha256(raw).hexdigest() == entry['sha256'],
-                'COS object checksum mismatch', 'CLOUD_FILE_CORRUPT')
-        return raw
+        storage = self.storage
+        key = (getattr(storage, 'bucket', storage), getattr(storage, 'prefix', ''),
+               self.project, obj['prefix'] + name, entry['sha256'])
+        def read():
+            raw = storage.get(obj['prefix'] + name)
+            if raw is None:
+                raise DashboardError('CLOUD_FILE_MISSING', 'COS object is missing')
+            require(hashlib.sha256(raw).hexdigest() == entry['sha256'],
+                    'COS object checksum mismatch', 'CLOUD_FILE_CORRUPT')
+            return raw
+        return _files.get(key, read)
 
     def _put(self, obj, files, name, raw, content_type='application/octet-stream'):
         self.storage.put(obj['prefix'] + name, raw, content_type)

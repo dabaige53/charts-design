@@ -35,10 +35,11 @@ export function StaticSite() {
   useEffect(() => {
     let live = true,
       clients: ReturnType<typeof createStaticClient>[] = [];
-    void fetch(new URL("document.json", location.href))
-      .then(async (response) => {
+    const initial = window.__chartsDocument || fetch(new URL("document.json", location.href)).then(async (response) => {
         if (!response.ok) throw Error(`网页数据加载失败（${response.status}）`);
-        const doc = (await response.json()) as Document;
+        return await response.json() as Document;
+      });
+    void initial.then(async (doc) => {
         const pages: { id: string; title: string; path: string }[] = doc.staticPages || [{ id: doc.id, title: doc.manifest.title, path: "document.json" }];
         const documents = new Map<string, Document>([[doc.id, doc]]);
         const queries = new Map<string, ReturnType<typeof createStaticClient>>();
@@ -65,7 +66,7 @@ export function StaticSite() {
           }
           return { current, query };
         };
-        const call: ToolCall = async (name, args = {}) => {
+        const call: ToolCall = async (name, args = {}, options) => {
           if (name === "dashboard_list")
             return { dashboards: pages };
           if (name === "dashboard_get" || name === "dashboard_preview")
@@ -73,10 +74,10 @@ export function StaticSite() {
           const { current, query } = await queryFor(args.dashboardId || doc.id);
           if (name === "runtime_info")
             return { dashboardRevision: current.revision };
-          if (name === "dashboard_view") return query.query(args);
-          if (name === "component_data") return query.query({ ...args, detail: true });
+          if (name === "dashboard_view") return query.query(args, options);
+          if (name === "component_data") return query.query({ ...args, detail: true }, options);
           if (name === "dashboard_filter_options")
-            return query.query({ ...args, filters: [] });
+            return query.query({ ...args, filters: [] }, options);
           if (name === "semantic_inspect") {
             const component = current.manifest.components[args.componentId],
               ids = component.binding

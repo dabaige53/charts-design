@@ -2,6 +2,7 @@ export type Config = Record<string, any>;
 declare global {
   interface Window {
     __chartsBoot: Config;
+    __chartsDocument?: Promise<Document>;
     __chartsReady: () => Promise<void>;
   }
 }
@@ -58,7 +59,7 @@ export type Document = {
   };
   [key: string]: any;
 };
-export type ToolCall = (name: string, args?: Config) => Promise<Config>;
+export type ToolCall = (name: string, args?: Config, options?: { signal?: AbortSignal }) => Promise<Config>;
 export type TableState = {
   page: number;
   pageSize: number;

@@ -63,6 +63,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     versions = useRef(new Map<string, number>()),
     live = useRef(true);
   const queue = useRef(createRequestQueue(4));
+  const requests = useRef(new Set<{ controller: AbortController; stale: () => boolean }>());
   const request = useCallback(
     (ids: string[]) => {
       const token = generation.current,
@@ -93,71 +94,61 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
         ),
       );
       const run = async () => {
-        let next = 0;
-        const worker = async () => {
-          while (next < keys.length) {
-            const id = keys[next++];
-            try {
-              if (!isCurrent(id)) continue;
-              const patch = await queue.current(() =>
-                isCurrent(id) ? call("dashboard_view", {
-                  dashboardId: doc.id,
-                  expectedRevision: doc.revision,
-                  ...(doc.dataVersion ? { dataVersion: doc.dataVersion } : {}),
-                  filterSequence: token,
-                  filters: values.filters,
-                  tableStates: {
-                    ...values.tables,
-                    ...(doc.manifest.components[id]?.kind === "table" && !values.tables[id]
-                      ? { [id]: { page: 1, pageSize: doc.manifest.components[id].config?.tableState?.pageSize ?? doc.manifest.components[id].presentation?.tableState?.pageSize ?? 10 } }
-                      : {}),
-                  },
-                  granularities: values.grains,
-                  responseMode: "patch",
-                  componentIds: [id],
-                  compactRecords: true,
-                }) : Promise.resolve(null),
-              );
-              if (!patch || !isCurrent(id)) continue;
-              if (patch.id !== doc.id || patch.revision !== doc.revision)
-                throw Error("查看结果与当前看板版本不一致，请刷新。");
-              if (isCurrent(id)) {
-                loaded.current.add(id);
-                if (patch.computed?.tables?.[id]) {
-                  const nextView = {
-                    ...reader.current,
-                    tables: {
-                      ...reader.current.tables,
-                      [id]: {
-                        ...reader.current.tables[id],
-                        ...patch.computed.tables[id],
-                        visible: reader.current.tables[id]?.visible,
-                        columns: reader.current.tables[id]?.columns,
-                      },
-                    },
-                  };
-                  reader.current = nextView;
-                  setView(nextView);
-                }
-                setDocument((previous) => mergeView(previous, patch));
-              }
-            } catch (e) {
-              if (isCurrent(id)) {
-                const message = e instanceof Error ? e.message : String(e);
-                setErrors((previous) => ({ ...previous, [id]: message }));
-              }
-            } finally {
-              if (pending.current.get(id) === requested.get(id)) {
-                pending.current.delete(id);
-                if (live.current)
-                  setLoading((list) => list.filter((key) => key !== id));
+        // Batch one view state, but keep batches bounded so a large table does
+        // not hold every visible result behind one response.
+        const batches: string[][] = [];
+        for (let offset = 0; offset < keys.length; offset += 4) batches.push(keys.slice(offset, offset + 4));
+        await Promise.all(batches.map(async (batch) => {
+          let ids = batch;
+          const task = { controller: new AbortController(), stale: () => batch.every(id => !isCurrent(id)) };
+          requests.current.add(task);
+          try {
+            const patch = await queue.current(() => {
+              ids = batch.filter(isCurrent);
+              if (!ids.length) return Promise.resolve(null);
+              return call("dashboard_view", {
+                dashboardId: doc.id, expectedRevision: doc.revision,
+                ...(doc.dataVersion ? { dataVersion: doc.dataVersion } : {}),
+                filterSequence: token, filters: values.filters,
+                tableStates: {
+                  ...Object.fromEntries(ids.filter(id => doc.manifest.components[id]?.kind === "table")
+                    .map(id => [id, { page: 1, pageSize: doc.manifest.components[id].config?.tableState?.pageSize ?? doc.manifest.components[id].presentation?.tableState?.pageSize ?? 10 }])),
+                  ...values.tables,
+                },
+                granularities: values.grains, responseMode: "patch",
+                componentIds: ids, compactRecords: true,
+              }, { signal: task.controller.signal });
+            }, { signal: task.controller.signal });
+            if (!patch) return;
+            if (patch.id !== doc.id || patch.revision !== doc.revision)
+              throw Error("查看结果与当前看板版本不一致，请刷新。");
+            const accepted = ids.filter(isCurrent);
+            if (!accepted.length) return;
+            const selected = (entries: Config = {}) => Object.fromEntries(Object.entries(entries).filter(([id]) => accepted.includes(id)));
+            const filtered = { ...patch, computed: Object.fromEntries(
+              Object.entries(patch.computed || {}).map(([key, value]) => [key, selected(value as Config)])),
+              statisticalArtifacts: selected(patch.statisticalArtifacts) };
+            for (const id of accepted) {
+              loaded.current.add(id);
+              if (patch.computed?.tables?.[id]) {
+                reader.current = { ...reader.current, tables: { ...reader.current.tables,
+                  [id]: { ...reader.current.tables[id], ...patch.computed.tables[id],
+                    visible: reader.current.tables[id]?.visible, columns: reader.current.tables[id]?.columns } } };
               }
             }
+            setView(reader.current);
+            setDocument(previous => mergeView(previous, filtered));
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            const failed = ids.filter(isCurrent);
+            if (failed.length) setErrors(previous => ({ ...previous, ...Object.fromEntries(failed.map(id => [id, message])) }));
+          } finally {
+            requests.current.delete(task);
+            const done = batch.filter(id => pending.current.get(id) === requested.get(id));
+            done.forEach(id => pending.current.delete(id));
+            if (live.current) setLoading(list => list.filter(id => !done.includes(id)));
           }
-        };
-        await Promise.all(
-          Array.from({ length: Math.min(4, keys.length) }, worker),
-        );
+        }));
       };
       return run();
     },
@@ -172,6 +163,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
         pending.current.delete(id);
         loaded.current.delete(id);
       });
+      for (const task of requests.current) if (task.stale()) task.controller.abort();
       setLoading((list) => list.filter((id) => !affected.has(id)));
       setError("");
       reader.current = next;
@@ -183,6 +175,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
   const accept = useCallback(
     (doc: Document, preserveView = false) => {
       generation.current++;
+      for (const task of requests.current) task.controller.abort();
       pending.current.clear();
       versions.current.clear();
       loaded.current.clear();
@@ -238,14 +231,25 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     return () => {
       live.current = false;
       generation.current++;
+      for (const task of requests.current) task.controller.abort();
       versions.current.clear();
       pending.current.clear();
     };
   }, [initial, accept]);
+  const activationScheduled = useRef(false);
   const activate = useCallback(
-    (id: string) => {
+    (id: string, visible = true) => {
+      if (!visible) { active.current.delete(id); return; }
       active.current.add(id);
-      if (!loaded.current.has(id)) void request([id]);
+      if (loaded.current.has(id)) return;
+      setLoading(list => [...new Set([...list, id])]);
+      if (!activationScheduled.current) {
+        activationScheduled.current = true;
+        queueMicrotask(() => {
+          activationScheduled.current = false;
+          if (live.current) void request([...active.current]);
+        });
+      }
     },
     [request],
   );

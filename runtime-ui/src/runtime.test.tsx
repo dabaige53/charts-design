@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, mock } from "bun:test";
 import { useDashboardRuntime } from "./runtime";
-import type { Config, Document } from "./types";
+import type { Config, Document, ToolCall } from "./types";
 
 afterEach(cleanup);
 
@@ -24,8 +24,8 @@ function document(): Document {
   };
 }
 
-function patch(id: string, value = 100): Config {
-  return { id: "runtime-interaction", revision: 1, computed: { components: { [id]: { value } } } };
+function patch(id: string | string[], value = 100): Config {
+  return { id: "runtime-interaction", revision: 1, computed: { components: Object.fromEntries((Array.isArray(id) ? id : [id]).map(key => [key, { value }])) } };
 }
 
 // @wu-test type=behavior | scope=useDashboardRuntime saved COS view | protects=首屏重复计算已有结果或用户筛选后仍显示旧结果
@@ -81,7 +81,7 @@ it("updates only filter consumers and retains the displayed value while waiting"
   let complete: ((result: Config) => void) | undefined;
   const call = mock(async (_name: string, args: Config = {}) => {
     if (args.filters[0].values.length) return new Promise<Config>((resolve) => { complete = resolve; });
-    return patch(args.componentIds[0]);
+    return patch(args.componentIds);
   });
   const initial = document();
   const { result } = renderHook(() => useDashboardRuntime(initial, call));
@@ -114,7 +114,7 @@ it("discards an older response that finishes after the newest selection", async 
 
 // @wu-test type=integration | scope=useDashboardRuntime.setTable | protects=表格翻页导致全部指标和图表重复查询
 it("queries only the table when its page changes", async () => {
-  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));
+  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds));
   const initial = document();
   const { result } = renderHook(() => useDashboardRuntime(initial, call));
   act(() => { result.current.activate("source"); result.current.activate("total"); result.current.activate("details"); });
@@ -160,7 +160,7 @@ it("preserves newer column settings when a pending page response arrives", async
 
 // @wu-test type=integration | scope=useDashboardRuntime.link | protects=柱图联动把来源图本身过滤成单根柱子或刷新无关组件
 it("preserves the source chart when applying linkage to other components", async () => {
-  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));
+  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds));
   const initial = document();
   const { result } = renderHook(() => useDashboardRuntime(initial, call));
   act(() => { result.current.activate("source"); result.current.activate("total"); result.current.activate("details"); });
@@ -170,7 +170,50 @@ it("preserves the source chart when applying linkage to other components", async
     id: "runtime-linkage", label: "区域收入", field: "region", op: "in", values: ["华东"], componentIds: ["total", "details"],
   }, "source"));
   await waitFor(() => expect(result.current.loading).toEqual([]));
-  expect(call.mock.calls.map(([, args]) => args!.componentIds[0]).sort()).toEqual(["details", "total"]);
+  expect(call.mock.calls.flatMap(([, args]) => args!.componentIds).sort()).toEqual(["details", "total"]);
   expect(result.current.view.linkageSource).toBe("source");
   expect(result.current.document.computed?.components.source.value).toBe(100);
+});
+
+// @wu-test type=performance | scope=useDashboardRuntime visible batching | protects=同批可见内容逐个请求且离屏内容抢占筛选加载
+it("batches visible consumers and defers offscreen updates until they return", async () => {
+  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds));
+  const initial = document();
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => { result.current.activate("total"); result.current.activate("details"); });
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(call.mock.calls[0][1]!.componentIds).toEqual(["total", "details"]);
+  call.mockClear();
+  act(() => { result.current.activate("details", false); result.current.setFilter("region", ["B"]); });
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  expect(call.mock.calls[0][1]!.componentIds).toEqual(["total"]);
+  act(() => result.current.activate("details"));
+  await waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+  expect(call.mock.calls[1][1]!.componentIds).toEqual(["details"]);
+});
+
+// @wu-test type=performance | scope=useDashboardRuntime cancellation | protects=四个旧批次占满队列后最新筛选必须等待旧计算完成
+it("starts the latest filter when all four request slots contain stale work", async () => {
+  const initial = document();
+  const ids = Array.from({ length: 16 }, (_, i) => `card${i}`);
+  initial.manifest.components = Object.fromEntries(ids.map(id => [id, { ...initial.manifest.components.total }]));
+  initial.manifest.filters[0].componentIds = ids;
+  const oldSignals: AbortSignal[] = [];
+  const call = mock<ToolCall>(async (_name, args = {}, options) => {
+    if (args.filters[0].values.length) return patch(args.componentIds, 200);
+    oldSignals.push(options!.signal!);
+    return new Promise((_resolve, reject) => {
+      options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), { once: true });
+    });
+  });
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => ids.forEach(id => result.current.activate(id)));
+  await waitFor(() => expect(call).toHaveBeenCalledTimes(4));
+  act(() => result.current.setFilter("region", ["华东"]));
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  expect(call).toHaveBeenCalledTimes(8);
+  expect(oldSignals.every(signal => signal.aborted)).toBe(true);
+  for (const id of ids) expect(result.current.document.computed?.components[id].value).toBe(200);
+  expect(result.current.errors).toEqual({});
 });

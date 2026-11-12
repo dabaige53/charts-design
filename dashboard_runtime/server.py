@@ -593,10 +593,21 @@ def create_app(server: RemoteServer):
 
     def compressed(request: Request, raw: bytes, media_type: str, headers: dict | None = None, cache_key=None) -> Response:
         headers = {**SECURITY_HEADERS, 'Vary': 'Accept-Encoding', **(headers or {})}
-        if len(raw) > 1024 and 'gzip' in request.headers.get('accept-encoding', ''):
+        if media_type != 'application/gzip' and len(raw) > 1024 and 'gzip' in request.headers.get('accept-encoding', ''):
             raw = server.gzip_asset(cache_key, raw) if cache_key else gzip.compress(raw, 5)
             headers['Content-Encoding'] = 'gzip'
         return Response(raw, media_type=media_type, headers=headers)
+
+    def private_content(request: Request, raw: bytes, media_type: str, headers=None) -> Response:
+        # Called only after current access and object membership are verified.
+        # Weak validation also covers a negotiated gzip representation.
+        etag = 'W/"' + hashlib.sha256(raw).hexdigest() + '"'
+        headers = {**SECURITY_HEADERS, 'Cache-Control': 'private, no-cache',
+                   'ETag': etag, 'Vary': 'Accept-Encoding, Authorization, Cookie', **(headers or {})}
+        tags = [tag.strip().removeprefix('W/') for tag in request.headers.get('if-none-match', '').split(',')]
+        if '*' in tags or etag.removeprefix('W/') in tags:
+            return Response(status_code=304, headers=headers)
+        return compressed(request, raw, media_type, headers, cache_key=etag)
 
     class McpEndpoint:
         """Bearer-authenticated Streamable HTTP MCP; the token may also be a path segment."""
@@ -636,13 +647,13 @@ def create_app(server: RemoteServer):
             return failure(error)
 
     async def asset(request: Request):
-        from .assets import bundle_assets
+        from .assets import bundle_asset, ui_build_id
         name = request.path_params['name']
         if name not in ('app.js', 'app.css', 'static-worker.js'):
             return JSONResponse({'error': 'not found'}, status_code=404)
         try:
-            return compressed(request, bundle_assets()[name], 'text/javascript' if name.endswith('.js') else 'text/css',
-                              {'Cache-Control': 'no-cache'})
+            return compressed(request, bundle_asset(name), 'text/javascript' if name.endswith('.js') else 'text/css',
+                              {'Cache-Control': 'no-cache'}, cache_key=(ui_build_id(), name))
         except DashboardError as error:
             return failure(error)
 
@@ -689,8 +700,8 @@ def create_app(server: RemoteServer):
                                       ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
                 return authorized_file(store, doc, request.path_params['object'], request.path_params['name'])
             raw = await asyncio.to_thread(read)
-            return compressed(request, raw, 'application/json', {'Cache-Control': 'private, no-store'}) if 'object' not in request.path_params else Response(
-                raw, media_type='application/gzip', headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
+            return compressed(request, raw, 'application/json', {'Cache-Control': 'private, no-store'}) if 'object' not in request.path_params else private_content(
+                request, raw, 'application/gzip')
         except Exception as error:  # noqa: BLE001
             return failure(error)
 
@@ -832,8 +843,9 @@ def create_app(server: RemoteServer):
                 return access_form(path)
             raw = await asyncio.to_thread(shares.content, share_id, name, control=control)
             kind = 'application/gzip' if name.endswith('.gz') else mimetypes.guess_type(name)[0] or 'application/octet-stream'
-            return compressed(request, raw, kind, {
-                'Cache-Control': 'private, no-store, max-age=0',
+            response = private_content if name.endswith('.gz') or name in ('app.js', 'app.css', 'static-worker.js') else compressed
+            return response(request, raw, kind, {
+                **({} if response is private_content else {'Cache-Control': 'private, no-store, max-age=0'}),
                 # Custom HTML retains its existing opaque iframe sandbox and
                 # child CSP, including explicitly supported HTTPS resources.
                 'Content-Security-Policy': "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",

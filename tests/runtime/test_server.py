@@ -41,7 +41,7 @@ def test_deferred_browser_directory_keeps_scope_and_revision_checks(tmp_path, mo
         result = client.get(prefix + 'board/1', headers=headers)
         assert result.status_code == 200
         assert result.json() == {'id': 'board', 'revision': 1, 'staticFiles': {}, 'staticOptions': {},
-                                 'staticPartitionIndexes': {}, 'staticComponentDatasets': {}, 'staticDatasetFields': {}}
+                                 'staticPartitionIndexes': {}, 'staticComponentDatasets': {}, 'staticDatasetFields': {}, 'staticResourceKeys': {}}
         assert client.get(prefix + 'board/2', headers=headers).status_code == 200
         assert client.get(prefix + 'private/1', headers=headers).status_code == 403
         assert client.get('/api/v1/p/other/content/board/1', headers=headers).status_code == 401
@@ -393,3 +393,28 @@ def test_read_only_tools_use_saved_content_even_when_a_newer_draft_exists(tmp_pa
     assert editor is not None
     edited = cast(dict, server.call_viewer('sales', 'dashboard_view', {'dashboardId': 'exec'}, editor)['document'])
     assert edited['revision'] == 2
+
+# @wu-test type=boundary | scope=在线数据条件缓存 | protects=编辑和只读内容304绕过授权或重复压缩gzip数据
+def test_online_resource_cache_revalidates_authorization(tmp_path, monkeypatch):
+    from starlette.testclient import TestClient
+    import gzip
+    server = RemoteServer(settings(tmp_path))
+    service = server.projects.service('sales')
+    service.call('dashboard_create', {'dashboardId': 'board', 'title': 'Saved'})
+    monkeypatch.setattr(service.store, 'cos_enabled', True, raising=False)
+    raw = gzip.compress(b'[1,2,3]')
+    monkeypatch.setattr('dashboard_runtime.cos_view.authorized_file', lambda *args: raw)
+    path = '/api/v1/p/sales/content/board/1/object/rows.gz'
+    with TestClient(create_app(server)) as client:
+        for access in ('edit', 'view'):
+            token = server.links.share('sales', 'board', access)['url'].split('#token=')[1]
+            headers = {'Authorization': 'Bearer ' + token}
+            response = client.get(path, headers=headers)
+            assert response.status_code == 200 and response.content == raw
+            assert response.headers['cache-control'] == 'private, no-cache'
+            assert 'content-encoding' not in response.headers
+            conditional = {**headers, 'If-None-Match': response.headers['etag']}
+            assert client.get(path, headers=conditional).status_code == 304
+        assert client.get(path, headers={'If-None-Match': '*'}).status_code == 401
+        server.state.revoke('sales', 'board')
+        assert client.get(path, headers=conditional).status_code == 401

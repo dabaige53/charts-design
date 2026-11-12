@@ -71,3 +71,28 @@ def test_editor_keeps_requested_saved_version_when_draft_is_newer(tmp_path):
                                     'operations': [{'op': 'set_title', 'value': 'Draft'}]})
     assert browser_version(service.store, 'board', 1, True)['manifest']['title'] == 'Saved'
     assert browser_version(service.store, 'board', 2, True)['manifest']['title'] == 'Draft'
+
+# @wu-test type=performance | scope=immutable file cache | protects=并发重复读取COS或无界保留压缩资源
+def test_immutable_bytes_coalesce_and_evict_by_capacity():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from dashboard_runtime.cloud_assets import ImmutableFileCache
+    cache = ImmutableFileCache(max_bytes=6)
+    started, release = Event(), Event()
+    calls = []
+    def read():
+        calls.append('A')
+        started.set()
+        assert release.wait(3)
+        return b'aaa'
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(cache.get, 'A', read)
+        assert started.wait(3)
+        second = pool.submit(cache.get, 'A', read)
+        release.set()
+        assert first.result() == second.result() == b'aaa'
+    assert calls == ['A']
+    assert cache.get('B', lambda: b'bbb') == b'bbb'
+    assert cache.get('C', lambda: b'ccc') == b'ccc'
+    assert cache.get('A', lambda: b'new') == b'new'
+    assert cache.bytes <= 6

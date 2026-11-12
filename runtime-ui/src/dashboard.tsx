@@ -51,22 +51,19 @@ function VisibleComponent({
   children,
 }: {
   id: string;
-  onVisible: (id: string) => void;
+  onVisible: (id: string, visible?: boolean) => void;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          onVisible(id);
-          observer.disconnect();
-        }
+        onVisible(id, entries.some((entry) => entry.isIntersecting));
       },
       { rootMargin: "200px" },
     );
     observer.observe(ref.current!);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); onVisible(id, false); };
   }, [id, onVisible]);
   return (
     <div ref={ref} className="h-full min-h-0">

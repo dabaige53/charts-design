@@ -431,3 +431,32 @@ def test_multi_page_publication_and_replace(tmp_path):
     assert replaced['previousRevoked']
     assert [page['id'] for page in replaced['pages']] == ['board', 'second', 'third']
     assert json.loads(shares.content(replaced['shareId'], 'pages/second/document.json'))['id'] == 'second'
+
+# @wu-test type=integration | scope=独立分享引擎升级和私有缓存 | protects=旧分享不获得引擎修复或304绕过撤销且升级改动业务副本
+def test_existing_share_uses_current_engine_and_validates_before_304(tmp_path, monkeypatch):
+    from starlette.testclient import TestClient
+    from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
+    from dashboard_runtime.assets import bundle_assets, static_html
+    _, storage, shares, published = publication(tmp_path)
+    share_id = published['shareId']
+    key = 'shares/' + share_id + '/site/app.js'
+    storage.objects[key] = b'old renderer'
+    original = dict(storage.objects)
+    current = bundle_assets(static=True)
+    assert shares.content(share_id, 'app.js') == current['app.js']
+    assert shares.content(share_id, 'index.html') == static_html().encode()
+    assert storage.objects == original
+    server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'cache',
+                                        tokens=('gateway-admin-token-0123456789',), public_url='https://charts.example.com'))
+    server.cloud_shares = shares
+    root = '/s/' + share_id + '/'
+    with TestClient(create_app(server), base_url='https://charts.example.com') as client:
+        assert client.get(root + 'app.js', headers={'If-None-Match': '*'}).status_code == 401
+        assert client.post(root, data={'accessKey': '01234567'}, follow_redirects=False).status_code == 303
+        response = client.get(root + 'app.js')
+        assert response.content == current['app.js']
+        assert response.headers['cache-control'] == 'private, no-cache'
+        etag = response.headers['etag']
+        assert client.get(root + 'app.js', headers={'If-None-Match': etag}).status_code == 304
+        monkeypatch.setattr(time, 'time', lambda: published['expiresAt'])
+        assert client.get(root + 'app.js', headers={'If-None-Match': etag}).status_code == 410

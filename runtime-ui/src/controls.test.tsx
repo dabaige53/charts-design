@@ -28,6 +28,19 @@ afterEach(() => {
   globalThis.NodeFilter = originalNodeFilter;
 });
 
+// @wu-test type=performance | scope=MultiSelect option loading | protects=打开筛选器立即加载选项且关闭时不预取
+it("loads options immediately when opened without prefetching closed menus", async () => {
+  const loadOptions = mock(async () => ({
+    options: [{ value: "east", label: "华东" }], hasMore: false,
+  }));
+  render(<MultiSelect label="区域" options={[]} value={[]} onChange={() => {}}
+    loadOptions={loadOptions} />);
+  expect(loadOptions).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("combobox"));
+  expect(loadOptions).toHaveBeenCalledWith("", 0);
+  expect(await screen.findByRole("option", { name: "华东" })).toBeTruthy();
+});
+
 // @wu-test type=regression | scope=required selection controls | protects=防止 required-month-20261112 复发：必选月份允许清空或全选且已有空值显示全部
 it("disables clearing a required single choice while allowing selection from empty", async () => {
   const change = mock(() => {});

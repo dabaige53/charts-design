@@ -1,6 +1,5 @@
 import {resolveOriginal} from './bindings.mjs';
 import {visibleRows,csv,calculateTableRows,grouped} from './engine.mjs';
-import {createRequestQueue} from './request-queue.mjs';
 const compareValue=(a,b)=>a==null?(b==null?0:-1):b==null?1:a<b?-1:a>b?1:0;
 function sortNumber(value){
   if(value==null)return null;
@@ -31,15 +30,22 @@ function searchRows(rows,search,fields){
     String(row[key]===null?'null':row[key]).toLocaleLowerCase().includes(needle)));
 }
 // The static site and the build-time seed use exactly the same query implementation.
-export function createStaticQuery(document,read){
-  const queue=createRequestQueue(4),loaded=new Map(),scopes=new Map();
+export function createStaticQuery(document,read,{maxScopes=8,maxScopeRows=250000}={}){
+  const scopes=new Map();
+  let scopeRows=0;
+  function cachedRows(key){
+    const rows=scopes.get(key);
+    if(rows){scopes.delete(key);scopes.set(key,rows);}
+    return rows;
+  }
   const datasetFor=id=>document.manifest.components[id].datasetId||document.manifest.components[id].binding?.datasetId||document.staticComponentDatasets?.[id];
   const fieldsFor=key=>document.manifest.datasets[key]?.fields||document.staticDatasetFields?.[key]||{};
   const scopedDocument=(id,rows,filters)=>({...document,computed:undefined,
     manifest:{...document.manifest,filters,components:{...document.manifest.components,
       [id]:{...document.manifest.components[id],datasetId:datasetFor(id)}}},
     snapshot:{...document.snapshot,datasets:{[datasetFor(id)]:rows}}});
-  async function rowsFor(id,filters){
+  async function rowsFor(id,filters,signal){
+    signal?.throwIfAborted();
     const key=datasetFor(id),partition=document.staticPartitions?.[key];
     const active=filters.filter(f=>f.componentIds.includes(id)&&f.values.length);
     if(!document.staticFiles?.[key])return document.snapshot.datasets[key]||[];
@@ -56,19 +62,29 @@ export function createStaticQuery(document,read){
       const conditions=active.filter(f=>f.field===partition.field);
       urls=Object.entries(partition.files).filter(([value])=>conditions.every(f=>f.op==='in'?f.values.includes(value):f.op==='range'?value>=f.values[0]&&value<=f.values[1]:value.includes(f.values[0]))).flatMap(([,files])=>files);
     }
-    const scope=JSON.stringify(urls);let cached=scopes.get(key);
-    if(cached?.scope===scope)return cached.promise;
-    const promise=Promise.all(urls.map(url=>{
-      if(!loaded.has(url))loaded.set(url,queue(()=>read(url)).catch(error=>{loaded.delete(url);throw error;}));
-      return loaded.get(url);
-    })).then(parts=>{
+    const scope=JSON.stringify([key,urls]);let cached=cachedRows(scope);
+    if(cached)return cached;
+    const parts=await Promise.all(urls.map(url=>read(url,{signal})));
+    signal?.throwIfAborted();
+    // Another component batch may have finished the same shared downloads.
+    // Keep one row array so filtering and metric caches can serve every batch.
+    cached=cachedRows(scope);
+    if(cached)return cached;
+    const rows=(()=>{
       if(parts.every(Array.isArray))return parts.flat();
       // Partition files retain original row positions so changing a filter
       // does not silently change unsorted details, grouping or export order.
       return parts.flatMap(part=>part.rows.map((row,index)=>({row,ordinal:part.ordinals[index]})))
         .sort((a,b)=>a.ordinal-b.ordinal).map(entry=>entry.row);
-    }).catch(error=>{if(scopes.get(key)?.promise===promise)scopes.delete(key);throw error;});
-    scopes.set(key,{scope,promise});return promise;
+    })();
+    signal?.throwIfAborted();
+    scopes.set(scope,rows);scopeRows+=rows.length;
+    // Keep the current range even when it alone exceeds the reference budget.
+    while(scopes.size>1&&(scopes.size>maxScopes||scopeRows>maxScopeRows)){
+      const oldest=scopes.keys().next().value;
+      scopeRows-=scopes.get(oldest).length;scopes.delete(oldest);
+    }
+    return rows;
   }
   function tableRows(doc,id){
     const c=doc.manifest.components[id],p={...c.presentation,...c.config};let rows=visibleRows(doc,id);
@@ -76,38 +92,49 @@ export function createStaticQuery(document,read){
     return calculateTableRows(rows,p,false);
   }
   const groupedCache=new Map(),optionCache=new Map();
-  async function query(args){
+  async function query(args,{signal}={}){
+    signal?.throwIfAborted();
     const filters=args.filters||document.manifest.filters,computed={components:{},tables:{},grouped:{}};
     if(args.filterId){
       const filter=document.manifest.filters.find(f=>f.id===args.filterId);
       if(!filter||filter.op!=='in')throw Error('Unknown selection filter');
       const search=(args.search||'').toLocaleLowerCase();
       let cached=optionCache.get(filter.id);
-      if(!cached||cached.search!==search){
+      if(!cached){
         const promise=(async()=>{
           const values=new Map();
-          for(const id of filter.componentIds){
-            const dataset=datasetFor(id),url=document.staticOptions?.[dataset]?.[filter.field];
-            if(url){
-              if(!loaded.has(url))loaded.set(url,queue(()=>read(url)).catch(error=>{loaded.delete(url);throw error;}));
-              for(const value of await loaded.get(url))values.set(JSON.stringify(value),value);
-            }else for(const row of await rowsFor(id,[])){
-              const value=row[filter.field]??null;values.set(JSON.stringify(value),value);
-            }
+          const datasets=new Map(filter.componentIds.map(id=>[datasetFor(id),id]));
+          const sources=await Promise.all([...datasets].map(async([dataset,id])=>{
+            const url=document.staticOptions?.[dataset]?.[filter.field];
+            if(url)return read(url,{priority:1});
+            // Embedded/legacy documents have no external option index.
+            // Hosted COS documents always carry indexes; do not silently scan
+            // their full row resources if that contract is broken.
+            if(document.storageFormat==='cos-v1'&&document.staticFiles?.[dataset])
+              throw Error('筛选选项索引缺失，请更新数据目录');
+            return (await rowsFor(id,[])).map(row=>row[filter.field]??null);
+          }));
+          for(const source of sources){
+            for(const value of source)values.set(JSON.stringify(value),value);
           }
-          return [...values.values()].filter(v=>String(v).toLocaleLowerCase().includes(search)).sort(compareValue);
+          return [...values.values()].sort(compareValue);
         })().catch(error=>{
           if(optionCache.get(filter.id)?.promise===promise)optionCache.delete(filter.id);
           throw error;
         });
-        cached={search,promise};optionCache.set(filter.id,cached);
+        cached={promise};optionCache.set(filter.id,cached);
       }
-      const matches=await cached.promise;
+      const values=await cached.promise;
+      signal?.throwIfAborted();
+      if(cached.search!==search){
+        cached.search=search;cached.matches=search?values.filter(v=>String(v).toLocaleLowerCase().includes(search)):values;
+      }
+      const matches=cached.matches;
       const offset=args.offset||0,limit=args.limit||100;
       return {values:matches.slice(offset,offset+limit),offset,totalValues:matches.length,hasMore:offset+limit<matches.length};
     }
     if(args.detail){
-      const id=args.componentId,rows=await rowsFor(id,filters);
+      const id=args.componentId,rows=await rowsFor(id,filters,signal);
       const doc=scopedDocument(id,rows,filters);
       let result=visibleRows(doc,id);
       const fields=fieldsFor(datasetFor(id));
@@ -116,10 +143,29 @@ export function createStaticQuery(document,read){
       const offset=args.offset||0,limit=args.limit||10;
       return {rows:result.slice(offset,offset+limit),fields,totalRows:result.length,offset,limit,hasMore:offset+limit<result.length};
     }
-    for(const id of args.componentIds||Object.keys(document.manifest.components)){
+    const ids=args.componentIds||Object.keys(document.manifest.components);
+    const sources=new Map(),ranges=new Map();
+    for(const id of ids){
       const c=document.manifest.components[id];
       if(c.kind==='text'||c.kind==='statistical')continue;
-      const rows=await rowsFor(id,filters);
+      // Filters may apply differently to two consumers of the same dataset.
+      const key=JSON.stringify([datasetFor(id),filters.filter(f=>f.componentIds.includes(id))
+        .map(f=>[f.field,f.op,f.values])]);
+      if(!ranges.has(key))ranges.set(key,rowsFor(id,filters,signal));
+      sources.set(id,ranges.get(key));
+    }
+    const rowsById=new Map(await Promise.all([...sources].map(async([id,rows])=>[id,await rows])));
+    signal?.throwIfAborted();
+    let sliceStart=performance.now();
+    for(const id of ids){
+      const c=document.manifest.components[id];
+      if(c.kind==='text'||c.kind==='statistical')continue;
+      const rows=rowsById.get(id);
+      if(signal&&performance.now()-sliceStart>=8){
+        // Yield a task, not a microtask, so Worker cancel messages can run.
+        await new Promise(resolve=>setTimeout(resolve,0));
+        signal.throwIfAborted();sliceStart=performance.now();
+      }
       const doc=scopedDocument(id,rows,filters);
       if(c.kind==='table'||c.family==='table'){
         const signature=JSON.stringify(filters.filter(f=>f.componentIds.includes(id)&&f.values.length));let cached=groupedCache.get(id);
