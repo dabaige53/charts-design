@@ -1,4 +1,10 @@
 export type Config = Record<string, any>;
+declare global {
+  interface Window {
+    __chartsBoot: Config;
+    __chartsReady: () => Promise<void>;
+  }
+}
 export type Position = {
   id: string;
   x: number;

@@ -13,12 +13,6 @@ import { browserDownload, type Download } from "./host";
 import { WebAccess } from "./web-access";
 import { createCosTools } from "./cos-client";
 import type { Config, Document, ToolCall } from "./types";
-declare global {
-  interface Window {
-    __chartsBoot: Config;
-    __chartsReady: () => Promise<void>;
-  }
-}
 const boot = window.__chartsBoot || { mode: "mcp" };
 let app: App | undefined;
 const webTokenKey = `charts-design-token:${boot.apiBase || "/api/tools/"}:${boot.projectRoot || ""}:${boot.dashboardId || ""}`;
