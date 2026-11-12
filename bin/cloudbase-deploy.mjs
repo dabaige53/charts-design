@@ -38,6 +38,19 @@ export function annotationMigrationPending(remote) {
   return true;
 }
 
+export function annotationMigrationFiles(remote) {
+  const files = remote.items.map(item => `${item.version}_${item.name}.sql`);
+  if (files.some(name => !/^\d{14}_[a-z][a-z0-9_]*\.sql$/.test(name)))
+    throw new Error('迁移历史文件名无效，停止发布。');
+  return [...files, '20261112050000_annotation_commands.sql'];
+}
+
+export function validateAnnotationPlan(plan) {
+  if (plan?.executable !== true || plan.conflicts?.length || plan.pending?.length !== 1 ||
+      plan.pending[0].Version !== '20261112050000')
+    throw new Error('迁移计划与本次发布范围不一致；停止执行。');
+}
+
 export function runtimeConfig(detail, version, commit) {
   const config = detail.ServerConfig;
   if (!config?.EnvParams) throw new Error('未找到现有服务配置；此脚本用于更新已部署的服务。');
@@ -155,12 +168,17 @@ export async function deploy() {
       if (!ready) throw new Error('灰度收尾尚未完成；请等待云端任务结束后重跑 CI。');
     }
     // This additive migration is compatible with the currently running service.
-    // Stage only this release's migration: never apply unrelated pending files.
+    // CloudBase verifies all applied history files. Include that history plus
+    // this release's migration, excluding other locally pending migrations.
     const migrationList = await cli(['db', 'pg', 'migration', 'list', '--remote-only'], true);
-    if (annotationMigrationPending((migrationList.data ?? migrationList).remote)) {
-      const migration = '20261112050000_annotation_commands.sql';
+    const remoteMigrations = (migrationList.data ?? migrationList).remote;
+    if (annotationMigrationPending(remoteMigrations)) {
       mkdirSync(join(stage, 'cloudbase/migrations'), { recursive: true });
-      copyFileSync(join(root, 'cloudbase/migrations', migration), join(stage, 'cloudbase/migrations', migration));
+      for (const migration of annotationMigrationFiles(remoteMigrations)) {
+        copyFileSync(join(root, 'cloudbase/migrations', migration), join(stage, 'cloudbase/migrations', migration));
+      }
+      const preview = await cli(['db', 'pg', 'migration', 'up', '--dry-run'], true);
+      validateAnnotationPlan(preview.data ?? preview);
       console.log('应用兼容的按条批注迁移。');
       await cli(['db', 'pg', 'migration', 'up']);
       const verified = await cli(['db', 'pg', 'migration', 'list', '--remote-only'], true);

@@ -7,7 +7,20 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { release, releaseVersion } from '../../bin/release.mjs';
-import { annotationMigrationPending, cloudrunDeployArgs, completedGrayRelease, includeSource, matchesRelease, runtimeConfig, taskReady, validateTag } from '../../bin/cloudbase-deploy.mjs';
+import { annotationMigrationFiles, annotationMigrationPending, validateAnnotationPlan, cloudrunDeployArgs, completedGrayRelease, includeSource, matchesRelease, runtimeConfig, taskReady, validateTag } from '../../bin/cloudbase-deploy.mjs';
+
+// @wu-test type=regression | scope=CloudBase迁移目录和计划 | protects=BUG-43235108677 中缺少已应用历史导致迁移被拒绝或顺带执行无关迁移
+test('migration staging includes applied history and exactly the intended new migration', () => {
+  assert.deepEqual(annotationMigrationFiles({items: [
+    {version: '20261112020000', name: 'cos_assets'},
+  ]}), ['20261112020000_cos_assets.sql', '20261112050000_annotation_commands.sql']);
+  assert.throws(() => annotationMigrationFiles({items: [{version: '../secret', name: 'bad'}]}));
+  const plan = {executable: true, conflicts: [], pending: [{Version: '20261112050000'}]};
+  validateAnnotationPlan(plan);
+  assert.throws(() => validateAnnotationPlan({...plan, executable: false}));
+  assert.throws(() => validateAnnotationPlan({...plan, pending: [...plan.pending, {Version: '20261112040000'}]}));
+  assert.throws(() => validateAnnotationPlan({...plan, conflicts: [{Reason: 'checksum'}]}));
+});
 
 // @wu-test type=boundary | scope=annotation release migration | protects=基线缺失或未知后续迁移时发布错误数据库结构
 test('annotation migration requires the known baseline and is replay safe', () => {
