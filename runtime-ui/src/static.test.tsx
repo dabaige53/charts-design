@@ -13,7 +13,12 @@ mock.module("./dashboard", () => ({
 import { StaticSite } from "./static";
 
 const originalFetch = globalThis.fetch;
-afterEach(() => { cleanup(); globalThis.fetch = originalFetch; delete window.__chartsDocument; mock.restore(); });
+const originalLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+afterEach(() => {
+  cleanup(); globalThis.fetch = originalFetch; delete window.__chartsDocument; mock.restore();
+  if (originalLocation) Object.defineProperty(globalThis, "location", originalLocation);
+  else Reflect.deleteProperty(globalThis, "location");
+});
 
 // @wu-test type=integration | scope=StaticSite 页面切换 | protects=多页面分享无法读取所选页面或误加载未选页面
 it("loads selected pages from the shared site", async () => {

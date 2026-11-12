@@ -3,7 +3,6 @@ import { afterEach, expect, it, mock } from "bun:test";
 
 mock.module("./dashboard", () => ({ DashboardApp: () => <p>看板已打开</p> }));
 mock.module("./static", () => ({ SnapshotApp: () => null, StaticSite: () => null }));
-mock.module("./components/ui/tooltip", () => ({ TooltipProvider: ({ children }: any) => children }));
 mock.module("sonner", () => ({ Toaster: () => null }));
 
 const originalFetch = globalThis.fetch;

@@ -121,9 +121,9 @@ def run_checks(base, token):
     outside = client.request('tools/call', {'name': 'dashboard_list', 'arguments': {'projectRoot': '/etc'}})
     check(outside.get('isError'), 'a path outside the workspace was accepted')
     operations = client.tool('generation_examples', {'caseId': 'operations-scorecard'})['operations']
-    revision = client.tool('dashboard_create', {'dashboardId': BOARD, 'title': 'Smoke'})['document']['revision']
+    revision = client.tool('dashboard_create', {'dashboardId': BOARD, 'title': 'Smoke'})['revision']
     batch = client.tool('dashboard_edit_begin', {'dashboardId': BOARD, 'expectedRevision': revision})
-    revision = client.tool('dashboard_patch', {'dashboardId': BOARD, 'expectedRevision': revision, 'operations': operations})['document']['revision']
+    revision = client.tool('dashboard_patch', {'dashboardId': BOARD, 'expectedRevision': revision, 'operations': operations})['revision']
     finished = client.tool('dashboard_edit_finish', {'dashboardId': BOARD, 'expectedRevision': revision, 'batchId': batch['batch_id']})
     check(finished.get('ok'), f'edit batch failed Doctor checks: {finished.get("doctor")}')
     saved = client.tool('dashboard_get', {'dashboardId': BOARD})
