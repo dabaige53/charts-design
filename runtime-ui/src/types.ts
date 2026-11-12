@@ -18,6 +18,7 @@ export type Filter = {
   field: string;
   op: "in" | "range" | "contains";
   selectionMode?: "single" | "multiple";
+  required?: boolean;
   values: any[];
   componentIds: string[];
 };

@@ -111,7 +111,7 @@ import {
 import { Skeleton } from "./components/ui/skeleton";
 
 export type Choice = { value: string; label: string };
-export type ActiveFilter = { id: string; label: string };
+export type ActiveFilter = { id: string; label: string; removable?: boolean };
 export type ChoicePage = {
   options: Choice[];
   hasMore: boolean;
@@ -170,6 +170,7 @@ export function MultiSelect({
   disabled = false,
   labelHidden = false,
   single = false,
+  required = false,
 }: {
   label: string;
   options: Choice[];
@@ -179,6 +180,7 @@ export function MultiSelect({
   disabled?: boolean;
   labelHidden?: boolean;
   single?: boolean;
+  required?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -273,7 +275,7 @@ export function MultiSelect({
                 ? [...options, ...remote.options].find((o) => o.value === value[0])?.label || "已选 1 项"
                 : value.length
                   ? `已选 ${value.length} 项`
-                  : "全部"}
+                  : required ? "请选择" : "全部"}
             </span>
             <ChevronDown data-icon="inline-end" />
           </Button>
@@ -301,7 +303,7 @@ export function MultiSelect({
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={!value.length}
+                disabled={required || !value.length}
                 onClick={() => onChange([])}
               >
                 清空
@@ -322,6 +324,7 @@ export function MultiSelect({
                     value={o.value}
                     aria-label={`${o.label}${value.includes(o.value) ? "，已选" : ""}`}
                     onSelect={() => {
+                      if (required && !single && value.length === 1 && value.includes(o.value)) return;
                       onChange(single ? [o.value] : value.includes(o.value)
                         ? value.filter((v) => v !== o.value)
                         : [...value, o.value]);
@@ -380,14 +383,14 @@ export function ActiveFilters({
         items.map((item) => (
           <Badge key={item.id} variant="secondary">
             {item.label}
-            <Button
+            {item.removable !== false && <Button
               variant="ghost"
               size="icon-xs"
               aria-label={`移除${item.label}`}
               onClick={() => onRemove(item.id)}
             >
               <X />
-            </Button>
+            </Button>}
           </Badge>
         ))
       ) : (

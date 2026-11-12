@@ -176,6 +176,8 @@ KPI 专用形态的数据校验仍存在历史路径差异。
 
 纯展示、GridStack、报告、Runtime 状态和宿主能力分别维护于 `component-view.tsx`、`grid.tsx`、`report.tsx`、`runtime.ts`、`main.tsx`／`host.ts`。临时筛选、表格和粒度不隐式保存。项目 `projectRoot` 在适配层固定；按组件加载、请求并发限制、旧响应丢弃和分块完整性检查保留。
 
+筛选声明的 `required` 由运行状态与共享选择控件共同处理。必选单选拒绝空值和多值，重置保留其选择；`MultiSelect.required` 禁用清空，`ActiveFilters.items[].removable=false` 隐藏对应移除按钮。浏览器分片客户端读取候选项时独立于必选分区校验，数据查询继续按必选分区校验和切换 Worker。
+
 | 能力 | 实现与数据状态 | 验证边界 |
 | --- | --- | --- |
 | 预览资源 | 带 uiBuildId 的 `ui://` 资源，后端可读取 | 实际 stdio MCP 已通过；目标宿主未打开确认 |

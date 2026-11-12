@@ -569,6 +569,7 @@ function SelectionFilter({
       label={filter.label}
       labelHidden
       single={filter.selectionMode === "single"}
+      required={filter.required}
       options={[...options, ...filter.values].map((v) => ({
         value: JSON.stringify(v),
         label: String(v),
@@ -681,6 +682,7 @@ function FilterBar({
       ? f.values.map((value, index) => ({
           id: JSON.stringify([f.id, index]),
           label: `${f.label}：${String(value)}`,
+          removable: !f.required,
         }))
       : f.values.length
         ? [{ id: JSON.stringify([f.id, -1]), label: `${f.label}：${f.values.join(" — ")}` }]

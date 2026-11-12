@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRequestQueue } from "../../dashboard_runtime/web/request-queue.mjs";
+import { clearFilterValues } from "../../dashboard_runtime/web/local-filter.mjs";
 import type {
   Config,
   Document,
@@ -248,6 +249,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
   );
   const setFilter = (id: string, values: any[]) => {
     const filter = reader.current.filters.find((item) => item.id === id);
+    if (filter?.required && filter.op === "in" && values.length !== 1) return;
     if (!filter || (filter.values.length === values.length && filter.values.every((value, index) => value === values[index]))) return;
     const targets = new Set(filter.componentIds);
     invalidate({
@@ -291,9 +293,8 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
   const clear = () =>
     invalidate({
       ...reader.current,
-      filters: reader.current.filters
-        .filter((f) => f.id !== "runtime-linkage")
-        .map((f) => ({ ...f, values: [] })),
+      filters: clearFilterValues(reader.current.filters
+        .filter((f) => f.id !== "runtime-linkage")),
       tables: {},
     });
   const link = (filter: Filter, sourceId: string) => {

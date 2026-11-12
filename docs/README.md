@@ -45,6 +45,7 @@
 
 ## 历史记录与附件
 
+- [必选月份筛选恢复修复](records/2026-11-12-required-month-filter.md)：浏览器候选项校验、必选交互和本轮发布检查。
 - [COS 统一存储发布](records/2026-11-12-cos-release.md)：版本发布、数据库结构、清理函数与迁移边界。
 - [CloudBase 资源消耗基线](records/2026-11-12-cloudbase-resource-baseline.md)：云托管、函数、PostgreSQL 和 COS 的只读盘点。
 - [CloudBase 存储与版本管理部署](records/2026-11-11-cloudbase-deployment.md)：本轮存储适配、局部检查、云端部署与验收边界。

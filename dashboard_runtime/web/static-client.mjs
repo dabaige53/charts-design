@@ -19,6 +19,7 @@ export function createStaticClient(doc,base,workerUrl,WorkerClass=Worker,headers
     ready=call('init',{document:definition,base,headers});return ready;
   }
   return {async query(args){
+    if(args.filterId){await start();return call('query',args);}
     const scope=staticPartitionScope(doc,args.filters||doc.manifest.filters);
     if(activeScope!==undefined&&scope!==activeScope)stop('筛选范围已切换');activeScope=scope;
     await start();if(scope!==activeScope)throw Object.assign(Error('筛选范围已切换'),{name:'AbortError'});

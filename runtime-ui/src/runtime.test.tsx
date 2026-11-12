@@ -28,6 +28,39 @@ function patch(id: string, value = 100): Config {
   return { id: "runtime-interaction", revision: 1, computed: { components: { [id]: { value } } } };
 }
 
+// @wu-test type=regression | scope=useDashboardRuntime required filters | protects=防止 required-month-20261112 复发：必选单月被清空或多选且重置全部丢失月份
+it("retains the required single month when clearing, resetting or attempting multiple months", () => {
+  const initial = document();
+  initial.manifest.filters.push({
+    id: "period", label: "月份", field: "month", op: "in", required: true,
+    selectionMode: "single", values: ["2026-10"], componentIds: ["total"],
+  });
+  const call = mock(async () => ({}));
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => result.current.setFilter("region", ["华东"]));
+  act(() => result.current.setFilter("period", []));
+  act(() => result.current.setFilter("period", ["2026-09", "2026-10"]));
+  expect(result.current.view.filters.find(f => f.id === "period")!.values).toEqual(["2026-10"]);
+  act(() => result.current.clear());
+  expect(result.current.view.filters.find(f => f.id === "region")!.values).toEqual([]);
+  expect(result.current.view.filters.find(f => f.id === "period")!.values).toEqual(["2026-10"]);
+  act(() => result.current.setFilter("period", ["2026-09"]));
+  expect(result.current.view.filters.find(f => f.id === "period")!.values).toEqual(["2026-09"]);
+});
+
+// @wu-test type=regression | scope=useDashboardRuntime required filter recovery | protects=防止 required-month-20261112 复发：已有空月份状态无法重新选择月份恢复
+it("accepts a month selection when a required filter starts empty", () => {
+  const initial = document();
+  initial.manifest.filters[0] = {
+    id: "period", label: "月份", field: "month", op: "in", required: true,
+    selectionMode: "single", values: [], componentIds: ["total"],
+  };
+  const call = mock(async () => ({}));
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => result.current.setFilter("period", ["2026-10"]));
+  expect(result.current.view.filters[0].values).toEqual(["2026-10"]);
+});
+
 // @wu-test type=integration | scope=useDashboardRuntime.setFilter | protects=局部筛选重新查询未关联图表或清空已显示数值
 it("updates only filter consumers and retains the displayed value while waiting", async () => {
   let complete: ((result: Config) => void) | undefined;
