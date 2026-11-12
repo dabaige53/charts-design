@@ -1,1 +1,1 @@
-{"CronExpression":"0 * * * * * *","Enable":true}
+{"CronExpression":"0 0 */6 * * * *","Enable":true}

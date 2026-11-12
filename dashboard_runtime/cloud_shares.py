@@ -90,8 +90,8 @@ class CloudShares:
                 documents.append((page_id, versions.read(page_id, revision)))
                 seen.add(page_id)
         heartbeat = self.storage.get('cleaner-status.json')
-        require(heartbeat is not None and time.time() - json.loads(heartbeat)['completedAt'] < 180,
-                'Deploy the SCF minute timer and confirm a successful cloud cleanup invocation before publishing',
+        require(heartbeat is not None and time.time() - json.loads(heartbeat)['completedAt'] < 7 * 3600,
+                'Deploy the SCF six-hour timer and confirm a successful cloud cleanup invocation before publishing',
                 'CLOUD_CLEANER_UNAVAILABLE')
         self.storage.check_private()
         share_id, now = uuid.uuid4().hex, int(time.time())

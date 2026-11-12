@@ -166,7 +166,7 @@ class Service:
                 raise DashboardError('CLOUD_STORAGE_FAILED',
                     'Tencent COS request failed. Check cloud service permissions and dashboard_share_status before retrying a publish.',
                     503) from error
-        if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish'):
+        if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish', 'dashboard_version_delete'):
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             from .versions import Versions
             versions = Versions(self.store)
@@ -174,7 +174,16 @@ class Service:
                 return versions.status(board)
             if tool == 'dashboard_version_get':
                 return {'version': versions.read(board, args['revision'])}
+            if tool == 'dashboard_version_delete':
+                return versions.delete_checkpoint(board, args['expectedRevision'], args['revision'])
             return versions.publish(board, args['expectedRevision'], args['revision'])
+        if tool == 'dataset_storage_inventory':
+            require(self.project_root is not None and hasattr(self.store, 'database'),
+                    'CloudBase project required', 'PROJECT_REQUIRED')
+            from .cloud_database import CloudDatabase
+            database = CloudDatabase()
+            database.url = database.url.rsplit('/', 1)[0] + '/charts_data_inventory'
+            return database.call('inventory', self.store.project)
         if tool == 'dashboard_version_label':
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             return self.store.label_checkpoint(board,args['expectedRevision'],args['revision'],args.get('name',''),args.get('published',False))

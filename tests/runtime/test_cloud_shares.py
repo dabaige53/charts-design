@@ -102,7 +102,7 @@ def test_never_expiring_share_revocation_and_failed_cleanup_retry(tmp_path):
     assert shares.status(service, 'board')['shares'] == []
 
 
-# @wu-test type=boundary | scope=云分享发布前置条件 | protects=密钥格式错误或未正式发布草稿或无云清理进程仍发布
+# @wu-test type=boundary | scope=云分享发布前置条件 | protects=密钥格式错误、未发布草稿或清理状态失效时仍发布
 def test_publication_requires_valid_key_checkpoint_and_cloud_heartbeat(tmp_path):
     service, storage, shares, _ = publication(tmp_path)
     for key in ('1234567', '１２３４５６７８', '1234567x', 12345678):
@@ -113,7 +113,9 @@ def test_publication_requires_valid_key_checkpoint_and_cloud_heartbeat(tmp_path)
     with pytest.raises(DashboardError) as error:
         shares.publish(service, 'board', 1)
     assert error.value.code == 'CLOUD_CLEANER_UNAVAILABLE'
-    storage.put('cleaner-status.json', json.dumps({'completedAt': int(time.time()) - 181}).encode())
+    storage.put('cleaner-status.json', json.dumps({'completedAt': int(time.time()) - 6 * 3600}).encode())
+    shares.publish(service, 'board', 1)
+    storage.put('cleaner-status.json', json.dumps({'completedAt': int(time.time()) - 7 * 3600}).encode())
     with pytest.raises(DashboardError) as error:
         shares.publish(service, 'board', 1)
     assert error.value.code == 'CLOUD_CLEANER_UNAVAILABLE'

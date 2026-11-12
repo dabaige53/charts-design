@@ -42,6 +42,7 @@ import { browserDownload, deliverExport, type Download } from "./host";
 import { RecoveryAlert } from "./recovery-alert";
 import { PositionComments } from "./position-comments";
 import { VersionCenter } from "./version-center";
+import { useVisibleVersionCheck } from "./resource-refresh";
 import type { Config, Document, Filter, Position, ToolCall } from "./types";
 function VisibleComponent({
   id,
@@ -126,39 +127,11 @@ export function DashboardApp({
       live = false;
     };
   }, [call, doc.id]);
-  useEffect(() => {
-    if (editing || annotationBusy || notesOpen) return;
-    const timer = setInterval(() => {
-      if (
-        document.visibilityState === "visible" &&
-        !runtime.loading.length &&
-        !runtime.saving
-      )
-        void call("runtime_info", { dashboardId: doc.id })
-          .then((info) => {
-            if (buildId && info.uiBuildId && info.uiBuildId !== buildId) {
-              runtime.setError("界面已更新，请重新打开看板预览。");
-              return;
-            }
-            if (
-              info.dashboardRevision &&
-              info.dashboardRevision !== doc.revision
-            )
-              void runtime.reload();
-          })
-          .catch((e) => runtime.setError(String(e)));
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [
-    editing,
-    annotationBusy,
-    notesOpen,
-    doc.id,
-    doc.revision,
-    call,
-    runtime.loading.length,
-    runtime.saving,
-  ]);
+  useVisibleVersionCheck({
+    call, dashboardId: doc.id, revision: doc.revision, buildId, staticMode,
+    blocked: editing || annotationBusy || notesOpen || runtime.saving,
+    reload: runtime.reload, setError: runtime.setError,
+  });
   const guard = (work: () => Promise<void>) => {
     void work().catch((e) => runtime.setError(String(e)));
   };
@@ -354,7 +327,7 @@ export function DashboardApp({
           {switchingId && <span role="status" className="sr-only">正在切换…</span>}
           <IconAction
             label="刷新报表"
-            disabled={runtime.saving || annotationBusy || notesOpen}
+            disabled={editing || runtime.saving || annotationBusy || notesOpen}
             onClick={() => void runtime.reload()}
           >
             <RefreshCw />
@@ -444,7 +417,16 @@ export function DashboardApp({
                 label="编辑布局"
                 disabled={readOnly || runtime.saving || annotationBusy || notesOpen}
                 unavailable={readOnly ? editUnavailable : "请先完成当前操作"}
-                onClick={() => setEditing(true)}
+                onClick={() =>
+                  guard(async () => {
+                    const result = await call("dashboard_get", { dashboardId: doc.id });
+                    if (result.document.revision !== doc.revision) {
+                      runtime.setError("草稿与当前保存版本不同，请先完成保存，再重新加载后编辑。");
+                      return;
+                    }
+                    setEditing(true);
+                  })
+                }
               >
                 <Pencil />
               </IconAction>

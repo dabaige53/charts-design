@@ -39,7 +39,7 @@ class CloudDatabase:
             codes = {'REVISION_CONFLICT': 409, 'ANNOTATION_CONFLICT': 409,
                      'ALREADY_EXISTS': 409, 'NOT_FOUND': 404,
                      'DATA_CONFLICT': 409, 'DATA_INCOMPLETE': 409,
-                     'INVALID_BATCH': 400}
+                     'INVALID_BATCH': 400, 'CHECKPOINT_IN_USE': 409}
             try:
                 message = json.loads(raw).get('message', '')
             except (ValueError, AttributeError):

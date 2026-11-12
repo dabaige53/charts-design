@@ -20,7 +20,7 @@
 
 项目草稿、已保存检查点与正式发布版本分别记录。`dashboard_checkpoint`／`dashboard_edit_finish` 保存检查点；`dashboard_version_publish` 选择一个已保存版本作为正式发布版本，重复发布当前版本不会重复写入发布事件。`dashboard_version_status` 返回三种修订号和发布记录，`dashboard_version_get` 只读查看保存或发布过的内容。
 
-`dashboard_restore` 只生成新草稿，保留现有批注，不自动保存检查点或改变正式发布。检查点中的旧 `published` 字段仍表示历史保留保护，不能当成正式发布状态。发布记录保存不可变内容与数据引用，检查点清理后仍可查看和回退到发布过的版本。
+`dashboard_restore` 生成新草稿并保留现有批注；保存检查点和更改正式发布需另行执行。检查点中的旧 `published` 字段表示历史保留保护；正式发布状态由发布记录确定。发布记录保存不可变内容与数据引用，检查点清理后仍可查看和回退到发布过的版本。
 
 共享编辑器在“版本与分享”侧栏提供保存、内容摘要、恢复为草稿、发布记录和独立分享。现阶段内容摘要不是历史图表的完整交互预览。替换选定分享会先生成新链接和不同的新密钥，再撤销旧链接与旧会话；其他独立分享保留。若新副本上传失败，旧分享保留；若新副本成功但旧分享撤销失败，操作返回新凭据与明确的待撤销状态，只重试撤销旧分享。
 
@@ -59,6 +59,10 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 `dashboard_get` 读取可编辑草稿；项目预览与刷新读取最近完成的检查点。`dashboard_edit_finish` 和 `dashboard_checkpoint` 检查失败时返回 `DOCTOR_FAILED`，MCP 同时标记 `isError: true`；草稿与批次保留，不生成检查点。调用方检查 Doctor 问题、读取最新草稿并修复，再用最新版本完成。`REVISION_CONFLICT` 要求重新读取并合并当前修改，不能盲目重放写入。
 
 `dashboard_history` 分页读取检查点，默认每页 50 个、最多 100 个；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建或命名当前检查点，也会关闭当前编辑批次，普通 Agent 编辑使用带批次 ID 的 `dashboard_edit_finish`。`published` 保护检查点免于自动清理。`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，批注变更保存在独立事件记录。
+
+版本列表可确认删除单个历史检查点。`dashboard_version_delete` 检查当前草稿版本；最新保存检查点和曾正式发布的版本不可删除。删除只移除所选检查点，不删除数据版本、草稿、发布记录或分享。CloudBase 需要先应用对应数据库迁移。
+
+CloudBase 的 `dataset_storage_inventory` 按项目列出数据版本、分块字节数、未完成分块及草稿、检查点、发布和批注历史中的保守引用匹配。结果仅含元数据，盘点为只读操作。字节数只计分块内容；未引用或未完成的版本须人工复核后再决定清理。
 
 ## 加载
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Check, Eye, RotateCcw, Save, Send } from "lucide-react";
+import { Check, Eye, RotateCcw, Save, Send, Trash2 } from "lucide-react";
 import { Button } from "./ui";
 import { Input } from "./components/ui/input";
 import { Badge } from "./components/ui/badge";
@@ -16,6 +16,7 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<Document | null>(null);
+  const [deleteRevision, setDeleteRevision] = useState<number | null>(null);
   const [tab, setTab] = useState<"versions" | "shares">("versions");
   const [availablePages, setAvailablePages] = useState<Config[]>([]);
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
@@ -32,7 +33,7 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   }, [call, document.id]);
   useEffect(() => {
     if (!open) return;
-    setError(""); setPreview(null); setNewShare(null);
+    setError(""); setPreview(null); setDeleteRevision(null); setNewShare(null);
     void refresh().catch((e) => setError(String(e.message || e)));
   }, [open, refresh]);
   const run = async (work: () => Promise<void>) => {
@@ -93,7 +94,21 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
                   await call("dashboard_version_publish", { dashboardId: document.id, expectedRevision: status?.draftRevision, revision: item.revision });
                   await refresh();
                 })}><Send />发布此版本</Button>
+                <Button size="sm" variant="outline"
+                  disabled={busy || !status || status.savedRevision === item.revision || status.releases?.some((release: Config) => release.revision === item.revision)}
+                  onClick={() => setDeleteRevision(item.revision)}><Trash2 />删除版本</Button>
               </div>
+              {deleteRevision === item.revision && <div className="mt-3 space-y-2" role="group" aria-label={`删除版本 ${item.revision}`}>
+                <p className="text-sm">删除后无法恢复此保存版本。草稿、已发布版本、分享和数据集保留。</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => setDeleteRevision(null)}>取消</Button>
+                  <Button size="sm" variant="destructive" disabled={busy} onClick={() => void run(async () => {
+                    await call("dashboard_version_delete", { dashboardId: document.id, expectedRevision: status?.draftRevision, revision: item.revision });
+                    if (preview?.revision === item.revision) setPreview(null);
+                    setDeleteRevision(null); await refresh();
+                  })}>确认删除</Button>
+                </div>
+              </div>}
             </article>)}
           </div>
           {preview && <section className="rounded-lg border bg-muted/30 p-3" aria-label="历史版本内容">

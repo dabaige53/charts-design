@@ -144,6 +144,7 @@ READ_ONLY = {
     'dashboard_share_status',
     'dashboard_version_status', 'dashboard_version_get',
     'dataset_transfer_status',
+    'dataset_storage_inventory',
 }
 APP_ONLY = {'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open'}
 DESTRUCTIVE = {
@@ -154,6 +155,7 @@ DESTRUCTIVE = {
     'dashboard_share_delete',
     'dashboard_share_replace',
     'dashboard_version_publish',
+    'dashboard_version_delete',
     'dataset_transfer_cleanup',
 }
 
@@ -165,6 +167,7 @@ def tool_annotations(name):
 
 WRITE_FLOW = ' In project mode this saves a draft: finish the edit batch before previewing. On REVISION_CONFLICT read dashboard_get, reconcile, and use its latest revision.'
 TOOLS = {
+    'dataset_storage_inventory': ('Inspect CloudBase dataset versions, stored chunk sizes and conservative references from drafts, checkpoints, releases and annotation history. Incomplete or unreferenced versions require review; this never deletes data or returns business rows.', schema({})),
     'dataset_transfer_chunk': ('Stage one ordered chunk in private COS; repeat the same upload ID and part to resume. This does not modify a dashboard.', schema({
         'uploadId': described({'type': 'string', 'pattern': '^[0-9a-f]{64}$'}, 'Random transfer identifier, distinct from the data version.'),
         'ref': described({'type': 'object'}, 'Exact immutable local dataset reference including field order, row count and version.'),
@@ -382,6 +385,10 @@ TOOLS = {
         **BOARD, 'expectedRevision': EXPECTED,
         'revision': described(INT, 'Existing checkpoint from dashboard_history to label.'),
         'name': NAME, 'published': PUBLISHED,
+    }, ('dashboardId', 'expectedRevision', 'revision'))),
+    'dashboard_version_delete': ('Delete one historical checkpoint after explicit confirmation. The latest saved checkpoint and all published versions are retained; data versions and shares are not deleted. Requires the current draft revision.', schema({
+        **BOARD, 'expectedRevision': EXPECTED,
+        'revision': described(INT, 'Historical checkpoint revision to delete.'),
     }, ('dashboardId', 'expectedRevision', 'revision'))),
     'dashboard_export_site': ('Create a managed ZIP containing an independent static React site and used immutable dataset shards. Project mode exports the latest completed checkpoint; legacy storage exports the current document. Does not deploy, share or complete an edit batch. Returns export metadata; download with dashboard_export_read(format=zip). Static sites have no live backend.', schema(BOARD, ('dashboardId',))),
 }

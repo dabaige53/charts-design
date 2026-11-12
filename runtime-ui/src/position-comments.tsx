@@ -149,7 +149,7 @@ export function PositionComments({
   draftRef.current = draft;
 
   useEffect(() => {
-    if (interacting) return;
+    if (!active || busy) return;
     let live = true;
     const load = () => {
       if (document.visibilityState !== "visible") return;
@@ -158,9 +158,12 @@ export function PositionComments({
       }).catch((failure) => { if (live) setError(String(failure)); });
     };
     load();
-    const timer = window.setInterval(load, 5000);
-    return () => { live = false; window.clearInterval(timer); };
-  }, [call, doc.id, interacting]);
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      live = false;
+      document.removeEventListener("visibilitychange", load);
+    };
+  }, [call, doc.id, active, busy]);
 
   useEffect(() => {
     try {

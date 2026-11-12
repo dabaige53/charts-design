@@ -66,3 +66,24 @@ class Versions:
                 db.execute('INSERT INTO releases(board_id,revision,created_at,document) VALUES(?,?,?,?)',
                            (board, revision, utcnow(), json_bytes(json.loads(row[0])).decode()))
         return self.status(board)
+
+    def delete_checkpoint(self, board, expected, revision):
+        require(type(expected) is int and type(revision) is int and expected > 0 and revision > 0,
+                'Expected draft and checkpoint revision are required')
+        if self.remote:
+            database = ReleaseDatabase()
+            database.url = database.url.rsplit('/', 1)[0] + '/charts_delete_checkpoint'
+            return database.call('delete', self.store.project, board=board, expected=expected, revision=revision)
+        with self.store.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            current = db.execute('SELECT revision FROM boards WHERE id=?', (board,)).fetchone()
+            require(current is not None and current[0] == expected, 'Reload before deleting', 'REVISION_CONFLICT')
+            saved = db.execute('SELECT max(revision) FROM revisions WHERE board_id=?', (board,)).fetchone()[0]
+            require(saved != revision, 'The latest saved checkpoint cannot be deleted', 'CHECKPOINT_IN_USE')
+            require(db.execute('SELECT 1 FROM releases WHERE board_id=? AND revision=?', (board, revision)).fetchone() is None,
+                    'Published versions must be retained', 'CHECKPOINT_IN_USE')
+            result = db.execute('DELETE FROM revisions WHERE board_id=? AND revision=?', (board, revision))
+            require(result.rowcount == 1, 'Checkpoint not found', 'NOT_FOUND')
+            db.execute('DELETE FROM checkpoint_meta WHERE board_id=? AND revision=?', (board, revision))
+        self.store._files(board)
+        return {'deleted': True, 'revision': revision}

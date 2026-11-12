@@ -64,7 +64,7 @@ EDIT_TOOLS = VIEW_TOOLS | frozenset({
     'dashboard_patch', 'dashboard_edit_begin', 'dashboard_edit_finish', 'dashboard_checkpoint',
     'dashboard_validate', 'dashboard_doctor', 'dashboard_history', 'dashboard_history_diff',
     'dashboard_restore', 'dashboard_version_label', 'runtime_diagnostics', 'dashboard_export_site',
-    'dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish',
+    'dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish', 'dashboard_version_delete',
     'dashboard_share_status', 'dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_replace',
 })
 # Acts on the server's desktop session; meaningless and unsafe remotely.
