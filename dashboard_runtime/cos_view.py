@@ -6,12 +6,11 @@ import copy
 from .model import DashboardError, require
 
 
-def web_document(store, document, url_for, editable=False):
-    doc = copy.deepcopy(document)
-    doc['staticFiles'], doc['staticOptions'], doc['staticPartitionIndexes'] = {}, {}, {}
-    doc['storageFormat'] = 'cos-v1'
-    doc['versionKey'] = f"{doc['id']}:{doc['revision']}"
-    doc['staticComponentDatasets'], doc['staticDatasetFields'] = {}, {}
+def browser_data(store, document, url_for):
+    doc = document
+    result = {'id': doc['id'], 'revision': doc['revision'],
+              'staticFiles': {}, 'staticOptions': {}, 'staticPartitionIndexes': {},
+              'staticComponentDatasets': {}, 'staticDatasetFields': {}}
     used = {component.get('datasetId') or component.get('binding', {}).get('datasetId')
             for component in doc['manifest']['components'].values()}
     refs = {key: ref for key, ref in doc['snapshot'].get('datasetRefs', {}).items() if key in used}
@@ -20,20 +19,38 @@ def web_document(store, document, url_for, editable=False):
         if component:
             key = 'component-' + component_id
             refs[key] = ref
-            doc['staticComponentDatasets'][component_id] = key
-            doc['staticDatasetFields'][key] = ref['fields']
+            result['staticComponentDatasets'][component_id] = key
+            result['staticDatasetFields'][key] = ref['fields']
+    objects = {}
     for key, ref in refs.items():
-        obj = store.assets.call('object_get', version=ref['version'])
+        if ref['version'] not in objects:
+            objects[ref['version']] = store.assets.call('object_get', version=ref['version'])
+        obj = objects[ref['version']]
         require(obj is not None, 'Dataset files unavailable', 'ASSET_UNAVAILABLE')
         descriptor = obj['descriptor']
-        doc['staticFiles'][key] = [url_for(obj['id'], name) for name in descriptor['shards']]
-        doc['staticOptions'][key] = {field: url_for(obj['id'], name)
-                                    for field, name in descriptor['options'].items()}
+        result['staticFiles'][key] = [url_for(obj['id'], name) for name in descriptor['shards']]
+        result['staticOptions'][key] = {field: url_for(obj['id'], name)
+                                       for field, name in descriptor['options'].items()}
         if descriptor.get('partitionIndex'):
             index = descriptor['partitionIndex']
-            doc['staticPartitionIndexes'][key] = {'field': index['field'],
+            result['staticPartitionIndexes'][key] = {'field': index['field'],
                 'entries': [{'value': entry['value'], 'files': [url_for(obj['id'], name) for name in entry['files']]}
                             for entry in index['entries']]}
+    return result
+
+
+def web_document(store, document, url_for, editable=False, data_url=None):
+    doc = copy.deepcopy(document)
+    doc['storageFormat'] = 'cos-v1'
+    doc['versionKey'] = f"{doc['id']}:{doc['revision']}"
+    if data_url:
+        # Render saved results first; resolve data files only when a query needs them.
+        doc['browserDataUrl'] = data_url
+        doc['staticComponentDatasets'] = {
+            key: 'component-' + key for key in doc['snapshot'].get('componentDataRefs', {})
+            if key in doc['manifest']['components']}
+    else:
+        doc.update(browser_data(store, document, url_for))
     if not editable:
         for key in ('sources', 'queries', 'annotations'):
             doc['manifest'].pop(key, None)
@@ -42,6 +59,18 @@ def web_document(store, document, url_for, editable=False):
     doc['snapshot']['datasets'] = {}
     doc['progressive'] = True
     return doc
+
+
+def browser_version(store, board, revision, editable):
+    if not editable:
+        doc = store.readable(board)
+        require(doc['revision'] == revision, 'Version no longer available', 'REVISION_CONFLICT')
+        return doc
+    doc = store.get(board, hydrate=False)
+    if doc['revision'] == revision:
+        return doc
+    from .versions import Versions
+    return Versions(store).read(board, revision)
 
 
 def authorized_file(store, document, object_id, name):

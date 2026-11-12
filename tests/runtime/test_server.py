@@ -23,6 +23,45 @@ def settings(tmp_path, **extra):
     return ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'ws' / '.runtime', tokens=(TOKEN,), port=8000, **extra)
 
 
+# @wu-test type=boundary | scope=延后数据目录 HTTP 接口 | protects=目录绕过令牌或看板范围检查并向只读链接暴露草稿
+def test_deferred_browser_directory_keeps_scope_and_revision_checks(tmp_path, monkeypatch):
+    from starlette.testclient import TestClient
+    server = RemoteServer(settings(tmp_path))
+    service = server.projects.service('sales')
+    service.call('dashboard_create', {'dashboardId': 'board', 'title': 'Saved'})
+    service.call('dashboard_patch', {'dashboardId': 'board', 'expectedRevision': 1,
+                                    'operations': [{'op': 'set_title', 'value': 'Draft'}]})
+    monkeypatch.setattr(service.store, 'cos_enabled', True, raising=False)
+    edit = server.links.share('sales', 'board', 'edit')['url'].split('#token=')[1]
+    view = server.links.share('sales', 'board', 'view')['url'].split('#token=')[1]
+    prefix = '/api/v1/p/sales/content/'
+    with TestClient(create_app(server)) as client:
+        assert client.get(prefix + 'board/1').status_code == 401
+        headers = {'Authorization': 'Bearer ' + edit}
+        result = client.get(prefix + 'board/1', headers=headers)
+        assert result.status_code == 200
+        assert result.json() == {'id': 'board', 'revision': 1, 'staticFiles': {}, 'staticOptions': {},
+                                 'staticPartitionIndexes': {}, 'staticComponentDatasets': {}, 'staticDatasetFields': {}}
+        assert client.get(prefix + 'board/2', headers=headers).status_code == 200
+        assert client.get(prefix + 'private/1', headers=headers).status_code == 403
+        assert client.get('/api/v1/p/other/content/board/1', headers=headers).status_code == 401
+        assert client.get(prefix + 'board/2', headers={'Authorization': 'Bearer ' + view}).status_code == 400
+        response = client.post('/api/v1/p/sales/tools/dashboard_preview',
+                               headers={**headers, 'X-Charts-Browser-Data': 'lazy'},
+                               json={'dashboardId': 'board'})
+        assert response.status_code == 200
+        doc = response.json()['document']
+        assert doc['revision'] == 1 and doc['manifest']['title'] == 'Saved'
+        assert doc['browserDataUrl'] == prefix + 'board/1'
+        assert 'staticFiles' not in doc
+        eager = client.post('/api/v1/p/sales/tools/dashboard_preview',
+                            headers=headers, json={'dashboardId': 'board'}).json()['document']
+        assert eager['staticFiles'] == {}
+        assert 'browserDataUrl' not in eager
+        server.state.revoke('sales', 'board')
+        assert client.get(prefix + 'board/1', headers=headers).status_code == 401
+
+
 # @wu-test type=integration | scope=服务器发布健康检查 | protects=云端发布返回旧版本标记或本地运行要求云端发布参数
 def test_health_reports_release_identity_only_when_configured(tmp_path, monkeypatch):
     from starlette.testclient import TestClient

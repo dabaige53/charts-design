@@ -2,12 +2,37 @@ import { createStaticClient } from "../../dashboard_runtime/web/static-client.mj
 import { createStaticQuery } from "../../dashboard_runtime/web/static-query.mjs";
 import type { Config, Document, ToolCall } from "./types";
 
+export async function loadWebDashboard(call: ToolCall, dashboardId?: string): Promise<Config & { initialBoards?: Config[] }> {
+  const catalog = dashboardId ? undefined : await call("dashboard_list");
+  const id = dashboardId || catalog?.dashboards[0]?.id;
+  if (!id) throw Error("尚无已保存的看板，请通过本项目 MCP 创建。");
+  return { ...await call("dashboard_preview", { dashboardId: id }), initialBoards: catalog?.dashboards };
+}
+
 export function createVersionReader(doc: Document, workerUrl: string, headers: Record<string, string> = {}) {
-  const worker = doc.staticFiles
+  let worker = doc.staticFiles && !doc.browserDataUrl
     ? createStaticClient(doc, location.href, workerUrl, Worker, headers)
     : null;
-  const embedded = worker ? null : createStaticQuery(doc, async () => { throw Error("版本数据文件不存在"); });
-  const query = (args: Config) => worker ? worker.query(args) : embedded!.query(args);
+  const embedded = worker || doc.browserDataUrl ? null : createStaticQuery(doc, async () => { throw Error("版本数据文件不存在"); });
+  let preparing: Promise<void> | undefined;
+  let closed = false;
+  const controller = new AbortController();
+  const query = async (args: Config) => {
+    if (closed) throw Object.assign(Error("页面已关闭"), { name: "AbortError" });
+    if (doc.browserDataUrl && !worker) {
+      preparing ??= (async () => {
+        const response = await fetch(new URL(doc.browserDataUrl, location.href), { headers, signal: controller.signal });
+        if (!response.ok) throw Error(`数据目录加载失败（${response.status}）`);
+        const data = await response.json();
+        if (data.id !== doc.id || data.revision !== doc.revision || !data.staticFiles)
+          throw Error("数据目录与当前看板版本不一致，请刷新。");
+        if (closed) throw Object.assign(Error("页面已关闭"), { name: "AbortError" });
+        worker = createStaticClient({ ...doc, ...data }, location.href, workerUrl, Worker, headers);
+      })().catch(error => { preparing = undefined; throw error; });
+      await preparing;
+    }
+    return worker ? worker.query(args) : embedded!.query(args);
+  };
   const call: ToolCall = async (name, args = {}) => {
     if (args.expectedRevision != null && args.expectedRevision !== doc.revision)
       throw Error("版本已切换，请重新读取");
@@ -39,7 +64,7 @@ export function createVersionReader(doc: Document, workerUrl: string, headers: R
     }
     throw Error("历史版本为只读内容，不支持此操作");
   };
-  return { call, destroy: () => worker?.destroy() };
+  return { call, destroy: () => { closed = true; controller.abort(); worker?.destroy(); } };
 }
 
 export function createCosTools(remote: ToolCall, workerUrl: string, headers: () => Record<string, string>) {
@@ -52,7 +77,7 @@ export function createCosTools(remote: ToolCall, workerUrl: string, headers: () 
     const result = await remote(name, args);
     const doc = result.document as Document | undefined;
     if (doc?.storageFormat === "cos-v1") {
-      const key = JSON.stringify([headers(), doc.versionKey, doc.manifest, doc.staticFiles]);
+      const key = JSON.stringify([headers(), doc.versionKey, doc.manifest, doc.staticFiles, doc.browserDataUrl]);
       if (keys.get(doc.id) !== key) {
         readers.get(doc.id)?.destroy();
         readers.set(doc.id, createVersionReader(doc, workerUrl, headers()));

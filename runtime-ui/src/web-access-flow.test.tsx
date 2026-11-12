@@ -24,14 +24,14 @@ it("retries dashboard loading with the pasted token after unauthorized", async (
     const authorization = (init?.headers as Record<string, string>).Authorization;
     if (authorization !== "Bearer restored-token")
       return new Response(JSON.stringify({ error: { code: "UNAUTHORIZED" } }), { status: 401 });
-    return new Response(JSON.stringify(calls === 2
-      ? { dashboards: [{ id: "board" }], projectRoot: "test" }
-      : { document: { id: "board", revision: 1 }, projectRoot: "test" }), { status: 200 });
+    expect(String(_url).endsWith("/dashboard_preview")).toBe(true);
+    expect((init?.headers as Record<string, string>)["X-Charts-Browser-Data"]).toBe("lazy");
+    return new Response(JSON.stringify({ document: { id: "board", revision: 1 }, projectRoot: "test" }), { status: 200 });
   }) as unknown as typeof fetch;
   await act(async () => { await import("./main"); });
   const input = await screen.findByLabelText("完整在线访问链接");
   fireEvent.change(input, { target: { value: `${window.location.origin}${window.location.pathname}#token=restored-token` } });
   fireEvent.click(screen.getByRole("button", { name: "打开看板" }));
   await waitFor(() => expect(screen.getByText("看板已打开")).toBeTruthy());
-  expect(calls).toBe(3);
+  expect(calls).toBe(2);
 });

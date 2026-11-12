@@ -77,6 +77,7 @@ function VisibleComponent({
 
 export function DashboardApp({
   initial,
+  initialBoards,
   call,
   onFullscreen,
   pageFullscreen = false,
@@ -88,6 +89,7 @@ export function DashboardApp({
   projectRoot,
 }: {
   initial: Document;
+  initialBoards?: Config[];
   call: ToolCall;
   onFullscreen?: () => void;
   pageFullscreen?: boolean;
@@ -105,7 +107,7 @@ export function DashboardApp({
   const editUnavailable = "此链接为查看预览，请使用编辑预览链接操作";
   const [editing, setEditing] = useState(false),
     [title, setTitle] = useState(initial.manifest.title),
-    [boards, setBoards] = useState<Config[]>([]),
+    [boards, setBoards] = useState<Config[]>(initialBoards || []),
     [versionsOpen, setVersionsOpen] = useState(false),
     [versionSwitchOpen, setVersionSwitchOpen] = useState(false),
     [switchingId, setSwitchingId] = useState<string | null>(null),
@@ -119,16 +121,24 @@ export function DashboardApp({
     setTitle(doc.manifest.title);
   }, [doc.id, doc.manifest.title]);
   useEffect(() => {
+    if (initialBoards) {
+      setBoards(initialBoards);
+      return;
+    }
     let live = true;
-    call("dashboard_list")
-      .then((r) => {
-        if (live) setBoards(r.dashboards);
-      })
-      .catch((e) => runtime.setError(String(e)));
+    // Let the saved view render before loading navigation; do not reload it on every page switch.
+    const timer = setTimeout(() => {
+      void call("dashboard_list")
+        .then((r) => {
+          if (live) setBoards(r.dashboards);
+        })
+        .catch((e) => { if (live) runtime.setError(String(e)); });
+    }, 0);
     return () => {
       live = false;
+      clearTimeout(timer);
     };
-  }, [call, doc.id]);
+  }, [call, initialBoards]);
   useVisibleVersionCheck({
     call, dashboardId: doc.id, revision: doc.revision, buildId, staticMode,
     blocked: editing || annotationBusy || notesOpen || runtime.saving,

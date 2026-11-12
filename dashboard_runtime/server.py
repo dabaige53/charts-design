@@ -453,7 +453,7 @@ class RemoteServer:
         return Principal(admin=False, access=payload.get('a', 'view'), dashboard=payload.get('d'), dashboards=tuple(pages))
 
     # Viewer API ---------------------------------------------------------
-    def call_viewer(self, project: str, name: str, args, principal: Principal):
+    def call_viewer(self, project: str, name: str, args, principal: Principal, *, lazy_browser_data=False):
         require(isinstance(args, dict), 'Tool arguments must be an object', 'INVALID_REQUEST')
         allowed = EDIT_TOOLS if principal.access == 'edit' else VIEW_TOOLS
         if name not in allowed:
@@ -502,7 +502,8 @@ class RemoteServer:
                     prefix = self.settings.base_path + '/api/v1/p/' + quote(project) + '/content/' + quote(doc['id']) + '/' + str(doc['revision']) + '/'
                     result[field] = web_document(service.store, doc,
                         lambda object_id, filename: prefix + object_id + '/' + filename,
-                        editable=principal.access == 'edit' and field != 'version')
+                        editable=principal.access == 'edit' and field != 'version',
+                        data_url=prefix.rstrip('/') if lazy_browser_data else None)
         if name == 'runtime_info' and not principal.admin:
             result = {key: result[key] for key in SANITIZED_INFO if key in result} | {'projectRoot': project}
         export = result.get('export')
@@ -659,7 +660,8 @@ def create_app(server: RemoteServer):
             body = await read_body(request, MAX_BYTES)
             if not body:
                 raise DashboardError('INVALID_REQUEST', 'Body must contain a JSON object', 400)
-            result = await asyncio.to_thread(server.call_viewer, project, name, json.loads(body), principal)
+            result = await asyncio.to_thread(server.call_viewer, project, name, json.loads(body), principal,
+                                             lazy_browser_data=request.headers.get('x-charts-browser-data') == 'lazy')
             raw = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
             return compressed(request, raw, 'application/json', {'Cache-Control': 'no-store'})
         except Exception as error:  # noqa: BLE001 - mapped to bounded JSON errors
@@ -673,24 +675,22 @@ def create_app(server: RemoteServer):
             principal = server.principal(bearer(request), project)
             if principal is None:
                 raise DashboardError('UNAUTHORIZED', '访问令牌失效', 401)
-            require(not principal.dashboard or board in principal.dashboards,
-                    'File belongs to another dashboard', 'FORBIDDEN')
+            if principal.dashboard and board not in principal.dashboards:
+                raise DashboardError('FORBIDDEN', 'File belongs to another dashboard', 403)
             revision = int(request.path_params['revision'])
             def read():
-                from .cos_view import authorized_file
-                from .versions import Versions
+                from .cos_view import authorized_file, browser_data, browser_version
                 store = server.projects.service(project).store
                 require(getattr(store, 'cos_enabled', False), 'Project has not migrated', 'NOT_FOUND')
-                if principal.access == 'edit' and store.revision(board) == revision:
-                    doc = store.get(board, hydrate=False)
-                else:
-                    if principal.access != 'edit':
-                        require(store.display_revision(board) == revision, 'Version no longer available', 'REVISION_CONFLICT')
-                    doc = Versions(store).read(board, revision)
+                doc = browser_version(store, board, revision, principal.access == 'edit')
+                if 'object' not in request.path_params:
+                    prefix = base + '/api/v1/p/' + quote(project) + '/content/' + quote(board) + '/' + str(revision) + '/'
+                    return json.dumps(browser_data(store, doc, lambda object_id, name: prefix + object_id + '/' + name),
+                                      ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
                 return authorized_file(store, doc, request.path_params['object'], request.path_params['name'])
             raw = await asyncio.to_thread(read)
-            return Response(raw, media_type='application/gzip',
-                            headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
+            return compressed(request, raw, 'application/json', {'Cache-Control': 'private, no-store'}) if 'object' not in request.path_params else Response(
+                raw, media_type='application/gzip', headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
         except Exception as error:  # noqa: BLE001
             return failure(error)
 
@@ -862,6 +862,7 @@ def create_app(server: RemoteServer):
         Route('/view/{project}/{dashboard}', viewer, methods=['GET']),
         Route('/edit/{project}/{dashboard}', viewer, methods=['GET']),
         Route('/api/v1/p/{project}/tools/{name}', tool, methods=['POST']),
+        Route('/api/v1/p/{project}/content/{dashboard}/{revision}', content, methods=['GET']),
         Route('/api/v1/p/{project}/content/{dashboard}/{revision}/{object}/{name}', content, methods=['GET']),
         Route('/api/v1/catalog', admin_catalog, methods=['POST']),
         Route('/api/v1/share', admin_share, methods=['POST']),

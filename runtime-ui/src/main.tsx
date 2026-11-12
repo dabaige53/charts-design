@@ -11,7 +11,7 @@ import { resolveToolResult } from "./tool-result.mjs";
 import { createToolQueue } from "../../dashboard_runtime/web/request-queue.mjs";
 import { browserDownload, type Download } from "./host";
 import { WebAccess } from "./web-access";
-import { createCosTools } from "./cos-client";
+import { createCosTools, loadWebDashboard } from "./cos-client";
 import type { Config, Document, ToolCall } from "./types";
 const boot = window.__chartsBoot || { mode: "mcp" };
 let app: App | undefined;
@@ -52,6 +52,7 @@ const send = (name: string, args: Config) =>
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + webToken,
+        "X-Charts-Browser-Data": "lazy",
       },
       body: JSON.stringify(args),
     });
@@ -115,6 +116,7 @@ class RenderBoundary extends Component<
 }
 function Root() {
   const [doc, setDoc] = useState<Document | null>(boot.document || null),
+    [initialBoards, setInitialBoards] = useState<Config[] | undefined>(),
     [error, setError] = useState(""),
     [accessRequired, setAccessRequired] = useState(false),
     [attempt, setAttempt] = useState(0),
@@ -185,18 +187,11 @@ function Root() {
       context.accept({ projectRoot: boot.projectRoot ?? null });
       setFullscreen(document.fullscreenEnabled);
       if (!boot.document)
-        void call("dashboard_list")
-          .then(async (result: Config) => {
-            const id =
-              boot.dashboardId ||
-              new URLSearchParams(location.search).get("dashboardId") ||
-              result.dashboards[0]?.id;
-            if (id)
-              await receive(
-                await call("dashboard_preview", { dashboardId: id }),
-              );
-            else if (live)
-              setError("尚无已保存的看板，请通过本项目 MCP 创建。");
+        void loadWebDashboard(call, boot.dashboardId || new URLSearchParams(location.search).get("dashboardId") || undefined)
+          .then(async (result) => {
+            if (!live) return;
+            setInitialBoards(result.initialBoards);
+            await receive(result);
           })
           .catch((e) => {
             if (live) {
@@ -276,6 +271,7 @@ function Root() {
     <DashboardApp
       buildId={boot.uiBuildId}
       initial={doc}
+      initialBoards={initialBoards}
       call={call}
       download={download}
       readOnly={!!boot.readOnly}

@@ -28,6 +28,21 @@ function patch(id: string, value = 100): Config {
   return { id: "runtime-interaction", revision: 1, computed: { components: { [id]: { value } } } };
 }
 
+// @wu-test type=behavior | scope=useDashboardRuntime saved COS view | protects=首屏重复计算已有结果或用户筛选后仍显示旧结果
+it("uses saved COS results until a user changes the filter", async () => {
+  const initial = document();
+  initial.storageFormat = "cos-v1";
+  initial.browserDataUrl = "/content/runtime-interaction/1";
+  const call = mock(async () => patch("total", 200));
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => result.current.activate("total"));
+  expect(call).not.toHaveBeenCalled();
+  expect(result.current.document.computed?.components.total.value).toBe(11);
+  act(() => result.current.setFilter("region", ["华东"]));
+  await waitFor(() => expect(result.current.document.computed?.components.total.value).toBe(200));
+  expect(call).toHaveBeenCalledTimes(1);
+});
+
 // @wu-test type=regression | scope=useDashboardRuntime required filters | protects=防止 required-month-20261112 复发：必选单月被清空或多选且重置全部丢失月份
 it("retains the required single month when clearing, resetting or attempting multiple months", () => {
   const initial = document();
