@@ -15,7 +15,7 @@ DECLARE
     cmd jsonb := payload->'command';
     verb text := cmd->>'action';
     note_id text := cmd->>'annotationId';
-    value jsonb := cmd->'value';
+    input_value jsonb := cmd->'value';
     note jsonb;
     updated_notes jsonb;
     pos integer;
@@ -55,19 +55,19 @@ BEGIN
     SELECT entry,ordinality::integer-1 INTO note,pos FROM jsonb_array_elements(updated_notes) WITH ORDINALITY a(entry,ordinality)
         WHERE entry->>'id'=note_id;
     IF verb IN ('add','edit','reply') AND
-        (jsonb_typeof(value) IS DISTINCT FROM 'object' OR jsonb_typeof(value->'text') IS DISTINCT FROM 'string'
-         OR length(btrim(value->>'text'))=0 OR length(value->>'text')>4000)
+        (jsonb_typeof(input_value) IS DISTINCT FROM 'object' OR jsonb_typeof(input_value->'text') IS DISTINCT FROM 'string'
+         OR length(btrim(input_value->>'text'))=0 OR length(input_value->>'text')>4000)
         THEN RAISE EXCEPTION 'INVALID_ARGUMENT'; END IF;
-    IF verb IN ('add','reply') AND (jsonb_typeof(value->'createdAt') IS DISTINCT FROM 'string'
-        OR length(value->>'createdAt') NOT BETWEEN 1 AND 100) THEN RAISE EXCEPTION 'INVALID_ARGUMENT'; END IF;
+    IF verb IN ('add','reply') AND (jsonb_typeof(input_value->'createdAt') IS DISTINCT FROM 'string'
+        OR length(input_value->>'createdAt') NOT BETWEEN 1 AND 100) THEN RAISE EXCEPTION 'INVALID_ARGUMENT'; END IF;
     IF verb='add' THEN
         IF note IS NOT NULL THEN RAISE EXCEPTION 'ANNOTATION_CONFLICT'; END IF;
         IF jsonb_array_length(updated_notes)>=100 THEN RAISE EXCEPTION 'INVALID_ARGUMENT'; END IF;
-        SELECT coalesce(jsonb_object_agg(key,v),'{}') INTO note FROM jsonb_each(value) e(key,v)
+        SELECT coalesce(jsonb_object_agg(key,v),'{}') INTO note FROM jsonb_each(input_value) e(key,v)
             WHERE key IN ('text','componentId','anchor','createdAt','view');
-        note:=note||jsonb_build_object('componentId',value->'componentId','id',note_id,'contentVersion',1,'context',jsonb_build_object(
+        note:=note||jsonb_build_object('componentId',input_value->'componentId','id',note_id,'contentVersion',1,'context',jsonb_build_object(
             'designRevision',rev,'dataVersions',coalesce(target_document#>'{snapshot,datasetRefs}','{}'),
-            'filters',coalesce(value#>'{view,filters}','[]')));
+            'filters',coalesce(input_value#>'{view,filters}','[]')));
         updated_notes:=updated_notes||jsonb_build_array(note);
     ELSE
         IF note IS NULL THEN RAISE EXCEPTION 'ANNOTATION_NOT_FOUND'; END IF;
@@ -78,16 +78,16 @@ BEGIN
             updated_notes:=updated_notes-pos;
         ELSE
             IF verb='edit' THEN
-                SELECT note||coalesce(jsonb_object_agg(key,v),'{}') INTO note FROM jsonb_each(value) e(key,v)
+                SELECT note||coalesce(jsonb_object_agg(key,v),'{}') INTO note FROM jsonb_each(input_value) e(key,v)
                     WHERE key IN ('text','componentId','anchor');
                 note:=note||jsonb_build_object('contentVersion',coalesce((note->>'contentVersion')::bigint,0)+1);
             ELSIF verb='reply' THEN
                 IF coalesce(note->>'status','open')='resolved' OR EXISTS (
-                    SELECT 1 FROM jsonb_array_elements(coalesce(note->'replies','[]')) r WHERE r->>'id'=value->>'id')
+                    SELECT 1 FROM jsonb_array_elements(coalesce(note->'replies','[]')) r WHERE r->>'id'=input_value->>'id')
                     THEN RAISE EXCEPTION 'ANNOTATION_CONFLICT'; END IF;
-                IF coalesce(value->>'id','') !~ '^[a-zA-Z0-9_-]{1,100}$' THEN RAISE EXCEPTION 'INVALID_ARGUMENT'; END IF;
+                IF coalesce(input_value->>'id','') !~ '^[a-zA-Z0-9_-]{1,100}$' THEN RAISE EXCEPTION 'INVALID_ARGUMENT'; END IF;
                 note:=note||jsonb_build_object('replies',coalesce(note->'replies','[]')||
-                    jsonb_build_array(jsonb_build_object('id',value->>'id','text',value->>'text','createdAt',value->>'createdAt')));
+                    jsonb_build_array(jsonb_build_object('id',input_value->>'id','text',input_value->>'text','createdAt',input_value->>'createdAt')));
             ELSIF verb='status' THEN
                 IF cmd->>'status' IS NULL OR cmd->>'status' NOT IN ('open','resolved') THEN RAISE EXCEPTION 'INVALID_ARGUMENT'; END IF;
                 IF cmd->>'expectedStatus' IS DISTINCT FROM coalesce(note->>'status','open')
