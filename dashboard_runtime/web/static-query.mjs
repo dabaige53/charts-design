@@ -105,6 +105,8 @@ export function createStaticQuery(document,read,{maxScopes=8,maxScopeRows=250000
           const values=new Map();
           const datasets=new Map(filter.componentIds.map(id=>[datasetFor(id),id]));
           const sources=await Promise.all([...datasets].map(async([dataset,id])=>{
+            const supplied=document.staticOptionValues?.[dataset];
+            if(supplied&&Object.hasOwn(supplied,filter.field))return supplied[filter.field];
             const url=document.staticOptions?.[dataset]?.[filter.field];
             if(url)return read(url,{priority:1});
             // Embedded/legacy documents have no external option index.

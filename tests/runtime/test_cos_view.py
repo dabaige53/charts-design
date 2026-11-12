@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from dashboard_runtime.cos_view import browser_data, browser_version, web_document
+from dashboard_runtime.cos_view import authorized_files, browser_data, browser_version, web_document
 from dashboard_runtime.model import DashboardError
 
 
@@ -96,3 +96,55 @@ def test_immutable_bytes_coalesce_and_evict_by_capacity():
     assert cache.get('C', lambda: b'ccc') == b'ccc'
     assert cache.get('A', lambda: b'new') == b'new'
     assert cache.bytes <= 6
+
+
+# @wu-test type=performance | scope=browser_data preload | protects=首页候选项重复查询同一数据对象或加载无关字段与业务行
+def test_preload_includes_complete_options_once_per_shared_field():
+    import gzip
+    import json
+    doc = document()
+    doc['manifest']['filters'] = [
+        {'id': 'month', 'op': 'in', 'field': 'month', 'componentIds': ['a', 'b']},
+        {'id': 'search', 'op': 'contains', 'field': 'label', 'componentIds': ['a']}]
+    values = [None, *range(230)]
+    obj = {'id': 'obj', 'descriptor': {
+        'shards': ['rows.gz'], 'options': {'month': 'months.gz', 'label': 'labels.gz'},
+        'files': {'rows.gz': {'bytes': 3000}, 'months.gz': {'bytes': 400}, 'labels.gz': {'bytes': 300}}}}
+    assets = Mock()
+    assets.call.return_value = obj
+    assets.read_file.return_value = gzip.compress(json.dumps(values).encode())
+    result = web_document(SimpleNamespace(assets=assets), doc,
+                          lambda obj, name: f'/{obj}/{name}', editable=True, preload_options=True)
+    assert result['staticOptionValues'] == {'sales': {'month': values}, 'copy': {'month': values}}
+    assert result['staticResourceSizes']['/obj/rows.gz'] == 3000
+    assert 'browserDataUrl' not in result
+    assets.call.assert_called_once_with('object_get', version='v1')
+    assets.read_file.assert_called_once_with(obj, 'months.gz')
+    assert result['computed'] == doc['computed']
+
+
+# @wu-test type=boundary | scope=authorized_files | protects=批量文件越过版本边界或部分授权失败仍读取业务字节
+def test_batch_checks_every_file_before_reading_and_deduplicates_objects():
+    obj = {'id': 'obj', 'kind': 'dataset', 'version': 'v1', 'descriptor': {
+        'shards': ['a.gz', 'b.gz'], 'options': {},
+        'files': {'a.gz': {'bytes': 2}, 'b.gz': {'bytes': 2}}}}
+    assets = Mock()
+    assets.call.return_value = obj
+    assets.read_file.side_effect = lambda _obj, name: name.encode()
+    store = SimpleNamespace(assets=assets)
+    result = authorized_files(store, document(), ['obj/a.gz', 'obj/b.gz', 'obj/a.gz'], max_bytes=4)
+    assert result == {'obj/a.gz': b'a.gz', 'obj/b.gz': b'b.gz'}
+    assets.call.assert_called_once_with('object_get', id='obj')
+    assets.read_file.reset_mock()
+    with pytest.raises(DashboardError, match='not a browser data resource'):
+        authorized_files(store, document(), ['obj/a.gz', 'obj/query.sqlite3'])
+    assets.read_file.assert_not_called()
+    with pytest.raises(DashboardError) as oversized:
+        authorized_files(store, document(), ['obj/a.gz', 'obj/b.gz'], max_bytes=3)
+    assert oversized.value.status == 413
+    assets.read_file.assert_not_called()
+    obj['version'] = 'private-version'
+    with pytest.raises(DashboardError) as forbidden:
+        authorized_files(store, document(), ['obj/a.gz'])
+    assert forbidden.value.code == 'FORBIDDEN'
+    assets.read_file.assert_not_called()

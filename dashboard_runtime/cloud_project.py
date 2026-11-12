@@ -100,8 +100,10 @@ class CloudProjectStore(Store):
 
     @staticmethod
     def _note_context(doc, notes, previous, preserve_incoming=False):
+        from .annotations import preserve_content_version
         old = {n['id']: n for n in previous}
         for note in notes:
+            preserve_content_version(note, old.get(note['id']))
             if note['id'] in old:
                 note['context'] = copy.deepcopy(old[note['id']].get('context', {}))
             elif not (preserve_incoming and isinstance(note.get('context'), dict)):
@@ -145,6 +147,13 @@ class CloudProjectStore(Store):
         return self._decode(self.database.call('commit', self.project, board=board_id, expected=expected_revision,
                                   document=self._encode(doc, current), previousNotes=previous_notes, at=utcnow(),
                                   restore=restore_revision is not None, revision=restore_revision))
+
+    def annotation_command(self, board_id, revision, command):
+        from .annotations import validate_command
+        validate_command(command)
+        database = CloudDatabase()
+        database.url = database.url.rsplit('/', 1)[0] + '/charts_annotation'
+        return database.call('apply', self.project, board=board_id, revision=revision, command=command, at=utcnow())
 
     def begin(self, board, expected):
         return self.database.call('begin', self.project, board=board, expected=expected, batch=uuid.uuid4().hex)

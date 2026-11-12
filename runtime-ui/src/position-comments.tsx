@@ -105,6 +105,25 @@ function locate(root: HTMLElement, value: Selection): Rect | null {
     width: box.width * rect.width, height: box.height * rect.height };
 }
 
+export function scrollToComment(root: HTMLElement, note: Selection) {
+  const rect = locate(root, note);
+  if (!rect) return;
+  const scope = note.componentId
+    ? root.querySelector<HTMLElement>(`[data-component-id="${CSS.escape(note.componentId)}"]`)
+    : root;
+  let parent = scope?.parentElement;
+  while (parent && parent !== document.body) {
+    const overflow = getComputedStyle(parent).overflowY;
+    if ((overflow === "auto" || overflow === "scroll") && parent.scrollHeight > parent.clientHeight) {
+      const bounds = parent.getBoundingClientRect();
+      parent.scrollBy({ top: rect.y - 12 - (bounds.top + bounds.height / 2), behavior: "auto" });
+      return;
+    }
+    parent = parent.parentElement;
+  }
+  window.scrollBy({ top: rect.y - 12 - window.innerHeight / 2, behavior: "auto" });
+}
+
 export function PositionComments({
   document: doc, root, active, onActiveChange, onActivityChange, call, readOnly,
   filters, projectRoot, onNotesChange,
@@ -133,6 +152,8 @@ export function PositionComments({
   const draftRef = useRef(draft), busyRef = useRef(false), reanchor = useRef<Config | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const replyIds = useRef<Record<string, { text: string; id: string }>>({});
+  const pendingCommand = useRef<{ signature: string; command: Config; revision: number } | null>(null);
+  const notesGeneration = useRef(0);
   const key = `charts-position-draft:${JSON.stringify([projectRoot || location.pathname, doc.id, readOnly])}`;
   const reply = openId ? replies[openId] || "" : "";
   const setReply = (text: string) => {
@@ -149,12 +170,13 @@ export function PositionComments({
   draftRef.current = draft;
 
   useEffect(() => {
-    if (!active || busy) return;
+    if (!active) return;
     let live = true;
     const load = () => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible" || busyRef.current) return;
+      const generation = notesGeneration.current;
       void call("dashboard_annotations", { dashboardId: doc.id }).then((value) => {
-        if (live) setNotes(value.annotations);
+        if (live && generation === notesGeneration.current) setNotes(value.annotations);
       }).catch((failure) => { if (live) setError(String(failure)); });
     };
     load();
@@ -163,13 +185,15 @@ export function PositionComments({
       live = false;
       document.removeEventListener("visibilitychange", load);
     };
-  }, [call, doc.id, active, busy]);
+  }, [call, doc.id, active]);
 
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(key);
       if (saved) {
         const value = JSON.parse(saved);
+        if (value.pendingCommand?.command?.operationId && typeof value.pendingCommand.signature === "string")
+          pendingCommand.current = value.pendingCommand;
         const candidate = value.draft;
         if (candidate) {
           const rect = candidate.anchor?.rect;
@@ -195,12 +219,17 @@ export function PositionComments({
   useEffect(() => {
     if (!hydrated) return;
     try {
-      if (draft || Object.keys(replies).length) sessionStorage.setItem(key, JSON.stringify({ draft, replies }));
+      if (draft || Object.keys(replies).length || pendingCommand.current)
+        try {
+          sessionStorage.setItem(key, JSON.stringify({ draft, replies, pendingCommand: pendingCommand.current }));
+        } catch {
+          setError("无法保存本地草稿；请在本次提交结果明确前保持页面打开。");
+        }
       else sessionStorage.removeItem(key);
     } catch {
       setError("无法保存本地草稿，请在离开页面前提交批注。");
     }
-  }, [draft, replies, key, hydrated]);
+  }, [draft, replies, key, hydrated, busy]);
   useEffect(() => {
     onActivityChange(interacting);
     return () => onActivityChange(false);
@@ -344,13 +373,31 @@ export function PositionComments({
     };
   }, [picking, root]);
 
-  const write = async (change: (current: Config[]) => Config[]) => {
+  const write = async (command: Config, change: (current: Config[]) => Config[]) => {
     if (readOnly || busyRef.current) return false;
     busyRef.current = true; setBusy(true); setError("");
+    notesGeneration.current++;
     try {
+      if (doc.progressive) {
+        const signature = JSON.stringify(command);
+        if (pendingCommand.current?.signature !== signature) {
+          const value = command.value && { ...command.value };
+          if (value && ["add", "reply"].includes(command.action)) value.createdAt = new Date().toISOString();
+          pendingCommand.current = { signature, revision: doc.revision,
+            command: { ...command, ...(value ? { value } : {}), operationId: crypto.randomUUID() } };
+        }
+        // Persist before sending: a reload after an uncertain response retries
+        // the exact operation instead of adding a second comment.
+        sessionStorage.setItem(key, JSON.stringify({ draft, replies, pendingCommand: pendingCommand.current }));
+        const pending = pendingCommand.current;
+        const result = await call("dashboard_annotation_apply", {
+          dashboardId: doc.id, revision: pending.revision, command: pending.command,
+        });
+        pendingCommand.current = null;
+        setNotes(result.annotations); onNotesChange(result.annotations);
+        return true;
+      }
       const latest = await call("dashboard_annotations", { dashboardId: doc.id });
-      if (doc.progressive && latest.independentSave !== true)
-        throw Error("批注服务需要重启 MCP 后更新；当前输入已保留。");
       const value = change(latest.annotations);
       const result = await call("dashboard_patch", {
         dashboardId: doc.id, expectedRevision: latest.revision,
@@ -361,13 +408,28 @@ export function PositionComments({
       setNotes(saved); onNotesChange(saved);
       return true;
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      let message = failure instanceof Error ? failure.message : String(failure);
+      if (doc.progressive && (failure as { code?: string })?.code === "ANNOTATION_CONFLICT") {
+        pendingCommand.current = null;
+        try {
+          const latest = await call("dashboard_annotations", { dashboardId: doc.id });
+          setNotes(latest.annotations); onNotesChange(latest.annotations);
+        } catch {
+          message += "；最新批注暂时无法读取，请稍后重新打开。";
+        }
+      }
+      setError(message);
       return false;
     } finally { busyRef.current = false; setBusy(false); }
   };
   const submit = async () => {
     if (!draft || !draft.text.trim() || !positions.draft) return;
-    const saved = await write((current) => {
+    const saved = await write({
+      action: draft.editing ? "edit" : "add", annotationId: draft.editing || draft.id,
+      ...(draft.editing ? { expectedVersion: draft.original?.contentVersion || 0 } : {}),
+      value: { text: draft.text.trim(), componentId: draft.componentId, anchor: draft.anchor,
+        ...(!draft.editing ? { view: { revision: doc.revision, filters } } : {}) },
+    }, (current) => {
       if (draft.editing) {
         const existing = current.find((note) => note.id === draft.editing);
         if (existing && existing.text === draft.text.trim() && existing.componentId === draft.componentId &&
@@ -392,10 +454,15 @@ export function PositionComments({
   const current = notes.find((note) => note.id === openId);
   const submitReply = async () => {
     if (!current || !reply.trim()) return;
-    if (replyIds.current[current.id]?.text !== reply.trim())
-      replyIds.current[current.id] = { text: reply.trim(), id: crypto.randomUUID() };
+    if (replyIds.current[current.id]?.text !== reply.trim()) {
+      const pending = pendingCommand.current?.command;
+      replyIds.current[current.id] = { text: reply.trim(),
+        id: pending?.action === "reply" && pending.annotationId === current.id && pending.value.text === reply.trim()
+          ? pending.value.id : crypto.randomUUID() };
+    }
     const response = replyIds.current[current.id];
-    const saved = await write((items) => {
+    const saved = await write({ action: "reply", annotationId: current.id,
+      value: { id: response.id, text: response.text } }, (items) => {
       if (!items.some((note) => note.id === current.id))
         throw Error("批注已被删除；当前回复已保留。");
       return items.map((note) => {
@@ -412,15 +479,26 @@ export function PositionComments({
   const selectedRect = (picking ? dragRect || positions.draft || hover : null) ||
     (openId ? positions[openId] : null);
   const anchor = (picking ? positions.draft : null) || (openId ? positions[openId] : null);
-  const width = Math.min(340, screen.width - 24);
+  const preferredWidth = Math.min(340, screen.width - 24);
   const maxPanelHeight = Math.min(560, screen.height - 96);
+  const markerLeft = anchor ? Math.min(screen.width - 36, Math.max(4, anchor.x + anchor.width - 16)) : 0;
+  const panelTop = anchor ? Math.max(12, Math.min(screen.height - 216, anchor.y - 12)) : 76;
+  const rightSpace = screen.width - 12 - markerLeft - 44;
+  const leftSpace = markerLeft - 24;
+  const useRight = rightSpace >= preferredWidth || rightSpace >= leftSpace;
+  const width = anchor && screen.width >= 640
+    ? Math.min(preferredWidth, useRight ? rightSpace : leftSpace)
+    : preferredWidth;
+  const panelLeft = anchor
+    ? (useRight ? markerLeft + 44 : markerLeft - width - 12)
+    : screen.width - width - 16;
   const panelStyle = screen.width < 640
     ? { left: 12, right: 12, bottom: 64, maxHeight: "calc(100dvh - 96px)" }
-    : { left: Math.max(12, Math.min(screen.width - width - 12, anchor ? anchor.x + anchor.width + 12 : screen.width - width - 16)),
-        top: Math.max(12, Math.min(screen.height - maxPanelHeight - 16, anchor?.y || 76)),
-        width, maxHeight: maxPanelHeight };
+    : { left: Math.max(12, Math.min(screen.width - width - 12, panelLeft)),
+        top: panelTop, width, maxHeight: Math.min(maxPanelHeight, screen.height - panelTop - 16) };
   const showComposer = picking ? draft : null;
   const showPanel = !!showComposer || !!current || listOpen || (active && !!error);
+  const openCount = notes.filter((note) => note.status !== "resolved").length;
   const visibleNotes = notes.filter((note) => status === "all" || (note.status === "resolved" ? status === "resolved" : status === "open"));
   const locationLabel = (note: Config) => note.componentId ? doc.manifest.components[note.componentId]?.title || "组件已移除" : "页面位置";
 
@@ -451,7 +529,7 @@ export function PositionComments({
             setListOpen(false); setOpenId(Object.keys(replies)[0]);
           }}>继续未提交回复</Button>}
           {!current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => setReplies({})}>丢弃未提交回复</Button>}
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setListOpen(!listOpen); setOpenId(null); }}>批注列表（{notes.length}）</Button>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setListOpen(!listOpen); setOpenId(null); }}>批注列表{openCount > 0 ? `（${openCount}）` : ""}</Button>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
             onActiveChange(false); setListOpen(false); setOpenId(null); setHover(null);
           }}>退出批注</Button>
@@ -496,14 +574,17 @@ export function PositionComments({
                   reanchor.current = current; setOpenId(null); onActiveChange(true);
                 }}><ScanLine aria-hidden="true" className="size-4" /></CommentAction>
                 <CommentAction label="删除批注" destructive disabled={busy} onClick={() => {
-                  void write((items) => items.filter((note) => note.id !== current.id)).then((saved) => {
+                  void write({ action: "delete", annotationId: current.id, expectedVersion: current.contentVersion || 0 },
+                    (items) => items.filter((note) => note.id !== current.id)).then((saved) => {
                     if (saved) { setReply(""); setOpenId(null); }
                   });
                 }}><Trash2 aria-hidden="true" className="size-4" /></CommentAction>
               </div>
               <Button type="button" variant="ghost" size="sm" disabled={busy}
                 className="h-9 gap-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-primary max-sm:h-11"
-                onClick={() => void write((items) => items.map((note) =>
+                onClick={() => void write({ action: "status", annotationId: current.id,
+                  expectedStatus: current.status || "open", status: current.status === "resolved" ? "open" : "resolved" },
+                  (items) => items.map((note) =>
                   note.id === current.id ? { ...note, status: note.status === "resolved" ? "open" : "resolved" } : note))}>
                 {current.status === "resolved"
                   ? <RotateCcw aria-hidden="true" className="size-3.5" />
@@ -520,6 +601,10 @@ export function PositionComments({
                 <span>{locationLabel(showComposer)}{showComposer.anchor.kind === "area" ? " · 框选区域" : ""}</span>
               </div>
               {showComposer.anchor.quote && <blockquote className="max-h-20 overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed text-muted-foreground">{showComposer.anchor.quote}</blockquote>}
+              {showComposer.editing && notes.find((note) => note.id === showComposer.editing)?.contentVersion !== showComposer.original?.contentVersion &&
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  最新正文：{notes.find((note) => note.id === showComposer.editing)?.text || "批注已删除"}
+                </p>}
               {!positions.draft && <p role="status" className="text-sm text-destructive">所选位置已变化，请在页面上重新标记；输入内容已保留。</p>}
               <Field>
                 <FieldLabel htmlFor="position-comment-text" className="text-xs font-medium">批注内容</FieldLabel>
@@ -570,8 +655,7 @@ export function PositionComments({
                   className="flex w-full items-start gap-3 rounded-md p-3 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary"
                   onClick={() => {
                     const page = root.current;
-                    const target = note.componentId ? page?.querySelector(`[data-component-id="${CSS.escape(note.componentId)}"]`) : page;
-                    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+                    if (page && note.anchor) scrollToComment(page, note as Selection);
                     setOpenId(note.id); setListOpen(false);
                   }}>
                   <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium tabular-nums text-primary">{notes.indexOf(note) + 1}</span>

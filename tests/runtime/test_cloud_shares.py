@@ -50,6 +50,30 @@ def publication(tmp_path, expiration='7d'):
     return service, storage, shares, result
 
 
+# @wu-test type=integration | scope=existing share document adaptation | protects=旧多页分享升级候选加载时改变URL密钥版本或遗漏完整候选
+def test_existing_share_preloads_candidates_without_republishing():
+    import gzip
+    storage = MemoryStorage()
+    shares = CloudShares(storage, 'https://charts.example.com')
+    share_id = 'a' * 32
+    name = 'pages/second/document.json'
+    doc = {'id': 'second', 'revision': 4,
+           'manifest': {'title': 'Frozen', 'components': {'table': {'datasetId': 'sales'}},
+                        'filters': [{'op': 'in', 'field': 'city', 'componentIds': ['table']}]},
+           'staticOptions': {'sales': {'city': '../../data/cities.json.gz'}}}
+    control = {'files': [name, 'data/cities.json.gz'], 'salt': 'unchanged',
+               'keyHash': 'unchanged', 'expiresAt': None, 'state': 'active'}
+    prefix = f'shares/{share_id}/site/'
+    storage.put(prefix + name, json.dumps(doc).encode(), 'application/json')
+    storage.put(prefix + 'data/cities.json.gz', gzip.compress(json.dumps(list(range(230))).encode()), 'application/gzip')
+    before = dict(storage.objects)
+    loaded = json.loads(shares.content(share_id, name, control=control))
+    assert loaded['staticOptionValues']['sales']['city'] == list(range(230))
+    assert loaded['manifest'] == doc['manifest'] and loaded['revision'] == 4
+    assert storage.objects == before
+    assert control['keyHash'] == 'unchanged' and control['expiresAt'] is None
+
+
 # @wu-test type=integration | scope=腾讯云分享副本与到期清理 | protects=到期仅失效链接却残留远程数据密钥或误删原稿和其他分享
 @pytest.mark.parametrize('expiration,days', [('7d', 7), ('30d', 30)])
 def test_publication_expiry_removes_only_its_remote_copy(tmp_path, monkeypatch, expiration, days):
@@ -460,3 +484,37 @@ def test_existing_share_uses_current_engine_and_validates_before_304(tmp_path, m
         assert client.get(root + 'app.js', headers={'If-None-Match': etag}).status_code == 304
         monkeypatch.setattr(time, 'time', lambda: published['expiresAt'])
         assert client.get(root + 'app.js', headers={'If-None-Match': etag}).status_code == 410
+
+# @wu-test type=integration | scope=云分享最新保存版本 | protects=新分享误用旧发布版本或更改既有分享及旧接口语义
+def test_saved_version_source_preserves_old_publications(tmp_path, monkeypatch):
+    service, _, shares, old = publication(tmp_path)
+    old_title = json.loads(shares.content(old['shareId'], 'document.json'))['manifest']['title']
+    service.store.mutate('board', 1, [{'op': 'set_title', 'value': 'Latest saved'}])
+    service.store.checkpoint('board', 2)
+    monkeypatch.setattr(CloudShares, 'from_environment', classmethod(lambda cls: shares))
+    latest = service.call('dashboard_share_publish', {'dashboardId': 'board', 'expectedRevision': 2, 'versionSource': 'saved'})
+    assert json.loads(shares.content(latest['shareId'], 'document.json'))['manifest']['title'] == 'Latest saved'
+    assert json.loads(shares.content(old['shareId'], 'document.json'))['manifest']['title'] == old_title
+    legacy = shares.publish(service, 'board', 1)
+    assert json.loads(shares.content(legacy['shareId'], 'document.json'))['manifest']['title'] == old_title
+    with pytest.raises(DashboardError) as stale:
+        shares.publish(service, 'board', 1, version_source='saved')
+    assert stale.value.code == 'REVISION_CONFLICT'
+
+
+# @wu-test type=boundary | scope=云分享多页面替换 | protects=确认后其他页面改变导致替换未经确认的内容或撤销原链接
+def test_saved_replacement_rejects_changed_page_and_preserves_old_link(tmp_path):
+    service, _, shares, _ = publication(tmp_path)
+    service.call('dashboard_create', {'dashboardId': 'second', 'document': executive_document('second')})
+    old = shares.publish(service, 'board', 1, pages=[{'dashboardId': 'second', 'expectedRevision': 1}], version_source='saved')
+    service.store.mutate('second', 1, [{'op': 'set_title', 'value': 'New page'}])
+    service.store.checkpoint('second', 2)
+    with pytest.raises(DashboardError) as stale:
+        shares.replace(service, 'board', old['shareId'], 1, version_source='saved',
+                       pages=[{'dashboardId': 'second', 'expectedRevision': 1}])
+    assert stale.value.code == 'REVISION_CONFLICT'
+    assert shares.authenticate(old['shareId'], old['accessKey'])['state'] == 'active'
+    new = shares.replace(service, 'board', old['shareId'], 1, version_source='saved',
+                         pages=[{'dashboardId': 'second', 'expectedRevision': 2}])
+    assert [(page['id'], page['revision']) for page in new['pages']] == [('board', 1), ('second', 2)]
+    assert new['previousRevoked']

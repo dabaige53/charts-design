@@ -45,3 +45,85 @@ test('retains decoded values across reads and evicts least recently used values 
  const cancelled=new AbortController();cancelled.abort();
  await assert.rejects(resources.json('https://example.test/b',{signal:cancelled.signal}),{name:'AbortError'});
 });
+
+// @wu-test type=performance | scope=static resources batches | protects=同轮数据分片逐个请求重复鉴权或重读已缓存数据
+test('groups file reads into one authorized request and retains individual cache entries',async()=>{
+ const calls=[];
+ const resources=createStaticResources({fetcher:async(url,init)=>{
+   calls.push({url,init});
+   const {files}=JSON.parse(init.body);
+   return Response.json({files:Object.fromEntries(files.map(key=>[key,btoa('[1,2]')]))});
+ }});
+ const options={batchUrl:'https://example.test/content/board/1',headers:{Authorization:'Bearer reader'},size:5};
+ const [a,b]=await Promise.all([
+   resources.json('https://example.test/a.json',{...options,key:'object/a.json'}),
+   resources.json('https://example.test/b.json',{...options,key:'object/b.json'}),
+ ]);
+ assert.deepEqual(a,[1,2]);assert.deepEqual(b,[1,2]);
+ assert.equal(calls.length,1);assert.equal(calls[0].init.method,'POST');
+ assert.equal(calls[0].init.headers.Authorization,'Bearer reader');
+ assert.deepEqual(JSON.parse(calls[0].init.body).files,['object/a.json','object/b.json']);
+ assert.equal(await resources.json('https://example.test/a.json',{...options,key:'object/a.json'}),a);
+ assert.equal(calls.length,1);
+});
+
+// @wu-test type=boundary | scope=static resources batch isolation | protects=取消单个文件中断共享批次或不同版本和凭据混用授权请求
+test('isolates batch endpoints and credentials and cancels only abandoned batches',async()=>{
+ const calls=[],releases=[];
+ const resources=createStaticResources({fetcher:(url,init)=>{
+   calls.push({url,init});
+   return new Promise(resolve=>releases.push(()=>resolve(Response.json({
+     files:Object.fromEntries(JSON.parse(init.body).files.map(key=>[key,btoa('[]')]))
+   }))));
+ }});
+ const options={batchUrl:'https://example.test/one',size:2};
+ const controller=new AbortController();
+ const cancelled=assert.rejects(resources.read('a',{...options,signal:controller.signal}),{name:'AbortError'});
+ const retained=resources.read('b',options);
+ const otherVersion=resources.read('c',{...options,batchUrl:'https://example.test/two'});
+ const otherCredential=resources.read('d',{...options,headers:{Authorization:'other'}});
+ await tick();controller.abort();
+ assert.equal(calls.length,3);assert.equal(calls[0].init.signal.aborted,false);
+ releases.forEach(release=>release());
+ await cancelled;await Promise.all([retained,otherVersion,otherCredential]);
+});
+
+// @wu-test type=boundary | scope=static resources batch size and errors | protects=批次超过容量或部分响应被当作完整数据缓存
+test('splits batches by byte budget and rejects incomplete responses without caching',async()=>{
+ const calls=[];
+ let incomplete=true;
+ const resources=createStaticResources({fetcher:async(url,init)=>{
+   calls.push({url,init});
+   const {files}=JSON.parse(init.body);
+   return Response.json({files:incomplete?{}:Object.fromEntries(files.map(key=>[key,btoa('[]')]))});
+ }});
+ const options={batchUrl:'https://example.test/batch',size:10*1024*1024};
+ await Promise.all(['a','b'].map(url=>assert.rejects(resources.read(url,options),/缺少请求的文件/)));
+ assert.equal(calls.length,2);
+ incomplete=false;
+ assert.equal(new TextDecoder().decode(await resources.read('a',options)),'[]');
+ assert.equal(calls.length,3);
+});
+
+// @wu-test type=boundary | scope=static batch lifecycle | protects=整批取消后网络仍运行或权限失败后缓存错误结果
+test('aborts a fully abandoned batch and permits retry after an authorization failure',async()=>{
+ let signal,calls=0;
+ const resources=createStaticResources({fetcher:async(_url,init)=>{
+   calls++;
+   if(calls===1){
+     signal=init.signal;
+     return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+   }
+   if(calls===2)return new Response('',{status:401});
+   return Response.json({files:{a:btoa('[]')}});
+ }});
+ const options={batchUrl:'https://example.test/batch',size:2};
+ const controller=new AbortController();
+ const cancelled=assert.rejects(resources.read('a',{...options,signal:controller.signal}),{name:'AbortError'});
+ await tick();controller.abort();await cancelled;
+ assert.equal(signal.aborted,true);
+ await tick();
+ await assert.rejects(resources.read('a',options),error=>error.status===401);
+ assert.equal(new TextDecoder().decode(await resources.read('a',options)),'[]');
+ assert.equal(calls,3);
+});

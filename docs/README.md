@@ -41,7 +41,7 @@
 ## 方案
 
 - [UI 组件与 MCP 整改](plans/ui-refactor-plan.md)：原方案范围、阶段与待确认事项；当前能力读取组件清单。
-- [云端托管与版本管理](plans/cloud-hosting-and-version-control.md)：云端部署、API Key、密钥轮换与版本中心的产品方案，未实现部分按文内状态区分。
+- [云端托管与版本管理](plans/cloud-hosting-and-version-control.md)：云端部署、API Key、密钥轮换与版本中心的产品方案；含[在线页面加载与多人批注改进计划](plans/cloud-hosting-and-version-control.md#在线页面加载与多人批注改进计划)，未实现部分按文内状态区分。
 
 ## 历史记录与附件
 

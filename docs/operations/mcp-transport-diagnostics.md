@@ -31,6 +31,8 @@ bun run python -- bin/remote-project.py read \
 
 ## 查询日志
 
+在线 COS 页面的批量文件 POST 响应提供 `Server-Timing`：`auth` 为链接权限检查，`version` 为服务端读取指定看板版本，`files` 为文件登记检查及缓存/COS 读取的合计时间，单位为毫秒。这些时长用于与浏览器 HAR 的首字节等待比较。`files` 是 PostgreSQL 登记查询与缓存/COS 读取的合计值；两者的独立耗时，以及浏览器解压和计算耗时，需要另行测量。诊断记录仅包含操作类型、次数、时长和字节数。
+
 - `runtime_diagnostics({limit:30})`：最近记录。
 - `runtime_diagnostics({requestId:"报错中的请求编号",limit:100})`：定位同一响应的序列化字节数、分块、首块和末块读取及客户端失败。
 - `runtime_report_error`：App 专用，客户端上报解码、渲染失败或完成时序事件，不上传原始响应或业务字段；Agent 通过诊断工具读取结果，不代替客户端生成事件。

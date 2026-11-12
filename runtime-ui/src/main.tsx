@@ -50,7 +50,7 @@ const send = (name: string, args: Config) =>
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + webToken,
-        "X-Charts-Browser-Data": "lazy",
+        "X-Charts-Browser-Data": "preload",
       },
       body: JSON.stringify(args),
     });

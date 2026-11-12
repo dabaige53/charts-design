@@ -12,7 +12,7 @@ afterEach(() => {
   mock.restore();
 });
 
-// @wu-test type=integration | scope=在线访问令牌恢复 | protects=跳转丢失令牌后无法通过完整链接加载看板
+// @wu-test type=integration | scope=在线访问令牌恢复与集中加载 | protects=跳转丢失令牌后无法通过完整链接集中加载看板
 it("retries dashboard loading with the pasted token after unauthorized", async () => {
   Object.assign(globalThis, { location: window.location, history: window.history, sessionStorage: window.sessionStorage });
   window.__chartsBoot = { mode: "web", projectRoot: "test", dashboardId: "board", apiBase: "/api/v1/p/test/tools/", idleTimeout: null };
@@ -24,7 +24,7 @@ it("retries dashboard loading with the pasted token after unauthorized", async (
     if (authorization !== "Bearer restored-token")
       return new Response(JSON.stringify({ error: { code: "UNAUTHORIZED" } }), { status: 401 });
     expect(String(_url).endsWith("/dashboard_preview")).toBe(true);
-    expect((init?.headers as Record<string, string>)["X-Charts-Browser-Data"]).toBe("lazy");
+    expect((init?.headers as Record<string, string>)["X-Charts-Browser-Data"]).toBe("preload");
     return new Response(JSON.stringify({ document: { id: "board", revision: 1 }, projectRoot: "test" }), { status: 200 });
   }) as unknown as typeof fetch;
   await act(async () => { await import("./main"); });

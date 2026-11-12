@@ -6,7 +6,8 @@ export async function loadWebDashboard(call: ToolCall, dashboardId?: string): Pr
   const catalog = dashboardId ? undefined : await call("dashboard_list");
   const id = dashboardId || catalog?.dashboards[0]?.id;
   if (!id) throw Error("尚无已保存的看板，请通过本项目 MCP 创建。");
-  return { ...await call("dashboard_preview", { dashboardId: id }), initialBoards: catalog?.dashboards };
+  const result = await call("dashboard_preview", { dashboardId: id });
+  return { ...result, initialBoards: catalog?.dashboards ?? result.initialBoards };
 }
 
 export function createVersionReader(doc: Document, workerUrl: string, headers: Record<string, string> = {}) {

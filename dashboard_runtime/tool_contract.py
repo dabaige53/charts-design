@@ -197,20 +197,23 @@ TOOLS = {
             'Optional shareId from dashboard_share_publish; omit to list this dashboard’s publications.'),
     }, ('dashboardId',))),
     'dashboard_share_publish': ('Publish a separate read-only static copy to configured private Tencent COS storage behind the HTTPS cloud gateway. '
-        'Project mode requires the current formal publication at expectedRevision: save with dashboard_checkpoint, then dashboard_version_publish. Also requires cloud credentials and a deployed SCF cleanup timer. '
+        'Project mode defaults to the current formal publication; set versionSource=saved to use the latest saved version without publishing. Also requires cloud credentials and a deployed SCF cleanup timer. '
         'Returns shareId/url/accessUrl/accessKey/expiresAt (UTC Unix seconds, null for never). accessUrl carries the eight-digit key in a #key fragment for automatic form filling; give this link only to intended readers, or send url and accessKey separately. '
         'expiration defaults to 7d; never means no automatic expiry. At expiry the gateway rejects access immediately and cloud SCF deletes the copy, historical object versions and key records. '
         'Does not delete the source project or other shares. Does not deploy cloud infrastructure. On an uncertain response call dashboard_share_status before publishing another copy.', schema({
-        **BOARD, 'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status; drafts may be newer without changing this share.'),
-        'pages': described({'type': 'array', 'items': {'type': 'object', 'properties': {'dashboardId': ID, 'expectedRevision': INT}, 'required': ['dashboardId', 'expectedRevision'], 'additionalProperties': False}}, 'Additional published pages to include; omit the main dashboard. Each revision must match its current published revision.'),
+        **BOARD, 'expectedRevision': described(INT, 'Current publishedRevision or savedRevision from dashboard_version_status according to versionSource.'),
+        'versionSource': described({'enum': ['published', 'saved'], 'default': 'published'}, 'Choose the current published version or latest saved version for every page.'),
+        'pages': described({'type': 'array', 'items': {'type': 'object', 'properties': {'dashboardId': ID, 'expectedRevision': INT}, 'required': ['dashboardId', 'expectedRevision'], 'additionalProperties': False}}, 'Additional pages to include; omit the main dashboard. Each revision must match the selected versionSource.'),
         'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'},
             'Lifetime from publication: never, seven days, or thirty days. Choose the period requested by the user.'),
         'accessKey': described({'type': 'string', 'pattern': '^[0-9]{8}$'},
             'Optional exactly eight ASCII digits, including leading zeros. Omit to generate a random key. Only a salted hash is stored remotely.'),
     }, ('dashboardId', 'expectedRevision'))),
-    'dashboard_share_replace': ('Replace one selected share with the current formally published version. Creates a new URL and random eight-digit key, then revokes the old link and its sessions; other shares stay unchanged. Upload failure leaves the old share usable. Returns new share credentials and previousRevoked. If previousRevoked=false, retain the returned new credentials and retry dashboard_share_delete for previousShareId; do not republish. Cloud SCF physically removes the old copy.', schema({
+    'dashboard_share_replace': ('Replace one selected share with versions from versionSource (published by default, saved when requested). Creates a new URL and random eight-digit key, then revokes the old link and its sessions; other shares stay unchanged. Upload failure leaves the old share usable. Returns new share credentials and previousRevoked. If previousRevoked=false, retain the returned new credentials and retry dashboard_share_delete for previousShareId; do not republish. Cloud SCF physically removes the old copy.', schema({
         **BOARD, 'shareId': described({'type': 'string', 'pattern': '^[0-9a-f]{32}$'}, 'Active share to replace; obtain from dashboard_share_status.'),
-        'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status.'),
+        'expectedRevision': described(INT, 'Current publishedRevision or savedRevision according to versionSource.'),
+        'versionSource': described({'enum': ['published', 'saved'], 'default': 'published'}, 'Choose the version source for all pages.'),
+        'pages': described({'type': 'array', 'items': {'type': 'object', 'properties': {'dashboardId': ID, 'expectedRevision': INT}, 'required': ['dashboardId', 'expectedRevision'], 'additionalProperties': False}}, 'Original additional pages in order, with reviewed revisions. A changed revision rejects replacement.'),
         'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'}, 'New share lifetime measured from replacement.'),
     }, ('dashboardId', 'shareId', 'expectedRevision'))),
     'dashboard_share_delete': ('Revoke one Tencent cloud publication immediately and queue physical deletion by cloud SCF, including never-expiring shares. '
@@ -226,6 +229,16 @@ TOOLS = {
         **BOARD, 'title': described(STR, 'Title for an empty dashboard; defaults to Dashboard. A supplied document carries its own title.'),
         'document': described({'type': 'object'}, 'Optional complete schema-v2 artifact, not a patch. Omit to create an empty dashboard; get shape guidance from charts://contract and chart_declarations.'),
     }, ('dashboardId',))),
+    'dashboard_annotation_apply': ('Apply one independent annotation command in a transaction. No list read or design save required. Reuse the identical command and operationId after an uncertain network result. Returns annotations and annotationChange. Edits/deletes compare only the target contentVersion (legacy notes use 0).', schema({
+        'dashboardId': BOARD['dashboardId'], 'revision': INT,
+        'command': schema({
+            'operationId': {'type': 'string', 'pattern': '^[a-zA-Z0-9_-]{1,100}$'},
+            'action': {'enum': ['add', 'edit', 'delete', 'reply', 'status']},
+            'annotationId': ID, 'value': {'type': 'object'},
+            'expectedVersion': {'type': 'integer', 'minimum': 0},
+            'expectedStatus': {'enum': ['open', 'resolved']}, 'status': {'enum': ['open', 'resolved']},
+        }, ('operationId', 'action', 'annotationId')),
+    }, ('dashboardId', 'revision', 'command'))),
     'dashboard_annotations': ('Read saved comments, original selection anchors and target identities without chart rows; returns revision, annotations and targets. Missing targets have componentExists=false. Before acting read dashboard_get; preserve comments unless asked to change them. Verify ambiguous visual anchors in the rendered page.', schema({'dashboardId': BOARD['dashboardId']} , ('dashboardId',))),
     'dashboard_get': ('Read the current editable draft and revision, including annotations and immutable data references. This may be newer than the checkpoint shown by dashboard_preview. Read before writing; use document.revision as expectedRevision. Returns document; use dashboard_view for computed data.', schema(BOARD, ('dashboardId',))),
     'dashboard_preview': ('Open the saved dashboard/report in the MCP App; project mode shows the latest completed checkpoint, not unfinished draft edits. Call once after a successful dashboard_edit_finish, using the same project and dashboard. Returns document and a UI resource when built; UI_UNAVAILABLE requires building/packaging UI resources.', schema(BOARD, ('dashboardId',))),

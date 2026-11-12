@@ -23,6 +23,30 @@ def settings(tmp_path, **extra):
     return ServerSettings(workspace=tmp_path / 'ws', runtime=tmp_path / 'ws' / '.runtime', tokens=(TOKEN,), port=8000, **extra)
 
 
+# @wu-test type=boundary | scope=dashboard_annotation_apply HTTP | protects=新增批注绕过看板范围只读权限或撤销检查
+def test_annotation_command_checks_link_scope_and_revocation(tmp_path):
+    from starlette.testclient import TestClient
+    server = RemoteServer(settings(tmp_path))
+    service = server.projects.service('sales')
+    service.call('dashboard_create', {'dashboardId': 'board'})
+    edit = server.links.share('sales', 'board', 'edit')['url'].split('#token=')[1]
+    view = server.links.share('sales', 'board', 'view')['url'].split('#token=')[1]
+    payload = {'dashboardId': 'board', 'revision': 1, 'command': {
+        'operationId': 'one', 'action': 'add', 'annotationId': 'note',
+        'value': {'text': 'Saved once', 'createdAt': 'today'}}}
+    endpoint = '/api/v1/p/sales/tools/dashboard_annotation_apply'
+    with TestClient(create_app(server)) as client:
+        assert client.post(endpoint, json=payload).status_code == 401
+        assert client.post(endpoint, headers={'Authorization': 'Bearer ' + view}, json=payload).status_code == 403
+        headers = {'Authorization': 'Bearer ' + edit}
+        assert client.post(endpoint, headers=headers, json={**payload, 'dashboardId': 'private'}).status_code == 403
+        first = client.post(endpoint, headers=headers, json=payload)
+        assert first.status_code == 200 and len(first.json()['annotations']) == 1
+        assert client.post(endpoint, headers=headers, json=payload).json() == first.json()
+        server.state.revoke('sales', 'board')
+        assert client.post(endpoint, headers=headers, json=payload).status_code == 401
+
+
 # @wu-test type=boundary | scope=延后数据目录 HTTP 接口 | protects=目录绕过令牌或看板范围检查并向只读链接暴露草稿
 def test_deferred_browser_directory_keeps_scope_and_revision_checks(tmp_path, monkeypatch):
     from starlette.testclient import TestClient
@@ -60,6 +84,128 @@ def test_deferred_browser_directory_keeps_scope_and_revision_checks(tmp_path, mo
         assert 'browserDataUrl' not in eager
         server.state.revoke('sales', 'board')
         assert client.get(prefix + 'board/1', headers=headers).status_code == 401
+
+
+# @wu-test type=integration | scope=首页集中读取 | protects=首页候选目录与页面列表重复鉴权查询或返回授权范围外页面
+def test_preloaded_preview_reuses_authorization_and_includes_options_and_catalog(tmp_path, monkeypatch):
+    import gzip
+    from unittest.mock import Mock
+    from starlette.testclient import TestClient
+    server = RemoteServer(settings(tmp_path))
+    service = server.projects.service('sales')
+    for board in ('board', 'private'):
+        service.call('dashboard_create', {'dashboardId': board, 'title': board})
+    doc = service.store.readable('board')
+    doc['manifest']['components'] = {'a': {'kind': 'table', 'datasetId': 'sales'}}
+    doc['manifest']['filters'] = [{'id': 'area', 'op': 'in', 'field': 'area', 'componentIds': ['a']}]
+    doc['snapshot']['datasetRefs'] = {'sales': {'version': 'v1'}}
+    obj = {'id': 'a' * 32, 'descriptor': {'shards': ['rows-0.json.gz'],
+           'options': {'area': 'options-0.json.gz'},
+           'files': {'rows-0.json.gz': {'bytes': 500}, 'options-0.json.gz': {'bytes': 20}}}}
+    assets = Mock()
+    assets.call.return_value = obj
+    assets.read_file.return_value = gzip.compress(b'["east","west"]')
+    monkeypatch.setattr(service.store, 'cos_enabled', True, raising=False)
+    monkeypatch.setattr(service.store, 'assets', assets, raising=False)
+    monkeypatch.setattr(service.store, 'readable', Mock(return_value=doc))
+    for access in ('edit', 'view'):
+        token = server.links.share('sales', 'board', access)['url'].split('#token=')[1]
+        generation = Mock(wraps=server.state.generation)
+        with monkeypatch.context() as patch:
+            patch.setattr(server.state, 'generation', generation)
+            assets.reset_mock()
+            with TestClient(create_app(server)) as client:
+                response = client.post('/api/v1/p/sales/tools/dashboard_preview',
+                    headers={'Authorization': 'Bearer ' + token, 'X-Charts-Browser-Data': 'preload'},
+                    json={'dashboardId': 'board'})
+        assert response.status_code == 200
+        result = response.json()
+        assert [item['id'] for item in result['initialBoards']] == ['board']
+        assert result['document']['staticOptionValues'] == {'sales': {'area': ['east', 'west']}}
+        assert result['document']['browserDataBatchUrl'] == '/api/v1/p/sales/content/board/1'
+        assert 'browserDataUrl' not in result['document']
+        generation.assert_called_once_with('sales', 'board')
+        assets.call.assert_called_once_with('object_get', version='v1')
+        assets.read_file.assert_called_once_with(obj, 'options-0.json.gz')
+
+
+# @wu-test type=boundary | scope=在线批量文件HTTP接口 | protects=批次绕过权限版本或数量限制以及重复执行文件登记查询
+def test_browser_file_batch_keeps_authorization_and_reuses_version_and_object_reads(tmp_path, monkeypatch):
+    import base64
+    import gzip
+    from unittest.mock import Mock
+    from starlette.testclient import TestClient
+    server = RemoteServer(settings(tmp_path))
+    service = server.projects.service('sales')
+    service.call('dashboard_create', {'dashboardId': 'board', 'title': 'Saved'})
+    doc = service.store.readable('board')
+    doc['manifest']['components'] = {'a': {'kind': 'table', 'datasetId': 'sales'}}
+    doc['snapshot']['datasetRefs'] = {'sales': {'version': 'v1'}}
+    object_id = 'a' * 32
+    names = [f'rows-{index}.json.gz' for index in range(6)]
+    raw = gzip.compress(b'[{"value":7}]')
+    obj = {'id': object_id, 'kind': 'dataset', 'version': 'v1', 'descriptor': {
+        'shards': names, 'options': {}, 'files': {name: {'bytes': len(raw)} for name in names}}}
+    assets = Mock()
+    assets.call.return_value = obj
+    assets.read_file.return_value = raw
+    monkeypatch.setattr(service.store, 'cos_enabled', True, raising=False)
+    monkeypatch.setattr(service.store, 'assets', assets, raising=False)
+    monkeypatch.setattr(service.store, 'get', Mock(return_value=doc))
+    monkeypatch.setattr(service.store, 'readable', Mock(return_value=doc))
+    resources = [object_id + '/' + name for name in names]
+    path = '/api/v1/p/sales/content/board/1'
+    with TestClient(create_app(server)) as client:
+        assert client.post(path, json={'files': resources}).status_code == 401
+        for access in ('edit', 'view'):
+            token = server.links.share('sales', 'board', access)['url'].split('#token=')[1]
+            headers = {'Authorization': 'Bearer ' + token}
+            assets.reset_mock()
+            service.store.get.reset_mock()
+            service.store.readable.reset_mock()
+            response = client.post(path, headers=headers, json={'files': resources})
+            assert response.status_code == 200
+            assert response.headers['cache-control'] == 'private, no-store'
+            assert 'auth;dur=' in response.headers['server-timing']
+            assert {key: base64.b64decode(value) for key, value in response.json()['files'].items()} == {
+                key: raw for key in resources}
+            assets.call.assert_called_once_with('object_get', id=object_id)
+            reader = service.store.get if access == 'edit' else service.store.readable
+            assert reader.call_count == 1
+            assert client.post(path.replace('/board/', '/private/'), headers=headers,
+                               json={'files': resources}).status_code == 403
+            assert client.post(path, headers=headers, json={'files': resources + resources}).status_code == 400
+            assert client.post(path, headers=headers, json={'files': [object_id + '/../private']}).status_code == 400
+            assert client.post(path, headers=headers, json={'files': [object_id + '/query.sqlite3']}).status_code == 400
+        assert client.post(path.replace('/1', '/2'), headers=headers,
+                           json={'files': resources}).status_code == 400
+        server.state.revoke('sales', 'board')
+        assert client.post(path, headers=headers, json={'files': resources}).status_code == 401
+
+
+# @wu-test type=integration | scope=异步HTTP鉴权 | protects=云端鉴权等待占住事件循环导致其他请求不能返回
+def test_waiting_for_viewer_authorization_does_not_block_other_requests(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from starlette.testclient import TestClient
+    server = RemoteServer(settings(tmp_path))
+    server.projects.service('sales').call('dashboard_create', {'dashboardId': 'board', 'title': 'Saved'})
+    entered, release = threading.Event(), threading.Event()
+    principal = server.principal
+    def delayed(token, project):
+        entered.set()
+        if not release.wait(3):
+            raise TimeoutError('Authorization blocked the server')
+        return principal(token, project)
+    monkeypatch.setattr(server, 'principal', delayed)
+    with TestClient(create_app(server)) as client, ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(client.post, '/api/v1/p/sales/tools/dashboard_preview',
+                              headers={'Authorization': 'Bearer ' + TOKEN}, json={'dashboardId': 'board'})
+        try:
+            assert entered.wait(3)
+            assert client.get('/health').status_code == 200
+        finally:
+            release.set()
+        assert pending.result().status_code == 200
 
 
 # @wu-test type=integration | scope=服务器发布健康检查 | protects=云端发布返回旧版本标记或本地运行要求云端发布参数

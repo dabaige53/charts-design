@@ -7,7 +7,15 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { release, releaseVersion } from '../../bin/release.mjs';
-import { cloudrunDeployArgs, completedGrayRelease, includeSource, matchesRelease, runtimeConfig, taskReady, validateTag } from '../../bin/cloudbase-deploy.mjs';
+import { annotationMigrationPending, cloudrunDeployArgs, completedGrayRelease, includeSource, matchesRelease, runtimeConfig, taskReady, validateTag } from '../../bin/cloudbase-deploy.mjs';
+
+// @wu-test type=boundary | scope=annotation release migration | protects=基线缺失或未知后续迁移时发布错误数据库结构
+test('annotation migration requires the known baseline and is replay safe', () => {
+  assert.equal(annotationMigrationPending({items: [{version: '20261112040000'}]}), true);
+  assert.equal(annotationMigrationPending({items: [{version: '20261112050000'}]}), false);
+  assert.throws(() => annotationMigrationPending({items: []}));
+  assert.throws(() => annotationMigrationPending({items: [{version: '20261112040000'}, {version: '20261112060000'}]}));
+});
 
 // @wu-test type=boundary | scope=releaseVersion | protects=重复降级或非法版本创建发布标签
 test('release version must be a newer stable semantic version', () => {

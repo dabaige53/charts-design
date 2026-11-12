@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import hmac
 import json
 import mimetypes
@@ -11,6 +12,8 @@ import secrets
 import tempfile
 import time
 import uuid
+import posixpath
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
@@ -65,17 +68,19 @@ class CloudShares:
                 '分享已过期或已撤销', 'SHARE_EXPIRED')
         return control
 
-    def publish(self, service, board, expected_revision, expiration='7d', access_key=None, pages=None):
+    def publish(self, service, board, expected_revision, expiration='7d', access_key=None, pages=None, version_source='published'):
         require(expiration in EXPIRATIONS, 'expiration must be never, 7d or 30d', 'INVALID_ARGUMENT')
         access_key = access_key if access_key is not None else f'{secrets.randbelow(100000000):08d}'
         require(isinstance(access_key, str) and bool(ACCESS_KEY.fullmatch(access_key)),
                 'accessKey must contain exactly eight ASCII digits', 'INVALID_ARGUMENT')
+        require(version_source in ('published', 'saved'), 'Invalid version source', 'INVALID_ARGUMENT')
+        revision_key = 'savedRevision' if version_source == 'saved' else 'publishedRevision'
         versions = None
         if service.project_root:
             from .versions import Versions
             versions = Versions(service.store)
-            require(versions.status(board)['publishedRevision'] == expected_revision,
-                    'Publish the saved version before sharing it', 'REVISION_CONFLICT')
+            require(versions.status(board)[revision_key] == expected_revision,
+                    'The selected page version changed; review it before sharing', 'REVISION_CONFLICT')
             doc = versions.read(board, expected_revision)
         else:
             doc = service.store.get(board, hydrate=False)
@@ -92,8 +97,8 @@ class CloudShares:
                         'Each page requires dashboardId and expectedRevision', 'INVALID_ARGUMENT')
                 page_id, revision = identifier(page['dashboardId']), page['expectedRevision']
                 require(page_id not in seen, 'Duplicate page', 'INVALID_ARGUMENT')
-                require(versions.status(page_id)['publishedRevision'] == revision,
-                        'Publish each selected page before sharing it', 'REVISION_CONFLICT')
+                require(versions.status(page_id)[revision_key] == revision,
+                        'A selected page version changed; review it before sharing', 'REVISION_CONFLICT')
                 documents.append((page_id, versions.read(page_id, revision)))
                 seen.add(page_id)
         heartbeat = self.storage.get('cleaner-status.json')
@@ -231,7 +236,7 @@ class CloudShares:
                 path = f'data/{object_id}/{name}'
                 asset_files[path] = {'object': object_id, 'name': name, 'board': board, 'revision': doc['revision']}
                 return path if index == 0 else '../../' + path
-            web = web_document(service.store, doc, url_for)
+            web = web_document(service.store, doc, url_for, preload_options=True)
             if index == 0:
                 web['staticPages'] = pages
             put(page['path'], json.dumps(web, ensure_ascii=False).encode(), 'application/json')
@@ -257,8 +262,9 @@ class CloudShares:
                 '访问密钥错误', 'INVALID_ACCESS_KEY')
         return control
 
-    def replace(self, service, board, share_id, expected_revision, expiration='7d'):
+    def replace(self, service, board, share_id, expected_revision, expiration='7d', version_source='published', pages=None):
         """Finish the new publication before revoking the selected old link."""
+        require(version_source in ('published', 'saved'), 'Invalid version source', 'INVALID_ARGUMENT')
         previous = self.control(share_id)
         owner = hashlib.sha256(str(Path(service.project_root or service.store.root).resolve()).encode()).hexdigest()
         require(previous['owner'] == owner and previous['dashboardId'] == board,
@@ -266,15 +272,22 @@ class CloudShares:
         access_key = f'{secrets.randbelow(100000000):08d}'
         while hmac.compare_digest(key_digest(access_key, previous['salt']), previous['keyHash']):
             access_key = f'{secrets.randbelow(100000000):08d}'
-        pages = []
-        if len(previous.get('pages', [])) > 1:
-            from .versions import Versions
-            versions = Versions(service.store)
-            for page in previous['pages'][1:]:
-                revision = versions.status(page['id'])['publishedRevision']
-                require(revision is not None, 'Publish each selected page before sharing it', 'REVISION_CONFLICT')
-                pages.append({'dashboardId': page['id'], 'expectedRevision': revision})
-        result = self.publish(service, board, expected_revision, expiration, access_key, pages)
+        previous_pages = previous.get('pages', [])[1:]
+        if pages is None:
+            pages = []
+            if previous_pages:
+                from .versions import Versions
+                versions = Versions(service.store)
+                revision_key = 'savedRevision' if version_source == 'saved' else 'publishedRevision'
+                for page in previous_pages:
+                    revision = versions.status(page['id'])[revision_key]
+                    require(revision is not None, 'A page has no version to share', 'REVISION_CONFLICT')
+                    pages.append({'dashboardId': page['id'], 'expectedRevision': revision})
+        else:
+            require(isinstance(pages, list) and all(isinstance(page, dict) for page in pages)
+                    and [page.get('dashboardId') for page in pages] == [page['id'] for page in previous_pages],
+                    'Replacement must retain the original pages', 'INVALID_ARGUMENT')
+        result = self.publish(service, board, expected_revision, expiration, access_key, pages, version_source)
         try:
             job_key = 'jobs/' + result['shareId'] + '.json'
             raw = self.storage.get(job_key)
@@ -314,7 +327,50 @@ class CloudShares:
         raw = self.storage.get('shares/' + checked_id(share_id) + '/site/' + name)
         if raw is None:
             raise DashboardError('NOT_FOUND', '分享文件不存在')
+        if path.name == 'document.json':
+            doc = json.loads(raw)
+            if 'staticOptionValues' not in doc:
+                doc['staticOptionValues'] = self._option_values(share_id, name, doc, control)
+                return json.dumps(doc, ensure_ascii=False).encode()
         return raw
+
+    def _option_values(self, share_id, name, doc, control):
+        """Adapt frozen documents at the gateway without replacing their links."""
+        objects, resources, result = {}, set(), {}
+        assets = None
+        if control.get('assetFiles'):
+            from .cloud_assets import CloudAssets
+            assets = CloudAssets(control['project'])
+        for selection in doc['manifest'].get('filters', []):
+            if selection['op'] != 'in':
+                continue
+            for component_id in selection['componentIds']:
+                component = doc['manifest']['components'][component_id]
+                dataset = (component.get('datasetId') or component.get('binding', {}).get('datasetId')
+                           or doc.get('staticComponentDatasets', {}).get(component_id))
+                filename = doc.get('staticOptions', {}).get(dataset, {}).get(selection['field'])
+                if filename is None:
+                    continue  # Older inline-data exports already query their local rows.
+                resource = posixpath.normpath(posixpath.join(posixpath.dirname(name), filename))
+                require(resource in control['files'], '分享候选索引不存在', 'NOT_FOUND')
+                resources.add(resource)
+                entry = control.get('assetFiles', {}).get(resource)
+                if entry and entry['object'] not in objects:
+                    objects[entry['object']] = assets.call('object_get', id=entry['object'])
+                    require(objects[entry['object']] is not None, '分享数据已删除', 'SHARE_UNAVAILABLE')
+                result.setdefault(dataset, {})[selection['field']] = resource
+        def read(resource):
+            entry = control.get('assetFiles', {}).get(resource)
+            if entry:
+                raw = assets.read_file(objects[entry['object']], entry['name'])
+            else:
+                raw = self.storage.get('shares/' + share_id + '/site/' + resource)
+                require(raw is not None, '分享候选索引不存在', 'NOT_FOUND')
+            return json.loads(gzip.decompress(raw))
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            values = dict(zip(resources, pool.map(read, resources)))
+        return {dataset: {field: values[resource] for field, resource in fields.items()}
+                for dataset, fields in result.items()}
 
     def revoke(self, service, board, share_id):
         control = self.control(share_id)

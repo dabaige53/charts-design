@@ -15,7 +15,9 @@ self.onmessage=async({data})=>{
       const {document,base,headers={}}=args;
       engines.set(client,createStaticQuery(document,(path,options={})=>{
         const url=new URL(path,base).href;
-        return resources.json(url,{...options,headers,key:document.staticResourceKeys?.[path]||url});
+        return resources.json(url,{...options,headers,key:document.staticResourceKeys?.[path]||url,
+          batchUrl:document.browserDataBatchUrl?new URL(document.browserDataBatchUrl,base).href:undefined,
+          size:document.staticResourceSizes?.[path]});
       }));
       self.postMessage({id,result:{ready:true}});return;
     }

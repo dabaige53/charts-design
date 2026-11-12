@@ -28,6 +28,14 @@ export function matchesRelease(health, version, commit) {
   return health?.ok === true && health.release?.version === version && health.release?.commit === commit;
 }
 
+export function annotationMigrationPending(remote) {
+  const versions = new Set((remote?.items ?? []).map(item => item.version));
+  if (versions.has('20261112050000')) return false;
+  if (!versions.has('20261112040000') || [...versions].some(version => version > '20261112050000'))
+    throw new Error('数据库迁移基线不匹配；停止发布，需先核对已应用的迁移。');
+  return true;
+}
+
 export function runtimeConfig(detail, version, commit) {
   const config = detail.ServerConfig;
   if (!config?.EnvParams) throw new Error('未找到现有服务配置；此脚本用于更新已部署的服务。');
@@ -143,6 +151,20 @@ export async function deploy() {
         await delay(3000);
       }
       if (!ready) throw new Error('灰度收尾尚未完成；请等待云端任务结束后重跑 CI。');
+    }
+    // This additive migration is compatible with the currently running service.
+    // Stage only this release's migration: never apply unrelated pending files.
+    const migrationList = await cli(['db', 'pg', 'migration', 'list', '--remote-only'], true);
+    if (annotationMigrationPending((migrationList.data ?? migrationList).remote)) {
+      const migration = '20261112050000_annotation_commands.sql';
+      mkdirSync(join(stage, 'cloudbase/migrations'), { recursive: true });
+      copyFileSync(join(root, 'cloudbase/migrations', migration), join(stage, 'cloudbase/migrations', migration));
+      console.log('应用兼容的按条批注迁移。');
+      await cli(['db', 'pg', 'migration', 'up']);
+      const verified = await cli(['db', 'pg', 'migration', 'list', '--remote-only'], true);
+      if (annotationMigrationPending((verified.data ?? verified).remote))
+        throw new Error('批注迁移尚未确认，停止部署客户端。');
+      rmSync(join(stage, 'cloudbase'), { recursive: true });
     }
     const files = git('ls-files', '-z').split('\0').filter(includeSource);
     for (const name of files) {

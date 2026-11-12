@@ -18,6 +18,8 @@
 
 页面外壳不含业务数据；数据只经由带令牌的接口读取。分享令牌放在 URL 片段中，浏览器不会把片段发送给服务器、代理或 Referer；页面加载后从地址栏移除，只保留在当前标签页的 sessionStorage。
 
+COS 在线编辑及查看页通过 `X-Charts-Browser-Data: preload` 将保存文档、数据目录、完整筛选候选项和授权页面列表集中在首页响应中。上述 content 路径的 GET 保留旧目录读取，POST 接收 `{"files":["<对象ID>/<文件名>"]}` 批量读取，最多六个文件且登记的压缩字节合计不超过 16 MiB。每批仍重新检查链接权限和版本，确认所有对象及文件归属后才读取内容；不公开 COS 地址或缓存跨请求授权。无需数据库结构迁移；旧客户端、原链接及有效期继续适用。加载与缓存规则见[项目加载](../implementation/project-runtime.md#加载)。
+
 如果访问域名的提示页在跳转时丢失了 URL 片段，或链接令牌已失效，页面会提示粘贴收到的完整在线访问链接。输入内容只在当前页面读取；恢复时仅接受当前域名和路径对应的链接，并将其中的令牌保存在当前标签页。过期或已撤销的链接须重新签发。生产使用应配置稳定的正式域名，避免依赖测试域名提示页。
 
 ## 快速开始
@@ -101,7 +103,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | --- | --- | --- | --- |
 | 在线只读链接 | `dashboard_share`，`access=view` | 服务端项目的已保存检查点及其数据；CloudBase 存储在 PG，通过服务端 SQLite 缓存计算 | 链接包含访问令牌；按 `expiresInHours` 或服务器默认值过期，可撤销 |
 | 在线编辑链接 | `dashboard_share`，`access=edit` | 同一服务端项目；支持网页提供的编辑、版本管理和恢复 | 同在线只读链接，权限包含网页支持的编辑操作 |
-| 独立分享链接 | 正式发布后调用 `dashboard_share_publish` | 独立 COS 副本含发布时的网页和完整数据分片；浏览器加载后计算筛选等操作，项目更新不会自动更新该副本 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
+| 独立分享链接 | 保存后在网页创建，或调用 `dashboard_share_publish` | 独立 COS 副本含发布时的网页和完整数据分片；浏览器加载后计算筛选等操作，项目更新不会自动更新该副本 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
 
 `dashboard_preview` 在支持 MCP Apps 的宿主中打开已保存检查点；需要浏览器链接时使用 `dashboard_share`。
 
@@ -145,6 +147,8 @@ bun run release -- 1.2.1
 
 替换为高于当前版本的新版本号。脚本要求工作区干净，更新 `package.json`，创建版本提交和附注标签，然后只推送该标签。其他改动须提前提交；脚本只推送标签，分支与原有全量测试流程保持原状。版本提交仍留在当前本地分支，后续按正常流程合并。加 `--dry-run` 只检查条件和展示步骤，不写文件或推送。
 
+发布工作流先执行本次加载、批注、分享与版本界面的定向检查，并在独立 PostgreSQL 实例上验证迁移及五连接并发。通过后才进入部署。部署先核对数据库迁移基线，只应用本次兼容的批注操作迁移并回读确认，再构建和发布客户端；不自动执行其他未应用的迁移。
+
 发布任务使用项目固定版本的 Bun 和固定版本的 CloudBase CLI。GitHub 运行发布脚本的局部测试，CloudBase 根据 `deploy/Dockerfile` 构建 React 与 Python 容器，并完成完整发布；不在本机重复构建。工作流中的并发组禁止打断正在执行的部署。推送标签须使用用户或发布机器的 Git 凭据，不使用另一个工作流的默认 `GITHUB_TOKEN`，以免无法触发后续工作流。
 
 仓库 Settings → Secrets and variables → Actions 需要以下配置：
@@ -163,7 +167,7 @@ bun run release -- 1.2.1
 
 若已有云端发布任务未结束，脚本停止，避免 CLI 取消其他任务。已构建完成、健康检查通过并承接 100% 流量的灰度版本会先完成发布状态，再提交新版本；部分流量灰度需要先由维护者完成或撤回。部署命令等待云端任务结束，随后检查 `/health` 的版本号与 Git 提交号，旧实例返回成功不算本次发布通过。
 
-成功结果显示在 GitHub Actions 的 `CloudBase release` 摘要。失败或超时会使任务失败；超时后云端任务可能仍在执行，应先看云托管构建记录再重试。需要重跑已有标签时，在 Actions 中重新运行该任务；工作流合入默认分支后，也可通过 `Run workflow` 输入已有标签。数据库回滚、SQL 迁移、SCF 清理函数更新和已分享的 COS 静态快照更新须按对应章节单独处理。
+成功结果显示在 GitHub Actions 的 `CloudBase release` 摘要。失败或超时会使任务失败；超时后云端任务可能仍在执行，应先看云托管构建记录再重试。需要重跑已有标签时，在 Actions 中重新运行该任务；工作流合入默认分支后，也可通过 `Run workflow` 输入已有标签。数据库回滚、其他 SQL 迁移、SCF 清理函数更新和业务快照更新须按对应章节单独处理。已有独立分享的应用脚本与候选项加载由网关适配，沿用原 URL、密钥和到期时间，不改变绑定的页面版本。
 
 ## 部署确认
 
@@ -179,18 +183,18 @@ bun run release -- 1.2.1
 
 ### MCP 操作
 
-先完成编辑批次，再用最新版本发布：
+先完成编辑批次，再选择分享所用的已保存版本：
 
 1. `dashboard_get` 读取草稿与版本。
-2. 有修改时按 `dashboard_edit_begin` → 修改 → `dashboard_edit_finish` 完成检查点；用 `dashboard_version_publish` 将选定已保存版本设为正式发布版本。
-3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId`；`expectedRevision` 使用当前 `publishedRevision`。可通过 `pages` 指定其他页面及其当前正式发布版本，每页都需先发布。草稿可以比发布版本更新。
+2. 有修改时按 `dashboard_edit_begin` → 修改 → `dashboard_edit_finish` 完成检查点。仅使用默认发布版本规则时，再调用 `dashboard_version_publish`。
+3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId`。显式指定 `versionSource=saved` 时，`expectedRevision` 使用当前 `savedRevision`；通过 `pages` 添加其他页面时，同样使用各自最新保存版本。省略 `versionSource` 时保留旧约定，使用 `publishedRevision`。草稿可比已保存版本更新。
 4. 将返回的 `accessUrl` 交给指定读者，打开后自动填入密钥，再点击“打开分享”；也可分别发送 `url` 和 `accessKey`。
 
 | 参数 | 说明 |
 | --- | --- |
 | `expiration` | `never` 不过期；`7d` 七天后过期，默认值；`30d` 三十天后过期。时间从发布时开始计算 |
 | `accessKey` | 可选，必须是 8 位 ASCII 数字字符串，可包含前导零；省略时随机生成 |
-| `expectedRevision` | 项目模式下必须等于当前正式发布版本，防止误分享未发布草稿 |
+| `expectedRevision` | 项目模式下必须等于所选 `versionSource` 对应的当前版本，不使用未保存草稿 |
 
 返回 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。分享路径使用随机十六进制标识。
 
@@ -200,7 +204,7 @@ bun run release -- 1.2.1
 
 `dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
 
-`dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；多页面分享替换时保留页面范围，并使用各页面当前正式发布版本。其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
+`dashboard_share_replace` 替换一条选定分享：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；多页面分享保留页面范围。网页指定 `versionSource=saved` 并提交逐页确认的最新保存版本；省略时沿用当前正式发布版本。其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
 
 该操作会改变地址，仅用于明确要求替换分享的业务操作，不属于 MCP 升级流程。需要保留原分享地址时，不调用此操作。
 
@@ -286,7 +290,7 @@ project-run <项目目录名> -- /bin/sh -c '
 '
 ```
 
-迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过，再运行 `dashboard_version_publish`；之后才能通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。
+迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过；使用默认发布版本规则时，还须运行 `dashboard_version_publish`。之后可通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。
 
 合并时，`dataset_transfer_status` 的 `phase` 标明读取暂存分块、保存数据库分块或清理；`completed` 和 `total` 对应当前阶段。脚本会记录已完整暂存的版本，恢复时不再发送这些数据行。使用旧版脚本时，只有在已确认某个版本全部分块均已暂存的情况下，才在恢复命令中加 `--resume-staged <完整数据版本号>`；缺块时合并报错，不会创建不完整的数据版本。
 

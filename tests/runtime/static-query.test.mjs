@@ -72,6 +72,22 @@ test('loads independent option indexes concurrently and retains them across sear
  assert.deepEqual((await engine.query({filterId:'agent',search:'C'})).values,['C']);
  assert.deepEqual(reads,['one','two']);
 });
+
+// @wu-test type=performance | scope=preloaded filter options | protects=首页完整候选已返回仍请求索引或分页搜索遗漏100条之后的数据
+test('uses complete startup options locally including empty lists and later pages',async()=>{
+ const d=make();d.storageFormat='cos-v1';
+ d.manifest.filters=[
+   {id:'agent',field:'agent',op:'in',values:[],componentIds:['card','table']},
+   {id:'month',field:'month',op:'in',values:[],componentIds:['table']}];
+ d.staticOptionValues={sales:{
+   agent:Array.from({length:230},(_,i)=>`Agent ${String(i).padStart(3,'0')}`),month:[]}};
+ const engine=createStaticQuery(d,async()=>{throw Error('Startup options must not fetch files');});
+ const first=await engine.query({filterId:'agent'});
+ assert.equal(first.totalValues,230);assert.equal(first.values.length,100);
+ assert.equal((await engine.query({filterId:'agent',offset:200})).values.length,30);
+ assert.deepEqual((await engine.query({filterId:'agent',search:'229'})).values,['Agent 229']);
+ assert.deepEqual((await engine.query({filterId:'month'})).values,[]);
+});
 // @wu-test type=boundary | scope=COS option index contract | protects=选项索引缺失时静默下载全部行分片
 test('a missing COS option index fails without reading any rows',async()=>{
  const d=make();d.storageFormat='cos-v1';d.manifest.filters=[{id:'agent',field:'agent',op:'in',values:[],componentIds:['table']}];

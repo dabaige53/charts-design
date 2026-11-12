@@ -45,6 +45,15 @@ it("returns the catalog for reuse when selecting the first dashboard", async () 
   expect(call.mock.calls).toEqual([["dashboard_list"], ["dashboard_preview", { dashboardId: "board" }]]);
 });
 
+// @wu-test type=performance | scope=loadWebDashboard preloaded catalog | protects=集中加载已返回页面列表仍额外请求dashboard_list
+it("reuses the authorized catalog returned with the initial document", async () => {
+  const initialBoards = [{ id: "board", title: "Saved" }];
+  const call = mock(async () => ({ document: saved(), initialBoards }));
+  const result = await loadWebDashboard(call, "board");
+  expect(result.initialBoards).toBe(initialBoards);
+  expect(call).toHaveBeenCalledTimes(1);
+});
+
 // @wu-test type=integration | scope=createVersionReader deferred data | protects=显示保存结果时下载业务数据或并发交互重复加载数据目录
 it("renders saved results without loading files and shares one directory request across queries", async () => {
   Object.assign(globalThis, { location: window.location });

@@ -386,6 +386,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
       accept(result.document);
     } catch (e) {
       setError(String(e));
+      throw e;
     } finally {
       setSaving(false);
     }

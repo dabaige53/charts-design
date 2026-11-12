@@ -37,6 +37,7 @@ class CloudDatabase:
             # Never expose gateway bodies, query data, or credential headers.
             raw = error.read()
             codes = {'REVISION_CONFLICT': 409, 'ANNOTATION_CONFLICT': 409,
+                     'ANNOTATION_NOT_FOUND': 404, 'INVALID_ARGUMENT': 400,
                      'ALREADY_EXISTS': 409, 'NOT_FOUND': 404,
                      'DATA_CONFLICT': 409, 'DATA_INCOMPLETE': 409,
                      'INVALID_BATCH': 400, 'CHECKPOINT_IN_USE': 409,

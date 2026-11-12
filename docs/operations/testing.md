@@ -62,6 +62,6 @@ Python 使用项目解释器和 `pyproject.toml` 中的依赖；运行配置见 
 - 不通过跳过、删除或放宽断言让 CI 变绿。明确的环境条件可跳过并记录原因，例如本地配置更新器需要 Python 3.11 的 `tomllib`。
 - 自动测试通过、构建成功和真实 MCP 宿主验收分别报告；组件测试不替代浏览器或宿主验收。
 
-版本部署由独立的 `cloudbase-release.yml` 执行，流程见 [自托管服务器](self-hosted-server.md#按版本自动发布到-cloudbase)。修改 CI 不自动触发生产部署。
+版本部署由独立的 `cloudbase-release.yml` 执行；发布前运行明确列出的加载、批注、分享和版本界面测试，以及独立 PostgreSQL 上的批注事务测试，不启动常规全量工作流。流程见 [自托管服务器](self-hosted-server.md#按版本自动发布到-cloudbase)。修改 CI 不自动触发生产部署。
 
 维护时机：开发入口、检查范围、构建复用或交付流程变化时更新本文。

@@ -165,10 +165,12 @@ class Service:
             try:
                 if tool == 'dashboard_share_publish':
                     return shares.publish(self, board, args['expectedRevision'],
-                                          args.get('expiration', '7d'), args.get('accessKey'), args.get('pages'))
+                                          args.get('expiration', '7d'), args.get('accessKey'), args.get('pages'),
+                                          args.get('versionSource', 'published'))
                 if tool == 'dashboard_share_replace':
                     return shares.replace(self, board, args['shareId'], args['expectedRevision'],
-                                          args.get('expiration', '7d'))
+                                          args.get('expiration', '7d'), args.get('versionSource', 'published'),
+                                          args.get('pages'))
                 if tool == 'dashboard_share_status':
                     return shares.status(self, board, args.get('shareId'))
                 return shares.revoke(self, board, args.get('shareId'))
@@ -411,6 +413,10 @@ class Service:
                 for source in doc.get('manifest', {}).get('sources', {}).values():
                     source['verification'] = 'supplied'
             return {'document': self.store.create(args['dashboardId'], args.get('title', 'Dashboard'), doc)}
+        if tool == 'dashboard_annotation_apply':
+            require(self.project_root is not None, 'Independent annotations require a project', 'PROJECT_REQUIRED')
+            require(type(args.get('revision')) is int and args['revision'] > 0, 'A target revision is required')
+            return self.store.annotation_command(board, args['revision'], args['command'])
         if tool == 'dashboard_annotations':
             doc = self._read_document(board, args, read_document)
             manifest = doc['manifest']

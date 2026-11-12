@@ -38,6 +38,9 @@ class ProjectStore(Store):
                 CREATE TABLE IF NOT EXISTS batches (board_id TEXT PRIMARY KEY, batch_id TEXT, base_revision INTEGER);
                 CREATE TABLE IF NOT EXISTS annotations (board_id TEXT PRIMARY KEY, payload TEXT);
                 CREATE TABLE IF NOT EXISTS annotation_events (board_id TEXT, at TEXT, revision INTEGER, payload TEXT);
+                CREATE TABLE IF NOT EXISTS annotation_operations (
+                    board_id TEXT, operation_id TEXT, command TEXT, result TEXT,
+                    PRIMARY KEY(board_id, operation_id));
             ''')
 
     def compatible(self, document):
@@ -67,8 +70,10 @@ class ProjectStore(Store):
         return self.compatible(doc) if hydrate else doc
 
     def _save_notes(self, db, doc, notes):
+        from .annotations import preserve_content_version
         previous = {n['id']: n for n in self._notes(db, doc['id'])}
         for note in notes:
+            preserve_content_version(note, previous.get(note['id']))
             if note['id'] in previous:
                 note['context'] = previous[note['id']].get('context', {})
             else:
@@ -115,6 +120,40 @@ class ProjectStore(Store):
             self._save_notes(db, doc, copy.deepcopy(doc['manifest'].get('annotations', [])))
         self._files(board_id)
         return self.get(board_id)
+
+    def annotation_command(self, board_id, revision, command):
+        from .annotations import apply_command, validate_command
+        validate_command(command)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT document,revision FROM boards WHERE id=?', (board_id,)).fetchone()
+            require(row is not None, 'Dashboard not found', 'NOT_FOUND')
+            receipt = db.execute('SELECT command,result FROM annotation_operations WHERE board_id=? AND operation_id=?',
+                                 (board_id, command['operationId'])).fetchone()
+            request = {'revision': revision, 'command': command}
+            if receipt:
+                require(json.loads(receipt['command']) == request, 'Operation ID was reused', 'ANNOTATION_CONFLICT')
+                result = json.loads(receipt['result'])
+                result['annotations'] = self._notes(db, board_id)
+                result['annotationChange'] = db.execute(
+                    'SELECT max(rowid) FROM annotation_events WHERE board_id=?', (board_id,)).fetchone()[0]
+                return result
+            target = row if row['revision'] == revision else db.execute(
+                'SELECT document FROM revisions WHERE board_id=? AND revision=?', (board_id, revision)).fetchone()
+            require(target is not None, 'Target version is unavailable', 'REVISION_CONFLICT')
+            doc = json.loads(target['document'])
+            context = {'designRevision': revision, 'dataVersions': doc['snapshot'].get('datasetRefs', {}),
+                       'filters': command.get('value', {}).get('view', {}).get('filters', [])}
+            notes = apply_command(self._notes(db, board_id), command, context)
+            raw = json.dumps(notes, ensure_ascii=False)
+            db.execute('INSERT OR REPLACE INTO annotations VALUES(?,?)', (board_id, raw))
+            cursor = db.execute('INSERT INTO annotation_events VALUES(?,?,?,?)',
+                                (board_id, utcnow(), revision, raw))
+            result = {'dashboardId': board_id, 'annotations': notes, 'annotationChange': cursor.lastrowid}
+            db.execute('INSERT INTO annotation_operations VALUES(?,?,?,?)',
+                       (board_id, command['operationId'], json.dumps(request), json.dumps(result)))
+        self._files(board_id)
+        return result
 
     def mutate(self, board_id, expected_revision, operations=None, restore_revision=None, use_current_data=False, expected_annotations=None):
         if operations and any(isinstance(op, dict) and op.get('op') == 'set_annotations' for op in operations):
