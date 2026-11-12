@@ -89,7 +89,7 @@ def normalize(diagram):
 
 def update(previous, component):
     """Explicit submission confirms a diagram; omission retains a stale copy."""
-    target = presentation(component, create=True)
+    target = presentation(component)
     from .model import require
     require(isinstance(target, dict), 'Presentation must be an object')
     if 'structureDiagram' in target:
@@ -100,7 +100,7 @@ def update(previous, component):
             before, after = copy.deepcopy(previous), copy.deepcopy(component)
             presentation(before, create=True).pop('structureDiagram', None)
             presentation(after, create=True).pop('structureDiagram', None)
-            target['structureDiagram'] = {**copy.deepcopy(old), 'status': old.get('status', 'ready') if before == after else 'stale'}
+            presentation(component, create=True)['structureDiagram'] = {**copy.deepcopy(old), 'status': old.get('status', 'ready') if before == after else 'stale'}
 
 
 def invalidate(component):

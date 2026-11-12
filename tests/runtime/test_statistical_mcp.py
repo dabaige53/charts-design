@@ -24,7 +24,7 @@ def test_statistical_stdio_authoring(tmp_path):
                     return result.structuredContent
                 assert 'regression' in (await call('chart_declarations',{}))['statistical']['types']
                 await call('dashboard_create',{'dashboardId':'statistics'})
-                result=await call('dashboard_patch',{'dashboardId':'statistics','expectedRevision':1,'operations':[
+                result=await call('dashboard_patch',{'dashboardId':'statistics','expectedRevision':1,'responseMode':'full','operations':[
                     {'op':'put_source','id':'sample','value':{'kind':'fixture','name':'Explicit synthetic observations'}},
                     {'op':'put_dataset','id':'sample','meta':{'sourceId':'sample','fields':{'x':{'type':'number'},'y':{'type':'number'}}},'rows':[{'x':i,'y':i*2} for i in range(5)]},
                     {'op':'put_component','id':'regression','value':{'kind':'statistical','title':'Synthetic regression','datasetId':'sample','plot':{'type':'regression','x':'x','y':'y'},'analysis':{'definition':'One synthetic observation per row','unit':'units'}}},

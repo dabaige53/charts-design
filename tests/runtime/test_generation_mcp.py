@@ -14,7 +14,7 @@ from mcp.types import TextResourceContents
 from pydantic import AnyUrl
 
 
-# @wu-test type=integration | scope=MCP报告创建 | protects=调用方无法发现创建报告或读正确数据 | debt=D1
+# @wu-test type=integration | scope=MCP报告创建 | protects=调用方无法发现创建报告或读正确数据
 def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
     async def check():
         params = StdioServerParameters(
@@ -57,7 +57,7 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 # Reading guidance must not instantiate demo boards or add data.
                 assert (await call('dashboard_list', {}))['dashboards'] == []
                 created = (await call('dashboard_create', {'dashboardId': 'fresh-report',
-                    'title': '独立合成样本分析'}))['document']
+                    'title': '独立合成样本分析', 'responseMode': 'full'}))['document']
                 assert created['revision'] == 1
                 assert created['manifest']['components'] == {}
                 assert created['snapshot']['datasets'] == {}
@@ -115,7 +115,7 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                     {'op': 'set_status', 'value': 'fixture'},
                 ]
                 doc = (await call('dashboard_patch', {'dashboardId': 'fresh-report',
-                    'expectedRevision': 1, 'operations': operations}))['document']
+                    'expectedRevision': 1, 'operations': operations, 'responseMode': 'full'}))['document']
                 assert doc['revision'] == 2
                 assert doc['manifest']['viewMode'] == 'report'
                 assert doc['manifest']['report']['markdown'] == markdown != case['markdown']

@@ -36,6 +36,7 @@ Docker 只在 GitHub 或部署平台构建；开发机不必安装 Docker。容�
 - Static checks：Python ruff、语法、文档与 Skill 链接、开发流程及发布脚本的 Bun 检查。
 - Shared UI build：安装锁定依赖、类型检查、构建一次，并上传 `shared-ui-<提交号>`；执行 React 组件与 Runtime 交互测试，上传 JUnit 报告。
 - Unit tests：Python 3.10、3.11、3.13 下载同一 UI 产物并打包到后端，不重复安装前端依赖或构建。检查 Runtime、MCP、Bun 数据模块、工作区合同；Runtime 覆盖率下限保留 84%。
+- MCP 协议测试会启动独立 Python 服务进程；覆盖率配置同时统计这些进程中实际执行的代码。
 - Container image smoke test：独立从源码构建部署镜像，经 HTTP 验证 MCP、预览、下载、非 root 权限和环境文件隔离。保留该独立构建，检查真实部署路径。
 
 前端依赖缓存按锁文件区分。新提交取消同一 PR 的旧 CI；失败时先读取对应作业日志及报告，不在本地重新跑整套。JUnit、覆盖率和 UI 构建产物保留 14 天。构建产物与报告由 Actions 保存，`runtime-ui/dist/`、后端资源副本和本地依赖不提交 Git。

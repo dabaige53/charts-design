@@ -120,7 +120,8 @@ class Service:
         expected = args.get('expectedRevision', doc['revision'])
         if selected is None and self.project_root and expected != doc['revision'] and expected == self.store.display_revision(board):
             doc = self.store.readable(board)
-        require(expected == doc['revision'], 'Data changed; reload the dashboard', 'REVISION_CONFLICT')
+        if expected != doc['revision']:
+            raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
         return doc
 
     def _call(self, tool, args, *, read_document=None):
