@@ -1,6 +1,6 @@
 {
   "name": "charts-design",
-  "version": "1.2.21",
+  "version": "1.2.22",
   "description": "Versioned dashboard data, metrics and MCP runtime with shared React UI components.",
   "bin": {
     "charts-design": "./bin/cli.js",
