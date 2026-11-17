@@ -68,6 +68,8 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 `dashboard_get` 读取可编辑草稿；项目预览与刷新读取最近完成的检查点。`dashboard_edit_finish` 和 `dashboard_checkpoint` 检查失败时返回 `DOCTOR_FAILED`，MCP 同时标记 `isError: true`；草稿与批次保留，不生成检查点。调用方检查 Doctor 问题、读取最新草稿并修复，再用最新版本完成。`REVISION_CONFLICT` 要求重新读取并合并当前修改，不能盲目重放写入。
 
+进入布局编辑时读取最新草稿；草稿与预览的保存版本不同时，切换到该草稿并保留兼容的筛选、表格和粒度状态。已有草稿内容继续保留，进入编辑本身不保存检查点；后续保存仍以草稿修订号检查并发冲突。
+
 `dashboard_history` 分页读取检查点，默认每页 50 个、最多 100 个；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建或命名当前检查点，也会关闭当前编辑批次，普通 Agent 编辑使用带批次 ID 的 `dashboard_edit_finish`。`published` 保护检查点免于自动清理。`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，批注变更保存在独立事件记录。
 
 版本列表允许删除最新、当前发布、曾发布及带保留标记的版本。`dashboard_version_delete_preview` 生成一次确认清单，包含将撤销的完整分享、专属 COS 对象、PostgreSQL 内容估算及保留引用。`dashboard_version_delete` 必须携带确认标识；项目状态变化或清单超过 15 分钟时重新确认。批注及其历史的数据引用采用保守匹配，无法排除引用的数据不删除。

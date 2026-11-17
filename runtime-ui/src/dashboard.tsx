@@ -430,9 +430,9 @@ export function DashboardApp({
                   guard(async () => {
                     const result = await call("dashboard_get", { dashboardId: doc.id });
                     if (result.document.revision !== doc.revision) {
-                      runtime.setError("草稿与当前保存版本不同，请先完成保存，再重新加载后编辑。");
-                      return;
+                      runtime.accept(result.document, true);
                     }
+                    runtime.setError("");
                     setEditing(true);
                   })
                 }

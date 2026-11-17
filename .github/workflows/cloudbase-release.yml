@@ -53,7 +53,7 @@ jobs:
         working-directory: runtime-ui
         run: |
           bun run typecheck
-          for file in position-comments cos-client web-access-flow version-center; do
+          for file in dashboard-edit runtime position-comments cos-client web-access-flow version-center; do
             path="./src/$file.test.tsx"
             if [ "$file" = cos-client ]; then path="./src/$file.test.ts"; fi
             bun test "$path" || exit $?
