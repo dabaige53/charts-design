@@ -15,6 +15,9 @@ from .model import require
 class CloudFiles:
     def __init__(self, database=None, storage=None):
         self.database = database or CloudDatabase()
+        if storage is None and os.environ.get('CHARTS_STORAGE_BACKEND') == 'neon':
+            from .cloudflare_shares import PrivateShares
+            storage = PrivateShares(Path(os.environ['CHARTS_RUNTIME_ROOT']) / 'private-assets', 'server-timer')
         if storage is None:
             shares = CosShareStorage.from_environment()
             prefix = os.environ.get('CHARTS_COS_ASSET_PREFIX', 'charts-assets/')

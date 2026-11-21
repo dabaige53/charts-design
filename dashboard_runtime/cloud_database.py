@@ -12,12 +12,20 @@ from .model import DashboardError, require
 
 def cloud_enabled():
     backend = os.environ.get('CHARTS_STORAGE_BACKEND', 'local')
-    require(backend in ('local', 'cloudbase'), 'Unknown CHARTS_STORAGE_BACKEND', 'INVALID_CONFIG')
-    return backend == 'cloudbase'
+    require(backend in ('local', 'cloudbase', 'cloudflare', 'neon'), 'Unknown CHARTS_STORAGE_BACKEND', 'INVALID_CONFIG')
+    return backend in ('cloudbase', 'neon')
 
 
 class CloudDatabase:
     def __init__(self):
+        self.backend = os.environ.get('CHARTS_DATABASE_BACKEND',
+                                      'neon' if os.environ.get('CHARTS_STORAGE_BACKEND') == 'neon' else 'cloudbase')
+        require(self.backend in ('cloudbase', 'neon'), 'Unknown CHARTS_DATABASE_BACKEND', 'INVALID_CONFIG')
+        if self.backend == 'neon':
+            self.database_url = os.environ.get('DATABASE_URL', '')
+            require(bool(self.database_url), 'Configure DATABASE_URL', 'INVALID_CONFIG')
+            self.url = '/rpc/charts_runtime'
+            return
         environment = os.environ.get('CLOUDBASE_ENV_ID', '')
         require(re.fullmatch(r'[a-zA-Z0-9-]+', environment) is not None,
                 'Configure CLOUDBASE_ENV_ID', 'INVALID_CONFIG')
@@ -28,6 +36,8 @@ class CloudDatabase:
     def call(self, action, project='', **payload):
         body = json.dumps({'action': action, 'project': project, 'payload': payload},
                           ensure_ascii=False, allow_nan=False).encode()
+        if self.backend == 'neon':
+            return self._call_neon(action, project, payload)
         request = Request(self.url, data=body, headers={
             'Authorization': 'Bearer ' + self.key, 'Content-Type': 'application/json'})
         try:
@@ -55,3 +65,39 @@ class CloudDatabase:
         except (URLError, TimeoutError):
             raise DashboardError('CLOUD_DATABASE_UNAVAILABLE',
                                  'PostgreSQL gateway is unavailable; no local fallback was used', 503) from None
+
+    def _call_neon(self, action, project, payload):
+        import psycopg
+        from psycopg import sql
+        from psycopg.types.json import Jsonb
+
+        function = self.url.rsplit('/', 1)[-1]
+        require(function in ('charts_runtime', 'charts_assets', 'charts_release',
+                             'charts_delete_checkpoint', 'charts_data_inventory'),
+                'Unknown PostgreSQL function', 'INVALID_CONFIG')
+        try:
+            with psycopg.connect(self.database_url, connect_timeout=60) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        sql.SQL('SELECT public.{}(%s, %s, %s)').format(sql.Identifier(function)),
+                        (action, project, Jsonb(payload)))
+                    row = cursor.fetchone()
+                    if row is None:
+                        raise DashboardError('CLOUD_DATABASE_FAILED', 'PostgreSQL function returned no row', 503)
+                    return row[0]
+        except psycopg.Error as error:
+            codes = {'REVISION_CONFLICT': 409, 'ANNOTATION_CONFLICT': 409,
+                     'ALREADY_EXISTS': 409, 'NOT_FOUND': 404,
+                     'DATA_CONFLICT': 409, 'DATA_INCOMPLETE': 409,
+                     'INVALID_BATCH': 400, 'CHECKPOINT_IN_USE': 409,
+                     'PLAN_CHANGED': 409, 'ASSET_UNAVAILABLE': 409,
+                     'REVISION_DELETED': 409, 'CONFIRMATION_REQUIRED': 409,
+                     'STORAGE_MIGRATED': 409, 'NO_SAVED_VERSION': 404}
+            message = error.diag.message_primary
+            if message in codes:
+                label = '暂无已保存版本' if message == 'NO_SAVED_VERSION' else message
+                raise DashboardError(message, label, codes[message]) from None
+            if isinstance(error, psycopg.OperationalError):
+                raise DashboardError('CLOUD_DATABASE_UNAVAILABLE',
+                                     'PostgreSQL is unavailable; no local fallback was used', 503) from None
+            raise DashboardError('CLOUD_DATABASE_FAILED', 'PostgreSQL request failed', 503) from None

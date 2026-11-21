@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "charts-design": {
+      "type": "http",
+      "url": "https://charts-design.49-51-184-179.sslip.io/unified/mcp",
+      "headers": {
+        "Authorization": "Bearer ${CHARTS_UNIFIED_TOKEN}"
+      }
+    }
+  }
+}

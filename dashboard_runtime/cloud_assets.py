@@ -173,13 +173,13 @@ class CloudAssets:
     def delete_job(self, job):
         if job['state'] == 'complete':
             return job
-        from .cloud_storage import CosShareStorage
+        from .cloud_storage import publication_storage
         completed = list(job['completed'])
         try:
             for share in job['plan']['shares']:
                 key = 'share:' + share['shareId']
                 if key not in completed:
-                    storage = CosShareStorage.from_environment()
+                    storage = publication_storage()
                     storage.delete_prefix('shares/' + share['shareId'] + '/')
                     storage.delete_prefix('jobs/' + share['shareId'] + '.json')
                     completed.append(key)

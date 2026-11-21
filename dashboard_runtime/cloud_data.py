@@ -48,8 +48,8 @@ class CloudData(LocalData):
 
     def _transfer_storage(self):
         if self.transfer_storage is None:
-            from .cloud_storage import CosShareStorage
-            storage = CosShareStorage.from_environment()
+            from .cloud_storage import publication_storage
+            storage = publication_storage()
             storage.check_private()
             self.transfer_storage = storage
         return self.transfer_storage

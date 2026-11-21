@@ -158,6 +158,69 @@ def free_port():
         return probe.getsockname()[1]
 
 
+# @wu-test type=integration | scope=统一 MCP 固定归属和独立鉴权 | protects=同名或断线时错误写入另一后端，或旧令牌取得双端权限
+def test_unified_mcp_pins_backend(tmp_path, monkeypatch):
+    from dashboard_runtime.backend_routing import BackendRoutes
+    from dashboard_runtime.remote_client import connect
+
+    cloud_port = free_port()
+    cloud = start(tmp_path / 'cloud', cloud_port)
+    cloud_base = f'http://127.0.0.1:{cloud_port}'
+    cloud_app = create_app(cloud)
+    entry_token = 'unified-test-token-distinct-from-both-backends'
+    monkeypatch.setenv('CHARTS_UNIFIED_TOKEN', entry_token)
+    monkeypatch.setenv('CHARTS_CLOUDBASE_URL', 'https://upstream.example')
+    monkeypatch.setenv('CHARTS_CLOUDBASE_MCP_TOKEN', TOKEN)
+    port = free_port()
+    local = start(tmp_path / 'server', port)
+    base = f'http://127.0.0.1:{port}'
+    import dashboard_runtime.backend_routing as routing
+    configure = routing.configured_routes
+
+    def loopback(server):
+        routes = configure(server)
+        assert isinstance(routes, BackendRoutes)
+        routes.base_url = cloud_base
+        return routes
+
+    monkeypatch.setattr(routing, 'configured_routes', loopback)
+
+    async def check():
+        async with connect(base + '/unified/mcp', entry_token) as client:
+            async def call(tool, project, **args):
+                result = await client.call_tool(tool, {'projectRoot': project, **args})
+                assert result.structuredContent is not None
+                return result.structuredContent
+
+            assert (await call('dashboard_list', 'sales'))['error']['code'] == 'BACKEND_REQUIRED'
+            assert (await call('dashboard_list', 'sales', backend='cloudbase'))['dashboards']
+            assert (await call('dashboard_list', 'sales', backend='server'))['error']['code'] == 'BACKEND_CONFLICT'
+            assert (await call('dashboard_create', 'fresh', dashboardId='board', title='New'))['error']['code'] == 'BACKEND_REQUIRED'
+            assert (await call('dashboard_create', 'fresh', backend='cloudbase', dashboardId='board', title='New'))['revision'] == 1
+            assert (await call('dashboard_list', 'fresh'))['dashboards'][0]['id'] == 'board'
+            assert not local.projects.exists('fresh')
+            assert (await call('dashboard_create', 'local-new', backend='server', dashboardId='board', title='Local'))['revision'] == 1
+            assert not cloud.projects.exists('local-new')
+
+    with Running(cloud_app, cloud_port), Running(create_app(local), port):
+        assert post(base + '/unified/mcp', {}, TOKEN)[0] == 401
+        assert post(base + '/mcp', {}, entry_token)[0] == 401
+        asyncio.run(check())
+
+    async def after_restart():
+        async with connect(base + '/unified/mcp', entry_token) as client:
+            async def read(project):
+                result = await client.call_tool('dashboard_list', {'projectRoot': project})
+                assert result.structuredContent is not None
+                return result.structuredContent
+            assert (await read('fresh'))['error']['code'] == 'BACKEND_UNAVAILABLE'
+            assert (await read('unbound'))['error']['code'] == 'CATALOG_UNAVAILABLE'
+            assert (await read('local-new'))['dashboards'][0]['id'] == 'board'
+            assert not local.projects.exists('fresh')
+    with Running(create_app(local), port):
+        asyncio.run(after_restart())
+
+
 # @wu-test type=integration | scope=远程MCP与分享链接 | protects=远程发现清单不一致或分享链接越权与撤销后仍可用
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
 def test_remote_mcp_and_scoped_viewer_api(tmp_path):

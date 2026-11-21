@@ -1,0 +1,52 @@
+name: Server and Pages release
+on:
+  push:
+    tags: ['server-v*.*.*']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Verify server release version
+        run: test "$GITHUB_REF_NAME" = "server-v$(bun -p "require('./package.json').version")"
+      - run: bun run ui:install
+      - run: bun run ui:prepare
+      - run: bun test ./tests/deploy/pages.test.mjs
+      - name: Package matching server and Pages builds
+        run: |
+          mkdir release
+          bun deploy/pages/build.mjs dashboard_runtime/web/dist "$RUNNER_TEMP/pages"
+          (cd "$RUNNER_TEMP/pages" && zip -qr "$GITHUB_WORKSPACE/release/pages.zip" .)
+          docker build -f deploy/neon/Dockerfile -t "charts-design-api:$GITHUB_REF_NAME" .
+          docker save "charts-design-api:$GITHUB_REF_NAME" | gzip -1 > release/server-image.tar.gz
+          cp deploy/neon/unified-mcp.example.json release/
+          (cd release && sha256sum pages.zip server-image.tar.gz unified-mcp.example.json > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-release
+          path: release/
+          if-no-files-found: error
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-release
+          path: release
+      - name: Publish server channel assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd release && sha256sum -c SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Charts Design $GITHUB_REF_NAME" --notes "自有服务器、Neon 和 Cloudflare Pages 专用版本。客户端配置不含密钥。"

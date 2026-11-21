@@ -13,7 +13,7 @@
 | `/` | 默认项目预览入口；跨项目管理通过 API／CLI | 服务器令牌（只保存在当前标签页） |
 | `/files/<令牌>` | 导出文件下载（JSON、CSV、HTML、静态 ZIP） | 24 小时有效的签名链接 |
 | `/health` | 存活检查，返回版本 | 无 |
-| `/s/<shareId>/` 及其资源 | 腾讯云独立只读副本 | 8 位数字密钥与受限会话 |
+| `/s/<shareId>/` 及其资源 | 所选平台上的独立只读副本 | 8 位数字密钥与受限会话 |
 
 页面外壳不含业务数据；数据只经由带令牌的接口读取。分享令牌放在 URL 片段中，浏览器不会把片段发送给服务器、代理或 Referer；页面加载后从地址栏移除，只保留在当前标签页的 sessionStorage。
 
@@ -100,7 +100,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | --- | --- | --- | --- |
 | 在线只读链接 | `dashboard_share`，`access=view` | 服务端项目的已保存检查点及其数据；CloudBase 存储在 PG，通过服务端 SQLite 缓存计算 | 链接包含访问令牌；按 `expiresInHours` 或服务器默认值过期，可撤销 |
 | 在线编辑链接 | `dashboard_share`，`access=edit` | 同一服务端项目；支持网页提供的编辑、版本管理和恢复 | 同在线只读链接，权限包含网页支持的编辑操作 |
-| 独立分享链接 | 正式发布后调用 `dashboard_share_publish` | 独立 COS 副本含发布时的网页和完整数据分片；浏览器加载后计算筛选等操作，项目更新不会自动更新该副本 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
+| 独立分享链接 | 正式发布后调用 `dashboard_share_publish` | 副本保留发布时的网页和数据；保存在腾讯云私有 COS 或 Cloudflare 私有工作区，不跟随原项目更新 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
 
 `dashboard_preview` 在支持 MCP Apps 的宿主中打开已保存检查点；需要浏览器链接时使用 `dashboard_share`。
 
@@ -131,6 +131,59 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 2026-11-07 在 Linux 容器中验证：官方 MCP Python 客户端经 Streamable HTTP 完成工具列表、创建、越界路径拒绝、预览链接、导出下载与令牌鉴权；Chromium 打开只读与编辑链接，看板与报告图表正常渲染、无脚本或 CSP 错误，伪造令牌显示失效提示，手机宽度无横向溢出。自动测试见 `tests/runtime/test_server.py`。
 
 2026-11-08，`main` 提交 `ae77261` 的 GitHub Actions 运行 40 六个作业全部通过，包含完整 Docker 多阶段构建、以非 root 用户运行镜像、远程 MCP、预览与下载冒烟检查。详细历史见[验收记录](../records/2026-11-07-server-layout-kpi.md)。
+
+## 独立服务器、Neon 与 Cloudflare Pages
+
+### 一个 MCP 入口访问两个后端
+
+在自有服务器的 API 容器中开启可选的 `/unified/mcp`，即可用同一套工具访问本机项目和既有 CloudBase 服务；不要求更新 CloudBase。它不是双写、复制或故障切换。两端原有 `/mcp` 和网页分享地址不变。
+
+只在网关容器中配置以下三个环境变量，配置后重建该容器：
+
+| 变量 | 用途 |
+| --- | --- |
+| `CHARTS_UNIFIED_TOKEN` | 新生成、至少 32 字符的独立 Bearer 令牌；持有者可管理两端项目，不得复用任一后端令牌 |
+| `CHARTS_CLOUDBASE_URL` | 原 CloudBase MCP 服务的 HTTPS 根地址，只填写协议和主机名 |
+| `CHARTS_CLOUDBASE_MCP_TOKEN` | 原服务的 MCP 访问令牌，不是腾讯云管理 API Key |
+
+三项全部未设置时不注册新入口。配置前须确认自有服务器可以保管 CloudBase 的 MCP 权限。将客户端原 MCP JSON 的 URL 改为自有服务器的 `https://<后端域名>/unified/mcp`，请求头使用 `Authorization: Bearer <统一入口令牌>`。不要使用 Pages 地址。
+
+每次工具调用都传 `projectRoot`。首次处理一个名字时，网关读取两端项目目录：只存在一处则自动固定归属；同名则须显式传 `backend: "server"` 或 `"cloudbase"`；新名字须在 `dashboard_create` 中指定 `backend`。例如 `{"projectRoot":"sales","dashboardId":"overview","title":"销售概览","backend":"server"}`。固定后无需再传 `backend`，传入冲突值会拒绝，另一端的同名项目仍可通过其直连入口使用。首次目录查询失败不转发；已绑定的项目只访问所属后端。写入响应中断后先检查原项目状态，不会自动重试或切到另一边。
+
+归属表 `backend-routes.sqlite3` 位于网关的 `CHARTS_RUNTIME_ROOT`，应随私有数据卷备份。它只存项目名和后端名，不保存看板、数据或上游令牌。
+
+支持在 JSON 请求头中替换环境变量的客户端，可使用[统一 MCP 配置示例](../../deploy/neon/unified-mcp.example.json)。不支持变量替换的客户端，应在其私有凭据设置中配置 Bearer 令牌，不要将真实值提交到项目。
+
+### 单后端部署
+
+此组合不使用 Cloudflare Containers。MCP 与 API 在独立的 `charts-design` Compose 项目中运行。`deploy/neon/compose.yml` 只向主机回环地址发布 `18160` 端口，使用独立的网络和数据卷；不连接同机其他应用的数据库。数据库结构、看板、版本及引用登记在 Neon PostgreSQL，下载文件、资源及分享副本保存在此项目的私有卷。备份须同时覆盖数据库和卷。
+
+从源码重建时，先运行 `bun run ui:prepare`，确认 `dashboard_runtime/web/dist/` 含 `build.json`、`app.js`、`app.css` 和 `static-worker.js`。从同一份构建结果运行 `bun deploy/pages/build.mjs dashboard_runtime/web/dist <Pages输出目录>`。在仅含发布源码和构建产物的项目根目录运行 `docker build -f deploy/neon/Dockerfile -t charts-design-api:neon .`。环境文件、数据库连接串和私钥均存放在构建目录外。
+
+在专用 Neon 数据库创建不具备建库、建角色权限的运行账号。以数据库所有者的直连 `DATABASE_URL` 和 `CHARTS_NEON_RUNTIME_ROLE` 运行 `python deploy/neon/migrate.py`；运行容器只接收普通运行账号的 `DATABASE_URL`。保留 `CHARTS_SERVER_SECRET`、`CHARTS_SERVER_TOKENS` 与单独的 `CHARTS_ORIGIN_TOKEN`；`CHARTS_PUBLIC_URL` 指向 Pages 的 HTTPS 根地址，`CHARTS_ALLOWED_HOSTS` 包含对外 MCP 主机名。
+
+`deploy/pages/build.mjs` 从与后端相同的 UI 构建产物生成 Pages 部署包。Pages 绑定 `ORIGIN_URL` 指向后端的独立 HTTPS 入口，`ORIGIN_TOKEN` 与后端 `CHARTS_ORIGIN_TOKEN` 配对，用于验证源站请求。浏览器从 Pages 加载资源，并在同一域名访问网页 API；MCP 客户端携带用户令牌直接连接后端域名的 `/mcp`。部署后通过 Pages 的网页 API 验证源站连接。
+
+后端就绪后单独安装 `deploy/neon/charts-design-cleanup.service` 与 `.timer`，先执行一次清理生成心跳，再启用每六小时清理。现有主机的容器、定时器及备份策略不复用。
+
+## Cloudflare 独立部署
+
+Cloudflare 运行同一套 Python MCP、网页编辑器、版本历史和下载服务。Worker 将请求送入同一个 Container。项目、历史、签名密钥和私密分享保存在同一工作区；Durable Object 的 SQLite 存储保留压缩归档，不依赖容器临时磁盘、COS 或腾讯云账号。更换云平台不会迁移原有项目或分享链接。
+
+在 GitHub 仓库的 Actions 配置中选择部署平台：
+
+| 仓库变量 `CHARTS_DEPLOY_PROVIDER` | 发布标签时执行 |
+| --- | --- |
+| 不设置或 `cloudbase` | 原有 CloudBase 任务 |
+| `cloudflare` | 仅 Cloudflare 任务 |
+
+Cloudflare 账号须能使用 Workers、Containers 和 SQLite Durable Objects。配置仓库变量 `CLOUDFLARE_ACCOUNT_ID`、`CHARTS_PUBLIC_URL`（此 Worker 的 HTTPS 根地址，不带路径或末尾斜杠）。设置两个独立的 Actions Secret：`CLOUDFLARE_API_TOKEN` 用于部署，`CHARTS_SERVER_TOKENS` 用于 MCP 访问，不能复用。默认 Worker 名为 `charts-design`，可使用其 `workers.dev` 地址；自定义域名需先绑定。
+
+按下节的版本标签流程发布，或在 **Cloudflare release** 中选择已有版本标签。工作流构建镜像，配置 Worker 与每六小时一次的 Cron，并以 `/health` 返回的 Git 提交号检查发布结果。首次成功清理前不允许创建独立分享。访问密钥、有效期、撤销和编辑链接权限沿用原有接口。
+
+本地部署入口是 `bun run deploy:cloudflare`，需要可用的 Docker 构建器、已注入的 Cloudflare 账号和部署凭据，以及 Worker 的 `CHARTS_SERVER_TOKENS` secret。用 `--var "CHARTS_PUBLIC_URL:$CHARTS_PUBLIC_URL"` 指定已绑定的地址。不要删除或更名已投入使用的 Durable Object 命名空间或 `workspace` 实例；新实例不会继承原项目。
+
+此路径面向单工作区。请求按顺序执行；成功的 MCP POST、编辑请求和定时清理在返回前保存整个工作区。恢复或保存失败时请求失败，不以空工作区继续。归档大小会影响每次保存的耗时，暂存新归档时还需要容纳上一份归档；不提供跨实例横向写入。清理移除当前工作区中的副本，平台灾备保留期不等同于在线访问期。
 
 ## 按版本自动发布到 CloudBase
 

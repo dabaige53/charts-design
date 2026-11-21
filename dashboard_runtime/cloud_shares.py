@@ -34,6 +34,7 @@ def key_digest(key, salt):
 class CloudShares:
     def __init__(self, storage, public_url):
         self.storage = storage
+        self.executor = getattr(storage, 'executor', 'tencent-scf')
         parsed = urlparse(public_url)
         require(parsed.scheme == 'https' and bool(parsed.netloc) and not parsed.query and not parsed.fragment,
                 'Configure CHARTS_PUBLIC_URL as the HTTPS cloud gateway address',
@@ -42,6 +43,9 @@ class CloudShares:
 
     @classmethod
     def from_environment(cls):
+        if os.environ.get('CHARTS_STORAGE_BACKEND') in ('cloudflare', 'neon'):
+            from .cloudflare_shares import storage
+            return cls(storage(), os.environ.get('CHARTS_PUBLIC_URL', ''))
         from .cloud_storage import CosShareStorage
         return cls(CosShareStorage.from_environment(), os.environ.get('CHARTS_PUBLIC_URL', ''))
 
@@ -98,7 +102,7 @@ class CloudShares:
                 seen.add(page_id)
         heartbeat = self.storage.get('cleaner-status.json')
         require(heartbeat is not None and time.time() - json.loads(heartbeat)['completedAt'] < 7 * 3600,
-                'Deploy the SCF six-hour timer and confirm a successful cloud cleanup invocation before publishing',
+                'Confirm a successful six-hour cloud cleanup invocation before publishing',
                 'CLOUD_CLEANER_UNAVAILABLE')
         self.storage.check_private()
         if getattr(service.store, 'cos_enabled', False):
@@ -177,7 +181,7 @@ class CloudShares:
         url = self.public_url + '/s/' + share_id + '/'
         return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
                 'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
-                'revision': doc['revision'], 'pages': entries, 'cleanupExecutor': 'tencent-scf'}
+                'revision': doc['revision'], 'pages': entries, 'cleanupExecutor': self.executor}
 
     def index_project(self, store):
         """Register old publications, including every page of a multi-page share."""
@@ -244,7 +248,7 @@ class CloudShares:
         url = self.public_url + '/s/' + share_id + '/'
         return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
                 'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
-                'revision': pages[0]['revision'], 'pages': pages, 'cleanupExecutor': 'tencent-scf'}
+                'revision': pages[0]['revision'], 'pages': pages, 'cleanupExecutor': self.executor}
 
     def authenticate(self, share_id, key):
         control = self.control(share_id)
@@ -319,7 +323,7 @@ class CloudShares:
             'revision': control['revision'],
         })
         return {'shareId': share_id, 'revoked': True, 'cleanupState': 'pending',
-                'cleanupExecutor': 'tencent-scf'}
+                'cleanupExecutor': self.executor}
 
     def status(self, service, board, share_id=None):
         if share_id is not None:
@@ -340,7 +344,7 @@ class CloudShares:
                            'replacesShareId': job.get('replacesShareId'),
                            'cleanupState': 'pending' if due else 'scheduled' if job['cleanupAfter'] else 'not_scheduled',
                            'url': self.public_url + '/s/' + job['shareId'] + '/'})
-        return {'shares': shares, 'cleanupExecutor': 'tencent-scf'}
+        return {'shares': shares, 'cleanupExecutor': self.executor}
 
 
 def cleanup_due(storage, now=None):
@@ -360,7 +364,7 @@ def cleanup_due(storage, now=None):
             deadline = job['cleanupAfter']
             registered = None
             from .cloud_database import cloud_enabled
-            if cloud_enabled() or os.environ.get('CLOUDBASE_API_KEY'):
+            if cloud_enabled() or (os.environ.get('CHARTS_STORAGE_BACKEND') != 'cloudflare' and os.environ.get('CLOUDBASE_API_KEY')):
                 registered = AssetDatabase().call('share_access', id=share_id)
                 if registered and registered['state'] == 'uploading':
                     deadline = registered['stagingUntil']

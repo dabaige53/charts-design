@@ -45,7 +45,7 @@ class McpProfile:
         return project_result(result, selected)
 
 
-def create_server(service, lifetime=None, profile=None):
+def create_server(service, lifetime=None, profile=None, routes=None):
     lifetime = lifetime or IdleLifetime()
     profile = profile or McpProfile()
     projects = profile.projects(service)
@@ -67,6 +67,11 @@ def create_server(service, lifetime=None, profile=None):
                 continue
             description = profile.describe(name, description)
             schema = profile.schema(name, schema)
+            if routes is not None:
+                schema = {**schema, 'required': sorted(set(schema.get('required', [])) | {'projectRoot'}),
+                          'properties': {**schema['properties'],
+                              'projectRoot': {'type': 'string', 'description': 'Persistent project name; required on every unified call.'},
+                              'backend': {'enum': ['server', 'cloudbase'], 'description': 'Choose once when creating a project or resolving a name present on both backends. Never changes an existing binding.'}}}
             if name in DOCUMENT_WRITES:
                 description += WRITE_RESPONSE_HELP
                 schema = write_response_schema(name, schema)
@@ -94,6 +99,10 @@ def create_server(service, lifetime=None, profile=None):
             if name in profile.hidden_tools or (name not in TOOLS and name not in profile.extra_tools):
                 raise DashboardError('UNKNOWN_TOOL', f'Unsupported tool: {name}', 404)
             request = dict(arguments or {})
+            if routes is not None:
+                owner = await routes.select(request.get('projectRoot'), request.pop('backend', None), name)
+                if owner == 'cloudbase':
+                    return await routes.forward(name, request)
             response_mode = 'full'
             if name in DOCUMENT_WRITES:
                 response_mode = request.pop('responseMode', 'summary')
@@ -158,7 +167,7 @@ def create_server(service, lifetime=None, profile=None):
                 for tool in tool_definitions()}, 'projectRouting': {
                     'selector': 'projectRoot', 'scope': 'request',
                     'description': profile.schema('dashboard_get', {})['properties']['projectRoot']['description'],
-                    'omitted': 'startup project default or legacy store; never the last selected project',
+                    'omitted': 'not permitted on the unified endpoint' if routes is not None else 'startup project default or legacy store; never the last selected project',
                     'preview': 'bind once from result.projectRoot; include it in all subsequent calls, including chunks'}}
             return [ReadResourceContents(content=json.dumps(contract, ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://layouts':

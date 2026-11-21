@@ -152,7 +152,10 @@ class Service:
         if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
             from .cloud_shares import CloudShares
             shares = CloudShares.from_environment()
-            from qcloud_cos.cos_exception import CosClientError, CosServiceError
+            storage_errors = (OSError,)
+            if shares.executor == 'tencent-scf':
+                from qcloud_cos.cos_exception import CosClientError, CosServiceError
+                storage_errors = (CosClientError, CosServiceError)
             try:
                 if tool == 'dashboard_share_publish':
                     return shares.publish(self, board, args['expectedRevision'],
@@ -163,9 +166,9 @@ class Service:
                 if tool == 'dashboard_share_status':
                     return shares.status(self, board, args.get('shareId'))
                 return shares.revoke(self, board, args.get('shareId'))
-            except (CosClientError, CosServiceError) as error:
+            except storage_errors as error:
                 raise DashboardError('CLOUD_STORAGE_FAILED',
-                    'Tencent COS request failed. Check cloud service permissions and dashboard_share_status before retrying a publish.',
+                    'Share storage failed. Check storage and dashboard_share_status before retrying a publish.',
                     503) from error
         if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish',
                     'dashboard_version_delete', 'dashboard_version_delete_preview',

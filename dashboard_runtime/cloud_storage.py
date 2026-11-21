@@ -7,6 +7,13 @@ import os
 from .model import DashboardError, require
 
 
+def publication_storage():
+    if os.environ.get('CHARTS_STORAGE_BACKEND') == 'neon':
+        from .cloudflare_shares import storage
+        return storage()
+    return CosShareStorage.from_environment()
+
+
 class CosShareStorage:
     def __init__(self, client, bucket, prefix='charts-shares/'):
         self.client, self.bucket = client, bucket

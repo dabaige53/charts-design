@@ -1,6 +1,6 @@
 {
   "name": "charts-design",
-  "version": "1.2.19",
+  "version": "1.2.27",
   "description": "Versioned dashboard data, metrics and MCP runtime with shared React UI components.",
   "bin": {
     "charts-design": "./bin/cli.js",
@@ -10,6 +10,7 @@
     "setup": "bun bin/setup-environment.mjs",
     "release": "bun bin/release.mjs",
     "deploy:cloudbase": "bun bin/cloudbase-deploy.mjs",
+    "deploy:cloudflare": "bunx --package wrangler@4.166.0 wrangler deploy --config deploy/cloudflare/wrangler.json",
     "ui:install": "bun install --cwd runtime-ui --frozen-lockfile",
     "ui:build": "bun run --cwd runtime-ui --bun build",
     "ui:prepare": "bun runtime-ui/scripts/prepare.mjs",
@@ -65,6 +66,9 @@
     "deploy/charts-design.service",
     "deploy/nginx.conf",
     "deploy/environment.example",
+    "deploy/cloudflare/worker.mjs",
+    "deploy/cloudflare/checkpoint.mjs",
+    "deploy/cloudflare/wrangler.json",
     "cloudbase/migrations/",
     "docs/operations/testing.md",
     "uv.lock",

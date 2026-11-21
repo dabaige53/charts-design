@@ -332,7 +332,7 @@ class ServerProfile(McpProfile):
             'dashboard_share_revoke': ('Revoke every previously issued browser share link for this dashboard/report; all those readers lose access. '
                                       'Does not delete the dashboard or revoke unrelated export download links. '
                                       'Returns revoked=true and generation. Call only for the requested dashboard; use dashboard_share for a new link. '
-                                      'To remove a Tencent COS publication use dashboard_share_delete with its shareId instead.',
+                                      'To remove an independent cloud publication use dashboard_share_delete with its shareId instead.',
                                       tool_schema({'dashboardId': BOARD['dashboardId']}, ('dashboardId',))),
         }
 
@@ -408,7 +408,7 @@ class RemoteServer:
         self.mcp = create_server(self.projects.service(settings.default_project), IdleLifetime(10 ** 9), self.profile)
         self._gzip: dict[tuple, bytes] = {}
         self.cloud_shares = None
-        if os.environ.get('CHARTS_COS_BUCKET'):
+        if os.environ.get('CHARTS_COS_BUCKET') or os.environ.get('CHARTS_STORAGE_BACKEND') in ('cloudflare', 'neon'):
             from .cloud_shares import CloudShares
             self.cloud_shares = CloudShares.from_environment()
         self._cloud_attempts = {}
@@ -545,10 +545,21 @@ def create_app(server: RemoteServer):
     base = settings.base_path
     import inspect
     options = {}
+    if os.environ.get('CHARTS_STORAGE_BACKEND') == 'cloudflare':
+        options['json_response'] = True
     if 'max_request_body_size' in inspect.signature(StreamableHTTPSessionManager).parameters:
         # dataset_import and patches accept up to 16 MiB, like the local transports.
         options['max_request_body_size'] = MAX_BYTES + 1024 * 1024
     manager = StreamableHTTPSessionManager(app=server.mcp, stateless=settings.stateless, security_settings=settings.security(), **options)
+    from .backend_routing import configured_routes
+    backend_routes = configured_routes(server)
+    unified = None
+    if backend_routes is not None:
+        from .mcp_server import create_server
+        from .lifecycle import IdleLifetime
+        unified = StreamableHTTPSessionManager(
+            app=create_server(server.projects.service(settings.default_project), IdleLifetime(10 ** 9), server.profile, backend_routes),
+            stateless=True, security_settings=settings.security(), **options)
 
     async def read_body(request: Request, limit: int) -> bytes:
         """Refuse oversized bodies before buffering them, with or without Content-Length."""
@@ -587,6 +598,12 @@ def create_app(server: RemoteServer):
 
         async def __call__(self, scope, receive, send):
             request = Request(scope, receive)
+            if scope['path'] == '/unified/mcp' and unified is not None:
+                if hmac.compare_digest(bearer(request).encode(), os.environ['CHARTS_UNIFIED_TOKEN'].encode()):
+                    await unified.handle_request(scope, receive, send)
+                else:
+                    await JSONResponse({'error': 'unauthorized'}, status_code=401)(scope, receive, send)
+                return
             token = scope.get('path_params', {}).get('secret') or bearer(request)
             if not (settings.insecure_no_auth or server.admin(token)):
                 response = JSONResponse({'error': 'unauthorized', 'message': 'Send Authorization: Bearer <server token>'},
@@ -837,7 +854,10 @@ def create_app(server: RemoteServer):
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
-        async with manager.run():
+        async with contextlib.AsyncExitStack() as stack:
+            await stack.enter_async_context(manager.run())
+            if unified is not None:
+                await stack.enter_async_context(unified.run())
             yield
 
     routes = [
@@ -856,6 +876,8 @@ def create_app(server: RemoteServer):
         Route('/mcp', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
         Route('/mcp/{secret}', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
     ]
+    if unified is not None:
+        routes.append(Route('/unified/mcp', McpEndpoint(), methods=['GET', 'POST', 'DELETE']))
     app = Starlette(routes=routes, lifespan=lifespan)
     app.state.server = server
     return RequestLog(app)
@@ -879,6 +901,14 @@ class RequestLog:
         if scope['type'] != 'http':
             await self.app(scope, receive, send)
             return
+        path = scope['path']
+        if os.environ.get('CHARTS_STORAGE_BACKEND') == 'neon' and path not in ('/health', '/mcp', '/unified/mcp') and not path.startswith('/mcp/'):
+            expected = os.environ.get('CHARTS_ORIGIN_TOKEN', '').encode()
+            supplied = dict(scope['headers']).get(b'x-origin-token', b'')
+            if not expected or not hmac.compare_digest(expected, supplied):
+                from starlette.responses import Response
+                await Response(status_code=403, headers={'Cache-Control': 'no-store'})(scope, receive, send)
+                return
         started, status = time.perf_counter(), {'code': 0}
 
         async def capture(message):

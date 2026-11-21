@@ -189,17 +189,17 @@ TOOLS = {
     'dataset_transfer_cleanup': ('Remove only this transfer staging prefix and all object versions; do not call while uploading or finalizing.', schema({
         'uploadId': described(STR, 'Exact transfer ID to remove.'),
     }, ('uploadId',))),
-    'dashboard_share_status': ('List this dashboard’s Tencent publication jobs, or inspect one shareId, without returning visitor keys. '
+    'dashboard_share_status': ('List this dashboard’s cloud publication jobs, or inspect one shareId, without returning visitor keys. '
         'Returns shares with revision/expiry/state/cleanupState. Use after an uncertain publish response before retrying. '
         'pending means cloud deletion is due or retrying, not complete; successfully cleaned jobs disappear. '
         'An empty result means no matching job remains and is not a host-rendering acceptance check.', schema({
         **BOARD, 'shareId': described({'type': 'string', 'pattern': '^[0-9a-f]{32}$'},
             'Optional shareId from dashboard_share_publish; omit to list this dashboard’s publications.'),
     }, ('dashboardId',))),
-    'dashboard_share_publish': ('Publish a separate read-only static copy to configured private Tencent COS storage behind the HTTPS cloud gateway. '
-        'Project mode requires the current formal publication at expectedRevision: save with dashboard_checkpoint, then dashboard_version_publish. Also requires cloud credentials and a deployed SCF cleanup timer. '
+    'dashboard_share_publish': ('Publish a separate read-only static copy to private storage behind the configured HTTPS cloud gateway. '
+        'Project mode requires the current formal publication at expectedRevision: save with dashboard_checkpoint, then dashboard_version_publish. Requires a healthy cloud cleanup timer. '
         'Returns shareId/url/accessUrl/accessKey/expiresAt (UTC Unix seconds, null for never). accessUrl carries the eight-digit key in a #key fragment for automatic form filling; give this link only to intended readers, or send url and accessKey separately. '
-        'expiration defaults to 7d; never means no automatic expiry. At expiry the gateway rejects access immediately and cloud SCF deletes the copy, historical object versions and key records. '
+        'expiration defaults to 7d; never means no automatic expiry. At expiry the gateway rejects access immediately and scheduled cleanup removes the copy and key records. '
         'Does not delete the source project or other shares. Does not deploy cloud infrastructure. On an uncertain response call dashboard_share_status before publishing another copy.', schema({
         **BOARD, 'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status; drafts may be newer without changing this share.'),
         'pages': described({'type': 'array', 'items': {'type': 'object', 'properties': {'dashboardId': ID, 'expectedRevision': INT}, 'required': ['dashboardId', 'expectedRevision'], 'additionalProperties': False}}, 'Additional published pages to include; omit the main dashboard. Each revision must match its current published revision.'),
@@ -208,13 +208,13 @@ TOOLS = {
         'accessKey': described({'type': 'string', 'pattern': '^[0-9]{8}$'},
             'Optional exactly eight ASCII digits, including leading zeros. Omit to generate a random key. Only a salted hash is stored remotely.'),
     }, ('dashboardId', 'expectedRevision'))),
-    'dashboard_share_replace': ('Replace one selected share with the current formally published version. Creates a new URL and random eight-digit key, then revokes the old link and its sessions; other shares stay unchanged. Upload failure leaves the old share usable. Returns new share credentials and previousRevoked. If previousRevoked=false, retain the returned new credentials and retry dashboard_share_delete for previousShareId; do not republish. Cloud SCF physically removes the old copy.', schema({
+    'dashboard_share_replace': ('Replace one selected share with the current formally published version. Creates a new URL and random eight-digit key, then revokes the old link and its sessions; other shares stay unchanged. Upload failure leaves the old share usable. Returns new share credentials and previousRevoked. If previousRevoked=false, retain the returned new credentials and retry dashboard_share_delete for previousShareId; do not republish. Scheduled cleanup removes the old copy.', schema({
         **BOARD, 'shareId': described({'type': 'string', 'pattern': '^[0-9a-f]{32}$'}, 'Active share to replace; obtain from dashboard_share_status.'),
         'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status.'),
         'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'}, 'New share lifetime measured from replacement.'),
     }, ('dashboardId', 'shareId', 'expectedRevision'))),
-    'dashboard_share_delete': ('Revoke one Tencent cloud publication immediately and queue physical deletion by cloud SCF, including never-expiring shares. '
-        'Returns revoked=true, cleanupState=pending and cleanupExecutor=tencent-scf; pending is not proof of completed deletion. '
+    'dashboard_share_delete': ('Revoke one cloud publication immediately and queue deletion, including never-expiring shares. '
+        'Returns revoked=true, cleanupState=pending and cleanupExecutor (tencent-scf or cloudflare-cron); pending is not proof of completed deletion. '
         'Deletes only this publication copy and its access records; preserves the source project and other shares. '
         'Use shareId from dashboard_share_publish, not a signed browser-link token.', schema({
         **BOARD, 'shareId': described({'type': 'string', 'pattern': '^[0-9a-f]{32}$'},

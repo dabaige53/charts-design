@@ -1,0 +1,9 @@
+[Unit]
+Description=Remove expired Charts Design publications
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/charts-design
+ExecStart=/usr/bin/docker compose -f compose.yml exec -T api python -m dashboard_runtime.cloudflare_shares

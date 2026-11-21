@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: vars.CHARTS_DEPLOY_PROVIDER == '' || vars.CHARTS_DEPLOY_PROVIDER == 'cloudbase'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

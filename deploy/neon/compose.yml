@@ -1,0 +1,21 @@
+name: charts-design
+services:
+  api:
+    image: charts-design-api:neon
+    env_file: ./runtime.env
+    restart: unless-stopped
+    init: true
+    cpus: 1.0
+    mem_limit: 1g
+    pids_limit: 192
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    ports: ["127.0.0.1:18160:8000"]
+    volumes: ["charts-data:/data"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  charts-data: {}
