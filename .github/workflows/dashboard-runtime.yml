@@ -90,7 +90,9 @@ jobs:
           retention-days: 14
       - name: React component and interaction tests
         working-directory: runtime-ui
-        run: bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
+        run: |
+          mkdir -p reports
+          bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
       - uses: actions/upload-artifact@v5
         if: always()
         with:

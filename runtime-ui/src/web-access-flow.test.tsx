@@ -7,15 +7,23 @@ mock.module("./components/ui/tooltip", () => ({ TooltipProvider: ({ children }: 
 mock.module("sonner", () => ({ Toaster: () => null }));
 
 const originalFetch = globalThis.fetch;
+const webGlobals = ["location", "history", "sessionStorage"] as const;
+const originalGlobals = webGlobals.map(key => Object.getOwnPropertyDescriptor(globalThis, key));
 afterEach(() => {
   globalThis.fetch = originalFetch;
   window.sessionStorage.clear();
+  webGlobals.forEach((key, index) => {
+    const descriptor = originalGlobals[index];
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  });
   mock.restore();
 });
 
 // @wu-test type=integration | scope=在线访问令牌恢复 | protects=跳转丢失令牌后无法通过完整链接加载看板
 it("retries dashboard loading with the pasted token after unauthorized", async () => {
-  Object.assign(globalThis, { location: window.location, history: window.history, sessionStorage: window.sessionStorage });
+  for (const key of webGlobals)
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: window[key] });
   window.__chartsBoot = { mode: "web", projectRoot: "test", dashboardId: "board", apiBase: "/api/v1/p/test/tools/", idleTimeout: null };
   document.body.innerHTML = '<div id="root"></div>';
   let calls = 0;

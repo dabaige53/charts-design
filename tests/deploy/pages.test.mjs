@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,17 +10,24 @@ const env = { ORIGIN_URL: "https://backend.example", ORIGIN_TOKEN: "origin-secre
   ASSETS: { fetch: async () => new Response("static asset") } };
 
 // @wu-test type=integration | scope=deploy/pages/build.mjs | protects=missing viewer assets in the deployable Pages bundle
-test("build copies actual backend UI resources into the Pages bundle", async () => {
-  const source = process.env.PAGES_TEST_DIST || "dashboard_runtime/web/dist";
-  const output = await mkdtemp(join(tmpdir(), "charts-pages-test-"));
+test("build copies backend UI resources into the Pages bundle", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "charts-pages-test-"));
+  const source = process.env.PAGES_TEST_DIST || join(temporary, "dist");
+  const output = join(temporary, "pages");
+  const assets = ["app.js", "app.css", "static-worker.js"];
   try {
+    if (!process.env.PAGES_TEST_DIST) {
+      await mkdir(source);
+      await writeFile(join(source, "build.json"), JSON.stringify({ id: "pages-test" }));
+      await Promise.all(assets.map(name => writeFile(join(source, name), `fixture: ${name}`)));
+    }
     execFileSync(process.execPath, ["deploy/pages/build.mjs", source, output]);
-    for (const name of ["app.js", "app.css", "static-worker.js"]) {
+    for (const name of assets) {
       assert.deepEqual(await readFile(join(output, "assets", name)), await readFile(resolve(source, name)));
     }
     assert.match(await readFile(join(output, "_worker.js"), "utf8"), /ORIGIN_TOKEN/);
   } finally {
-    await rm(output, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true });
   }
 });
 

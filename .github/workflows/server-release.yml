@@ -20,6 +20,8 @@ jobs:
       - run: bun run ui:install
       - run: bun run ui:prepare
       - run: bun test ./tests/deploy/pages.test.mjs
+        env:
+          PAGES_TEST_DIST: dashboard_runtime/web/dist
       - name: Package matching server and Pages builds
         run: |
           mkdir release
