@@ -148,6 +148,7 @@ def test_filtered_report_over_stdio(tmp_path):
                 async def call(name, args):
                     result = await session.call_tool(name, args)
                     assert not result.isError, result
+                    assert result.structuredContent is not None, result
                     return result.structuredContent
                 case = await call('generation_examples', {'caseId': 'filtered-report'})
                 await call('dashboard_create', {'dashboardId': 'filtered', 'title': 'Blank'})

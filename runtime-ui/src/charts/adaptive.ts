@@ -203,7 +203,7 @@ export function adaptOption(option: any, width: any, height = 320) {
         ...axis.data.map((item: any) => textWidth(label(item), size)),
       );
       if (longest <= slot - 6) continue;
-      const next: any = { ...(axis.axisLabel || {}) };
+      const next: any = { ...axis.axisLabel };
       if (slot >= 44)
         Object.assign(next, {
           width: Math.floor(slot - 6),
