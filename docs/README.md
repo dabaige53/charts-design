@@ -32,6 +32,7 @@
 
 ## 生成与设计资产参考
 
+- [外部报表审查](../skills/executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp)与[MCP 声明构建](../skills/executive-charts/references/mcp-authoring.md)用于核对旧报表和初始化、调整目标文件。
 - [看板 Skill](../skills/executive-charts/SKILL.md)、[报告 Skill](../skills/analytical-reports/SKILL.md)及[共享交付流程](../skills/executive-charts/references/mcp-delivery.md)：随包提供的生成步骤与成果保留要求。
 - [指标定义](../skills/executive-charts/references/metric-definitions.md)、[数据格式](../skills/executive-charts/references/data_formatting_standards.md)：业务对象、范围、计算和显示。
 - [指标卡选型](../skills/executive-charts/references/kpi-cards.md)、[布局模板](../skills/executive-charts/references/layout_templates.md)、[生成设计参考](../skills/executive-charts/references/design_standards.md)：按问题选择，不覆盖当前产品与设计规则。

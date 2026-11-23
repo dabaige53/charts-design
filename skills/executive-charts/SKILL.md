@@ -1,11 +1,13 @@
 ---
 name: executive-charts
-description: Create, revise and refresh data-backed business dashboards, KPI scorecards and interactive analysis through Charts Design MCP or CLI. Use for sources, metrics, charts, filters, tables and saved dashboard delivery. For narrative Markdown reports with inline figures, use analytical-reports.
+description: Migrate external legacy dashboards. Create, revise and refresh data-backed business dashboards, KPI scorecards and interactive analysis through Charts Design MCP or CLI. Use for sources, metrics, charts, filters, tables and saved dashboard delivery. For narrative Markdown reports with inline figures, use analytical-reports.
 ---
 
 # Executive Charts
 
 Build a dashboard around the user's question and the data available. Use the requested chart and reading order; fill unspecified choices with the project's [design standards](references/design_standards.md).
+
+迁移其他项目或系统的历史看板时，先委派一个子代理逐页完成[源报表审查与 MCP 映射](references/existing-project-checklist.md#从外部历史报表迁入-mcp)。新建或修改 MCP 声明时使用[通用构建脚本](references/mcp-authoring.md)生成 JSON、编辑文件和请求。
 
 ## Find the project and tools
 
