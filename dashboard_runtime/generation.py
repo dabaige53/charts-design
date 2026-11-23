@@ -1,6 +1,6 @@
 """Read-only, packaged generation cases. Never insert example data implicitly."""
 from copy import deepcopy
-from .demo import executive_document, operations_document, report_document
+from .demo import executive_document, operations_document, report_document, filtered_report_document
 from .model import require
 
 CASES = {
@@ -10,6 +10,7 @@ CASES = {
     'operations-scorecard': {'track': 'dashboard', 'title': '航空运营指标墙 · 收入、运力与目标',
         'description': 'Contrasting composition on the same synthetic data: scorecard layout template, mc16 hero, mc11 ring, mc13 bullet, mc14 period comparison, mc12 mini bars and mc05 gauge, with c02/c03/t01 charts. All bound values recompute under filters.',
         'skill': 'skills/executive-charts/SKILL.md'},
+    'filtered-report': {'track': 'report', 'title': '合成月度报告', 'description': 'Two tables with report-level and independent table-level filters.', 'skill': 'skills/analytical-reports/SKILL.md'},
     'academic-report': {'track': 'report', 'title': '季度收入变化与区域结构的描述性分析',
         'description': 'Approved academic reading master: authored title, abstract, methods, analysis, inline figures, conclusions and limitations.',
         'skill': 'skills/analytical-reports/SKILL.md'},
@@ -46,7 +47,7 @@ def generation_examples(case_id=None):
                 'workflow':['chart_recommend(intent, data shape)', 'chart_declarations(code)', 'layout_templates', 'generation_examples(caseId)', 'dashboard_create', 'dashboard_edit_begin', 'dashboard_patch(expectedRevision, operations incl. apply_layout_template)', 'dashboard_edit_finish', 'dashboard_get'],
                 'variety':'The two dashboard cases share data but differ in layout template, KPI shapes and chart codes. Choose per question with chart_recommend and the kpiGuide; do not reuse one composition for every dashboard.'}
     require(case_id in CASES, 'Unknown generation case', 'UNKNOWN_EXAMPLE')
-    doc = {'academic-report': report_document, 'operations-scorecard': operations_document}.get(case_id, executive_document)('example')
+    doc = {'filtered-report': filtered_report_document, 'academic-report': report_document, 'operations-scorecard': operations_document}.get(case_id, executive_document)('example')
     return {'id':case_id, **CASES[case_id], 'synthetic':True, 'operations':case_operations(doc),
             'markdown':doc['manifest'].get('report',{}).get('markdown'),
             'adaptationRules':['Keep stable component IDs and chart fences in sync.',

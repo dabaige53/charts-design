@@ -23,7 +23,7 @@ CONTRACT = {
         'set_annotations': {'value': [{'id': 'unique annotation id', 'componentId': 'existing component id or null for page', 'text': '1-4000 characters', 'createdAt': 'ISO timestamp', 'anchor': 'optional: scope component/text/page, kind element/area, quote (max 1000), rect {x,y,width,height} in 0..1; text scope also requires occurrence'}], 'policy': 'Replaces annotation list; at most 100. Project annotations are independent of design restore; expectedAnnotations enables conflict-checked saves without a design revision.'},
         'set_meta': {'value': {'iconKey': 'chart|plane', 'subtitle': 'Page description', 'org': 'Organization', 'system': 'Business system', 'statusText': 'Business status; each field optional, 0-1000 characters; replaces page metadata'}},
         'set_title': {'value': 'Dashboard title'}, 'set_theme': {'value': 'light|dark; legacy metadata only, current UI always renders light'},
-        'set_view_mode': {'value': 'dashboard|report'},
+        'set_view_mode': {'value': 'dashboard|report|filtered-report'},
         'set_report_markdown': {'value': 'Markdown source (0-200000 characters); chart fences require componentId and allow optional caption (string, 0-500 characters) and source (string, 0-1000 characters)'},
         'set_report': {'value': {'subtitle': 'Report subtitle (0-1000 characters)', 'blocks': [{'id': 'unique block id', 'componentId': 'existing component id'}]}},
         'set_status': {'value': 'ready|partial|blocked|fixture'}
@@ -49,6 +49,7 @@ CONTRACT = {
         'format=percent requires scale=fraction. Raw 0.98 displays as 98%.',
         'All breakpoints must place each component exactly once; placement is automatically added for new components: KPIs join a trailing KPI row, charts pair two per desktop row, tables and text span the width.',
         'Layout templates are optional starting points. Use set_layout for business-specific composition at every breakpoint.',
+        'In filtered-report, filters with scope=table target exactly one table and appear above it; other filters appear at the report top. Conditions combine.',
         'manifest.viewMode is optional and defaults to dashboard; report mode does not change dashboard layouts.',
         'manifest.report.markdown is canonical source (0-200000 characters). Ordinary Markdown prose and chart fences determine the report, independently of dashboard layouts.',
         'A top-level fenced code block with exact info string chart must contain one JSON object with required componentId and optional plain-string caption (0-500 characters) and source (0-1000 characters). The ID must resolve to an existing non-text chart, KPI, table or original component after the atomic batch. Existing componentId-only fences and repeated references are allowed.',

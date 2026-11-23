@@ -138,3 +138,9 @@ MCP 用同样的 `set_report_markdown` 操作，传入项目、看板和最新�
 表格列头优先使用 `columns[].title`；`label` 保持兼容，未提供两者时使用 key。真实交付须替换 fixture 来源与数据，重新计算全部说明、基期比较及指标，不沿用合成案例结论。
 
 维护时机：文档类型、报告源文语法、生成流程或案例引用方式变化时更新；具体渲染能力从当前声明发现入口读取。
+
+## 原生筛选式报告
+
+`set_view_mode` 设为 `filtered-report`，正文单栏铺满可用内容区，继续使用 `set_report_markdown` 和 `chart` 围栏按顺序引用组件。可在围栏前写小节标题和分析段落；提供 `caption` 的表格显示表序号及图注。表格随内容排版，其他图表仍显示图号。
+
+筛选通过 `set_filters` 声明。默认或 `scope: "report"` 的筛选显示在页首；`scope: "table"` 的筛选必须且只能指定一张原生表格作为 `componentIds`，显示在该表上方。报告级与表级条件按各自消费者叠加，选择属于临时查看状态。可通过 `generation_examples {"caseId":"filtered-report"}` 或 `charts://examples/filtered-report` 获取含两张表的合成案例。已有 `report` 和 `dashboard` 保持原有呈现。

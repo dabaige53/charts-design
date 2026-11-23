@@ -217,6 +217,23 @@
   font-size: 16px;
   line-height: 1.8;
 }
+.prose-report-filtered {
+  max-width: none;
+  min-width: 0;
+  padding: clamp(14px, 2vw, 24px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+.prose-report-filtered > h3 {
+  margin: 24px 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.prose-report-filtered > h3 + p {
+  margin: 6px 0 12px;
+}
 .prose-report h1 {
   font-size: 32px;
 }

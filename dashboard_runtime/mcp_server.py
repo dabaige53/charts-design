@@ -146,7 +146,8 @@ def create_server(service, lifetime=None, profile=None, routes=None):
                 types.Resource(uri=AnyUrl('charts://examples'), name='Dashboard and report reference cases', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples/executive-dashboard'), name='Dashboard generation case', mimeType='application/json'),
                 types.Resource(uri=AnyUrl('charts://examples/operations-scorecard'), name='Contrasting scorecard dashboard case', mimeType='application/json'),
-                types.Resource(uri=AnyUrl('charts://examples/academic-report'), name='Approved academic report master', mimeType='application/json')]
+                types.Resource(uri=AnyUrl('charts://examples/academic-report'), name='Approved academic report master', mimeType='application/json'),
+                types.Resource(uri=AnyUrl('charts://examples/filtered-report'), name='Synthetic filtered report', mimeType='application/json')]
         if ui_build_id() != 'unavailable':
             result.append(types.Resource(uri=AnyUrl(ui_resource_uri()), name='Charts Design React UI', mimeType=MIME_TYPE))
         return result
@@ -176,7 +177,7 @@ def create_server(service, lifetime=None, profile=None, routes=None):
         if str(uri) == 'charts://declarations':
             from .declarations import declaration_contract
             return [ReadResourceContents(content=json.dumps(declaration_contract(), ensure_ascii=False), mime_type='application/json')]
-        if str(uri) == 'charts://examples' or str(uri) in ('charts://examples/executive-dashboard', 'charts://examples/operations-scorecard', 'charts://examples/academic-report'):
+        if str(uri) == 'charts://examples' or str(uri) in ('charts://examples/executive-dashboard', 'charts://examples/operations-scorecard', 'charts://examples/academic-report', 'charts://examples/filtered-report'):
             args = {} if str(uri) == 'charts://examples' else {'caseId':str(uri).rsplit('/',1)[1]}
             return [ReadResourceContents(content=json.dumps(service.call('generation_examples', args), ensure_ascii=False), mime_type='application/json')]
         raise ValueError('Unknown resource')

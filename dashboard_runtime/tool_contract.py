@@ -121,7 +121,7 @@ for op_name, value_schema, meaning in (
     ('set_filters', FILTERS, 'Replace saved filter declarations, unlike temporary dashboard_view filters.'),
     ('set_annotations', ANNOTATIONS, 'Replace the complete annotation list. Project annotations survive design restoration.'),
     ('set_meta', common['metaSchema'], 'Replace all page metadata; omitted keys are removed and {} clears it.'),
-    ('set_view_mode', {'enum': ['dashboard', 'report']}, 'Choose grid or Markdown presentation; preserves existing canonical report source.'),
+    ('set_view_mode', {'enum': ['dashboard', 'report', 'filtered-report']}, 'Choose grid or Markdown presentation; preserves existing canonical report source.'),
     ('set_report_markdown', {'type': 'string', 'maxLength': 200000}, 'Replace complete report Markdown; preserve text outside requested edits. chart fences reference existing non-text component IDs.'),
     ('set_report', {'type': 'object'}, 'Legacy whole-report replacement. Prefer set_report_markdown for new authoring; see charts://contract.'),
     ('set_status', {'enum': ['ready', 'partial', 'blocked', 'fixture']}, 'Set saved data status; fixture labels explicitly synthetic data.'),
@@ -272,7 +272,7 @@ TOOLS = {
     ])),
     'legacy_render': ('Return standalone HTML for one existing kind=legacy component using the shared renderer; read-only, does not open the App or create a full-dashboard export. Returns html, scope and componentId. Use dashboard_preview for the saved page.', schema(TARGET, ('dashboardId', 'componentId'))),
     'generation_examples': ('Read explicitly synthetic dashboard/report examples and reusable atomic operations without creating data. Omit caseId for the index; choose a case for detail. Adapt composition and metric definitions to the user request; examples are optional aids.', schema({
-        'caseId': described({'enum': ['executive-dashboard', 'operations-scorecard', 'academic-report']}, 'Example ID from the index; omission returns discovery information.'),
+        'caseId': described({'enum': ['executive-dashboard', 'operations-scorecard', 'academic-report', 'filtered-report']}, 'Example ID from the index; omission returns discovery information.'),
     })),
     'chart_declarations': ('Discover authoring schemas and working examples. Omit code for a compact index; provide a preset chart or KPI code from chart_catalog for its definition. Full common schemas: charts://declarations. Does not write data; validate final declarations before completing the edit.', schema({
         'code': described(STR, 'Installed chart or KPI code from chart_catalog (for example c01 or mc03); omit for the index.'),

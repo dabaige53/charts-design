@@ -18,7 +18,7 @@ ID = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]{0,79}$')
 TYPES = ('bar', 'line', 'area', 'pie', 'scatter', 'heatmap', 'funnel', 'waterfall')
 COLS = {'desktop': 12, 'tablet': 8, 'mobile': 4}
 AGGREGATES = ('sum', 'avg', 'min', 'max', 'count', 'ratio', 'entity_ratio')
-VIEW_MODES = ('dashboard', 'report')
+VIEW_MODES = ('dashboard', 'report', 'filtered-report')
 
 class DashboardError(ValueError):
     def __init__(self, code: str, message: str, status: int = 400):
@@ -462,6 +462,11 @@ def validate(doc):
             require(len(f['values']) <= 1 and all(isinstance(v, str) and len(v) <= 1000 for v in f['values']), 'Search filter requires at most one text value (0-1000 characters)')
         targets = f.get('componentIds')
         require(isinstance(targets, list) and targets, 'Declare explicit filter consumers')
+        require(f.get('scope', 'report') in ('report', 'table'), 'Unknown filter scope')
+        if f.get('scope') == 'table':
+            require(len(targets) == 1, 'Table filter requires exactly one consumer')
+            target_component = m['components'].get(targets[0], {})
+            require(target_component.get('kind') == 'table' or (target_component.get('kind') == 'legacy' and target_component.get('family') == 'table'), 'Table filter requires a table consumer')
         for target in targets:
             require(target in m['components'], 'Filter refers to a missing component')
             c = m['components'][target]
@@ -617,7 +622,7 @@ def apply_operations(doc, operations):
             value = op.get('value')
             require(value in VIEW_MODES, 'Unknown view mode')
             m['viewMode'] = value
-            if value == 'report' and 'markdown' not in m.get('report', {}):
+            if value in ('report', 'filtered-report') and 'markdown' not in m.get('report', {}):
                 initialize_report = True
         elif kind == 'set_report_markdown':
             markdown = copy.deepcopy(op.get('value'))

@@ -55,6 +55,31 @@ def report_document(board_id='report-demo'):
         {'op': 'set_view_mode', 'value': 'report'}
     ])
 
+def filtered_report_document(board_id='filtered-report-demo'):
+    """Two independent tables, with explicitly synthetic rows."""
+    doc = new_document(board_id, '合成月度报告')
+    rows = [
+        {'branch': branch, 'month': month, 'category': category, 'amount': amount}
+        for branch, month, category, amount in [
+            ('东部', '2026-07', '甲', 10), ('东部', '2026-07', '乙', 20),
+            ('东部', '2026-08', '甲', 30), ('南部', '2026-07', '乙', 40)]]
+    filters = [
+        {'id': 'branch', 'label': '营业部', 'field': 'branch', 'op': 'in', 'values': [], 'componentIds': ['table-a', 'table-b']},
+        {'id': 'month', 'label': '报告月份', 'field': 'month', 'op': 'in', 'values': [], 'componentIds': ['table-a', 'table-b']},
+        {'id': 'category-a', 'label': '类别', 'field': 'category', 'op': 'in', 'values': [], 'scope': 'table', 'componentIds': ['table-a']},
+        {'id': 'category-b', 'label': '类别', 'field': 'category', 'op': 'in', 'values': [], 'scope': 'table', 'componentIds': ['table-b']},
+    ]
+    markdown = '# 合成月度报告\n\n第一段：以下为合成数据。\n\n```chart\n{"componentId":"table-a","caption":"第一张表"}\n```\n\n第二段：另一张表独立筛选。\n\n```chart\n{"componentId":"table-b","caption":"第二张表"}\n```\n'
+    return apply_operations(doc, [
+        {'op': 'put_source', 'id': 'fixture', 'value': {'kind': 'fixture', 'name': 'Synthetic data only'}},
+        {'op': 'put_dataset', 'id': 'sales', 'meta': {'sourceId': 'fixture', 'fields': {key: {'type': 'number' if key == 'amount' else 'string'} for key in rows[0]}}, 'rows': rows},
+        *[{'op': 'put_component', 'id': key, 'value': {'kind': 'table', 'title': title, 'datasetId': 'sales'}} for key, title in [('table-a', '第一张表'), ('table-b', '第二张表')]],
+        {'op': 'set_filters', 'value': filters},
+        {'op': 'set_report_markdown', 'value': markdown},
+        {'op': 'set_view_mode', 'value': 'filtered-report'},
+        {'op': 'set_status', 'value': 'fixture'},
+    ])
+
 def executive_document(board_id='executive-demo'):
     """Authored executive master; all values derive from declared synthetic rows."""
     from .declarations import _advanced_configs

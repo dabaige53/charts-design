@@ -435,7 +435,7 @@ export function DashboardApp({
             ))}
         </div>
       </header>
-      <main className="dashboard-main mx-auto max-w-[1800px] p-4">
+      <main className={`dashboard-main mx-auto ${doc.manifest.viewMode === "filtered-report" ? "p-3 sm:p-6" : "max-w-[1800px] p-4"}`}>
         {runtime.error && (
           <RecoveryAlert
             className="mb-4"
@@ -453,14 +453,17 @@ export function DashboardApp({
         )}
         <FilterBar
           document={doc}
-          filters={runtime.view.filters}
+          filters={doc.manifest.viewMode === "filtered-report" ? runtime.view.filters.filter((f) => f.scope !== "table") : runtime.view.filters}
           call={call}
           onChange={runtime.setFilter}
-          onClear={runtime.clear}
+          onClear={doc.manifest.viewMode === "filtered-report" ? () => runtime.view.filters.filter((f) => f.scope !== "table").forEach((f) => runtime.setFilter(f.id, [])) : runtime.clear}
           primaryFilterIds={primaryFilterIds}
         />
-        {doc.manifest.viewMode === "report" ? (
-          <ReportView document={doc} component={component} />
+        {doc.manifest.viewMode === "report" || doc.manifest.viewMode === "filtered-report" ? (
+          <ReportView document={doc} component={component} tableFilters={(id) => {
+            const filters = runtime.view.filters.filter((f) => f.scope === "table" && f.componentIds[0] === id);
+            return <FilterBar document={doc} filters={filters} call={call} onChange={runtime.setFilter} onClear={() => filters.forEach((f) => runtime.setFilter(f.id, []))} />;
+          }} />
         ) : (
           <DashboardGrid
             key={`${doc.id}:${layoutKey}`}

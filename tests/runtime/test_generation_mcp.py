@@ -14,7 +14,7 @@ from mcp.types import TextResourceContents
 from pydantic import AnyUrl
 
 
-# @wu-test type=integration | scope=MCP报告创建 | protects=调用方无法发现创建报告或读正确数据 | debt=D1
+# @wu-test type=integration | scope=MCP论文式报告 | protects=调用方无法发现声明、保存独立报告或读到正确的图表数据
 def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
     async def check():
         params = StdioServerParameters(
@@ -57,7 +57,7 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 # Reading guidance must not instantiate demo boards or add data.
                 assert (await call('dashboard_list', {}))['dashboards'] == []
                 created = (await call('dashboard_create', {'dashboardId': 'fresh-report',
-                    'title': '独立合成样本分析'}))['document']
+                    'title': '独立合成样本分析', 'responseMode': 'full'}))['document']
                 assert created['revision'] == 1
                 assert created['manifest']['components'] == {}
                 assert created['snapshot']['datasets'] == {}
@@ -115,7 +115,7 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                     {'op': 'set_status', 'value': 'fixture'},
                 ]
                 doc = (await call('dashboard_patch', {'dashboardId': 'fresh-report',
-                    'expectedRevision': 1, 'operations': operations}))['document']
+                    'expectedRevision': 1, 'operations': operations, 'responseMode': 'full'}))['document']
                 assert doc['revision'] == 2
                 assert doc['manifest']['viewMode'] == 'report'
                 assert doc['manifest']['report']['markdown'] == markdown != case['markdown']
@@ -135,4 +135,25 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
                 assert invalid.isError
                 unchanged = (await call('dashboard_get', {'dashboardId': 'fresh-report'}))['document']
                 assert {k: v for k, v in unchanged.items() if k != 'computed'} == {k: v for k, v in doc.items() if k != 'computed'}
+    asyncio.run(check())
+
+
+# @wu-test type=integration | scope=MCP筛选式报告 | protects=案例无法通过协议保存和重新读取
+def test_filtered_report_over_stdio(tmp_path):
+    async def check():
+        params = StdioServerParameters(command=sys.executable, args=['-m', 'dashboard_runtime', '--project-root', str(tmp_path/'project'), '--runtime-root', str(tmp_path/'state'), 'mcp'], env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')})
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                async def call(name, args):
+                    result = await session.call_tool(name, args)
+                    assert not result.isError, result
+                    return result.structuredContent
+                case = await call('generation_examples', {'caseId': 'filtered-report'})
+                await call('dashboard_create', {'dashboardId': 'filtered', 'title': 'Blank'})
+                await call('dashboard_patch', {'dashboardId': 'filtered', 'expectedRevision': 1, 'operations': case['operations']})
+                doc = (await call('dashboard_get', {'dashboardId': 'filtered'}))['document']
+                assert doc['manifest']['viewMode'] == 'filtered-report'
+                assert doc['manifest']['report']['markdown'] == case['markdown']
+                assert [f['componentIds'] for f in doc['manifest']['filters']] == [['table-a', 'table-b'], ['table-a', 'table-b'], ['table-a'], ['table-b']]
     asyncio.run(check())

@@ -426,7 +426,7 @@ class Service:
                     if component is not None:
                         target.update({'title': component.get('title', ''), 'kind': component['kind']})
                 else:
-                    target['sourcePath'] = 'manifest.report.markdown' if manifest.get('viewMode') == 'report' else 'manifest'
+                    target['sourcePath'] = 'manifest.report.markdown' if manifest.get('viewMode') in ('report', 'filtered-report') else 'manifest'
                 targets[note['id']] = target
             return {'dashboardId': doc['id'], 'title': manifest['title'], 'revision': doc['revision'],
                     'annotations': notes, 'targets': targets, 'count': len(notes),

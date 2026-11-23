@@ -89,9 +89,48 @@ function scalePresentation(option: any, scale: number) {
     for (const side of ["left", "right", "top", "bottom"])
       if (typeof grid[side] === "number") grid[side] *= scale;
 }
+
+function separateDualAxisLabels(option: any, height: number) {
+  const grids = list(option.grid);
+  for (const [index, grid] of grids.entries()) {
+    if (grid.containLabel !== true) continue;
+    const belongsToGrid = (axis: any) =>
+      axis.gridId != null ? axis.gridId === grid.id : (axis.gridIndex ?? 0) === index;
+    const positions = new Set<string>();
+    const valueSides = new Set<string>();
+    const yAxes = list(option.yAxis).filter(belongsToGrid);
+    for (const axis of yAxes) {
+      const side = axis.position ?? (positions.has("left") ? "right" : "left");
+      positions.add(side);
+      if (axis.show !== false && (axis.type ?? "value") === "value") valueSides.add(side);
+    }
+    if (!valueSides.has("left") || !valueSides.has("right")) continue;
+    const xAxes = list(option.xAxis).filter(belongsToGrid);
+    if (![...xAxes, ...yAxes].some((axis) => axis.show !== false && axis.name)) continue;
+
+    grid.containLabel = false;
+    grid.outerBoundsMode = "same";
+    grid.outerBoundsContain = "all";
+
+    for (const legend of list(option.legend)) {
+      if (legend.show === false || legend.orient === "vertical") continue;
+      const top = legend.top === "top" ? 0 : margin(legend.top, height, NaN);
+      if (!Number.isFinite(top)) continue;
+      const padding = legend.padding ?? 5;
+      const verticalPadding = Array.isArray(padding)
+        ? padding[0] + (padding[2] ?? padding[0]) : 2 * padding;
+      const textHeight = legend.textStyle?.lineHeight ?? (legend.textStyle?.fontSize ?? 12);
+      const rowHeight = Math.max(legend.itemHeight ?? 14, textHeight, legend.pageIconSize ?? 15);
+      const minTop = top + verticalPadding + rowHeight + 6;
+      if (margin(grid.top, height, 65) < minTop) grid.top = minTop;
+    }
+  }
+}
+
 export function adaptOption(option: any, width: any, height = 320) {
   if (!option || typeof option !== "object" || !(width > 0)) return option;
   scalePresentation(option, Math.max(0.4, Math.min(2.5, width / 560, height / 320)));
+  separateDualAxisLabels(option, height);
   const grids: any = list(option.grid),
     xAxes: any = list(option.xAxis);
   // Ordered flow nodes wrap into a readable snake on narrower cards.

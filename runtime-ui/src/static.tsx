@@ -17,7 +17,7 @@ export function SnapshotApp({ document: doc }: { document: Document }) {
       <p className="mb-5 text-sm text-muted-foreground">
         当前视图快照 · 版本 {doc.revision}
       </p>
-      {doc.manifest.viewMode === "report" ? (
+      {(doc.manifest.viewMode === "report" || doc.manifest.viewMode === "filtered-report") ? (
         <ReportView document={doc} component={component} />
       ) : (
         <DashboardGrid document={doc} editing={false} onLayoutChange={() => {}}>

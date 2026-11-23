@@ -6,22 +6,28 @@ import type { Document } from "./types";
 export function ReportView({
   document: doc,
   component,
+  tableFilters,
 }: {
   document: Document;
   component: (id: string) => React.ReactNode;
+  tableFilters?: (id: string) => React.ReactNode;
 }) {
+  const filtered = doc.manifest.viewMode === "filtered-report";
   const figures = new Map<string, number>();
   const numberBlocks = () => (tree: any) => {
     let figure = 0,
-      section = 0;
+      section = 0,
+      table = 0;
     for (const block of tree.children) {
       if (block.type === "code" && block.lang === "chart") {
         const ref = JSON.parse(block.value);
-        figure++;
-        if (!figures.has(ref.componentId)) figures.set(ref.componentId, figure);
+        const c = doc.manifest.components[ref.componentId];
+        const isTable = filtered && (c?.kind === "table" || (c?.kind === "legacy" && c.family === "table"));
+        const number = isTable ? ++table : ++figure;
+        if (!isTable && !figures.has(ref.componentId)) figures.set(ref.componentId, number);
         block.data = {
           ...block.data,
-          hProperties: { ...block.data?.hProperties, "data-figure": figure },
+          hProperties: { ...block.data?.hProperties, "data-figure": number, "data-table": isTable ? "true" : undefined },
         };
       } else if (block.type === "heading" && block.depth === 2) {
         block.data = {
@@ -35,7 +41,7 @@ export function ReportView({
     }
   };
   return (
-    <article className="prose-report">
+    <article className={filtered ? "prose-report prose-report-filtered" : "prose-report"}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, numberBlocks]}
         components={{
@@ -68,6 +74,14 @@ export function ReportView({
               try {
                 const ref = JSON.parse(String(children));
                 const number = Number(node.properties["data-figure"]);
+                if (node.properties["data-table"] === "true") return (
+                  <section className="mt-3 mb-6">
+                    {ref.caption && <p className="mb-2 text-sm font-medium">表 {number}　{ref.caption}</p>}
+                    {tableFilters?.(ref.componentId)}
+                    {component(ref.componentId)}
+                    {ref.source && <p className="text-xs text-muted-foreground">{ref.source}</p>}
+                  </section>
+                );
                 return (
                   <figure
                     id={`fig-${ref.componentId}${figures.get(ref.componentId) === number ? "" : "-" + number}`}

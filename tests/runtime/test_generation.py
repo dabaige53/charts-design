@@ -34,7 +34,7 @@ def test_case_generates_from_blank(case_id,mode):
 def test_case_discovery_read_only(tmp_path):
     service=Service(tmp_path)
     cases=service.call('generation_examples',{})['cases']
-    assert [case['id'] for case in cases]==['executive-dashboard','operations-scorecard','academic-report']
+    assert [case['id'] for case in cases]==['executive-dashboard','operations-scorecard','filtered-report','academic-report']
     assert service.call('dashboard_list',{})=={'dashboards':[]}
     assert 'generation_examples' in READ_ONLY
     with pytest.raises(DashboardError):
@@ -88,3 +88,33 @@ def test_operations_case_contrasts_the_executive_case_and_recomputes(tmp_path):
     assert (computed['budget-bullet']['actual'], computed['budget-bullet']['target']) == (206, 225)
     assert computed['period-compare']['priorValue'] == 165
     assert computed['region-rank']['data']['categories'] == ['华南基地']
+
+
+# @wu-test type=integration | scope=筛选式报告 | protects=保存后正文顺序或两层筛选范围丢失
+def test_filtered_report_roundtrip_and_scoped_filters(tmp_path):
+    case = generation_examples('filtered-report')
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    service.call('dashboard_create', {'dashboardId': 'filtered', 'title': 'Blank'})
+    service.call('dashboard_patch', {'dashboardId': 'filtered', 'expectedRevision': 1, 'operations': case['operations']})
+    doc = service.call('dashboard_get', {'dashboardId': 'filtered'})['document']
+    assert doc['manifest']['viewMode'] == 'filtered-report'
+    assert doc['manifest']['report']['markdown'] == case['markdown']
+    assert doc['manifest']['report']['markdown'].index('table-a') < doc['manifest']['report']['markdown'].index('第二段') < doc['manifest']['report']['markdown'].index('table-b')
+    filters = doc['manifest']['filters']
+    for f in filters:
+        f['values'] = {'branch': ['东部'], 'month': ['2026-07'], 'category-a': ['甲']}.get(f['id'], [])
+    result = service.call('dashboard_view', {'dashboardId': 'filtered', 'filters': filters})['document']['computed']['tables']
+    assert result['table-a']['totalRows'] == 1
+    assert result['table-b']['totalRows'] == 2
+    filters[2]['values'] = ['不存在']
+    result = service.call('dashboard_view', {'dashboardId': 'filtered', 'filters': filters})['document']['computed']['tables']
+    assert result['table-a']['totalRows'] == 0
+    assert result['table-b']['totalRows'] == 2
+
+# @wu-test type=boundary | scope=表级筛选声明 | protects=表级筛选错误地影响其他表或非表组件
+def test_table_filter_requires_one_table():
+    doc = apply_operations(new_document('fresh', 'Blank'), generation_examples('filtered-report')['operations'])
+    filters = doc['manifest']['filters']
+    filters[2]['componentIds'] = ['table-a', 'table-b']
+    with pytest.raises(DashboardError):
+        apply_operations(doc, [{'op': 'set_filters', 'value': filters}])
