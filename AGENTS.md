@@ -31,6 +31,7 @@
 - 修改项目路由、存储、草稿、检查点、历史或渐进查询时读 [项目资产与加载](docs/implementation/project-runtime.md)：项目隔离、版本检查、数据引用和查询状态。
 - 创建看板或分析报告时读 [生成路径](docs/implementation/generation-tracks.md)：文档类型、报告源文、图表引用与案例的使用边界。
 - 通过 MCP 交付内容时读 [共享交付流程](skills/executive-charts/references/mcp-delivery.md)：检查现有成果、保留语义、完成编辑批次后展示。
+- 迁移外部历史报表先读[源端审查与映射](skills/executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp)；生成或调整声明文件用[MCP 构建脚本](skills/executive-charts/references/mcp-authoring.md)。
 - 生成经营看板时读 [executive-charts](skills/executive-charts/SKILL.md)：指标拆解、渲染入口与组件编排。
 - 生成 Markdown 分析报告时读 [analytical-reports](skills/analytical-reports/SKILL.md)：学术单栏正文、数据声明与图文核对。
 - 修改 UI 组件及宿主适配时读 [组件清单](docs/implementation/ui-component-inventory.md)：组件维护位置、输入输出、动态能力和接入状态。

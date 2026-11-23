@@ -1,11 +1,13 @@
 ---
 name: analytical-reports
-description: Create, revise and refresh evidence-based analytical reports as Markdown with inline declarative charts in Charts Design. Use for narrative business reports, research-style analysis and text–figure–text documents with sources and calculation notes. For interactive KPI dashboards, use executive-charts.
+description: Migrate external legacy reports. Create, revise and refresh evidence-based analytical reports as Markdown with inline declarative charts in Charts Design. Use for narrative business reports, research-style analysis and text–figure–text documents with sources and calculation notes. For interactive KPI dashboards, use executive-charts.
 ---
 
 # Analytical Reports
 
 Write a report that answers the user's question with traceable data and figures. Save Markdown as the report source; the shared React renderer presents it in the academic single-column layout.
+
+迁移其他项目或系统的历史报告时，先委派一个子代理完成[逐页源端审查与 MCP 映射](../executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp)，覆盖正文、图表、表内筛选和指标口径。用[通用构建脚本](../executive-charts/references/mcp-authoring.md)维护正文与声明。
 
 ## Read the project and evidence
 

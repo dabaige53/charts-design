@@ -1,6 +1,8 @@
 # Workspace 资产脚本
 
-本目录负责业务配置的创建、导入、检查和校验。页面通过共享 React Runtime 渲染。
+构建 schema-v2 MCP 声明及增量请求时使用 [mcp_author.py](mcp_author.py)，输入和调用示例见[MCP 声明构建](../references/mcp-authoring.md)。
+
+下列 schema-v1 命令负责业务配置的创建、导入、检查和校验。页面通过共享 React Runtime 渲染。
 
 ```bash
 bun bin/python-runtime.js skills/executive-charts/scripts/dashboard_workspace.py init ./sales-board --title "销售经营看板"
