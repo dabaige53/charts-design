@@ -35,6 +35,10 @@ export function createStaticQuery(document,read){
   const queue=createRequestQueue(4),loaded=new Map(),scopes=new Map();
   const datasetFor=id=>document.manifest.components[id].datasetId||document.manifest.components[id].binding?.datasetId||document.staticComponentDatasets?.[id];
   const fieldsFor=key=>document.manifest.datasets[key]?.fields||document.staticDatasetFields?.[key]||{};
+  function load(url){
+    if(!loaded.has(url))loaded.set(url,queue(()=>read(url)).catch(error=>{loaded.delete(url);throw error;}));
+    return loaded.get(url);
+  }
   const scopedDocument=(id,rows,filters)=>({...document,computed:undefined,
     manifest:{...document.manifest,filters,components:{...document.manifest.components,
       [id]:{...document.manifest.components[id],datasetId:datasetFor(id)}}},
@@ -58,10 +62,7 @@ export function createStaticQuery(document,read){
     }
     const scope=JSON.stringify(urls);let cached=scopes.get(key);
     if(cached?.scope===scope)return cached.promise;
-    const promise=Promise.all(urls.map(url=>{
-      if(!loaded.has(url))loaded.set(url,queue(()=>read(url)).catch(error=>{loaded.delete(url);throw error;}));
-      return loaded.get(url);
-    })).then(parts=>{
+    const promise=Promise.all(urls.map(load)).then(parts=>{
       if(parts.every(Array.isArray))return parts.flat();
       // Partition files retain original row positions so changing a filter
       // does not silently change unsorted details, grouping or export order.
@@ -69,6 +70,21 @@ export function createStaticQuery(document,read){
         .sort((a,b)=>a.ordinal-b.ordinal).map(entry=>entry.row);
     }).catch(error=>{if(scopes.get(key)?.promise===promise)scopes.delete(key);throw error;});
     scopes.set(key,{scope,promise});return promise;
+  }
+  async function optionsFor(filter){
+    const prepared=document.staticFilterOptions?.[filter.id];
+    if(Array.isArray(prepared))return prepared;
+    const consumers=new Map(filter.componentIds.map(id=>[datasetFor(id),id]));
+    const groups=await Promise.all([...consumers].map(async ([dataset,id])=>{
+      const index=document.staticPartitionIndexes?.[dataset];
+      if(index?.field===filter.field)return index.entries.map(entry=>entry.value);
+      const url=document.staticOptions?.[dataset]?.[filter.field];
+      if(url)return load(url);
+      return (await rowsFor(id,[])).map(row=>row[filter.field]??null);
+    }));
+    const values=new Map();
+    for(const group of groups)for(const value of group)values.set(JSON.stringify(value),value);
+    return [...values.values()];
   }
   function tableRows(doc,id){
     const c=doc.manifest.components[id],p={...c.presentation,...c.config};let rows=visibleRows(doc,id);
@@ -81,17 +97,8 @@ export function createStaticQuery(document,read){
     if(args.filterId){
       const filter=document.manifest.filters.find(f=>f.id===args.filterId);
       if(!filter||filter.op!=='in')throw Error('Unknown selection filter');
-      const values=new Map();
-      for(const id of filter.componentIds){
-        const dataset=datasetFor(id),url=document.staticOptions?.[dataset]?.[filter.field];
-        if(url){
-          if(!loaded.has(url))loaded.set(url,queue(()=>read(url)).catch(error=>{loaded.delete(url);throw error;}));
-          for(const value of await loaded.get(url))values.set(JSON.stringify(value),value);
-        }else for(const row of await rowsFor(id,[])){
-          const value=row[filter.field]??null;values.set(JSON.stringify(value),value);
-        }
-      }
-      const matches=[...values.values()].filter(v=>String(v).toLocaleLowerCase().includes((args.search||'').toLocaleLowerCase())).sort(compareValue);
+      const search=(args.search||'').toLocaleLowerCase();
+      const matches=(await optionsFor(filter)).filter(v=>String(v).toLocaleLowerCase().includes(search)).sort(compareValue);
       const offset=args.offset||0,limit=args.limit||100;
       return {values:matches.slice(offset,offset+limit),offset,totalValues:matches.length,hasMore:offset+limit<matches.length};
     }

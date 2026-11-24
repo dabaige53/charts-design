@@ -41,6 +41,48 @@ def test_health_reports_release_identity_only_when_configured(tmp_path, monkeypa
         assert response.headers['cache-control'] == 'no-store'
 
 
+# @wu-test type=integration | scope=COS editable content reads | protects=重复读取当前草稿或用错误修订授权数据文件
+def test_edit_asset_authorizes_current_or_requested_revision(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from starlette.testclient import TestClient
+
+    from dashboard_runtime import cos_view, versions
+
+    server = RemoteServer(settings(tmp_path))
+    reads = []
+
+    def get(board, hydrate):
+        reads.append(('draft', board))
+        assert not hydrate
+        return {'id': board, 'revision': 3}
+
+    def history(_versions, board, revision):
+        reads.append(('history', board, revision))
+        return {'id': board, 'revision': revision}
+
+    def asset(_store, doc, object_id, name):
+        assert (object_id, name) == ('fixture', 'rows.json.gz')
+        return str(doc['revision']).encode()
+
+    app = create_app(server)
+    connect = server.projects.service('default').store.connect
+    store = SimpleNamespace(get=get, cos_enabled=True, connect=connect)
+    monkeypatch.setattr(server.projects, 'service', lambda _name: SimpleNamespace(store=store))
+    monkeypatch.setattr(versions.Versions, 'read', history)
+    monkeypatch.setattr(cos_view, 'authorized_file', asset)
+    url = '/api/v1/p/default/content/board/{}/fixture/rows.json.gz'
+    with TestClient(app) as client:
+        assert client.get(url.format(3)).status_code == 401
+        headers = {'Authorization': 'Bearer ' + TOKEN}
+        current = client.get(url.format(3), headers=headers)
+        assert (current.status_code, current.content) == (200, b'3')
+        assert reads == [('draft', 'board')]
+        saved = client.get(url.format(2), headers=headers)
+        assert (saved.status_code, saved.content) == (200, b'2')
+        assert reads == [('draft', 'board'), ('draft', 'board'), ('history', 'board', 2)]
+
+
 # @wu-test type=boundary | scope=分享链接签名 | protects=篡改过期或错类型令牌被接受
 def test_signer_rejects_tampering_kind_and_expiry():
     signer = Signer(b'k' * 32)

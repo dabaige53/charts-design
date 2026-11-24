@@ -45,6 +45,48 @@ class MemoryStorage:
                 del self.objects[key]
 
 
+# @wu-test type=integration | scope=COS prepared scope options | protects=编辑绑定后继续使用上一数据集的筛选选项
+def test_cos_scope_option_seed_tracks_changed_consumer(tmp_path):
+    import copy
+    from types import SimpleNamespace
+    from dashboard_runtime.cloud_project import CloudProjectStore
+    from dashboard_runtime.cos_view import web_document
+    from dashboard_runtime.local_view import LocalView
+    from dashboard_runtime.model import new_document
+
+    store = CloudProjectStore.__new__(CloudProjectStore)
+    store.cos_enabled = True
+    data = LocalData(tmp_path)
+    store.prepared_views = LocalView(data)
+    store.assets = SimpleNamespace(
+        save_document=lambda doc: doc,
+        call=lambda _action, *, version: {
+            'id': version, 'descriptor': {'shards': [], 'options': {}},
+        },
+    )
+    doc = new_document('board', 'Scope options')
+    doc['snapshot']['datasetRefs'] = {}
+    fields = {'office': {'type': 'string'}}
+    for dataset, office in [('initial', 'A'), ('replacement', 'B')]:
+        doc['manifest']['datasets'][dataset] = {'fields': fields}
+        doc['snapshot']['datasetRefs'][dataset] = data.import_rows([{'office': office}], fields)
+    doc['manifest']['components']['table'] = {'kind': 'table', 'datasetId': 'initial'}
+    doc['manifest']['filters'] = [{
+        'id': 'office', 'field': 'office', 'op': 'in', 'selectionMode': 'single',
+        'required': True, 'componentIds': ['table'], 'values': ['A'],
+    }]
+    initial = store._encode(doc)
+    assert web_document(store, initial, lambda *_: '')['staticFilterOptions'] == {'office': ['A']}
+    updated = copy.deepcopy(doc)
+    updated['manifest']['components']['table']['datasetId'] = 'replacement'
+    next_revision = store._encode(updated, previous=initial)
+    assert web_document(store, next_revision, lambda *_: '')['staticFilterOptions'] == {'office': ['B']}
+    oversized = copy.deepcopy(updated)
+    oversized['snapshot']['datasetRefs']['replacement'] = data.import_rows([{'office': 'x' * 5000}], fields)
+    encoded = store._encode(oversized, previous=next_revision)
+    assert web_document(store, encoded, lambda *_: '')['staticFilterOptions'] == {}
+
+
 # @wu-test type=integration | scope=CloudAssets dataset writes | protects=并行写入失败仍将不完整数据包标记为可用
 def test_cos_dataset_failed_parallel_write_never_becomes_ready(tmp_path):
     class Database:

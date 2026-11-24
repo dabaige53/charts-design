@@ -47,6 +47,17 @@ class CloudProjectStore(Store):
                 changed = [key for key, component in new['components'].items() if component != old['components'].get(key)]
         prepared = self.prepared_views.prepare(doc, component_ids=changed, include_filter_options=False)
         computed = prepared['computed']
+        previous_pages = previous['computed'].get('filterPages', {}) if changed is not None else {}
+        for selection in doc['manifest']['filters']:
+            if (selection['op'] != 'in' or not selection.get('required')
+                    or selection.get('selectionMode') != 'single'):
+                continue
+            key = selection['id']
+            page = previous_pages.get(key) if not any(cid in (changed or ()) for cid in selection['componentIds']) else None
+            if page is None:
+                page = self.prepared_views.filter_options(doc, key)
+            if not page['hasMore'] and len(json_bytes(page['values'])) <= 4096:
+                computed['filterPages'][key] = page
         if previous is not None and changed is not None:
             for group in ('components', 'tables', 'grouped'):
                 computed[group] = {**{key: value for key, value in previous['computed'].get(group, {}).items()

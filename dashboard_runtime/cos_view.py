@@ -9,6 +9,10 @@ from .model import DashboardError, require
 def web_document(store, document, url_for, editable=False):
     doc = copy.deepcopy(document)
     doc['staticFiles'], doc['staticOptions'], doc['staticPartitionIndexes'] = {}, {}, {}
+    pages = doc.get('computed', {}).get('filterPages', {})
+    doc['staticFilterOptions'] = {
+        key: page['values'] for key, page in pages.items() if not page.get('hasMore') and not page.get('offset')
+    }
     doc['storageFormat'] = 'cos-v1'
     doc['versionKey'] = f"{doc['id']}:{doc['revision']}"
     doc['staticComponentDatasets'], doc['staticDatasetFields'] = {}, {}
