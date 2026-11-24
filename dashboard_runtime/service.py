@@ -150,6 +150,19 @@ class Service:
             self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
+        if tool == 'dataset_repartition':
+            from .cloud_data import CloudData
+            data = self.store.data
+            require(isinstance(data, CloudData) and data.cos_enabled, 'Repartitioning requires COS project storage',
+                    'UNSUPPORTED_OPERATION')
+            dataset = args.get('datasetId')
+            doc = self.store.get(board, hydrate=False)
+            ref = doc['snapshot'].get('datasetRefs', {}).get(dataset)
+            require(ref is not None, 'Dataset has no immutable version', 'NOT_FOUND')
+            require(ref['version'] == args.get('expectedVersion'), 'Dataset version changed', 'DATA_CONFLICT')
+            replacement = data.repartition(ref, args.get('field'))
+            return {'dashboardId': board, 'datasetId': dataset, 'previousVersion': ref['version'],
+                    'ref': replacement, 'partitionField': args['field']}
         if tool in ('dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
             from .cloud_data import CloudData
             from .transfer_payload import BULK_ENCODING
