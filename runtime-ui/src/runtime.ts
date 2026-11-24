@@ -246,23 +246,29 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     },
     [request],
   );
-  const setFilter = (id: string, values: any[]) => {
-    const filter = reader.current.filters.find((item) => item.id === id);
-    if (!filter || (filter.values.length === values.length && filter.values.every((value, index) => value === values[index]))) return;
-    const targets = new Set(filter.componentIds);
+  const setFilters = (updates: ReadonlyMap<string, any[]>) => {
+    const targets = new Set<string>();
+    let changed = false;
+    const filters = reader.current.filters.map((filter) => {
+      const values = updates.get(filter.id);
+      if (!values || (filter.values.length === values.length && filter.values.every((value, index) => value === values[index]))) return filter;
+      changed = true;
+      filter.componentIds.forEach((id) => targets.add(id));
+      return { ...filter, values };
+    });
+    if (!changed) return;
     invalidate({
       ...reader.current,
-      filters: reader.current.filters.map((f) =>
-        f.id === id ? { ...f, values } : f,
-      ),
+      filters,
       tables: Object.fromEntries(
         Object.entries(reader.current.tables).map(([key, state]) => [
           key,
           targets.has(key) ? { ...state, page: 1 } : state,
         ]),
       ),
-    }, filter.componentIds);
+    }, [...targets]);
   };
+  const setFilter = (id: string, values: any[]) => setFilters(new Map([[id, values]]));
   const setTable = (id: string, state: TableState) => {
     const before = reader.current.tables[id];
     const next = {
@@ -402,6 +408,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     saving,
     activate,
     setFilter,
+    setFilters,
     setTable,
     setGrain,
     clear,

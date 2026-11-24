@@ -48,6 +48,34 @@ it("updates only filter consumers and retains the displayed value while waiting"
   expect(result.current.document.computed?.components.total.value).toBe(200);
 });
 
+// @wu-test type=integration | scope=useDashboardRuntime.setFilters | protects=批量应用时同一组件多次查询或收到部分条件，受影响表格未回到首页
+it("applies all filter updates in one query per affected component", async () => {
+  const call = mock(async (_name: string, args: Config = {}) => patch(args.componentIds[0]));
+  const initial = document();
+  initial.manifest.filters.push({
+    id: "keyword", label: "关键词", field: "region", op: "contains", values: ["旧条件"], componentIds: ["details"],
+  });
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => {
+    result.current.setTable("details", { page: 3, pageSize: 10 });
+    result.current.activate("source");
+    result.current.activate("total");
+    result.current.activate("details");
+  });
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  call.mockClear();
+
+  act(() => result.current.setFilters(new Map([["region", ["华东"]], ["keyword", []]])));
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  const queries = call.mock.calls.map(([, args]) => args!);
+  expect(queries.map((args) => args.componentIds[0]).sort()).toEqual(["details", "total"]);
+  for (const args of queries) {
+    expect(args.filters.map((filter: { values: unknown[] }) => filter.values)).toEqual([["华东"], []]);
+    expect(args.tableStates.details.page).toBe(1);
+  }
+  expect(result.current.document.manifest.filters.map((filter) => filter.values)).toEqual([[], ["旧条件"]]);
+});
+
 // @wu-test type=integration | scope=useDashboardRuntime.request | protects=快速筛选时旧查询覆盖新结果或提前清除加载状态
 it("discards an older response that finishes after the newest selection", async () => {
   const responses: ((result: Config) => void)[] = [];

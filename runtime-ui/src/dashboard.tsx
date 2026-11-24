@@ -39,6 +39,7 @@ import {
   type ChoiceLoader,
 } from "./controls";
 import { useDashboardRuntime, layoutOperations } from "./runtime";
+import { FilterParameters } from "./filter-parameters";
 import { browserDownload, deliverExport, type Download } from "./host";
 import { RecoveryAlert } from "./recovery-alert";
 import { PositionComments } from "./position-comments";
@@ -452,17 +453,19 @@ export function DashboardApp({
           </p>
         )}
         <FilterBar
+          key={doc.id}
           document={doc}
           filters={doc.manifest.viewMode === "filtered-report" ? runtime.view.filters.filter((f) => f.scope !== "table") : runtime.view.filters}
           call={call}
           onChange={runtime.setFilter}
+          onApply={runtime.setFilters}
           onClear={doc.manifest.viewMode === "filtered-report" ? () => runtime.view.filters.filter((f) => f.scope !== "table").forEach((f) => runtime.setFilter(f.id, [])) : runtime.clear}
           primaryFilterIds={primaryFilterIds}
         />
         {doc.manifest.viewMode === "report" || doc.manifest.viewMode === "filtered-report" ? (
           <ReportView document={doc} component={component} tableFilters={(id) => {
             const filters = runtime.view.filters.filter((f) => f.scope === "table" && f.componentIds[0] === id);
-            return <FilterBar document={doc} filters={filters} call={call} onChange={runtime.setFilter} onClear={() => filters.forEach((f) => runtime.setFilter(f.id, []))} />;
+            return <FilterBar key={`${doc.id}:${id}`} document={doc} filters={filters} call={call} onChange={runtime.setFilter} onApply={runtime.setFilters} onClear={() => filters.forEach((f) => runtime.setFilter(f.id, []))} />;
           }} />
         ) : (
           <DashboardGrid
@@ -660,6 +663,7 @@ function FilterBar({
   filters,
   call,
   onChange,
+  onApply,
   onClear,
   primaryFilterIds,
 }: {
@@ -667,6 +671,7 @@ function FilterBar({
   filters: Filter[];
   call: ToolCall;
   onChange: (id: string, values: any[]) => void;
+  onApply: (updates: ReadonlyMap<string, any[]>) => void;
   onClear: () => void;
   primaryFilterIds?: string[];
 }) {
@@ -694,29 +699,30 @@ function FilterBar({
       aria-label="看板筛选"
       className="screen-only mb-3 flex flex-col gap-2 border border-border bg-card p-3"
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {primary.map((f) => (
             <FilterControl key={f.id} filter={f} document={doc} call={call} onChange={onChange} />
           ))}
+          {!!advanced.length && (
+            <Button
+              variant={expanded ? "secondary" : "outline"}
+              aria-expanded={expanded}
+              aria-controls={advancedId}
+              onClick={() => setExpanded(!expanded)}
+            >
+              <SlidersHorizontal data-icon="inline-start" />
+              更多筛选
+              {activeAdvanced > 0 && <Badge variant="secondary">{activeAdvanced}</Badge>}
+            </Button>
+          )}
+          {!!active.length && (
+            <IconAction label="重置全部筛选" onClick={onClear} size="icon-sm">
+              <RotateCcw />
+            </IconAction>
+          )}
         </div>
-        {!!advanced.length && (
-          <Button
-            variant={expanded ? "secondary" : "outline"}
-            aria-expanded={expanded}
-            aria-controls={advancedId}
-            onClick={() => setExpanded(!expanded)}
-          >
-            <SlidersHorizontal data-icon="inline-start" />
-            更多筛选
-            {activeAdvanced > 0 && <Badge variant="secondary">{activeAdvanced}</Badge>}
-          </Button>
-        )}
-        {!!active.length && (
-          <IconAction label="重置全部筛选" onClick={onClear} size="icon-sm">
-            <RotateCcw />
-          </IconAction>
-        )}
+        {!!declared.length && <FilterParameters document={doc} filters={declared} onApply={onApply} />}
       </div>
       {!!advanced.length && (
         <div className="filter-advanced-row" data-expanded={expanded} inert={!expanded}>

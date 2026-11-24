@@ -36,8 +36,12 @@
 | RangeFilter：数值区间 | label、value、type | onApply(from,to) | 输入、校验、应用、清空 | `dashboard_view` 的范围条件 | 无；已接 MCP |
 | DateRangeFilter：日期范围 | label、value | onApply(from,to) | 日历选取、完整区间、清空 | 日期字段与 ISO 日期条件 | 无；已接 MCP |
 | ActiveFilters：条件标签 | items、title | onRemove(id)、onClear() | 单项移除、空条件、清空禁用 | 查看状态与图表联动条件 | 无；已接 MCP |
-| FilterBar：全局筛选 | document、filters、call | onChange、onClear | 多维条件、关键词、日期／数值范围、摘要 | 定义、候选项、查看状态 | 由应用适配工具；已构建 |
+| FilterBar：全局及表格筛选 | document、filters、call | onChange、onClear、onApply | 多维条件、关键词、日期／数值范围、摘要、复制与粘贴筛选参数 | 定义、候选项、查看状态 | 由应用适配工具；剪贴板不可用时可手动复制 |
 | 图表点击联动 | 点击点、绑定分类字段、linkGroup | 临时 runtime-linkage 条件 | 再次点击或移除恢复；显式消费者 | 绑定数据集、跨数据集同名字段 | 工具调用；已接 MCP |
+
+「复用筛选」区的「复制」导出当前筛选栏的已选择条件，如 `{"region":["华东"]}`；键为筛选器 ID，值为数组。「粘贴」校验通过后替换当前筛选栏的条件，未列出的条件会清空，必选筛选器仍须提供值。
+
+复制与粘贴仅处理当前查看状态中的筛选栏条件。图表点击联动和已保存的看板配置保持原样。
 
 ## 图表与操作
 
