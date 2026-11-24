@@ -12,8 +12,12 @@ def data_version(doc):
     return hashlib.sha256(json.dumps(doc['snapshot'], sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
 
 
-def diagnose(service, board, mode='full'):
-    doc = service.store.get(board, hydrate=False)
+def document_fingerprint(doc):
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def diagnose(service, doc, mode='full', previous=None):
+    board = doc['id']
     request_id = uuid.uuid4().hex
     report = {'dashboardId': board, 'requestId': request_id, 'revision': doc['revision'], 'dataVersion': data_version(doc), 'uiBuildId': ui_build_id(), 'backendBuildId': BACKEND_BUILD_ID, 'mode': mode, 'checks': []}
     events = []
@@ -27,12 +31,20 @@ def diagnose(service, board, mode='full'):
         # One diagnostic transaction per Doctor run instead of one per check.
         events.append((request_id, 'dashboard_doctor', item, '', 0, board, (time.perf_counter()-start)*1000, doc['revision'], None))
     import sqlite3
-    check('definition', lambda: validate(doc))
+    if previous is None:
+        check('definition', lambda: validate(doc))
+    else:
+        report['checks'].append(previous['checks'][0])
     for key, ref in doc['snapshot'].get('datasetRefs', {}).items():
         check('dataset:'+key, lambda ref=ref: service.store.data.describe(ref['version']))
+    for key, ref in doc['snapshot'].get('componentDataRefs', {}).items():
+        check('component-data:'+key, lambda ref=ref: service.store.data.describe(ref['version']))
     ids=list(doc['manifest']['components'])
     if mode=='quick':
         ids=[item['id'] for item in doc['manifest']['layout']['desktop'] if item.get('y',0)<8]
+    if previous is not None and all(item['status']=='passed' for item in report['checks']):
+        report['checks'].extend(item for item in previous['checks'] if item['check']=='component')
+        ids = []
     for key in ids:
         def calculate(key=key):
             service.views.prepare(doc, component_ids=[key], include_filter_options=False)

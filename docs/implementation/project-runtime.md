@@ -82,6 +82,8 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 `dashboard_doctor` 的 quick/full 模式检查定义、数据引用与组件计算。结果带请求编号，设计、数据和 UI 版本。完整批次检查失败不生成检查点。`runtime_diagnostics` 支持看板、请求编号、阶段及错误码过滤。页面提供运行诊断入口。
 
+常规同步直接保存。同一 Runtime 进程内，草稿内容未变且已通过完整检查时，保存复用定义和组件检查结果，并检查数据引用。
+
 ## 迁移
 
 `--project-root <destination> --runtime-root <cache> migrate-project --source-root <legacy> --board <id>` 先列清单；加 `--apply` 才迁移。只复制选中看板及其历史引用的数据版本，流式核对数据引用，保留历史编号和批注事件；不删除源数据。目标已有同名看板时拒绝覆盖。

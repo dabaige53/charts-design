@@ -149,7 +149,7 @@ def test_real_stdio_protocol(tmp_path):
     asyncio.run(check())
 
 
-# @wu-test type=integration | scope=MCP编辑完成与数据检查 | protects=数据文件不可用时被当作保存成功或失败后草稿批次无法继续
+# @wu-test type=integration | scope=MCP编辑完成与数据检查 | protects=复用通过报告时把已不可用的数据当成可保存，或失败后丢失草稿和批次
 def test_failed_finish_preserves_draft_and_batch_over_stdio(tmp_path):
     from dashboard_runtime.service import Service
     from dashboard_runtime.demo import executive_document
@@ -173,6 +173,9 @@ def test_failed_finish_preserves_draft_and_batch_over_stdio(tmp_path):
                 edited = await session.call_tool('dashboard_patch', {'dashboardId': 'review', 'expectedRevision': 1,
                     'operations': [{'op': 'set_title', 'value': 'Reviewed draft'}]})
                 assert not edited.isError
+                checked = await session.call_tool('dashboard_doctor', {'dashboardId': 'review', 'mode': 'full'})
+                assert not checked.isError
+                assert checked.structuredContent is not None and checked.structuredContent['passed']
                 data_path = project / 'data' / 'data.sqlite3'
                 unavailable = tmp_path / 'unavailable.sqlite3'
                 data_path.rename(unavailable)

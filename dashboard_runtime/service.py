@@ -23,12 +23,13 @@ class Service:
             from .cloud_project import CloudProjectStore
             require(project_root is not None, 'Cloud storage requires a named project', 'PROJECT_REQUIRED')
             self.store: Any = CloudProjectStore(project_root, root)
+            self.views = self.store.prepared_views
         else:
             self.store = ProjectStore(project_root, root) if project_root else Store(root)
+            self.views = LocalView(self.store.data)
         self.queries = QueryRunner(sources_file)
         self.project_root = project_root
         self.doctor_reports = {}
-        self.views = LocalView(self.store.data)
         from .transport import ResultTransport
         self.transport = ResultTransport(getattr(self.store, "runtime_root", self.store.root))
 
@@ -114,6 +115,22 @@ class Service:
         if 'computed' in result:
             result['computed']['totalDurationMs'] = (time.perf_counter()-started)*1000
         return result
+
+    def _doctor(self, draft, mode, *, reuse=False):
+        from .doctor import diagnose, document_fingerprint
+        from .project import write_json
+
+        board = draft['id']
+        fingerprint = document_fingerprint(draft) if mode == 'full' else None
+        cached = self.doctor_reports.get(board) if reuse else None
+        previous = cached[1] if cached is not None and cached[0] == fingerprint else None
+        report = diagnose(self, draft, mode, previous)
+        if not report['passed']:
+            self.doctor_reports.pop(board, None)
+        elif mode == 'full':
+            self.doctor_reports[board] = (fingerprint, report)
+        write_json(self.transport.path.parent / 'doctor' / (board+'.json'), report)
+        return report
 
     def _call(self, tool, args):
         require(isinstance(args, dict), 'Tool arguments must be an object')
@@ -218,19 +235,16 @@ class Service:
             require(self.project_root is not None, 'Project required', 'PROJECT_REQUIRED')
             return self.store.label_checkpoint(board,args['expectedRevision'],args['revision'],args.get('name',''),args.get('published',False))
         if tool == 'dashboard_doctor':
-            from .doctor import diagnose
-            report = diagnose(self, board, args.get('mode', 'full'))
-            self.doctor_reports[board] = report
-            from .project import write_json
-            write_json(self.transport.path.parent / 'doctor' / (board+'.json'), report)
-            return report
+            return self._doctor(self.store.get(board, hydrate=False), args.get('mode', 'full'))
         if tool in ('dashboard_edit_begin', 'dashboard_edit_finish', 'dashboard_checkpoint', 'dashboard_history_diff'):
             require(self.project_root is not None, 'Migrate this dashboard to a project first', 'PROJECT_REQUIRED')
             if tool == 'dashboard_edit_begin':
                 return self.store.begin(board, args['expectedRevision'])
             if tool == 'dashboard_history_diff':
                 return self.store.diff(board, args['fromRevision'], args['toRevision'])
-            report = self._call('dashboard_doctor', {'dashboardId': board, 'mode': 'full'})
+            draft = self.store.get(board, hydrate=False)
+            require(draft['revision'] == args['expectedRevision'], 'Reload before checkpoint', 'REVISION_CONFLICT')
+            report = self._doctor(draft, 'full', reuse=True)
             if not report['passed']:
                 return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
                         'message': 'Draft checks failed; no checkpoint was created. Read dashboard_get, fix the reported issues, then retry with the latest revision.'},
@@ -241,8 +255,8 @@ class Service:
             except DashboardError as error:
                 if error.code != 'NO_SAVED_VERSION':
                     raise
-                previous = self.store.get(board, hydrate=False)
-            changes = semantic_diff(previous, self.store.get(board, hydrate=False))
+                previous = draft
+            changes = semantic_diff(previous, draft)
             checkpoint = self.store.checkpoint(board, args['expectedRevision'], args.get('name', ''), args.get('published', False), args.get('batchId'))
             return {'ok': True, 'checkpoint': checkpoint, 'doctor': report, 'semanticChanges': changes, 'nextAction': 'dashboard_preview', 'displayPolicy': 'saved-dashboard-ui'}
         if tool == 'runtime_info':

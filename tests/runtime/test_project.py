@@ -33,6 +33,36 @@ def test_drafts_checkpoints_notes_and_runtime_removal(tmp_path):
     assert not (runtime/'data.sqlite3').exists()
 
 
+# @wu-test type=integration | scope=dashboard_doctor 与 dashboard_checkpoint | protects=相同草稿保存时重复计算组件，或草稿改变后沿用旧检查
+def test_checkpoint_reuses_only_an_unchanged_full_doctor_report(tmp_path):
+    from dashboard_runtime.demo import executive_document
+
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    board = {'dashboardId': 'board'}
+    service.call('dashboard_create', {**board, 'document': executive_document('board')})
+
+    def stages(report):
+        return {event['stage'] for event in service.call('runtime_diagnostics', {
+            'requestId': report['requestId'], 'limit': 100,
+        })['events']}
+
+    full = service.call('dashboard_doctor', {**board, 'mode': 'full'})
+    assert full['passed'] and 'component' in stages(full)
+    saved = service.call('dashboard_checkpoint', {**board, 'expectedRevision': 1})
+    assert saved['ok'] and saved['doctor']['checks'] == full['checks']
+    assert 'component' not in stages(saved['doctor'])
+    assert any(stage.startswith('dataset:') for stage in stages(saved['doctor']))
+
+    service.call('dashboard_patch', {**board, 'expectedRevision': 1,
+                 'operations': [{'op': 'set_title', 'value': 'Updated'}]})
+    with pytest.raises(DashboardError) as stale:
+        service.call('dashboard_checkpoint', {**board, 'expectedRevision': 1})
+    assert stale.value.code == 'REVISION_CONFLICT'
+    assert service.call('dashboard_doctor', {**board, 'mode': 'quick'})['passed']
+    updated = service.call('dashboard_checkpoint', {**board, 'expectedRevision': 2})
+    assert updated['ok'] and 'component' in stages(updated['doctor'])
+
+
 # @wu-test type=behavior | scope=渐进数据读取 | protects=定义读取提前携带完整数据或无法按组件加载
 def test_local_document_has_no_component_results(tmp_path):
     from dashboard_runtime.demo import executive_document
