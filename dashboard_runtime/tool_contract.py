@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .declarations import common_declarations
 from .statistical import statistical_schema
+from .transfer_payload import BULK_ENCODED, BULK_ENCODING
 
 
 def schema(properties=None, required=(), **keywords):
@@ -169,22 +170,31 @@ def tool_annotations(name):
 
 
 WRITE_FLOW = ' In project mode this saves a draft: finish the edit batch before previewing. On REVISION_CONFLICT read dashboard_get, reconcile, and use its latest revision.'
+TRANSFER_ENCODING = described({'type': 'string', 'enum': [BULK_ENCODING]},
+                              'Use for all calls of a bulk upload. Omit for legacy 250-row JSON chunks.')
 TOOLS = {
     'dataset_storage_inventory': ('Inspect CloudBase dataset versions, stored chunk sizes and conservative references from drafts, checkpoints, releases and annotation history. Incomplete or unreferenced versions require review; this never deletes data or returns business rows.', schema({})),
     'dataset_transfer_chunk': ('Stage one ordered chunk in private COS; repeat the same upload ID and part to resume. This does not modify a dashboard.', schema({
         'uploadId': described({'type': 'string', 'pattern': '^[0-9a-f]{64}$'}, 'Random transfer identifier, distinct from the data version.'),
         'ref': described({'type': 'object'}, 'Exact immutable local dataset reference including field order, row count and version.'),
-        'part': described({'type': 'integer', 'minimum': 0}, 'Zero-based chunk number; chunks contain exactly 250 rows except the last.'),
-        'rows': described({'type': 'array', 'maxItems': 250, 'items': {'type': 'object'}}, 'Typed rows; JSON payload limited to 2 MiB.'),
-    }, ('uploadId', 'ref', 'part', 'rows'))),
+        'part': described({'type': 'integer', 'minimum': 0}, 'Zero-based chunk number. Use exactly 5,000 rows for bulk or 250 for legacy, except the last chunk.'),
+        'rows': described({'type': 'array', 'maxItems': 250, 'items': {'type': 'object'}}, 'Legacy typed rows; JSON limited to 2 MiB. Do not send with payload.'),
+        'encoding': TRANSFER_ENCODING,
+        'payload': described({**STR, 'maxLength': BULK_ENCODED}, 'Bulk only: Base64 of a single gzip stream containing a canonical UTF-8 JSON row array. Limit: 8 MiB compressed and 16 MiB decoded.'),
+    }, ('uploadId', 'ref', 'part'), oneOf=[
+        {'required': ['rows'], 'not': {'anyOf': [{'required': ['encoding']}, {'required': ['payload']}]}},
+        {'required': ['encoding', 'payload'], 'not': {'required': ['rows']}},
+    ])),
     'dataset_transfer_finish': ('Start or resume background verification and durable import. Poll dataset_transfer_status; do not create dashboard references before complete. Successful completion removes the COS staging prefix.', schema({
         'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
+        'encoding': TRANSFER_ENCODING,
     }, ('uploadId', 'ref'))),
     'dataset_transfer_status': ('Read state (not status): unknown, running, cleanup_required, complete or failed. Running includes phase and completed/total counts. After all chunks are staged, call dataset_transfer_finish for unknown or cleanup_required; correct failures before resuming. Optional parts returns receivedParts, mapping staged part numbers to SHA-256 of uncompressed JSON, for verified resume. Only complete permits binding the returned ref.', schema({
         'uploadId': described(STR, 'Same upload ID as the chunks.'), 'ref': described({'type': 'object'}, 'Exact immutable dataset reference.'),
+        'encoding': TRANSFER_ENCODING,
         'parts': described({'type': 'array', 'maxItems': 128, 'uniqueItems': True,
                             'items': {'type': 'integer', 'minimum': 0}},
-                           'Optional receipt query for up to 128 zero-based parts; missing parts are omitted from receivedParts.'),
+                           'Optional receipt query for up to 4 bulk or 128 legacy zero-based parts; missing parts are omitted from receivedParts.'),
     }, ('uploadId', 'ref'))),
     'dataset_transfer_cleanup': ('Remove only this transfer staging prefix and all object versions; do not call while uploading or finalizing.', schema({
         'uploadId': described(STR, 'Exact transfer ID to remove.'),

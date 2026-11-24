@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dashboard_runtime.model import validate
 from dashboard_runtime.remote_client import (
-    TRANSFER_TOOLS, TransferClient, call_tool, check_source,
-    connect, connection_settings, require_tools, run_command,
+    TRANSFER_TOOLS, TransferClient, call_tool,
+    connect, connection_settings, require_tools, run_command, supports_bulk,
 )
 
 
@@ -71,19 +71,20 @@ async def run(args):
     manifest = json.loads(Path(args.manifest).read_text())
     root, docs, refs = read_project(manifest)
     endpoint, token = connection_settings()
-    for ref in refs.values():
-        check_source(root, ref)
     async with connect(endpoint, token) as session:
-        await require_tools(session, {**TRANSFER_TOOLS,
+        available = await require_tools(session, {**TRANSFER_TOOLS,
             'dashboard_list': set(), 'dashboard_get': {'dashboardId'},
             'runtime_result_chunk': {'requestId', 'index'},
             'dashboard_create': {'dashboardId', 'document'}})
         async def call(name, arguments):
             return await call_tool(session, args.project, name, arguments)
         client = TransferClient(call, root, endpoint, args.project, args.state,
-                                concurrency=args.concurrency)
+                                concurrency=args.concurrency, bulk_available=supports_bulk(available),
+                                legacy=args.legacy)
         if args.resume_staged and args.resume_staged not in refs:
             raise ValueError('The staged version must exist in the manifest')
+        for ref in refs.values():
+            client.check_source(ref)
         existing = {item['id'] for item in (await call('dashboard_list', {}))['dashboards']}
         for board in existing & docs.keys():
             actual = (await call('dashboard_get', {'dashboardId': board}))['document']
@@ -110,6 +111,7 @@ def main():
     parser.add_argument('--state', required=True, help='Private resumable state file')
     parser.add_argument('--resume-staged', help='One existing data version already fully staged by an older client')
     parser.add_argument('--concurrency', type=int, choices=range(1, 5), default=4)
+    parser.add_argument('--legacy', action='store_true', help='Use 250-row JSON chunks for new uploads')
     parser.add_argument('--check-only', action='store_true', help='Validate source and remote capabilities without uploading')
     args = parser.parse_args()
     run_command(run(args), args.state)

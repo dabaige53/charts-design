@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dashboard_runtime.local_data import LocalData
 from dashboard_runtime.remote_client import (
-    TRANSFER_TOOLS, TransferClient, call_tool, check_source, connect,
-    connection_settings, progress, require_tools, run_command, save_private,
+    TRANSFER_TOOLS, TransferClient, call_tool, connect,
+    connection_settings, progress, require_tools, run_command, save_private, supports_bulk,
 )
 
 
@@ -46,15 +46,16 @@ async def run(args):
         return
     start = time.monotonic()
     ref = source_ref(args)
-    check_source(args.root, ref)
     progress({'stage': 'source', 'rows': ref['rowCount'], 'bytes': ref['bytes'],
               'seconds': round(time.monotonic() - start, 3)})
     async with connect(endpoint, token) as session:
         async def call(name, arguments):
             return await call_tool(session, args.project, name, arguments)
-        await require_tools(session, TRANSFER_TOOLS)
+        available = await require_tools(session, TRANSFER_TOOLS)
         client = TransferClient(call, args.root, endpoint, args.project, args.state,
-                                concurrency=args.concurrency)
+                                concurrency=args.concurrency, bulk_available=supports_bulk(available),
+                                legacy=args.legacy)
+        client.check_source(ref)
         if args.check_only:
             print(json.dumps({'checked': True, 'rows': ref['rowCount'], 'bytes': ref['bytes']}))
             return
@@ -77,6 +78,7 @@ def main():
     upload.add_argument('--state', required=True, help='Private resumable state file')
     upload.add_argument('--output', required=True, help='Verified ref JSON, written only after completion')
     upload.add_argument('--concurrency', type=int, choices=range(1, 5), default=4)
+    upload.add_argument('--legacy', action='store_true', help='Use 250-row JSON chunks for new uploads')
     upload.add_argument('--check-only', action='store_true', help='Check source and service; upload no rows')
     read = commands.add_parser('read', help='Save complete configuration, decoding all MCP response chunks')
     read.add_argument('--project', required=True)

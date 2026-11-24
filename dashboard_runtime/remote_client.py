@@ -16,9 +16,9 @@ import time
 from urllib.parse import urlparse
 
 from .local_data import LocalData
-from .model import json_bytes
+from .model import DashboardError, json_bytes
+from .transfer_payload import BULK_ENCODING, BULK_ROWS, TRANSFER_ROWS, encode_bulk
 
-TRANSFER_ROWS = 250
 TRANSFER_TOOLS = {
     'dataset_transfer_chunk': {'uploadId', 'ref', 'part', 'rows'},
     'dataset_transfer_finish': {'uploadId', 'ref'},
@@ -79,6 +79,14 @@ async def require_tools(session, required):
         schema = available.get(name)
         if schema is None or not parameters <= set(schema.get('properties', {})):
             raise RuntimeError(f'CAPABILITY_MISSING: {name}; update the target service before uploading')
+    return available
+
+
+def supports_bulk(available):
+    return all(
+        BULK_ENCODING in available[name].get('properties', {}).get('encoding', {}).get('enum', [])
+        for name in TRANSFER_TOOLS
+    ) and 'payload' in available['dataset_transfer_chunk']['properties']
 
 
 async def call_tool(session, project, name, arguments):
@@ -114,7 +122,7 @@ async def call_tool(session, project, name, arguments):
     return result
 
 
-def batches(root, ref):
+def batches(root, ref, size=TRANSFER_ROWS):
     data_path = Path(root).resolve() / 'data' / 'data.sqlite3'
     if not data_path.is_file():
         raise ValueError('Local data/data.sqlite3 is missing')
@@ -128,14 +136,22 @@ def batches(root, ref):
         keys, fields = ref['fieldOrder'], ref['fields']
         columns = ','.join('c' + str(i) for i in range(len(keys)))
         cursor = db.execute(f'SELECT {columns}, _missing FROM d_{version} ORDER BY rowid')
-        while values := cursor.fetchmany(TRANSFER_ROWS):
+        while values := cursor.fetchmany(size):
             yield [LocalData._decode(keys, row[:-1], fields, row[-1]) for row in values]
 
 
-def check_source(root, ref):
+def check_source(root, ref, *, bulk=False):
     count = 0
-    for rows in batches(root, ref):
-        if len(json_bytes(rows)) > 2 * 1024 * 1024:
+    for rows in batches(root, ref, BULK_ROWS if bulk else TRANSFER_ROWS):
+        try:
+            raw = json_bytes(rows)
+        except DashboardError as error:
+            if bulk and error.code == 'PAYLOAD_TOO_LARGE':
+                raise ValueError('Bulk chunk exceeds 16 MiB decoded; use --legacy for a new upload') from error
+            raise
+        if bulk:
+            encode_bulk(raw)
+        elif len(raw) > 2 * 1024 * 1024:
             raise ValueError('A 250-row upload chunk exceeds 2 MiB; reduce source field size')
         count += len(rows)
     if count != ref['rowCount']:
@@ -165,11 +181,13 @@ def run_command(coroutine, state_path=None):
 
 
 class TransferClient:
-    def __init__(self, call, root, endpoint, project, state_path, *, concurrency=4, emit=progress):
+    def __init__(self, call, root, endpoint, project, state_path, *, concurrency=4, emit=progress,
+                 bulk_available=False, legacy=False):
         if type(concurrency) is not int or not 1 <= concurrency <= 4:
             raise ValueError('Upload concurrency must be between 1 and 4')
         self.call, self.root, self.path = call, Path(root).resolve(), Path(state_path)
         self.concurrency, self.emit = concurrency, emit
+        self.bulk_available, self.legacy = bulk_available, legacy
         identity = hashlib.sha256((endpoint + '\0' + project + '\0' + str(self.root)).encode()).hexdigest()
         if self.path.exists():
             self.state = json.loads(self.path.read_text())
@@ -178,18 +196,34 @@ class TransferClient:
         else:
             self.state = {'identity': identity, 'uploads': {}, 'created': []}
         self.state.setdefault('staged', [])
+        self.state.setdefault('bulk', [])
 
     def save(self):
         save_private(self.path, self.state)
+
+    def uses_bulk(self, version):
+        if version in self.state['bulk']:
+            if not self.bulk_available:
+                raise RuntimeError('CAPABILITY_MISSING: gzip-json-v1; resume on a bulk-compatible service')
+            return True
+        return version not in self.state['uploads'] and self.bulk_available and not self.legacy
+
+    def check_source(self, ref):
+        check_source(self.root, ref, bulk=self.uses_bulk(ref['version']))
 
     async def transfer(self, ref, *, resume_staged=False):
         version = ref['version']
         if resume_staged and version not in self.state['uploads']:
             raise ValueError('The staged version must already exist in the state file')
         fresh = version not in self.state['uploads']
+        bulk = self.uses_bulk(version)
+        if fresh and bulk:
+            self.state['bulk'].append(version)
         upload = self.state['uploads'].setdefault(version, secrets.token_hex(32))
         self.save()
         args = {'uploadId': upload, 'ref': ref}
+        if bulk:
+            args['encoding'] = BULK_ENCODING
         start = time.monotonic()
         phase = 'inspect'
         timings = {}
@@ -211,9 +245,9 @@ class TransferClient:
                     block = []
                     # Inspect remote receipts in bounded windows, including an acknowledged
                     # chunk whose response was lost before a local state save.
-                    for part, rows in enumerate(batches(self.root, ref)):
+                    for part, rows in enumerate(batches(self.root, ref, BULK_ROWS if bulk else TRANSFER_ROWS)):
                         block.append((part, rows))
-                        if len(block) == 128:
+                        if len(block) == (4 if bulk else 128):
                             sent, reused = await self.upload_window(args, block, inspect=not fresh)
                             uploaded += sent
                             skipped += reused
@@ -267,6 +301,7 @@ class TransferClient:
 
     async def upload_window(self, args, block, *, inspect=True):
         started = time.monotonic()
+        bulk = args.get('encoding') == BULK_ENCODING
         received = {}
         if inspect:
             result = await self.call('dataset_transfer_status', {**args, 'parts': [part for part, _ in block]})
@@ -278,7 +313,7 @@ class TransferClient:
                 raise RuntimeError('TRANSFER_PROTOCOL_ERROR: missing receivedParts; update the target service')
         checked = time.monotonic()
         pending = []
-        encoded_bytes = 0
+        encoded_bytes = sent_bytes = 0
         for part, rows in block:
             raw = json_bytes(rows)
             encoded_bytes += len(raw)
@@ -287,25 +322,32 @@ class TransferClient:
             if remote is not None and remote != digest:
                 raise ValueError(f'DATA_CONFLICT: staged part {part} differs from the source')
             if remote is None:
-                pending.append((part, rows))
+                if bulk:
+                    payload = encode_bulk(raw)
+                    sent_bytes += len(payload)
+                    pending.append((part, {'payload': payload}))
+                else:
+                    sent_bytes += len(raw)
+                    pending.append((part, {'rows': rows}))
         encoded = time.monotonic()
 
-        async def send(part, rows):
-            result = await self.call('dataset_transfer_chunk', {**args, 'part': part, 'rows': rows})
+        async def send(part, data):
+            result = await self.call('dataset_transfer_chunk', {**args, 'part': part, **data})
             if result.get('part') != part or type(result.get('complete')) is not bool:
                 raise RuntimeError('TRANSFER_PROTOCOL_ERROR: invalid chunk receipt')
 
         # Await every in-flight request before propagating failure. Never finalize a partial window.
         for offset in range(0, len(pending), self.concurrency):
             results = await asyncio.gather(
-                *(send(part, rows) for part, rows in pending[offset:offset + self.concurrency]),
+                *(send(part, data) for part, data in pending[offset:offset + self.concurrency]),
                 return_exceptions=True,
             )
             for result in results:
                 if isinstance(result, BaseException):
                     raise result
         self.emit({'stage': 'upload-window', 'sentParts': len(pending), 'reusedParts': len(block) - len(pending),
-                   'encodedBytes': encoded_bytes, 'receiptSeconds': round(checked - started, 3),
+                   'encodedBytes': encoded_bytes, 'sentPayloadBytes': sent_bytes,
+                   'receiptSeconds': round(checked - started, 3),
                    'encodeSeconds': round(encoded - checked, 3),
                    'requestSeconds': round(time.monotonic() - encoded, 3)})
         return len(pending), len(block) - len(pending)

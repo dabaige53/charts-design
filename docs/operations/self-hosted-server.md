@@ -318,7 +318,9 @@ docker buildx build --platform linux/amd64 \
 
 ### 从本地项目迁移选定数据
 
-云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。每个数据版本分成最多 250 行、JSON 不超过 2 MiB 的批次；相同传输 ID 和批次重试时内容必须一致。批次先放在私有 COS，服务端重算原始数据版本并持久保存后才可引用：未切换项目写入 PostgreSQL 业务分块，`cos-v1` 项目生成 COS 数据包并登记 PostgreSQL 元信息。完成后删除该传输的 COS 暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 指定该传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 也重新调用 finish 完成清理。迁移需要现有服务凭据对分享桶执行读取、写入、列举对象版本和删除该暂存前缀的权限；不会自动更改权限。
+云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。目标支持批量上传时，客户端在发送前压缩，每个数据版本按 5,000 行分片（末片可更少），每片最多 8 MiB gzip、16 MiB 解压后 JSON。客户端直接传给 MCP，不需要另开存储或配置存储凭据。旧服务、已有的旧格式续传，以及新任务显式使用 `--legacy` 时，仍使用 250 行、2 MiB JSON 分片。
+
+批量上传的分片、状态查询和合并请求都带 `encoding: gzip-json-v1`。相同传输 ID 和分片编号重试时，解压后的内容必须一致。分片先放到服务端已有的私有对象存储，服务端按序重算完整数据版本，持久保存后才可引用：未切换项目写入 PostgreSQL 业务分块，`cos-v1` 项目生成 COS 数据包并登记 PostgreSQL 元信息。完成后删除该传输的暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 并指定传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 时也调用 finish 完成清理。迁移沿用服务端既有存储权限，不自动更改权限。
 
 `bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
 
@@ -352,7 +354,7 @@ bun run python -- bin/remote-project.py upload \
 
 已有本地数据版本使用 `--ref`；新数据使用 `--rows /path/rows.jsonl --fields /path/fields.json` 替换 `--ref`，按字段定义导入 `--root/data` 后上传。`--rows` 接受 JSON 数组或 `.jsonl` 文件；大型来源优先 JSONL。准备新数据时指定独立的本地工作目录，避免与业务加工进程同时写同一数据仓库。
 
-两个上传入口均支持 `--check-only`：检查本地引用、全部分块大小、行数和目标工具能力，检查完成后退出。使用 `--rows` 时仍会准备本地数据版本。远程续传要求 `dataset_transfer_status` 支持 `parts`；旧服务会在发送数据前收到升级提示。依赖缺失时使用项目环境安装入口，运行时不临时改用其他解释器。
+两个上传入口均支持 `--check-only`：检查本地引用、全部分片大小、行数和目标工具能力，不上传。使用 `--rows` 时仍会准备本地数据版本。远程续传要求 `dataset_transfer_status` 支持 `parts`；缺少该能力时，在发送数据前提示升级。上传日志区分分片数、已复用分片数、实际发送的数据字段字节数和请求耗时。依赖缺失时使用项目环境安装入口，运行时不临时改用其他解释器。
 
 上传默认并发 4 块，`--concurrency 1` 可用于单请求排错，最大值为 4；数据集之间顺序执行。首次上传直接发送；中途恢复时按窗口查询服务端 `receivedParts`，比较暂存 JSON 的 SHA-256，仅发送缺失块。客户端即使在收到确认前退出，也能恢复。校验值不一致时报告 `DATA_CONFLICT`。每个状态文件由一个上传进程使用，恢复沿用同一文件、来源和目标。
 

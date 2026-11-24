@@ -135,16 +135,21 @@ class Service:
         board = args.get('dashboardId')
         if tool in ('dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
             from .cloud_data import CloudData
+            from .transfer_payload import BULK_ENCODING
             require(isinstance(self.store.data, CloudData), 'Transfer requires cloud project storage', 'UNSUPPORTED_OPERATION')
             from qcloud_cos.cos_exception import CosClientError, CosServiceError
             data = self.store.data
+            encoding = args.get('encoding')
+            require(encoding is None or encoding == BULK_ENCODING, 'Unsupported transfer encoding')
+            bulk = encoding == BULK_ENCODING
             try:
                 if tool == 'dataset_transfer_chunk':
-                    return data.transfer_chunk(args['uploadId'], args['ref'], args['part'], args['rows'])
+                    return data.transfer_chunk(args['uploadId'], args['ref'], args['part'],
+                                               args.get('rows'), bulk=bulk, payload=args.get('payload'))
                 if tool == 'dataset_transfer_finish':
-                    return data.transfer_finish(args['uploadId'], args['ref'])
+                    return data.transfer_finish(args['uploadId'], args['ref'], bulk=bulk)
                 if tool == 'dataset_transfer_status':
-                    return data.transfer_status(args['uploadId'], args['ref'], args.get('parts'))
+                    return data.transfer_status(args['uploadId'], args['ref'], args.get('parts'), bulk=bulk)
                 data.transfer_cleanup(args['uploadId'])
                 return {'ok': True}
             except (CosClientError, CosServiceError) as error:

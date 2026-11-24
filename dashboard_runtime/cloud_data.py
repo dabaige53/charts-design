@@ -17,9 +17,9 @@ from typing import cast
 from .cloud_assets import CloudAssets
 from .local_data import LocalData
 from .model import json_bytes, require
+from .transfer_payload import BULK_ROWS, TRANSFER_ROWS, bulk_binary, bulk_raw, bulk_rows
 
 CHUNK_ROWS = 500
-TRANSFER_ROWS = 250
 
 
 class CloudData(LocalData):
@@ -61,30 +61,43 @@ class CloudData(LocalData):
         require(isinstance(upload, str) and re.fullmatch("[0-9a-f]{64}", upload), "Invalid upload ID")
         self._transfer_storage().delete_prefix(self._transfer_prefix(upload))
 
-    def transfer_chunk(self, upload, ref, part, rows):
+    def _transfer_parts(self, upload, bulk):
+        return self._transfer_prefix(upload) + ('bulk-v1/' if bulk else '')
+
+    def transfer_chunk(self, upload, ref, part, rows=None, *, bulk=False, payload=None):
         version, count = self.transfer_ref(ref)
         require(isinstance(upload, str) and re.fullmatch('[0-9a-f]{64}', upload)
                 and upload != version, 'Invalid upload ID')
-        require(type(part) is int and 0 <= part < (count + TRANSFER_ROWS - 1) // TRANSFER_ROWS,
+        size = BULK_ROWS if bulk else TRANSFER_ROWS
+        require(type(part) is int and 0 <= part < (count + size - 1) // size,
                 'Invalid chunk number')
-        expected = min(TRANSFER_ROWS, count - part * TRANSFER_ROWS)
-        require(isinstance(rows, list) and len(rows) == expected, 'Invalid chunk row count')
-        require(len(json_bytes(rows)) <= 2 * 1024 * 1024, 'Chunk exceeds 2 MiB')
+        expected = min(size, count - part * size)
+        compressed = None
+        if bulk:
+            require(rows is None, 'Bulk chunks do not accept rows')
+            compressed = bulk_binary(payload)
+            raw = bulk_raw(compressed)
+            bulk_rows(raw, expected)
+        else:
+            require(payload is None, 'Compressed chunks require gzip-json-v1 encoding')
+            require(isinstance(rows, list) and len(rows) == expected, 'Invalid chunk row count')
+            raw = json_bytes(rows)
+            require(len(raw) <= 2 * 1024 * 1024, 'Chunk exceeds 2 MiB')
         saved = self.database.call('data_get', self.project, version=version)
         if saved is not None:
             require(saved == ref, 'Remote data metadata differs', 'DATA_CONFLICT')
             return {'complete': True, 'part': part}
         storage = self._transfer_storage()
-        key = self._transfer_prefix(upload) + str(part)
-        raw = json_bytes(rows)
+        key = self._transfer_parts(upload, bulk) + str(part)
         previous = storage.get(key)
         if previous is not None:
-            require(gzip.decompress(previous) == raw, 'Transfer chunk differs', 'DATA_CONFLICT')
+            require((bulk_raw(previous) if bulk else gzip.decompress(previous)) == raw,
+                    'Transfer chunk differs', 'DATA_CONFLICT')
         else:
-            storage.put(key, gzip.compress(raw), 'application/gzip')
+            storage.put(key, compressed if compressed is not None else gzip.compress(raw), 'application/gzip')
         return {'complete': False, 'part': part}
 
-    def transfer_finish(self, upload, ref):
+    def transfer_finish(self, upload, ref, *, bulk=False):
         version, count = self.transfer_ref(ref)
         require(isinstance(upload, str) and re.fullmatch('[0-9a-f]{64}', upload)
                 and upload != version, 'Invalid upload ID')
@@ -93,13 +106,16 @@ class CloudData(LocalData):
             require(saved == ref, 'Remote data metadata differs', 'DATA_CONFLICT')
             self.transfer_cleanup(upload)
             return {'state': 'complete', 'ref': saved}
+        size = BULK_ROWS if bulk else TRANSFER_ROWS
+        total = (count + size - 1) // size
         with self.transfer_lock:
             current = self.transfers.get(upload)
             if current and current['state'] == 'running':
-                require(current['ref'] == ref, 'Upload already in use', 'DATA_CONFLICT')
+                require(current['ref'] == ref and current['bulk'] == bulk,
+                        'Upload already in use', 'DATA_CONFLICT')
                 return {'state': 'running'}
             self.transfers[upload] = {'state': 'running', 'ref': ref, 'phase': 'reading',
-                                      'completed': 0, 'total': (count + TRANSFER_ROWS - 1) // TRANSFER_ROWS}
+                                      'completed': 0, 'total': total, 'bulk': bulk}
 
         def progress(phase, completed, total):
             with self.transfer_lock:
@@ -108,9 +124,8 @@ class CloudData(LocalData):
         def finish():
             try:
                 def rows():
-                    total = (count + TRANSFER_ROWS - 1) // TRANSFER_ROWS
                     storage = self._transfer_storage()
-                    prefix = self._transfer_prefix(upload)
+                    prefix = self._transfer_parts(upload, bulk)
                     with ThreadPoolExecutor(max_workers=4) as executor:
                         pending = deque()
                         next_part = 0
@@ -120,8 +135,8 @@ class CloudData(LocalData):
                                 next_part += 1
                             part, future = pending.popleft()
                             raw = future.result()
-                            chunk = json.loads(gzip.decompress(raw)) if raw is not None else None
-                            expected = min(TRANSFER_ROWS, count - part * TRANSFER_ROWS)
+                            chunk = json.loads(bulk_raw(raw) if bulk else gzip.decompress(raw)) if raw is not None else None
+                            expected = min(size, count - part * size)
                             require(isinstance(chunk, list) and len(chunk) == expected,
                                     'A transfer chunk is missing', 'DATA_INCOMPLETE')
                             assert isinstance(chunk, list)
@@ -147,25 +162,26 @@ class CloudData(LocalData):
         threading.Thread(target=finish, daemon=True).start()
         return {'state': 'running'}
 
-    def transfer_status(self, upload, ref, parts=None):
-        result = self._transfer_status(upload, ref)
+    def transfer_status(self, upload, ref, parts=None, *, bulk=False):
+        result = self._transfer_status(upload, ref, bulk)
         if parts is not None:
-            total = (ref['rowCount'] + TRANSFER_ROWS - 1) // TRANSFER_ROWS
-            require(isinstance(parts, list) and len(parts) <= 128
+            size = BULK_ROWS if bulk else TRANSFER_ROWS
+            total = (ref['rowCount'] + size - 1) // size
+            require(isinstance(parts, list) and len(parts) <= (4 if bulk else 128)
                     and all(type(part) is int and 0 <= part < total for part in parts)
                     and len(set(parts)) == len(parts), 'Invalid transfer receipt parts')
             received = {}
             if result['state'] not in ('complete', 'cleanup_required'):
                 storage = self._transfer_storage()
-                prefix = self._transfer_prefix(upload)
+                prefix = self._transfer_parts(upload, bulk)
                 with ThreadPoolExecutor(max_workers=4) as executor:
                     for part, raw in zip(parts, executor.map(lambda part: storage.get(prefix + str(part)), parts)):
                         if raw is not None:
-                            received[str(part)] = hashlib.sha256(gzip.decompress(raw)).hexdigest()
+                            received[str(part)] = hashlib.sha256(bulk_raw(raw) if bulk else gzip.decompress(raw)).hexdigest()
             result['receivedParts'] = received
         return result
 
-    def _transfer_status(self, upload, ref):
+    def _transfer_status(self, upload, ref, bulk):
         version, _ = self.transfer_ref(ref)
         require(isinstance(upload, str) and re.fullmatch('[0-9a-f]{64}', upload),
                 'Invalid upload ID')
@@ -175,13 +191,16 @@ class CloudData(LocalData):
             with self.transfer_lock:
                 state = self.transfers.get(upload)
             if state and state['state'] == 'running':
-                return {key: value for key, value in state.items() if key != 'ref'}
+                require(state['bulk'] == bulk, 'Upload already in use', 'DATA_CONFLICT')
+                return {key: value for key, value in state.items() if key not in ('ref', 'bulk')}
             if state and state['state'] == 'complete':
                 return {'state': 'complete', 'ref': saved}
             return {'state': 'cleanup_required', 'ref': saved}
         with self.transfer_lock:
             state = self.transfers.get(upload, {'state': 'unknown'})
-            return {key: value for key, value in state.items() if key != 'ref'}
+            if state['state'] == 'running':
+                require(state['bulk'] == bulk, 'Upload already in use', 'DATA_CONFLICT')
+            return {key: value for key, value in state.items() if key not in ('ref', 'bulk')}
 
     def import_rows(self, rows, fields, progress=None):
         ref = super().import_rows(rows, fields)

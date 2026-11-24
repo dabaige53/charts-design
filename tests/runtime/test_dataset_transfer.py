@@ -169,6 +169,30 @@ def test_transfer_rejects_wrong_content_and_can_restart(tmp_path, monkeypatch):
     assert not storage.objects
 
 
+# @wu-test type=boundary | scope=CloudData bulk payload | protects=无效压缩包或解压后超限的数据进入暂存
+@pytest.mark.parametrize(('compressed', 'limit', 'message'), [
+    (b'not-gzip', 16_384, 'Invalid bulk chunk gzip'),
+    (b'', 16_384, 'Invalid bulk chunk gzip'),
+    (None, 32, 'Bulk chunk exceeds 16 MiB decoded'),
+])
+def test_bulk_rejects_invalid_payload_before_staging(tmp_path, monkeypatch, compressed, limit, message):
+    import base64
+    import gzip
+    from dashboard_runtime import transfer_payload
+
+    rows = [{'label': 'x' * 1024}]
+    ref = LocalData(tmp_path / 'source').import_rows(rows, {'label': {'type': 'string'}})
+    data = CloudData(tmp_path / 'cache', MemoryDatabase(), 'fixture')
+    storage = MemoryStorage()
+    monkeypatch.setattr(data, 'transfer_storage', storage)
+    monkeypatch.setattr(transfer_payload, 'BULK_DECODED', limit)
+    if compressed is None:
+        compressed = gzip.compress(transfer_payload.json_bytes(rows))
+    with pytest.raises(DashboardError, match=message):
+        data.transfer_chunk('d' * 64, ref, 0, bulk=True, payload=base64.b64encode(compressed).decode())
+    assert not storage.objects and not data.database.refs
+
+
 
 # @wu-test type=integration | scope=CloudProjectStore.create | protects=迁移批注时丢失原始版本和筛选上下文
 def test_cloud_import_keeps_annotation_context(tmp_path, monkeypatch):
@@ -426,7 +450,7 @@ def test_client_rejects_corrupt_response(corruption):
         asyncio.run(call_tool(Session(), 'fixture', 'dashboard_get', {}))
 
 
-# @wu-test type=integration | scope=remote-project upload/read | protects=正式命令返回未完成引用或下载时丢失大型组件配置
+# @wu-test type=integration | scope=remote-project upload/read | protects=批量上传响应丢失后重传已暂存分片、登记不完整数据或下载时丢失大型组件配置
 def test_remote_cli_upload_and_complete_read(tmp_path, monkeypatch, capsys):
     import asyncio
     from contextlib import asynccontextmanager
@@ -434,20 +458,28 @@ def test_remote_cli_upload_and_complete_read(tmp_path, monkeypatch, capsys):
     from pathlib import Path
     import runpy
     from types import SimpleNamespace
+    from dashboard_runtime.remote_client import batches
+    from dashboard_runtime.model import json_bytes
+    from dashboard_runtime.service import Service
+    from dashboard_runtime.transfer_payload import BULK_ENCODING
     from dashboard_runtime.transport import ResultTransport
     from dashboard_runtime.tool_contract import TOOLS
 
     run = runpy.run_path(str(Path(__file__).parents[2] / 'bin' / 'remote-project.py'))['run']
     root = tmp_path / 'source'
-    rows, fields = [{'value': 1}], {'value': {'type': 'number'}}
+    rows = [{'value': number, 'label': '渠道覆盖率'} for number in range(5003)]
+    fields = {'value': {'type': 'number'}, 'label': {'type': 'string'}}
     rows_path, fields_path = tmp_path / 'rows.jsonl', tmp_path / 'fields.json'
-    rows_path.write_text(json.dumps(rows[0]) + '\n')
+    rows_path.write_text('\n'.join(json.dumps(row) for row in rows) + '\n')
     fields_path.write_text(json.dumps(fields))
     data = CloudData(tmp_path / 'remote', MemoryDatabase(), 'fixture')
     storage = MemoryStorage()
     monkeypatch.setattr(data, 'transfer_storage', storage)
     transport = ResultTransport(tmp_path)
+    service = Service(tmp_path / 'service')
+    service.store.data = data
     document = {'revision': 7, 'manifest': {'components': {'trend': {'description': '字' * 50000}}}}
+    uploads = []
     class Session:
         async def list_tools(self, cursor=None):
             return SimpleNamespace(tools=[SimpleNamespace(name=name, inputSchema=schema)
@@ -457,13 +489,13 @@ def test_remote_cli_upload_and_complete_read(tmp_path, monkeypatch, capsys):
                 result = transport.pack({'document': document}, name)
             elif name == 'runtime_result_chunk':
                 result = transport.chunk(args)
-            elif name == 'dataset_transfer_chunk':
-                result = data.transfer_chunk(args['uploadId'], args['ref'], args['part'], args['rows'])
-            elif name == 'dataset_transfer_finish':
-                result = data.transfer_finish(args['uploadId'], args['ref'])
             else:
-                assert name == 'dataset_transfer_status'
-                result = data.transfer_status(args['uploadId'], args['ref'], args.get('parts'))
+                assert args['encoding'] == BULK_ENCODING
+                result = service.call(name, args)
+                if name == 'dataset_transfer_chunk':
+                    uploads.append((args['part'], len(args['payload'])))
+                    if len(uploads) == 1:
+                        raise RuntimeError('synthetic response lost')
             return SimpleNamespace(isError=False, structuredContent=result, content=[])
     @asynccontextmanager
     async def connect(*_):
@@ -474,14 +506,22 @@ def test_remote_cli_upload_and_complete_read(tmp_path, monkeypatch, capsys):
     output = tmp_path / 'ref.json'
     args = SimpleNamespace(command='upload', project='fixture', root=str(root), ref=None,
                            rows=str(rows_path), fields=str(fields_path), output=str(output),
-                           state=str(tmp_path / 'state.json'), concurrency=4, check_only=True)
+                           state=str(tmp_path / 'state.json'), concurrency=1, check_only=True, legacy=False)
     asyncio.run(run(args))
     assert not data.database.refs and not storage.objects
     assert not output.exists()
     args.check_only = False
+    with pytest.raises(RuntimeError, match='response lost'):
+        asyncio.run(run(args))
+    assert not output.exists()
     asyncio.run(run(args))
     ref = json.loads(output.read_text())
     assert list(data.iter_rows(ref)) == rows
+    assert [part for part, _ in uploads] == [0, 1]
+    legacy = list(batches(root, ref))
+    assert len(legacy) == 21
+    assert sum(size for _, size in uploads) < sum(len(json_bytes(part)) for part in legacy)
+    assert not storage.objects
     assert output.stat().st_mode & 0o777 == 0o600
     download = tmp_path / 'dashboard.json'
     asyncio.run(run(SimpleNamespace(command='read', project='fixture', dashboard='board', output=str(download))))
@@ -499,7 +539,7 @@ def test_source_preflight_rejects_oversized_chunk(tmp_path):
         check_source(root, ref)
 
 
-# @wu-test type=integration | scope=remote_client staged recovery | protects=旧版已完整暂存的传输恢复时再次发送所有数据行
+# @wu-test type=integration | scope=remote_client staged recovery | protects=批量功能上线后旧暂存任务改用新分片格式或重新发送数据
 def test_shared_client_recovers_legacy_staged_state(tmp_path, monkeypatch):
     import asyncio
     import hashlib
@@ -517,11 +557,13 @@ def test_shared_client_recovers_legacy_staged_state(tmp_path, monkeypatch):
     state = tmp_path / 'state.json'
     state.write_text(json.dumps({'identity': identity, 'uploads': {ref['version']: upload}, 'created': []}))
     async def call(name, args):
+        assert 'encoding' not in args
         if name == 'dataset_transfer_status':
             return data.transfer_status(upload, ref)
         assert name == 'dataset_transfer_finish'
         return data.transfer_finish(upload, ref)
-    client = TransferClient(call, root, endpoint, 'fixture', state, emit=lambda _: None)
+    client = TransferClient(call, root, endpoint, 'fixture', state, emit=lambda _: None,
+                            bulk_available=True)
     assert asyncio.run(client.transfer(ref, resume_staged=True)) == ref
 
 
