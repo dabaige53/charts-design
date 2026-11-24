@@ -10,5 +10,7 @@ test('same-month queries reuse worker; switching month terminates old data owner
  const instances=[];class FakeWorker{constructor(){instances.push(this);this.messages=[];}postMessage(data){this.messages.push(data);queueMicrotask(()=>{if(!this.dead)this.onmessage({data:{id:data.id,result:{ready:true}}});});}terminate(){this.dead=true;}}
  const client=createStaticClient(doc,'https://site.example/document.json','./assets/worker.js',FakeWorker);
  await client.query({filters:[month('2026-09')]});await client.query({filters:[month('2026-09')]});assert.equal(instances.length,1);
+ await client.query({filterId:'period',filters:[]});assert.equal(instances.length,1);
+ assert.equal(instances[0].messages.at(-1).args.filterId,'period');
  await client.query({filters:[month('2026-08')]});assert.equal(instances.length,2);assert.equal(instances[0].dead,true);assert.equal(instances[1].messages[1].args.filters[0].values[0],'2026-08');client.destroy();assert.equal(instances[1].dead,true);
 });

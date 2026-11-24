@@ -683,11 +683,12 @@ def create_app(server: RemoteServer):
                 from .versions import Versions
                 store = server.projects.service(project).store
                 require(getattr(store, 'cos_enabled', False), 'Project has not migrated', 'NOT_FOUND')
-                if principal.access == 'edit' and store.revision(board) == revision:
+                if principal.access == 'edit':
                     doc = store.get(board, hydrate=False)
+                    if doc['revision'] != revision:
+                        doc = Versions(store).read(board, revision)
                 else:
-                    if principal.access != 'edit':
-                        require(store.display_revision(board) == revision, 'Version no longer available', 'REVISION_CONFLICT')
+                    require(store.display_revision(board) == revision, 'Version no longer available', 'REVISION_CONFLICT')
                     doc = Versions(store).read(board, revision)
                 return authorized_file(store, doc, request.path_params['object'], request.path_params['name'])
             raw = await asyncio.to_thread(read)

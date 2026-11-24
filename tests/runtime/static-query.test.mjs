@@ -9,6 +9,52 @@ test('month filtering loads only matching static partition and reuses it',async(
  await engine.query({componentIds:['card'],filters});assert.deepEqual(calls,['sep']);
  const all=await engine.query({componentIds:['card'],filters:[]});assert.equal(all.computed.components.card.value,'5');assert.deepEqual(calls,['sep','aug']);
 });
+// @wu-test type=integration | scope=static filter options | protects=多个数据集串行读取或遗漏候选值
+test('option reads use the bounded queue and combine distinct datasets',async()=>{
+ const doc=make(),files=['a','b','c','d','e','f'];
+ for(const file of files)doc.manifest.components[file]={datasetId:file};
+ doc.manifest.components.extra={datasetId:'a'};
+ doc.manifest.filters=[{id:'office',field:'office',op:'in',componentIds:[...files,'extra']}];
+ doc.staticOptions=Object.fromEntries(files.map(file=>[file,{office:file}]));
+ let active=0,peak=0;
+ const calls=[];
+ const query=createStaticQuery(doc,async file=>{
+  calls.push(file);peak=Math.max(peak,++active);
+  await new Promise(resolve=>setImmediate(resolve));
+  active--;return [file,'shared'];
+ });
+ assert.deepEqual((await query.query({filterId:'office',offset:1,limit:2})),
+  {values:['b','c'],offset:1,totalValues:7,hasMore:true});
+ assert.equal(peak,4);
+ assert.deepEqual(calls,files);
+ assert.deepEqual((await query.query({filterId:'office',search:'shared'})).values,['shared']);
+ assert.deepEqual(calls,files);
+});
+// @wu-test type=integration | scope=COS partition reads and options | protects=选项查询下载其他营业部分片或忽略完整的发布选项索引
+test('prepared and partition options need no files, while scoped cards load only a selected shard',async()=>{
+ const doc=make();
+ delete doc.staticPartitions;
+ doc.manifest.filters=[
+  {id:'office',field:'month',op:'in',componentIds:['card'],values:['2026-09']},
+  {id:'agent',field:'agent',op:'in',componentIds:['card'],values:[]},
+ ];
+ doc.staticFilterOptions={agent:['A','B']};
+ doc.staticPartitionIndexes={sales:{field:'month',entries:[
+  {value:'2026-08',files:['aug']},{value:'2026-09',files:['sep']},
+ ]}};
+ const calls=[];
+ const query=createStaticQuery(doc,async file=>{
+  calls.push(file);
+  assert.equal(file,'sep');
+  return {rows:[{month:'2026-09',pax:3}],ordinals:[1]};
+ });
+ assert.deepEqual((await query.query({filterId:'office'})).values,['2026-08','2026-09']);
+ assert.deepEqual((await query.query({filterId:'agent',search:'b'})).values,['B']);
+ assert.deepEqual(calls,[]);
+ const result=await query.query({componentIds:['card']});
+ assert.equal(result.computed.components.card.value,'3');
+ assert.deepEqual(calls,['sep']);
+});
 // @wu-test type=integration | scope=static table query | protects=分页排序搜索与导出使用不同数据范围
 test('table grouping, sort, paging, search and full CSV export use same scope',async()=>{
  const engine=createStaticQuery(make(),async file=>file==='aug'?[]:[{month:'2026-09',agent:'A',pax:2},{month:'2026-09',agent:'B',pax:5},{month:'2026-09',agent:'A',pax:4}]);
