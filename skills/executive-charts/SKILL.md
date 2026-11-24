@@ -29,6 +29,8 @@ Read `charts://contract` for the connected server's operations. `chart_declarati
 
 Read [shared delivery](references/mcp-delivery.md) for revisions, batches, comments and publication.
 
+Use native filter and chart-linking controls where supported. Every applied filter needs a visible active state, and a chart selection that drives filtering stays highlighted after the pointer leaves. Follow the [interaction defaults](references/design_standards.md#操作与更新) and verify them in the delivered view.
+
 For cloud delivery, use `cos-v1` by default. Check the project's actual storage format before importing data and verify the saved editor document uses COS before handing it over. An existing PostgreSQL project needs the explicit migration flow in shared delivery; a deployed server upgrade alone does not migrate its contents.
 
 ## Create and fill a dashboard

@@ -31,6 +31,8 @@ Before handover, confirm `storageFormat: "cos-v1"`, data references and row coun
 5. Call `dashboard_edit_finish` with the batch ID and current revision. This runs Doctor checks and creates the completed checkpoint.
 6. After success, call `dashboard_preview` once with the same project and dashboard. Deliver the saved result and relevant source details.
 
+For an affected filter or chart interaction, check the [interaction defaults](design_standards.md#操作与更新) in the actual delivery view. Apply a filter and close the menu, or click a chart item and move the pointer away. Confirm the visible active state survives the update, the intended components update, and clearing the selection restores both the styling and the prior filter scope. Repeat in the standalone export when it is part of the delivery.
+
 `dashboard_get` reads the editable draft; project previews read the latest completed checkpoint. On `DOCTOR_FAILED`, read the issues, correct the draft and finish again. On `REVISION_CONFLICT`, read the current document and reconcile the requested changes before retrying.
 
 Use `dashboard_data_inspect` for dataset counts and version references. Refreshing data creates a new dataset version; authored prose must be recalculated for that version or remain explicitly tied to its earlier snapshot.
