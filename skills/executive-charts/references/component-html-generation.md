@@ -32,3 +32,11 @@
 前端源码位于 `runtime-ui/src`。类型检查、构建和测试默认由 GitHub CI 执行。仅在需要本地预览或安装时运行 `bun run ui:prepare`，复用与源码相符的产物，否则构建一次并打包 Runtime。设计系统资源通过 `bun run ui:package:design` 单独更新。
 
 交付前检查声明校验、数据单位、筛选范围和所需动作；测试范围遵循 [项目测试规则](../../../docs/operations/testing.md)。
+
+## 组件结构图
+
+Author each diagram from the component's actual marks, field bindings and series meaning. Submit it with `put_component`: `config.presentation.structureDiagram` for legacy components, `presentation.structureDiagram` for other kinds, including KPI cards, tables and statistical images.
+
+Use the connected declarations' `structureDiagramSchema`: `{version:1, viewBox:[0,0,width,height], svg, annotations}`. Each annotation has a stable `id`, shape `anchor:[x,y]` and `label:[x,y]`; optional `align` is `left`, `center` or `right`. Reference canonical definitions with `metricId`; use `name` and `description` for axes, nodes and other parts. Keep label areas clear. Preserve the actual chart’s axis titles, units, category labels, legend and distinctive marks when present. Use representative category labels when the structure needs them; do not invent business values. Make the plot use the available space, reserving only enough room for readable annotations and avoiding overlaps.
+
+SVG contains static geometry and text. Business values, scripts, events, external references, CSS and URL paints are prohibited. Data refreshes, filters and resizing reuse the saved geometry; declaration changes require an updated diagram.

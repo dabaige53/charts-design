@@ -4,7 +4,9 @@ Use this flow for dashboards and Markdown reports. Read the connected tools' sch
 
 ## Project and data
 
-Pass `projectRoot` on every project call, including discovery, diagnostics and chunk reads. Locally it is the absolute durable asset directory; on the self-hosted server it is the configured project name. One MCP registration serves multiple projects.
+Discover Charts Design in the current session's tools, including tools exposed through a connector such as Magpie. Use `runtime_info` to confirm the service responds before investigating a local Runtime or a new deployment. If the project name is still unknown, an unscoped call can confirm connectivity to the default project.
+
+Resolve the project name and dashboard ID from existing project configuration or delivery records. Pass `projectRoot` on project calls, including `dashboard_list`, diagnostics and chunk reads. Locally it is the absolute durable asset directory. On the self-hosted server it is the configured project name. `dashboard_list` lists only the selected project, so an empty default list leaves the target project unresolved. A static export URL identifies a published view. Confirm editor availability separately against the connected service and target project.
 
 Read `dashboard_get` before editing. Keep the returned revision, stable component IDs, data references and comments. For affected components, retain the metric scope, aggregation, baseline, units, tooltip fields, sorting, drilldown and filter consumers.
 
@@ -15,6 +17,8 @@ For large local data, use the [remote upload client](../../../docs/operations/se
 For KPI comparisons, aggregate each period at the same scope and grain before calculating the change. Distinguish percentage changes from percentage-point differences. Tooltip totals, shares and detail tables must use the same denominator, including the declared treatment of hidden series.
 
 ## Cloud storage
+
+For a hosted release or bulk import, follow the [deployment pilot](deployment-check.md) before scaling up.
 
 Cloud projects default to `cos-v1`; local workspaces keep their local storage. Before cloud imports, call `dataset_storage_inventory` and inspect `cos.format`. For an existing dashboard, also check the returned document's `storageFormat` after saving.
 

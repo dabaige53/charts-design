@@ -1,82 +1,42 @@
 ---
 name: executive-charts
-description: Create, revise and refresh data-backed business dashboards, KPI scorecards and interactive analysis through Charts Design MCP or CLI. Migrate existing non-MCP dashboards into editable Charts Design dashboards. Use for sources, metrics, charts, filters, tables and saved dashboard delivery. For narrative Markdown reports with inline figures, use analytical-reports.
+description: 用 Charts Design MCP 或 CLI 新建、迁移、修改、刷新和交付可编辑的业务看板与 KPI 记分卡。正文为主的 Markdown 分析报告使用 analytical-reports。
 ---
 
 # Executive Charts
 
-Build a dashboard around the user's question and the data available. Use the requested chart and reading order; fill unspecified choices with the project's [design standards](references/design_standards.md).
+## 确定交付范围
 
-迁移其他项目或系统的历史看板时，先委派一个子代理逐页完成[源报表审查与 MCP 映射](references/existing-project-checklist.md#从外部历史报表迁入-mcp)。新建或修改 MCP 声明时使用[通用构建脚本](references/mcp-authoring.md)生成 JSON、编辑文件和请求。
+先明确谁会用这张看板、要回答什么问题、要在哪个入口完成哪些操作。沿用用户指定的图形、阅读顺序、数据范围和交付形式。修改已有看板时，从实际连接的服务定位项目和看板，带上 `projectRoot`，读取当前可编辑修订及其数据引用。
 
-When migrating a non-MCP dashboard, treat each original page's observable layout, reading order, content and operations as the preservation baseline. Replace the rendering with Charts Design components and standard dashboard or report renderers; do not reduce a page to a template. Before converting each page, record its content and operations, then compare each item with the saved native preview. Follow [existing-project integration](references/existing-project-checklist.md); unresolved differences make the migration incomplete unless the user explicitly approves a reduction.
+按独立业务内容和导航确定页面。营业部、地区、月份等可切换条件做成筛选器，组合数量不决定页面数。分别确定全局筛选、模块内筛选和用户授权范围。
 
-## Find the project and tools
+## 数据与指标
 
-Use the existing dashboard and asset directory when revising a result. Pass `projectRoot` on every project call: an absolute asset directory locally, or the configured project name on a remote server.
+读取真实输入，确认一行代表什么、覆盖的对象和期间、字段单位及缺失值含义。先登记来源、数据集与指标，再绑定组件。复用粒度、口径和授权范围相容的数据版本。使用合成示例时明确标注。[数据接入](references/local-data.md)
 
-Read `charts://contract` for the connected server's operations. `chart_declarations` returns the component index; query a selected preset with `{"code":"c01"}` to get its fields, binding support and example. `generation_examples` provides complete synthetic cases: `executive-dashboard` and `operations-scorecard`.
+定义指标时写清公式、分母、汇总顺序和比较基期。比率按业务定义汇总后计算，区分百分比变化和百分点变化；缺失的比较值保持缺失。图表、提示、明细和导出使用对应筛选范围下的同一口径。[指标定义](references/metric-definitions.md) · [单位与精度](references/data_formatting_standards.md)
 
-| Task | Tools |
-| --- | --- |
-| Read declarations and editable revision | `dashboard_get` |
-| Inspect dataset versions and row counts | `dashboard_data_inspect` |
-| Import rows/CSV or attach a configured SQLite table | `dataset_import`, `dataset_attach` |
-| Define sources, datasets, metrics, components and layout | `dashboard_patch` |
-| Compute chart results and table pages | `dashboard_view` |
-| Save one editing session | `dashboard_edit_begin`, `dashboard_edit_finish` |
-| Show the completed dashboard | `dashboard_preview` |
-| Read comments and version history | `dashboard_annotations`, `dashboard_history`, `dashboard_version_status` |
-| Export a file or standalone website | `dashboard_export`, `dataset_export`, `dashboard_export_site`, `dashboard_export_read` |
+## 页面、图表与明细
 
-Read [shared delivery](references/mcp-delivery.md) for revisions, batches, comments and publication.
+- 按读者解决问题的顺序安排概览、比较和明细。KPI 卡显示标题、主值、单位、比较值及必要的图形标签；定义、公式、来源和明细放入详情，业务解读放在正文。[指标卡选型](references/kpi-cards.md)
+- 按趋势、比较、构成、分布或关系选择图形，保留有业务含义的系列、坐标轴、单位、图例和提示。标题、标签和状态使用读者的语言。优先沿用原生字号；窄容器通过调整布局、间距和换行保持可读。[设计规范](references/design_standards.md) · [布局模板](references/layout_templates.md)
+- 通过 `charts://contract` 和 `chart_declarations` 核对当前服务支持的字段、绑定和操作。需要运行时聚合和筛选时优先用支持该绑定的预设。自由 ECharts 用于显式快照，HTML 用于组件内自定义交互；两者的跨组件联动都要在实际宿主验证。需要转表或 CSV 时提供对应表头与数据行。[声明构建](references/mcp-authoring.md) · [组件渲染](references/component-html-generation.md)
+- 按组件实际标记、字段和系列保存结构图，关联指标定义。几何、绑定或系列含义变化时更新结构图；仅刷新数据时复用已保存的几何。[结构图声明](references/component-html-generation.md#组件结构图)
 
-Use native filter and chart-linking controls where supported. Every applied filter needs a visible active state, and a chart selection that drives filtering stays highlighted after the pointer leaves. Follow the [interaction defaults](references/design_standards.md#操作与更新) and verify them in the delivered view.
+## 筛选与联动
 
-For cloud delivery, use `cos-v1` by default. Check the project's actual storage format before importing data and verify the saved editor document uses COS before handing it over. An existing PostgreSQL project needs the explicit migration flow in shared delivery.
+为每个筛选写清字段、默认值、单选或多选、清空语义和受影响的组件。需要跨页保留的选择在切页返回后仍应生效。会随范围变化的月报正文、图注和表格与图表使用同一选择。固定业务条件在清空用户筛选后仍然生效。
 
-## Create and fill a dashboard
+优先用原生筛选和图形联动。关闭下拉后仍能看到生效的值。点选散点或柱条后，移开指针并等待关联组件更新，选中项应持续高亮。清除选择后核对源图样式与目标数据都已恢复。对表格重放所需的排序、翻页、下钻和导出，检查作用范围。
 
-1. **Read the data.** Inspect the supplied file or query the named source. Establish fields, row grain, time range, units and missing values. Record provenance in sources and calculation rules in metrics. Use existing business definitions when available; label synthetic examples. [Metric definitions](references/metric-definitions.md) covers scope and formulas.
-2. **Register the inputs.** Define sources, datasets and metrics before binding components. Reuse a dataset across related calculations. Small imports accept rows or CSV; configured SQLite tables use `dataset_attach`. Read [local data](references/local-data.md) for large datasets, versioned references and exports.
-3. **Choose the presentation.** Arrange the overview, comparisons and detail in the order that answers the question. Choose KPI forms by the comparison they show using [KPI selection](references/kpi-cards.md). Use [layout templates](references/layout_templates.md) when they fit. `chart_recommend` can suggest presets.
-4. **Declare the components.** Select the renderer below, bind supported filters to explicit consumers and save each component's structure diagram. Put definitions, formulas, sources and detail rows in the shared detail view. KPI cards contain only titles, values, units, comparisons and concise graphical labels; narrative belongs in a separate text component.
-5. **Save and inspect.** Follow the shared edit-batch flow. Compare computed totals, ratios, comparison values and table rows with the source at the same filter scope. Complete the batch and open the saved preview once.
+## 修改、保存与交付
 
-Use the reader's language for titles, labels, dates and state messages. Follow [data formatting](references/data_formatting_standards.md) for units and precision. Preserve actual comparison baselines; leave missing baselines missing.
+视觉修改保留既有业务定义、稳定 ID、批注关联和无关内容。`put_component` 替换整个组件，提交时带回仍在使用的字段与交互。刷新数据时核对新版本的字段、行数和期间，重算受影响的指标、比较值及引用这些数字的正文。
 
-## Choose a renderer
+用当前修订开启编辑批次，成组提交相关变更。用 `dashboard_view` 在相同筛选范围下与源数据对账，核对主值、比例、基期和明细行。完成批次后打开保存的页面，从交付入口重放受影响的操作，既检查应更新的组件，也检查应保持的组件。交付保存的链接或指定导出物，说明数据范围、关键假设和仍影响使用的缺口。[MCP 保存、版本与分享](references/mcp-delivery.md) · [本地 CLI 工作区](references/dashboard-workspace.md)
 
-Chart components use `put_component` with `kind: "legacy"` and `family: "chart"`.
+## 重建与部署
 
-| Route | Configuration | Data and interactions |
-| --- | --- | --- |
-| Preset | `code`, `data`, `presentation`; optional `renderer: "preset"` | Runtime aggregation, filters and shared actions declared for that code |
-| Native ECharts | `renderer: "echarts"`, custom `code`, complete `echarts` object | Explicit snapshot with authored series, coordinates, annotations and styling |
-| HTML/JavaScript | `renderer: "html"`, custom `code`, `html`; optional `data` | Isolated frame with `window.chartData`, SVG/Canvas and browser-ready JavaScript, including compiled React |
-
-For native and custom components, declare `table: {headers: string[], rows: array[]}` to enable shared table view and CSV. Implement custom local interactions in the component script. Distinguish snapshots from filter consumers when both appear on a page.
-
-Read [component rendering](references/component-html-generation.md) for shared actions and [native/custom configuration](../../docs/implementation/echarts-options.md) for complete declarations.
-
-## Change or refresh
-
-Read the current document and affected source data first. Preserve stable component IDs, unrelated content, metric definitions, filter consumers and comments. `put_component` replaces the complete component, so carry forward fields that remain in use.
-
-For a data refresh, import or attach the new dataset version, inspect its fields and counts, then recompute affected components and authored claims. Compare ratios from aggregated numerators and denominators; calculate changes at the same scope and grain. Update prose tied to the refreshed data together with its figures.
-
-For a visual edit, change the requested layout or presentation fields. When geometry, field bindings or series meaning changes, regenerate the component's structure diagram.
-
-## Save structure diagrams
-
-Author each diagram from the component's actual marks, field bindings and series meaning. Submit it with `put_component`: `config.presentation.structureDiagram` for legacy components, `presentation.structureDiagram` for other kinds, including KPI cards, tables and statistical images.
-
-Use the connected declarations' `structureDiagramSchema`: `{version:1, viewBox:[0,0,width,height], svg, annotations}`. Each annotation has a stable `id`, shape `anchor:[x,y]` and `label:[x,y]`; optional `align` is `left`, `center` or `right`. Reference canonical definitions with `metricId`; use `name` and `description` for axes, nodes and other parts. Keep label areas clear. Preserve the actual chart’s axis titles, units, category labels, legend and distinctive marks when present. Use representative category labels when the structure needs them; do not invent business values. Make the plot use the available space, reserving only enough room for readable annotations and avoiding overlaps.
-
-SVG contains static geometry and text. Business values, scripts, events, external references, CSS and URL paints are prohibited. Data refreshes, filters and resizing reuse the saved geometry; declaration changes require an updated diagram.
-
-## CLI and handover
-
-Use [workspace commands](references/dashboard-workspace.md) when the user wants local JSON assets. Store business datasets and declarations in their project. For framework integration, read [existing-project integration](references/existing-project-checklist.md).
-
-Deliver the saved dashboard or requested export with a short explanation of what it shows, where its data came from and which assumptions affect interpretation. Mention concrete unresolved issues. Describe changes using the dashboard's own titles and controls.
+- 从其他系统重建看板或接入既有页面时，按[源端审查与迁移验收](references/existing-project-checklist.md)逐页对照业务内容、读取顺序和操作。
+- 在线部署、批量导入或排查加载性能时，按[部署样例与性能验收](references/deployment-check.md)验证目标服务、权限、读取分区及真实页面耗时。
