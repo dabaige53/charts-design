@@ -1,7 +1,9 @@
 import time
+from threading import Barrier
 
 import pytest
 
+from dashboard_runtime.cloud_assets import CloudAssets
 from dashboard_runtime.cloud_data import CloudData
 from dashboard_runtime.local_data import LocalData
 from dashboard_runtime.model import DashboardError
@@ -41,6 +43,38 @@ class MemoryStorage:
         for key in list(self.objects):
             if key.startswith(prefix):
                 del self.objects[key]
+
+
+# @wu-test type=integration | scope=CloudAssets dataset writes | protects=并行写入失败仍将不完整数据包标记为可用
+def test_cos_dataset_failed_parallel_write_never_becomes_ready(tmp_path):
+    class Database:
+        def call(self, action, project, **args):
+            if action == 'object_get':
+                return None
+            assert action == 'reserve', action
+            return {'prefix': 'dataset/'}
+
+    class Storage(MemoryStorage):
+        def __init__(self):
+            super().__init__()
+            self.writes = Barrier(3, timeout=5)
+
+        def put(self, key, value, content_type):
+            self.writes.wait()
+            if key.endswith('options-1.json.gz'):
+                raise OSError('option write failed')
+            super().put(key, value, content_type)
+
+    source = LocalData(tmp_path / 'source')
+    ref = source.import_rows([{'count': 1, 'office': 'A'}], {
+        'count': {'type': 'number'},
+        'office': {'type': 'string'},
+    })
+    storage = Storage()
+    assets = CloudAssets('test', database=Database(), storage=storage)
+    with pytest.raises(OSError, match='option write failed'):
+        assets.save_dataset(source, ref)
+    assert set(storage.objects) == {'dataset/rows-0.json.gz', 'dataset/options-0.json.gz'}
 
 
 # @wu-test type=integration | scope=CloudData legacy restore | protects=并发恢复分块乱序改变数据校验值或重复读取已缓存版本

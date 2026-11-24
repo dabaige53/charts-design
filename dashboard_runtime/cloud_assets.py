@@ -9,6 +9,8 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import uuid
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 
 from .cloud_database import CloudDatabase
@@ -62,14 +64,14 @@ class CloudAssets:
                                 if ref['fields'].get(field, {}).get('type') in ('date', 'string')), None)
         partitions, batch_values = {}, set()
 
-        def flush():
+        def flush(put):
             nonlocal batch, ordinals, size
             name = f'rows-{len(shards)}.json.gz'
             payload = b'[' + b','.join(batch) + b']'
             if partition_field:
                 payload = b'{"rows":' + payload + b',"ordinals":' + json_bytes(ordinals) + b'}'
             raw = gzip.compress(payload, mtime=0)
-            self._put(obj, files, name, raw, 'application/gzip')
+            put(name, raw)
             shards.append(name)
             if partition_field:
                 for value in batch_values:
@@ -90,31 +92,44 @@ class CloudAssets:
                 for record in db.execute(f'SELECT {columns},_missing,rowid FROM {table} ORDER BY {order}rowid'):
                     yield record[-1], local._decode(keys, record[:-2], fields, record[-2])
 
-        for ordinal, row in ordered_rows():
-            encoded = json_bytes(row)
-            row_size = len(encoded) + len(str(ordinal)) + 2
-            require(row_size + 64 <= 16 * 1024 * 1024, 'A data row exceeds 16 MiB', 'PAYLOAD_TOO_LARGE')
-            partition_value = json.dumps(row.get(partition_field), ensure_ascii=False) if partition_field else None
-            if batch and (len(batch) >= 5000 or size + row_size > 16 * 1024 * 1024
-                          or (partition_field and partition_value not in batch_values)):
-                flush()
-            batch.append(encoded)
-            ordinals.append(ordinal)
-            if partition_field:
-                # Nulls have a separate index entry and are never discarded on
-                # an unfiltered read. The actual filter still runs on rows.
-                batch_values.add(partition_value)
-            size += row_size
-            for key, values in options.items():
-                value = row.get(key)
-                values[json.dumps(value, ensure_ascii=False)] = value
-        if batch:
-            flush()
-        option_files = {}
-        for index, (key, values) in enumerate(options.items()):
-            name = f'options-{index}.json.gz'
-            self._put(obj, files, name, gzip.compress(json_bytes(list(values.values())), mtime=0), 'application/gzip')
-            option_files[key] = name
+        # Bound the number of buffered compressed objects and wait for every
+        # write to succeed before publishing the manifest or marking it ready.
+        storage = self.storage
+        pending = deque()
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            def put(name, raw):
+                if len(pending) == 4:
+                    pending.popleft().result()
+                pending.append(executor.submit(storage.put, obj['prefix'] + name, raw, 'application/gzip'))
+                files[name] = {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
+
+            for ordinal, row in ordered_rows():
+                encoded = json_bytes(row)
+                row_size = len(encoded) + len(str(ordinal)) + 2
+                require(row_size + 64 <= 16 * 1024 * 1024, 'A data row exceeds 16 MiB', 'PAYLOAD_TOO_LARGE')
+                partition_value = json.dumps(row.get(partition_field), ensure_ascii=False) if partition_field else None
+                if batch and (len(batch) >= 5000 or size + row_size > 16 * 1024 * 1024
+                              or (partition_field and partition_value not in batch_values)):
+                    flush(put)
+                batch.append(encoded)
+                ordinals.append(ordinal)
+                if partition_field:
+                    # Nulls have a separate index entry and are never discarded on
+                    # an unfiltered read. The actual filter still runs on rows.
+                    batch_values.add(partition_value)
+                size += row_size
+                for key, values in options.items():
+                    value = row.get(key)
+                    values[json.dumps(value, ensure_ascii=False)] = value
+            if batch:
+                flush(put)
+            option_files = {}
+            for index, (key, values) in enumerate(options.items()):
+                name = f'options-{index}.json.gz'
+                put(name, gzip.compress(json_bytes(list(values.values())), mtime=0))
+                option_files[key] = name
+            while pending:
+                pending.popleft().result()
         # Copy the validated table in SQLite, not through Python row decoding.
         with tempfile.TemporaryDirectory(prefix='charts-data-') as temporary:
             target = Path(temporary) / 'query.sqlite3'
