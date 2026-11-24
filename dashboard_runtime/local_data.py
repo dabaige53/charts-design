@@ -512,8 +512,7 @@ class LocalData:
 
     def _option_page(self, refs, field, search='', offset=0, limit=100):
         """Page the complete option universe, including across consumer datasets."""
-        if not isinstance(search, str) or len(search) > 1000 or type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 1000:
-            raise ValueError('Invalid option search or pagination')
+        self._validate_option_page(search, offset, limit)
         with self._connect() as db:
             selects, versions = [], set()
             kind = None
@@ -527,14 +526,22 @@ class LocalData:
                 selects.append(f'SELECT {column} AS value FROM {table}')
             if not selects:
                 return {'values': [], 'totalValues': 0, 'offset': offset, 'hasMore': False}
-            union = ' UNION ALL '.join(selects)
-            where = ' WHERE search_text(value, ?, ?)' if search else ''
-            params = [search, kind] if search else []
-            query = f'SELECT value FROM ({union})' + where + ' GROUP BY value'
-            records = list(db.execute('SELECT value, COUNT(*) OVER() FROM (' + query + ') ORDER BY value LIMIT ? OFFSET ?', params + [limit, offset]))
-            total = records[0][1] if records else (db.execute('SELECT COUNT(*) FROM (' + query + ')', params).fetchone()[0] if offset else 0)
-            values = [bool(row[0]) if row[0] is not None and kind == 'boolean' else row[0] for row in records]
-            return {'values': values, 'totalValues': total, 'offset': offset, 'hasMore': offset+len(values) < total}
+            return self._page_option_values(db, '(' + ' UNION ALL '.join(selects) + ')', kind, search, offset, limit)
+
+    @staticmethod
+    def _validate_option_page(search, offset, limit):
+        if not isinstance(search, str) or len(search) > 1000 or type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError('Invalid option search or pagination')
+
+    @staticmethod
+    def _page_option_values(db, source, kind, search, offset, limit):
+        where = ' WHERE search_text(value, ?, ?)' if search else ''
+        params = [search, kind] if search else []
+        query = f'SELECT value FROM {source}' + where + ' GROUP BY value'
+        records = list(db.execute('SELECT value, COUNT(*) OVER() FROM (' + query + ') ORDER BY value LIMIT ? OFFSET ?', params + [limit, offset]))
+        total = records[0][1] if records else (db.execute('SELECT COUNT(*) FROM (' + query + ')', params).fetchone()[0] if offset else 0)
+        values = [bool(row[0]) if row[0] is not None and kind == 'boolean' else row[0] for row in records]
+        return {'values': values, 'totalValues': total, 'offset': offset, 'hasMore': offset+len(values) < total}
 
     def iter_rows(self, ref, filters=None, columns=None, sort=None, search=''):
         """Stream every matching row for file exports, with no preview row limit."""

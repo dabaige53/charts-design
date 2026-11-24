@@ -45,6 +45,59 @@ class MemoryStorage:
                 del self.objects[key]
 
 
+# @wu-test type=integration | scope=COS report options | protects=月报引用超过十个数据集时无法保存或缺少筛选选项
+def test_cos_report_seed_can_have_more_consumers_than_sqlite_attachment_limit(tmp_path):
+    from dashboard_runtime.cloud_project import CloudProjectStore
+    from dashboard_runtime.local_view import LocalView
+    from dashboard_runtime.model import new_document
+
+    class Registry:
+        def __init__(self):
+            self.objects = {}
+            self.by_version = {}
+
+        def call(self, action, _project, **kwargs):
+            if action == 'object_get':
+                return self.by_version.get(kwargs['version'])
+            if action == 'reserve':
+                obj = kwargs | {'prefix': kwargs['id'] + '/'}
+                self.objects[obj['id']] = obj
+                return obj
+            assert action == 'ready'
+            obj = self.objects[kwargs['id']] | kwargs
+            self.by_version[obj['version']] = obj
+            return obj
+
+    class Assets(CloudAssets):
+        def save_document(self, doc):
+            return doc
+
+    doc = new_document('report', 'Monthly report')
+    doc['snapshot']['datasetRefs'] = {}
+    source = LocalData(tmp_path / 'source')
+    registry = Registry()
+    assets = Assets('test', database=registry, storage=MemoryStorage())
+    store = CloudProjectStore.__new__(CloudProjectStore)
+    store.cos_enabled, store.assets = True, assets
+    store.data = CloudData(tmp_path / 'reader', MemoryDatabase(), 'test', assets, cos_enabled=True)
+    store.prepared_views = LocalView(store.data)
+    fields = {'office': {'type':'string'}}
+    for index in range(13):
+        key = f'table-{index}'
+        ref = source.import_rows([{'office':f'Office {index:02}'}], fields)
+        assets.save_dataset(source, ref)
+        doc['manifest']['datasets'][key] = {'fields':fields}
+        doc['manifest']['components'][key] = {'kind':'table','datasetId':key}
+        doc['snapshot']['datasetRefs'][key] = ref
+    doc['manifest']['filters'] = [{'id':'office','field':'office','op':'in',
+        'selectionMode':'single','required':True,'componentIds':list(doc['manifest']['components']),'values':['Office 00']}]
+    prepared = store._encode(doc)
+    assert set(prepared['computed']['filterPages']['office']['values']) == {f'Office {index:02}' for index in range(13)}
+    assert store.prepared_views.filter_options(doc, 'office', search='office 1', offset=1, limit=1) == {
+        'values': ['Office 11'], 'totalValues': 3, 'offset': 1, 'hasMore': True,
+    }
+
+
 # @wu-test type=integration | scope=COS prepared scope options | protects=编辑绑定后继续使用上一数据集的筛选选项
 def test_cos_scope_option_seed_tracks_changed_consumer(tmp_path):
     import copy

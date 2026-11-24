@@ -299,6 +299,26 @@ class CloudData(LocalData):
             db.execute(f'ATTACH DATABASE ? AS {alias}', (target.as_uri() + '?mode=ro',))
         return alias + '.d_' + version, self._metadata(json.dumps(obj['descriptor']['metadata']))
 
+    def _option_page(self, refs, field, search='', offset=0, limit=100):
+        unique = {ref['version']: ref for ref in refs}
+        if not self.cos_enabled or len(unique) <= 10:
+            return super()._option_page(refs, field, search, offset, limit)
+        self._validate_option_page(search, offset, limit)
+        # SQLite allows ten attached databases per connection. Collect each
+        # file's distinct candidates before merging the complete option set.
+        with self._connect() as merged:
+            merged.execute('CREATE TEMP TABLE option_values (value UNIQUE)')
+            for ref in unique.values():
+                with self._connect() as source:
+                    table, metadata = self._version(source, ref)
+                    column = self._column(metadata['fields'], field)
+                    kind = metadata['fields'][field]['type']
+                    merged.executemany(
+                        'INSERT OR IGNORE INTO option_values VALUES (?)',
+                        source.execute(f'SELECT DISTINCT {column} FROM {table}'),
+                    )
+            return self._page_option_values(merged, 'option_values', kind, search, offset, limit)
+
     def _indexes(self, db, table, fields, filters, sort=None):
         if table.startswith('v_') and '.d_' in table:
             return  # The immutable query file already contains field indexes.
