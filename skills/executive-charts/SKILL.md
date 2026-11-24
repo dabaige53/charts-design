@@ -1,6 +1,6 @@
 ---
 name: executive-charts
-description: Migrate external legacy dashboards. Create, revise and refresh data-backed business dashboards, KPI scorecards and interactive analysis through Charts Design MCP or CLI. Use for sources, metrics, charts, filters, tables and saved dashboard delivery. For narrative Markdown reports with inline figures, use analytical-reports.
+description: Create, revise and refresh data-backed business dashboards, KPI scorecards and interactive analysis through Charts Design MCP or CLI. Migrate existing non-MCP dashboards into editable Charts Design dashboards. Use for sources, metrics, charts, filters, tables and saved dashboard delivery. For narrative Markdown reports with inline figures, use analytical-reports.
 ---
 
 # Executive Charts
@@ -8,6 +8,8 @@ description: Migrate external legacy dashboards. Create, revise and refresh data
 Build a dashboard around the user's question and the data available. Use the requested chart and reading order; fill unspecified choices with the project's [design standards](references/design_standards.md).
 
 迁移其他项目或系统的历史看板时，先委派一个子代理逐页完成[源报表审查与 MCP 映射](references/existing-project-checklist.md#从外部历史报表迁入-mcp)。新建或修改 MCP 声明时使用[通用构建脚本](references/mcp-authoring.md)生成 JSON、编辑文件和请求。
+
+When migrating a non-MCP dashboard, treat each original page's observable layout, reading order, content and operations as the preservation baseline. Replace the rendering with Charts Design components and standard dashboard or report renderers; do not reduce a page to a template. Before converting each page, record its content and operations, then compare each item with the saved native preview. Follow [existing-project integration](references/existing-project-checklist.md); unresolved differences make the migration incomplete unless the user explicitly approves a reduction. These preservation rules apply to migration, not new dashboards.
 
 ## Find the project and tools
 
