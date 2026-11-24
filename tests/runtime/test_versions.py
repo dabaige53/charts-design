@@ -39,15 +39,18 @@ def test_publish_requires_current_draft_and_saved_revision(tmp_path):
     assert unsaved.value.code == 'NOT_FOUND'
 
 
-# @wu-test type=behavior | scope=Versions release archive | protects=保存历史清理后正式发布记录丢失并无法回退发布
-def test_release_remains_readable_after_checkpoint_pruning(tmp_path):
+# @wu-test type=behavior | scope=Versions release archive | protects=旧版本裁剪过检查点后正式发布记录丢失并无法回退发布
+def test_release_remains_readable_without_legacy_checkpoint(tmp_path):
     store = ProjectStore(tmp_path / 'project', tmp_path / 'runtime')
     store.create('board', 'Original')
     versions = Versions(store)
     versions.publish('board', 1, 1)
-    store.config['history']['keepCheckpoints'] = 1
     store.mutate('board', 1, [{'op': 'set_title', 'value': 'Next'}])
     store.checkpoint('board', 2)
+    # Model a project saved by an older runtime, which pruned checkpoints but not its release archive.
+    # A confirmed deletion in the current runtime intentionally removes both.
+    with store.connect() as db:
+        db.execute('DELETE FROM revisions WHERE board_id=? AND revision=?', ('board', 1))
     assert [item['revision'] for item in store.history('board')] == [2]
     assert versions.read('board', 1)['manifest']['title'] == 'Original'
     versions.publish('board', 2, 2)

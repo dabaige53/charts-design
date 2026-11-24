@@ -31,9 +31,12 @@ def test_statistical_stdio_authoring(tmp_path):
                     {'op':'set_view_mode','value':'report'},
                     {'op':'set_report_markdown','value':'# Synthetic report\n\n```chart\n{"componentId":"regression"}\n```'},
                 ]})
-                assert result['document']['computed']['components']=={}
+                assert result['revision']==2
+                assert 'document' not in result and 'statisticalArtifacts' not in result
+                saved=await call('dashboard_get',{'dashboardId':'statistics'})
+                assert saved['document']['computed']['components']=={}
+                assert 'statisticalArtifacts' not in saved
                 assert (await call('dashboard_validate',{'dashboardId':'statistics'}))['valid']
-                assert 'statisticalArtifacts' not in (await call('dashboard_get',{'dashboardId':'statistics'}))
                 assert (await call('dashboard_view',{'dashboardId':'statistics','responseMode':'patch','componentIds':['regression']}))['statisticalArtifacts']['regression']['provenance']['rowsUsed']==5
                 assert (await call('statistical_render',{'dashboardId':'statistics','componentId':'regression','format':'png'}))['mimeType']=='image/png'
     asyncio.run(check())

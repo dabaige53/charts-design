@@ -77,8 +77,8 @@ def test_local_document_has_no_component_results(tmp_path):
     assert view['componentIds']==[component]
 
 
-# @wu-test type=integration | scope=检查点保留 | protects=历史清理删除受保护检查点
-def test_checkpoint_retention_protects_named_and_migration(tmp_path):
+# @wu-test type=integration | scope=检查点保留 | protects=保存新版本时自动删除命名或未命名的历史检查点
+def test_saving_does_not_prune_migrated_project_history(tmp_path):
     from dashboard_runtime.project_migration import migrate_project
     from dashboard_runtime.store import Store
     legacy=Store(tmp_path/'legacy')
@@ -92,50 +92,91 @@ def test_checkpoint_retention_protects_named_and_migration(tmp_path):
     for revision in range(1,4):
         store.mutate('board',revision,[{'op':'set_title','value':f'Title {revision}'}])
         store.checkpoint('board',revision+1)
-    assert {item['revision'] for item in store.history('board')}=={1,4}
+    history = store.history('board')
+    assert [item['revision'] for item in history] == [4, 3, 2, 1]
+    assert history[-1]['name'] == 'protected'
+    assert {path.name for path in (store.root / 'board/checkpoints').glob('*.json')} == {
+        '1.json', '2.json', '3.json', '4.json',
+    }
     assert legacy.revision('board')==1
 
 
-# @wu-test type=integration | scope=dashboard_version_delete | protects=删除历史时误删最新保存版本、发布版本或因草稿变化删除错误内容
-def test_delete_checkpoint_preserves_latest_and_published_versions(tmp_path):
+# @wu-test type=integration | scope=dashboard_version_delete | protects=未经专用确认删除版本、删除当前发布后错误回退、复用已删除修订号
+def test_delete_checkpoint_requires_confirmation_and_preserves_draft(tmp_path):
     service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
-    service.call('dashboard_create', {'dashboardId': 'board', 'title': 'Original'})
-    service.call('dashboard_version_publish', {'dashboardId': 'board', 'expectedRevision': 1, 'revision': 1})
+    board = {'dashboardId': 'board'}
+    checkpoints = service.store.root / 'board/checkpoints'
+    service.call('dashboard_create', {**board, 'title': 'Original'})
+    service.call('dashboard_version_publish', {**board, 'expectedRevision': 1, 'revision': 1})
     for revision in (1, 2):
-        service.call('dashboard_patch', {'dashboardId': 'board', 'expectedRevision': revision,
+        service.call('dashboard_patch', {**board, 'expectedRevision': revision,
                                       'operations': [{'op': 'set_title', 'value': f'Title {revision}'}]})
         service.store.checkpoint('board', revision + 1)
+    current = {**board, 'expectedRevision': 3}
     for revision in (1, 3):
         with pytest.raises(DashboardError) as error:
-            service.call('dashboard_version_delete', {'dashboardId': 'board', 'expectedRevision': 3, 'revision': revision})
-        assert error.value.code == 'CHECKPOINT_IN_USE'
+            service.call('dashboard_version_delete', {**current, 'revision': revision})
+        assert error.value.code == 'CONFIRMATION_REQUIRED'
+    published = service.call('dashboard_version_delete_preview', {**current, 'revision': 1})
+    assert published['clearsPublication'] and published['nextSavedRevision'] == 3
     with pytest.raises(DashboardError) as error:
-        service.call('dashboard_version_delete', {'dashboardId': 'board', 'expectedRevision': 2, 'revision': 2})
+        service.call('dashboard_version_delete', {**current, 'expectedRevision': 2, 'revision': 1,
+                                                  'confirmation': published['token']})
     assert error.value.code == 'REVISION_CONFLICT'
-    assert service.call('dashboard_version_delete', {'dashboardId': 'board', 'expectedRevision': 3, 'revision': 2})['deleted']
-    assert {item['revision'] for item in service.store.history('board')} == {1, 3}
-    assert not (tmp_path / 'project/dashboards/board/checkpoints/2.json').exists()
-    assert service.call('dashboard_version_status', {'dashboardId': 'board'})['publishedRevision'] == 1
+    with pytest.raises(DashboardError) as error:
+        service.call('dashboard_version_delete', {**current, 'revision': 3, 'confirmation': published['token']})
+    assert error.value.code == 'CONFIRMATION_REQUIRED'
+    assert [item['revision'] for item in service.store.history('board')] == [3, 2, 1]
+    assert service.call('dashboard_version_delete', {**current, 'revision': 1, 'confirmation': published['token']})['deleted']
+    assert not (checkpoints / '1.json').exists()
+    status = service.call('dashboard_version_status', board)
+    assert status['publishedRevision'] is None
+    assert status['releases'] == []
+    latest = service.call('dashboard_version_delete_preview', {**current, 'revision': 3})
+    assert not latest['clearsPublication'] and latest['nextSavedRevision'] == 2
+    assert service.call('dashboard_version_delete', {**current, 'revision': 3, 'confirmation': latest['token']})['deleted']
+    assert [item['revision'] for item in service.store.history('board')] == [2]
+    assert not (checkpoints / '3.json').exists()
+    assert service.store.readable('board')['manifest']['title'] == 'Title 1'
+    draft = service.store.get('board')
+    assert (draft['revision'], draft['manifest']['title']) == (4, 'Title 2')
 
 
 # @wu-test type=boundary | scope=dataset_storage_inventory | protects=跨项目盘点或将只读盘点注册成修改操作
 def test_storage_inventory_routes_to_selected_cloud_project(tmp_path, monkeypatch):
-    from dashboard_runtime import cloud_database
+    from dashboard_runtime import cloud_assets, cloud_database, cloud_project
     from dashboard_runtime.tool_contract import tool_annotations
-    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
-    service.store.database = object()
     calls = []
 
     class Database:
         def __init__(self):
             self.url = 'https://example.invalid/rpc/charts_runtime'
 
-        def call(self, action, project):
+        def call(self, action, project, **args):
             calls.append((self.url, action, project))
+            if action == 'ensure':
+                return {**args['config'], 'storageFormat': 'cos-v1'}
             return {'versions': []}
 
+    class Assets:
+        def __init__(self, project):
+            self.project = project
+
+        def call(self, action):
+            calls.append(('assets', action, self.project))
+            return {'storageFormat': 'cos-v1', 'datasets': [], 'documents': [{'revision': 1}]}
+
+    monkeypatch.setenv('CHARTS_STORAGE_BACKEND', 'cloudbase')
     monkeypatch.setattr(cloud_database, 'CloudDatabase', Database)
-    service.store.project = 'selected-project'
-    assert service.call('dataset_storage_inventory', {}) == {'versions': []}
-    assert calls == [('https://example.invalid/rpc/charts_data_inventory', 'inventory', 'selected-project')]
+    monkeypatch.setattr(cloud_project, 'CloudDatabase', Database)
+    monkeypatch.setattr(cloud_assets, 'CloudAssets', Assets)
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'selected-project')
+    assert service.call('dataset_storage_inventory', {}) == {
+        'versions': [], 'cos': {'storageFormat': 'cos-v1', 'datasets': []},
+    }
+    assert calls == [
+        ('https://example.invalid/rpc/charts_runtime', 'ensure', 'selected-project'),
+        ('https://example.invalid/rpc/charts_data_inventory', 'inventory', 'selected-project'),
+        ('assets', 'inventory', 'selected-project'),
+    ]
     assert tool_annotations('dataset_storage_inventory')['readOnlyHint']
