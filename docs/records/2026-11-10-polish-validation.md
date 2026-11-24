@@ -42,16 +42,6 @@
 - 实施前项目入口和文件管理文档仍描述“新 UI 未实现”。
 - 当前工作区存在大量既有改动，本轮不回退、不覆盖无关内容。
 
-### 检查与交付约束
-
-不新增或运行 UI 测试、浏览器自动化、截图验收。不自行启用子代理。不提交、发布、部署或修改 MCP 注册。
-
-2026-11-10 已获本轮全量测试授权。类型检查、构建和测试结果见 [共享工作区交付检查](2026-11-10-polish-validation.md)。
-
-按需读取 shadcn、impeccable、claude-design-system、claude-design、dataviz、executive-charts、find-docs、value-cleaner。Markdown 报告才使用 analytical-reports。不使用 redesign-existing-projects 或独立 HTML 看板替代 React 应用。
-
-交付时列出实际改动、组件逐项状态、设计入口、已接通 MCP 流程、构建和诊断结果，以及未完成项和具体阻塞。组件实现、画布展示、构建、真实数据、MCP 宿主与发布资源分别判断。
-
 ### 实施结果与此前检查记录
 
 此前实现构建：`3d487d3b16493392`。应用打包目录为 `dashboard_runtime/web/dist`；设计系统组件 bundle 已显式复制，64 张挂载组件的画板改为引用安装在自身目录中的同一 bundle，原布局示意画板保留。65 张画板的坐标、尺寸和用户编辑保留。
@@ -113,12 +103,6 @@
 ### 位置批注对应的构建与本机预览
 
 本轮应用资源标识：`72042e610b8f73d9`。已执行应用构建与 `package:runtime`；impeccable 静态设计扫描无发现，8 个文件经 Pyright、typescript-language-server 与 CSS LSP 复查均为 passed，0 错误。CSS 服务保留 6 条对既有 Tailwind 自定义指令的 warning。未运行 UI 测试。独立本机预览使用 8770 端口及复制的示例数据；原 8769 服务未重启。旧服务未声明独立保存能力时，新界面会提示重启并保留输入，不尝试按旧版方式保存。
-
-### 筛选栏与缩放调整对应的范围
-
-筛选栏复用 shadcn Popover、Command、Calendar、InputGroup、Field、Badge 和 Tooltip。常用条件同排，其他已声明条件在更多筛选中展开；日期提供五组快捷范围，状态行仅在有生效条件时显示。原有候选分页、全选、单项移除和重置保留。编辑布局、自定义列与 CSV 导出使用图标入口。
-
-KPI 内容按可用宽高及自然高度整体缩放，不设内部滚动；图表通过容器宽高更新文字、图例和标记尺寸。仅生成组件、应用和画板资源，未运行验证、检查或测试。
 
 ### 原组件保真的历史背景
 

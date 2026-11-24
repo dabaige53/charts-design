@@ -16,7 +16,8 @@ export async function resolveToolResult(result, call) {
     return decoded;
   }catch(error){
     try{await call('runtime_report_error',{requestId,code:'CLIENT_DECODE_FAILED'});}catch{}
-    throw Error(`${error.message}${requestId?` [请求 ${requestId}]`:''}`);
+    throw Object.assign(Error(`${error.message}${requestId?` [请求 ${requestId}]`:''}`),
+      {code:error.code,requestId:error.requestId||requestId});
   }
 }
 export function decodeToolResult(result) {

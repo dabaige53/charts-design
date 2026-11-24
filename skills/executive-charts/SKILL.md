@@ -9,7 +9,7 @@ Build a dashboard around the user's question and the data available. Use the req
 
 迁移其他项目或系统的历史看板时，先委派一个子代理逐页完成[源报表审查与 MCP 映射](references/existing-project-checklist.md#从外部历史报表迁入-mcp)。新建或修改 MCP 声明时使用[通用构建脚本](references/mcp-authoring.md)生成 JSON、编辑文件和请求。
 
-When migrating a non-MCP dashboard, treat each original page's observable layout, reading order, content and operations as the preservation baseline. Replace the rendering with Charts Design components and standard dashboard or report renderers; do not reduce a page to a template. Before converting each page, record its content and operations, then compare each item with the saved native preview. Follow [existing-project integration](references/existing-project-checklist.md); unresolved differences make the migration incomplete unless the user explicitly approves a reduction. These preservation rules apply to migration, not new dashboards.
+When migrating a non-MCP dashboard, treat each original page's observable layout, reading order, content and operations as the preservation baseline. Replace the rendering with Charts Design components and standard dashboard or report renderers; do not reduce a page to a template. Before converting each page, record its content and operations, then compare each item with the saved native preview. Follow [existing-project integration](references/existing-project-checklist.md); unresolved differences make the migration incomplete unless the user explicitly approves a reduction.
 
 ## Find the project and tools
 
@@ -33,7 +33,7 @@ Read [shared delivery](references/mcp-delivery.md) for revisions, batches, comme
 
 Use native filter and chart-linking controls where supported. Every applied filter needs a visible active state, and a chart selection that drives filtering stays highlighted after the pointer leaves. Follow the [interaction defaults](references/design_standards.md#操作与更新) and verify them in the delivered view.
 
-For cloud delivery, use `cos-v1` by default. Check the project's actual storage format before importing data and verify the saved editor document uses COS before handing it over. An existing PostgreSQL project needs the explicit migration flow in shared delivery; a deployed server upgrade alone does not migrate its contents.
+For cloud delivery, use `cos-v1` by default. Check the project's actual storage format before importing data and verify the saved editor document uses COS before handing it over. An existing PostgreSQL project needs the explicit migration flow in shared delivery.
 
 ## Create and fill a dashboard
 

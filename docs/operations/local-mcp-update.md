@@ -1,9 +1,5 @@
 # 本地 MCP 安装更新
 
-
-> **当前状态（2026-11-10）**
-> 新 React 组件和 MCP 应用通过独立构建、资源打包接入。支持 JSON、CSV、HTML 快照与静态网页导出；未构建应用资源时返回 `UI_UNAVAILABLE`。实施记录与宿主确认边界见项目 `docs/plans/ui-refactor-plan.md`。
-
 ## 按需准备资源并更新 analyst-workspace
 
 在 charts-design 本项目的 Codex 本地环境中执行“更新 charts-design MCP”。analyst-workspace 是更新目标，不放置该操作按钮。
@@ -24,7 +20,11 @@ bun bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/anal
 
 ## 按文件清单更新已有安装包
 
-已确定目标安装目录与改动文件时，传入明确的包内后端相对路径：
+已确定目标安装目录与改动文件时，传入明确的包内相对路径：
+
+```sh
+bun bin/update-runtime.js <INSTALL_ROOT> <FILE...>
+```
 
 脚本检查目标包身份和全部源文件，然后复制清单内文件，最后原子写入 `.runtime-generation`。后端源文件更新也必须逐项列入清单。只复制前端产物不会更新后端。依赖变化需另行完成依赖安装或选择完整打包更新；此脚本只复制指定文件。
 

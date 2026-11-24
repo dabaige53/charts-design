@@ -18,7 +18,6 @@
 2. **CLI 积木式看板资产管理 (`charts-design dashboard`)**：
    - 提供 `init`、`import-csv`、`inspect`、`validate`、`meta`、`add`、`table` 完整资产管理工具。
    - 允许对筛选器、指标卡、图表声明和数据表格进行原子化组装与严格合同校验。
-   - 旧 `build` 及 HTML 检查命令（`inspect-html`、`inventory-html`、`compare-html`）已完全移除，调用会直接失败；旧 `chart`、`batch` 也已下线。
 
 3. **Runtime 后端与 CLI (`charts-design-runtime`)**：
    - 管理多项目路由、SQLite 存储、数据计算、批次修改与版本检查点。
@@ -33,7 +32,7 @@
    - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/operations/self-hosted-server.md)。
 
 5. **Seaborn 统计图后端（可选）**：
-   - 统计图后端独立于旧 UI，数据与统计计算能力继续完整支持。运行 `uv sync --locked --extra statistics --no-install-project` 后，可基于原始观测数据声明直方图、箱线图、回归散点图，输出纯图产物（SVG/PNG）供嵌入报告。
+   - 运行 `uv sync --locked --extra statistics --no-install-project` 后，可基于原始观测数据声明直方图、箱线图、回归散点图，输出纯图产物（SVG/PNG）供嵌入报告。
    - 规范见 [Seaborn 后端说明](docs/implementation/seaborn-backend.md)。
 
 ## CLI 工作区使用 (Workspace Flow)
@@ -66,16 +65,16 @@ charts-design dashboard validate ./sales-board --strict --json
 - **Dashboard 路径**：[executive-charts Skill](skills/executive-charts/SKILL.md)，负责高管业务看板的指标拆解、图表推荐、7 种布局构图和数据建模。
 - **分析报告路径**：[analytical-reports Skill](skills/analytical-reports/SKILL.md)，负责以学术单栏规范编写分析报告，包括摘要、章节、图文交叉引用与严谨业务解读。
 
-生成流程与阶段划分见 [生成路径说明](docs/implementation/generation-tracks.md)。两条路径复用新 React 组件，通过 Runtime 导出 HTML 或打开 MCP 预览。
+生成流程与阶段划分见 [生成路径说明](docs/implementation/generation-tracks.md)。两条路径复用共享 React 组件，通过 Runtime 导出 HTML 或打开 MCP 预览。
 
 ## 项目结构
 
 ```
 charts-design/
 ├── AGENTS.md                           # 任务阅读入口与项目约定
-├── README.md                           # 项目当前可用入口与重构说明
+├── README.md                           # 项目入口与常用命令
 ├── docs/                               # 规范、实现说明与验证记录
-│   ├── README.md                       # 文档总览与重构状态索引
+│   ├── README.md                       # 文档总览与索引
 │   ├── agent/file-management.md         # 文件管理准则
 │   ├── implementation/                # Runtime、组件与接口说明
 │   ├── reference/                     # 设计规范

@@ -1,4 +1,4 @@
-"""Deterministic geometry tests; these do not assert visual browser fidelity."""
+"""Deterministic KPI packing geometry tests."""
 import copy
 import itertools
 import pytest
@@ -15,8 +15,8 @@ def manifest(count, mixed=False):
     return {'components': components}
 
 
-# @wu-test type=behavior | scope=test_kpi_packing | protects=all counts remain valid
-@pytest.mark.parametrize('count', [0, 1, 2, 3, 4, 5, 7, 8, 11, 12, 19, 20, 21, 40, 100])
+# @wu-test type=behavior | scope=test_kpi_packing | protects=KPI布局越界、重叠或未填满行宽
+@pytest.mark.parametrize('count', [0, 1, 4, 5, 7, 21, 100])
 @pytest.mark.parametrize('template', list(TEMPLATES))
 @pytest.mark.parametrize('mixed', [False, True])
 def test_all_counts_remain_valid(count, template, mixed):

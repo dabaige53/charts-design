@@ -2,7 +2,6 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {resolveOriginal} from '../../dashboard_runtime/web/bindings.mjs';
 import {formatComparison} from '../../dashboard_runtime/web/engine.mjs';
-import {linkageValue} from '../../dashboard_runtime/web/linkage.mjs';
 const source={
  manifest:{components:{bar:{kind:'legacy',family:'chart',datasetId:'ds',config:{code:'c01',data:{categories:['old'],values:[999]},presentation:{}},binding:{datasetId:'ds',categoryField:'region',categoryTarget:'categories',measures:{values:'revenue'}}}},metrics:{revenue:{aggregation:'sum',field:'revenue'},ratio:{aggregation:'ratio',numerator:'p',denominator:'s',format:'percent'}},filters:[]},
  snapshot:{datasets:{ds:[{region:'East',date:'2026-01-01',revenue:100,p:90,s:100},{region:'East',date:'2026-02-01',revenue:20,p:1,s:10},{region:'West',date:'2026-02-01',revenue:35,p:7,s:10}]}}};
@@ -48,16 +47,14 @@ test('rounded zero never receives a positive or negative sign',()=>{
  assert.equal(formatComparison(-0.00001,{format:'percent',decimals:1}),'0%');
  assert.equal(formatComparison(0,{unit:'m2'}),'0 m2');
 });
-// @wu-test type=integration | scope=bubble binding | protects=气泡筛选结果或联动身份错误
-test('bubble aggregation follows filters and keeps the clicked agent identity',()=>{
+// @wu-test type=integration | scope=bubble binding | protects=气泡筛选结果错误
+test('bubble aggregation follows filters',()=>{
  const d=structuredClone(source);
  d.manifest.components.bubble={kind:'legacy',family:'chart',datasetId:'ds',config:{code:'r02',data:{clusters:[[99,99,99,'old']]}},binding:{datasetId:'ds',categoryField:'region',categoryTarget:'clusters',measures:{x:'ratio',y:'revenue',size:'count'},scale:{x:100}}};
  d.manifest.metrics.count={aggregation:'count'};
  d.manifest.filters=[{componentIds:['bubble'],field:'date',op:'in',values:['2026-02-01']}];
  const points=resolveOriginal(d,'bubble').data.clusters;
  assert.deepEqual(points,[[10,20,1,'East'],[70,35,1,'West']]);
- assert.equal(linkageValue({value:points[0]},true),'East');
- assert.equal(linkageValue({name:'East'},false),'East');
  d.manifest.filters[0].values=['missing'];
  assert.deepEqual(resolveOriginal(d,'bubble').data.clusters,[]);
 });

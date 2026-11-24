@@ -5,7 +5,7 @@ import { definitions } from "./charts";
 import { encodingOption } from "./charts/encoding";
 import { adaptOption } from "./charts/adaptive";
 import { encodingTable } from "../../dashboard_runtime/web/encoding.mjs";
-import { applyEChartsOptions } from "./echarts-options.mjs";
+import { applyEChartsOptions } from "../../dashboard_runtime/web/echarts-options.mjs";
 import type { Config, Document } from "./types";
 export type ChartContext = { document: Document; id: string };
 export const chartCodes = Object.keys(definitions);

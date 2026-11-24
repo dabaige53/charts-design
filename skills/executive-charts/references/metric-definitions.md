@@ -65,6 +65,4 @@ Runtime 的业务定义写入 `manifest.metrics[id].definition`；计算依据�
 
 组件使用 `config.explanation.overview`、`type`、`period`、`comparison`、`structure` 和 `metrics[]`；每个指标的 `name`、`definition`、`formula`、`rule` 分别承担名称、业务定义、中文公式和已确认的判定规则。更长的统计范围或边界可写入 `notes` 或 `limitations`，页面直接展开。
 
-交付前逐项检查：定义能独立阅读；限定词都有解释；公式对应实际配置；比例汇总顺序正确；单位与时间范围一致；未虚构纳入/排除项、去重或判定规则；SQL 和来源可复核；缺失依据明确列出。
-
 界面正文只包含业务内容与可复核的数据记录。不得加入“正式页面将展示”“仅用于版式演示”“参数将跟随筛选”等制作过程或未来实现说明。统计周期和对比基准使用可换行的字段行，长段文字不塞入标签。组件 SQL 与数据来源 SQL 分别在 SQL 与来源区展示，不放入补充说明。

@@ -35,4 +35,4 @@ bun run python -- bin/remote-project.py read \
 - `runtime_diagnostics({requestId:"报错中的请求编号",limit:100})`：定位同一响应的序列化字节数、分块、首块和末块读取及客户端失败。
 - `runtime_report_error`：App 专用，客户端上报解码、渲染失败或完成时序事件，不上传原始响应或业务字段；Agent 通过诊断工具读取结果，不代替客户端生成事件。
 
-日志存于运行目录 transport-diagnostics.sqlite3，保留最近 2,000 条。记录时间、请求编号、工具、阶段、错误码及响应字节数，不记录工具参数、业务记录和凭据。旧页面在本次功能安装前发生的错误无法补写到日志。服务端日志不能单独证明 Codex 宿主渲染成功。
+日志存于运行目录 transport-diagnostics.sqlite3，保留最近 2,000 条。记录时间、请求编号、工具、阶段、错误码及响应字节数，不记录工具参数、业务记录和凭据。旧页面在本次功能安装前发生的错误无法补写到日志。
