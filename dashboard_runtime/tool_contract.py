@@ -174,6 +174,11 @@ TRANSFER_ENCODING = described({'type': 'string', 'enum': [BULK_ENCODING]},
                               'Use for all calls of a bulk upload. Omit for legacy 250-row JSON chunks.')
 TOOLS = {
     'dataset_storage_inventory': ('Inspect CloudBase dataset versions, stored chunk sizes and conservative references from drafts, checkpoints, releases and annotation history. Incomplete or unreferenced versions require review; this never deletes data or returns business rows.', schema({})),
+    'dataset_repartition': ('Stage a replacement private COS dataset partitioned by one string or date field. Reads the existing immutable dataset on the server and preserves its logical values and row order. Does not change a draft, checkpoint, share, or other references. Call only for approved repartitioning. After verifying the returned ref, use a revision-checked put_dataset_ref to attach it.', schema({
+        **BOARD, 'datasetId': described(ID, 'Dataset ID in the current draft.'),
+        'expectedVersion': described({'type': 'string', 'pattern': '^[0-9a-f]{64}$'}, 'Expected immutable dataset version. Read it with dashboard_get first.'),
+        'field': described(STR, 'Declared string or date field to partition by.'),
+    }, ('dashboardId','datasetId','expectedVersion','field'))),
     'dataset_transfer_chunk': ('Stage one ordered chunk in private COS; repeat the same upload ID and part to resume. This does not modify a dashboard.', schema({
         'uploadId': described({'type': 'string', 'pattern': '^[0-9a-f]{64}$'}, 'Random transfer identifier, distinct from the data version.'),
         'ref': described({'type': 'object'}, 'Exact immutable local dataset reference including field order, row count and version.'),

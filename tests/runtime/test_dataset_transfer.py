@@ -45,28 +45,76 @@ class MemoryStorage:
                 del self.objects[key]
 
 
+class MemoryAssetRegistry:
+    def __init__(self):
+        self.objects = {}
+        self.by_version = {}
+
+    def call(self, action, _project, **kwargs):
+        if action == 'object_get':
+            return self.by_version.get(kwargs['version'])
+        if action == 'reserve':
+            obj = kwargs | {'prefix': kwargs['id'] + '/'}
+            self.objects[obj['id']] = obj
+            return obj
+        assert action == 'ready'
+        obj = self.objects[kwargs['id']] | kwargs
+        self.by_version[obj['version']] = obj
+        return obj
+
+
+# @wu-test type=integration | scope=COS dataset repartition | protects=重建分区篡改原数据或更新看板引用
+def test_repartition_stages_one_replacement_and_preserves_original(tmp_path, monkeypatch):
+    import gzip
+    import json
+
+    from dashboard_runtime.server import EDIT_TOOLS
+    from dashboard_runtime.service import Service
+
+    monkeypatch.setenv('CHARTS_STORAGE_BACKEND', 'local')
+    fields = {'department': {'type': 'string'}, 'month': {'type': 'string'}, 'value': {'type': 'number'}}
+    rows = [
+        {'department': 'A', 'month': '2026-10', 'value': 3},
+        {'department': 'B', 'month': '2026-11', 'value': None},
+        {'department': 'A', 'month': '2026-11'},
+    ]
+    registry = MemoryAssetRegistry()
+    assets = CloudAssets('test', database=registry, storage=MemoryStorage())
+    local = LocalData(tmp_path / 'source')
+    ref = local.import_rows(rows, fields)
+    original = assets.save_dataset(local, ref)
+    cloud = CloudData(tmp_path / 'reader', MemoryDatabase(), 'test', assets, cos_enabled=True)
+    service = Service(tmp_path / 'service')
+    service.store.data = cloud
+    doc = {'snapshot': {'datasetRefs': {'sales': ref}}}
+    monkeypatch.setattr(service.store, 'get', lambda _board, hydrate: doc)
+    request = {'dashboardId': 'board', 'datasetId': 'sales', 'field': 'department',
+               'expectedVersion': ref['version']}
+    assert 'dataset_repartition' not in EDIT_TOOLS
+    with pytest.raises(DashboardError) as stale:
+        service.call('dataset_repartition', dict(request, expectedVersion='0' * 64))
+    assert stale.value.code == 'DATA_CONFLICT'
+    replacement = service.call('dataset_repartition', request)['ref']
+    assert replacement['version'] != ref['version']
+    assert replacement['fields'] == ref['fields']
+    assert list(cloud.iter_rows(replacement)) == list(cloud.iter_rows(ref)) == rows
+    obj = registry.by_version[replacement['version']]
+    index = obj['descriptor']['partitionIndex']
+    assert index['field'] == 'department'
+    office_a = next(entry['files'][0] for entry in index['entries'] if entry['value'] == 'A')
+    part = json.loads(gzip.decompress(assets.read_file(obj, office_a)))
+    assert part == {'rows': [rows[0], rows[2]], 'ordinals': [1, 3]}
+    assert service.call('dataset_repartition', request)['ref'] == replacement
+    assert len(registry.objects) == 2
+    assert registry.by_version[ref['version']] == original
+    assert doc['snapshot']['datasetRefs']['sales'] == ref
+
+
 # @wu-test type=integration | scope=COS report options | protects=月报引用超过十个数据集时无法保存或缺少筛选选项
 def test_cos_report_seed_can_have_more_consumers_than_sqlite_attachment_limit(tmp_path):
     from dashboard_runtime.cloud_project import CloudProjectStore
     from dashboard_runtime.local_view import LocalView
     from dashboard_runtime.model import new_document
-
-    class Registry:
-        def __init__(self):
-            self.objects = {}
-            self.by_version = {}
-
-        def call(self, action, _project, **kwargs):
-            if action == 'object_get':
-                return self.by_version.get(kwargs['version'])
-            if action == 'reserve':
-                obj = kwargs | {'prefix': kwargs['id'] + '/'}
-                self.objects[obj['id']] = obj
-                return obj
-            assert action == 'ready'
-            obj = self.objects[kwargs['id']] | kwargs
-            self.by_version[obj['version']] = obj
-            return obj
 
     class Assets(CloudAssets):
         def save_document(self, doc):
@@ -75,7 +123,7 @@ def test_cos_report_seed_can_have_more_consumers_than_sqlite_attachment_limit(tm
     doc = new_document('report', 'Monthly report')
     doc['snapshot']['datasetRefs'] = {}
     source = LocalData(tmp_path / 'source')
-    registry = Registry()
+    registry = MemoryAssetRegistry()
     assets = Assets('test', database=registry, storage=MemoryStorage())
     store = CloudProjectStore.__new__(CloudProjectStore)
     store.cos_enabled, store.assets = True, assets

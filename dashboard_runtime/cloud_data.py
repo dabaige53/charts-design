@@ -12,6 +12,7 @@ import gzip
 import hashlib
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from tempfile import TemporaryDirectory
 from typing import cast
 
 from .cloud_assets import CloudAssets
@@ -237,6 +238,39 @@ class CloudData(LocalData):
         metadata = self.database.call('data_get', self.project, version=version)
         require(metadata is not None, 'Unknown durable data version', 'NOT_FOUND')
         return self._metadata(json.dumps(metadata))
+
+    def repartition(self, ref, field):
+        """Stage a private replacement package with identical logical rows."""
+        require(self.cos_enabled, 'Repartitioning requires COS project storage', 'UNSUPPORTED_OPERATION')
+        version, count = self.transfer_ref(ref)
+        fields = ref['fields']
+        require(isinstance(field, str) and fields.get(field, {}).get('type') in ('string', 'date'),
+                'Partition field must be a declared string or date field')
+        assets = cast(CloudAssets, self.assets)
+        current = assets.call('object_get', version=version)
+        require(current is not None, 'Data version is unavailable', 'ASSET_UNAVAILABLE')
+        require(current['descriptor']['metadata'] == ref, 'Remote data metadata differs', 'DATA_CONFLICT')
+        if current['descriptor'].get('partitionIndex', {}).get('field') == field:
+            return ref
+
+        keys = ref['fieldOrder']
+        require(len(keys) > 1, 'Repartitioning requires at least two fields for a replacement version',
+                'UNSUPPORTED_OPERATION')
+        remaining = [key for key in keys if key != field]
+        # A different physical column order produces a new content address.
+        # The original version and its consumers remain readable.
+        ordered = [*remaining, field] if keys[0] == field else [field, *remaining]
+        with TemporaryDirectory(prefix='charts-repartition-', dir=self.root) as directory:
+            target = LocalData(directory)
+            target.partition_fields = [field]
+            replacement = target.import_rows(self.iter_rows(ref), {key: fields[key] for key in ordered})
+            require(replacement['rowCount'] == count and replacement['fields'] == fields,
+                    'Repartitioning changed the source data metadata', 'DATA_CONFLICT')
+            asset = assets.save_dataset(target, replacement)
+        descriptor = asset['descriptor']
+        require(descriptor['metadata'] == replacement and descriptor.get('partitionIndex', {}).get('field') == field,
+                'Replacement version already exists with a different layout', 'DATA_CONFLICT')
+        return replacement
 
     def _version(self, db, ref):
         # Validate the content hash before using it as an identifier.
