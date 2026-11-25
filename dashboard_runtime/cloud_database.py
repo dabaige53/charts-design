@@ -83,11 +83,14 @@ def neon_view_connections():
     if os.environ.get('CHARTS_STORAGE_BACKEND') != 'neon':
         yield
         return
+    from psycopg import Connection
     from psycopg_pool import ConnectionPool
 
     database = CloudDatabase()
-    with ConnectionPool(database.database_url, min_size=2, max_size=6, timeout=10, open=False,
-                        kwargs={'connect_timeout': 10, 'prepare_threshold': None, 'autocommit': True}) as pool:
+    pool: ConnectionPool[Connection] = ConnectionPool(
+        database.database_url, connection_class=Connection, min_size=2, max_size=6, timeout=10, open=False,
+        kwargs={'connect_timeout': 10, 'prepare_threshold': None, 'autocommit': True})
+    with pool:
         token = _VIEW_CONNECTIONS.set(pool)
         try:
             yield

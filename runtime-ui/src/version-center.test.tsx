@@ -1,6 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, mock } from "bun:test";
-import React from "react";
 import { VersionCenter } from "./version-center";
 import type { Config, Document } from "./types";
 

@@ -190,8 +190,9 @@ def test_publish_current_and_historical_report_over_stdio(tmp_path):
             assert published['publishedRevision'] == published['versionStatus']['savedRevision'] == 2
             assert 'share' not in published
             stale = await session.call_tool('dashboard_publish', {**board, 'expectedRevision': 1})
-            assert stale.isError and stale.structuredContent is not None
-            assert stale.structuredContent['error']['code'] == 'REVISION_CONFLICT'
+            stale_content = stale.structuredContent
+            assert stale.isError and stale_content is not None
+            assert stale_content['error']['code'] == 'REVISION_CONFLICT'
             historical = await call('dashboard_publish', {'revision': 1, 'expectedRevision': 2})
             assert historical['publishedRevision'] == 1
             assert historical['versionStatus']['draftRevision'] == 2
