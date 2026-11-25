@@ -149,14 +149,8 @@ READ_ONLY = {
     'dataset_transfer_status',
     'dataset_storage_inventory',
 }
-APP_ONLY = {
-    'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open', 'dashboard_export_read', 'runtime_result_chunk',
-    'dashboard_edit_begin', 'dashboard_patch', 'dashboard_edit_finish',
-    'dashboard_refresh', 'dashboard_version_query', 'legacy_render', 'dashboard_checkpoint',
-    'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status',
-}
 MAINTENANCE_TOOLS = frozenset({
-    'dataset_storage_inventory', 'dataset_repartition', 'dataset_transfer_cleanup',
+    'dataset_storage_inventory', 'dataset_transfer_cleanup',
     'dashboard_migrate', 'dashboard_migration_rollback',
 })
 AUTHOR_TOOLS = frozenset({
@@ -164,14 +158,7 @@ AUTHOR_TOOLS = frozenset({
     'dashboard_view', 'dashboard_filter_options', 'component_data', 'dashboard_annotations',
     'dashboard_annotations_update', 'dataset_import', 'dataset_attach', 'query_execute',
     'chart_recommend', 'chart_declarations', 'statistical_render',
-    'dashboard_export', 'dataset_export', 'dashboard_export_site',
-})
-RELEASE_TOOLS = frozenset({
-    'dashboard_history', 'dashboard_history_diff', 'dashboard_restore',
-    'dashboard_version_get', 'dashboard_version_status', 'dashboard_version_label', 'dashboard_version_publish',
-    'dashboard_version_delete_preview', 'dashboard_version_delete', 'dashboard_version_delete_status',
-    'dashboard_version_delete_retry', 'dashboard_share_status', 'dashboard_share_publish',
-    'dashboard_share_replace', 'dashboard_share_delete', 'dashboard_share', 'dashboard_share_revoke',
+    'dashboard_export', 'dataset_export', 'dashboard_export_site', 'dataset_repartition',
 })
 DESTRUCTIVE = {
     'dashboard_patch', 'dashboard_submit', 'dashboard_annotations_update', 'dashboard_restore', 'dataset_import', 'dataset_attach',

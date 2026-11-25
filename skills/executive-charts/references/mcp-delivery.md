@@ -16,7 +16,7 @@ For KPI comparisons, aggregate each period at the same scope and grain before ca
 
 ## Cloud storage
 
-Cloud projects default to `cos-v1`; local workspaces keep their local storage. For an existing dashboard inspect the document's `storageFormat` before importing. For a project-level storage audit use `dataset_storage_inventory` on the maintenance MCP. Confirm the saved document's storage format before delivery.
+Cloud projects default to `cos-v1`; local workspaces keep their local storage. For an existing dashboard inspect the document's `storageFormat` before importing. To partition existing COS data by branch or region, call `dataset_repartition` on the current connection with the dataset ID, version and partition field. Verify the returned reference before attaching it with `dashboard_submit`. For a project-wide storage inventory use the operator CLI.
 
 If an existing project reports `postgres`, use the [COS migration procedure](../../../docs/operations/self-hosted-server.md#cos-业务内容迁移与删除任务). Read its inventory first. Within the user's migration authorization, upload and verify datasets and all draft/checkpoint/release documents, then switch references atomically. Retain drafts, stable IDs, annotations and history unless the user explicitly requests deletion. Never change the format flag by itself or silently continue through the legacy path.
 
@@ -41,7 +41,7 @@ Read `dashboard_annotations` for comments and their original targets, then inspe
 
 Annotations save independently of design revisions. Preserve their original context across restoration. To change comments when requested, use `dashboard_annotations_update` with the exact previously read `expectedAnnotations` and the replacement `annotations`.
 
-Use a `release` connection for version management and publication. Read `dashboard_history` or `dashboard_version_status` for saved versions. `dashboard_version_get` reads a historical version. A requested `dashboard_restore` creates a new draft; complete its checkpoint before opening the restored preview.
+Use the version controls in the editor or the operator CLI for history, restoration and publication. A restored version creates a new draft; save it before opening the preview.
 
 ## Export and publication
 
@@ -60,9 +60,9 @@ Details: [static website export](../../../docs/operations/static-deployment.md),
 
 ## Diagnose a failed delivery
 
-On a maintenance connection, use `runtime_info` to locate the installed backend, UI build and project assets. `UI_UNAVAILABLE` requires building and packaging the UI resources using the repository's [local update procedure](../../../docs/operations/local-mcp-update.md).
+Use the operator CLI for `runtime_info` to locate the installed backend, UI build and project assets. `UI_UNAVAILABLE` requires building and packaging the UI resources using the repository's [local update procedure](../../../docs/operations/local-mcp-update.md).
 
-Give the request ID to the operator for `runtime_diagnostics` on the maintenance connection. Correct the reported cause and repeat the failed step. Keep credentials and raw business rows out of logs.
+Give the request ID to the operator for `runtime_diagnostics` in the CLI. Correct the reported cause and repeat the failed step. Keep credentials and raw business rows out of logs.
 
 If a tool returns `transport.resourceUri`, read that MCP resource for the complete JSON. Chunk assembly is a client protocol, not an authoring step. For hosts with resource size limits use the complete configuration download client.
 

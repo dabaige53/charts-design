@@ -72,13 +72,13 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 
 工具定义由 `tool_contract.py` 维护，输入结构说明参数来源、默认值和替换影响。修改定义时同步发现资源与调用方，不在文档手工复制工具枚举。
 
-创作连接提供编辑、查询、展示与导出。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。发布连接用于管理历史、发布和分享。逐项判断见[工具审查](../records/2026-11-25-mcp-tool-audit.md)。
+同一连接提供编辑、查询、展示、导出和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。历史、发布和分享由项目管理界面与程序调用处理。
 
 ## 编辑与结果确认
 
 新看板已有初始声明时，一次调用 `dashboard_submit`，传 `dashboardId`、`createTitle` 和 `operations`。服务仅创建新 ID。已有 ID 会返回冲突；首次提交失败后，先读 `dashboard_get` 获取草稿状态，再用 `expectedRevision` 修正。导入完整文档或先建空看板时仍使用 `dashboard_create`。
 
-`CHARTS_MCP_MODE` 默认 `author`，在支持 MCP Apps 可见性规则的宿主中只向模型展示创作工具，并保留程序回调。忽略可见性规则的宿主会看到完整协议清单。模型专用连接使用 `model`，服务端仅列出并接受创作工具。`release` 在此基础上增加版本和分享工具。这两个模式通过 MCP 资源读取大结果；需要 App 回调的预览宿主使用 `author`。存储盘点、重建分区、上传暂存清理及存储迁移使用 `maintenance`。模式在连接启动时生效，沿用既有认证。
+所有连接的 `tools/list` 返回同一套 Agent 工具。需要为 COS 数据集分片时，在当前连接调用 `dataset_repartition`。使用 CLI 执行存储盘点、上传暂存清理及存储迁移。直连服务为现有页面和上传程序保留协议回调，参数见 `charts://contract` 的 `clientTools`。
 
 项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。批注独立调用 `dashboard_annotations_update`，不创建设计版本。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
 

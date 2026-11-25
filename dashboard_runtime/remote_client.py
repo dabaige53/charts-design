@@ -75,6 +75,12 @@ async def require_tools(session, required):
         cursor = page.nextCursor
         if not cursor:
             break
+    if required.keys() - available.keys():
+        from pydantic import AnyUrl
+        from mcp.types import TextResourceContents
+        resource = (await session.read_resource(AnyUrl('charts://contract'))).contents[0]
+        if isinstance(resource, TextResourceContents):
+            available.update(json.loads(resource.text).get('clientTools', {}))
     for name, parameters in required.items():
         schema = available.get(name)
         if schema is None or not parameters <= set(schema.get('properties', {})):

@@ -27,13 +27,10 @@ def test_real_stdio_protocol(tmp_path):
                             'dashboard_edit_begin', 'dashboard_patch', 'dashboard_edit_finish', 'dashboard_checkpoint',
                             'dashboard_refresh', 'dashboard_version_query', 'legacy_render',
                             'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'generation_examples'}
-                for name in app_only:
-                    meta = by_name[name].meta
-                    assert meta is not None
-                    assert meta['ui']['visibility'] == ['app']
+                assert app_only.isdisjoint(by_name)
                 assert by_name['dashboard_submit'].meta is None
-                assert 'dashboard_submit' in by_name and 'dataset_repartition' not in by_name
-                for name in ('dashboard_patch', 'dashboard_restore'):
+                assert 'dashboard_submit' in by_name and 'dataset_repartition' in by_name
+                for name in ('dashboard_submit', 'dataset_import'):
                     annotations = by_name[name].annotations
                     assert annotations is not None
                     assert annotations.destructiveHint is True

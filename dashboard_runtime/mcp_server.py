@@ -2,7 +2,6 @@
 from __future__ import annotations
 import asyncio
 import json
-import os
 import re
 import sys
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -11,7 +10,7 @@ from . import __version__
 from .assets import MIME_TYPE, render_html, ui_build_id, ui_resource_uri
 from .model import DashboardError, MAX_BYTES
 from .service import TOOLS
-from .tool_contract import APP_ONLY, AUTHOR_TOOLS, MAINTENANCE_TOOLS, RELEASE_TOOLS, tool_annotations
+from .tool_contract import AUTHOR_TOOLS, MAINTENANCE_TOOLS, tool_annotations
 from .mcp_results import DOCUMENT_WRITES, WRITE_RESPONSE_HELP, write_receipt, write_response_schema
 from .project_routing import ProjectResolver, ProjectServices, project_result, project_schema
 
@@ -48,18 +47,13 @@ class McpProfile:
         return project_result(result, selected)
 
 
-def create_server(service, lifetime=None, profile=None, routes=None, *, mode=None):
+def create_server(service, lifetime=None, profile=None, routes=None):
     lifetime = lifetime or IdleLifetime()
     profile = profile or McpProfile()
     projects = profile.projects(service)
-    if mode is None:
-        mode = os.environ.get('CHARTS_MCP_MODE', 'author')
-    if mode not in ('author', 'model', 'release', 'maintenance'):
-        raise DashboardError('INVALID_CONFIG', 'CHARTS_MCP_MODE must be author, model, release or maintenance')
-    hidden = profile.hidden_tools if mode == 'maintenance' else profile.hidden_tools | MAINTENANCE_TOOLS
-    if mode in ('model', 'release'):
-        allowed = AUTHOR_TOOLS | RELEASE_TOOLS if mode == 'release' else AUTHOR_TOOLS
-        hidden = hidden | ((TOOLS.keys() | profile.extra_tools.keys()) - allowed)
+    hidden = profile.hidden_tools | MAINTENANCE_TOOLS
+    if routes is not None:
+        hidden = hidden | ((TOOLS.keys() | profile.extra_tools.keys()) - AUTHOR_TOOLS)
     try:
         import mcp.types as types
         from mcp.server.lowlevel import Server
@@ -89,7 +83,7 @@ def create_server(service, lifetime=None, profile=None, routes=None, *, mode=Non
             ui = {}
             if name == 'dashboard_preview' and ui_build_id() != 'unavailable':
                 ui['resourceUri'] = ui_resource_uri()
-            if name in APP_ONLY or (mode == 'author' and name not in AUTHOR_TOOLS):
+            if name not in AUTHOR_TOOLS:
                 ui['visibility'] = ['app']
             meta = {'ui': ui} if ui else None
             tool = types.Tool(name=name, description=description, inputSchema=schema, _meta=meta,
@@ -97,10 +91,13 @@ def create_server(service, lifetime=None, profile=None, routes=None, *, mode=Non
             result.append(tool)
         return result
 
+    definitions = {tool.name: tool for tool in tool_definitions()}
+    public_tools = [tool for name, tool in definitions.items() if name in AUTHOR_TOOLS]
+
     @server.list_tools()
     @lifetime.track
     async def list_tools():
-        return tool_definitions()
+        return public_tools
 
     @server.call_tool()
     @lifetime.track
@@ -110,6 +107,12 @@ def create_server(service, lifetime=None, profile=None, routes=None, *, mode=Non
             if name in hidden or (name not in TOOLS and name not in profile.extra_tools):
                 raise DashboardError('UNKNOWN_TOOL', f'Unsupported tool: {name}', 404)
             request = dict(arguments or {})
+            if name not in AUTHOR_TOOLS:
+                from jsonschema import ValidationError, validate
+                try:
+                    validate(request, definitions[name].inputSchema)
+                except ValidationError as exc:
+                    raise DashboardError('INVALID_ARGUMENT', exc.message) from exc
             if routes is not None:
                 routing_action = 'dashboard_create' if name == 'dashboard_submit' and 'createTitle' in request else name
                 owner = await routes.select(request.get('projectRoot'), request.pop('backend', None), routing_action)
@@ -198,7 +201,8 @@ def create_server(service, lifetime=None, profile=None, routes=None, *, mode=Non
         if str(uri) == 'charts://contract':
             from .contract import CONTRACT
             contract = {**CONTRACT, 'tools': {tool.name: tool.model_dump(by_alias=True, exclude_none=True, exclude={'name'})
-                for tool in tool_definitions()}, 'projectRouting': {
+                for tool in public_tools}, 'clientTools': {name: tool.inputSchema for name, tool in definitions.items()
+                if name not in AUTHOR_TOOLS}, 'projectRouting': {
                     'selector': 'projectRoot', 'scope': 'request',
                     'description': profile.schema('dashboard_get', {})['properties']['projectRoot']['description'],
                     'omitted': 'not permitted on the unified endpoint' if routes is not None else 'startup project default or legacy store; never the last selected project',

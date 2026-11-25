@@ -25,7 +25,8 @@ Read `charts://contract` for the connected server's operations. `chart_declarati
 | Submit declarations or layout, check and save | `dashboard_submit` |
 | Compute chart results and table pages | `dashboard_view` |
 | Show the completed dashboard | `dashboard_preview` |
-| Read comments or historical versions | `dashboard_annotations` for comments, `dashboard_history` on a release connection for history |
+| Read comments | `dashboard_annotations` |
+| Partition an existing COS dataset by a business field | `dataset_repartition` on the same connection; supply the current data version and chosen field |
 | Export a file or standalone website | `dashboard_export`, `dataset_export`, `dashboard_export_site` |
 
 Read [shared delivery](references/mcp-delivery.md) for revisions, batches, comments and publication.

@@ -26,10 +26,8 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 tools = {tool.name: tool for tool in (await session.list_tools()).tools}
-                assert {'chart_declarations', 'generation_examples', 'dashboard_patch'} <= tools.keys()
-                assert tools['generation_examples'].annotations is not None
+                assert {'chart_declarations', 'dashboard_submit'} <= tools.keys()
                 assert tools['chart_declarations'].annotations is not None
-                assert tools['generation_examples'].annotations.readOnlyHint is True
                 assert tools['chart_declarations'].annotations.readOnlyHint is True
                 resources = {str(resource.uri) for resource in (await session.list_resources()).resources}
                 expected_resources = {'charts://declarations', 'charts://examples',

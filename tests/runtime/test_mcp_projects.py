@@ -142,24 +142,20 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
     asyncio.run(check())
 
 
-# @wu-test type=boundary | scope=MCP工具发现 | protects=创作连接暴露发布或维护操作，或发布连接丢失发布入口
-@pytest.mark.parametrize('mode', ['author', 'model', 'release', 'maintenance'])
-def test_storage_maintenance_mode(tmp_path, monkeypatch, mode):
-    monkeypatch.setenv('CHARTS_MCP_MODE', mode)
+# @wu-test type=boundary | scope=MCP工具发现 | protects=旧启动设置改变工具清单或导致分片操作无法调用
+@pytest.mark.parametrize('previous_mode', ['model', 'maintenance'])
+def test_single_tool_catalog(tmp_path, monkeypatch, previous_mode):
+    monkeypatch.setenv('CHARTS_MCP_MODE', previous_mode)
 
     async def check():
         async with stdio_client(parameters(tmp_path)) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 names = {tool.name for tool in (await session.list_tools()).tools}
-                assert ('dataset_repartition' in names) == (mode == 'maintenance')
-                assert ('dashboard_patch' in names) == (mode in {'author', 'maintenance'})
-                assert ('dashboard_version_publish' in names) == (mode != 'model')
-                assert ('semantic_inspect' in names) == (mode in {'author', 'maintenance'})
-                assert 'dashboard_submit' in names
-                if mode != 'maintenance':
-                    denied = await session.call_tool('dataset_storage_inventory', {})
-                    assert denied.isError and denied.structuredContent and denied.structuredContent['error']['code'] == 'UNKNOWN_TOOL'
+                from dashboard_runtime.tool_contract import AUTHOR_TOOLS
+                assert names == AUTHOR_TOOLS and {'dashboard_submit', 'dataset_repartition'} <= names
+                denied = await session.call_tool('dataset_storage_inventory', {})
+                assert denied.isError and denied.structuredContent and denied.structuredContent['error']['code'] == 'UNKNOWN_TOOL'
     asyncio.run(check())
 
 

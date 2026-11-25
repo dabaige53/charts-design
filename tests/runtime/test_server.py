@@ -242,8 +242,10 @@ def test_unified_mcp_pins_backend(tmp_path, monkeypatch):
             assert (await call('dashboard_create', 'fresh', backend='cloudbase', dashboardId='board', title='New'))['revision'] == 1
             assert (await call('dashboard_list', 'fresh'))['dashboards'][0]['id'] == 'board'
             report = '# Quarterly report\n' + 'Quarterly results.\n' * 4000
-            packed = await call('dashboard_patch', 'fresh', dashboardId='board', expectedRevision=1, responseMode='full',
+            saved = await call('dashboard_submit', 'fresh', dashboardId='board', expectedRevision=1,
                                 operations=[{'op': 'set_report_markdown', 'value': report}])
+            assert saved['ok']
+            packed = await call('dashboard_get', 'fresh', dashboardId='board')
             from mcp.types import TextResourceContents
             resource = (await client.read_resource(AnyUrl(packed['transport']['resourceUri']))).contents[0]
             assert isinstance(resource, TextResourceContents)
@@ -294,7 +296,8 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
                     await client.initialize()
                     tools = {tool.name: tool for tool in (await client.list_tools()).tools}
                     names = tools.keys()
-                    assert {'dashboard_share', 'dashboard_share_revoke', 'dashboard_preview'} <= names
+                    from dashboard_runtime.tool_contract import AUTHOR_TOOLS
+                    assert set(names) == AUTHOR_TOOLS
                     assert 'dashboard_export_open' not in names
                     from mcp.types import TextResourceContents
                     guide = (await client.read_resource(AnyUrl('charts://contract'))).contents[0]
@@ -303,12 +306,7 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
                     assert contract['tools'] == {name: tool.model_dump(by_alias=True, exclude_none=True, exclude={'name'})
                         for name, tool in tools.items()}
                     assert 'Project name on this server' in contract['projectRouting']['description']
-                    revoke_annotations = tools['dashboard_share_revoke'].annotations
-                    assert revoke_annotations is not None
-                    assert revoke_annotations.destructiveHint is True
-                    keepalive_meta = tools['runtime_keepalive'].meta
-                    assert keepalive_meta is not None
-                    assert keepalive_meta['ui']['visibility'] == ['app']
+                    assert {'runtime_keepalive', 'dashboard_share_revoke'} <= contract['clientTools'].keys()
                     outside = await client.call_tool('dashboard_list', {'projectRoot': '/etc'})
                     assert outside.isError and outside.structuredContent is not None
                     assert outside.structuredContent['error']['code'] == 'PROJECT_OUTSIDE_WORKSPACE'

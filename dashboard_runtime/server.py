@@ -559,7 +559,7 @@ def create_app(server: RemoteServer):
         from .lifecycle import IdleLifetime
         unified = StreamableHTTPSessionManager(
             app=create_server(server.projects.service(settings.default_project), IdleLifetime(10 ** 9), server.profile,
-                              backend_routes, mode=os.environ.get('CHARTS_UNIFIED_MCP_MODE')),
+                              backend_routes),
             stateless=True, security_settings=settings.security(), **options)
 
     async def read_body(request: Request, limit: int) -> bytes:

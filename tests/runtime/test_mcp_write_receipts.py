@@ -30,8 +30,8 @@ def test_write_receipts_preserve_storage_and_revision_flow(tmp_path):
                 resource = (await session.read_resource(AnyUrl('charts://contract'))).contents[0]
                 assert isinstance(resource, TextResourceContents)
                 contract = json.loads(resource.text)
-                mode = tools['dashboard_patch'].inputSchema['properties']['responseMode']
-                assert mode == contract['tools']['dashboard_patch']['inputSchema']['properties']['responseMode']
+                mode = contract['clientTools']['dashboard_patch']['properties']['responseMode']
+                assert mode == tools['dataset_import'].inputSchema['properties']['responseMode']
                 assert mode['default'] == 'summary'
                 assert 'responseMode' not in tools['dashboard_get'].inputSchema['properties']
                 assert tools['dashboard_view'].inputSchema['properties']['responseMode']['enum'] == ['full', 'patch']

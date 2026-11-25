@@ -33,7 +33,7 @@ MCP defaults to local result mode. Explicit `dataMode: "snapshot"` supports boun
 
 CLI `export <id> --format csv --dataset <datasetId> --output <path>` streams every matching row. Use `--component <tableId>` for a table's filter scope.
 
-Use a maintenance connection for storage migration and rollback. See [project storage](../../../docs/implementation/project-runtime.md).
+Use the operator CLI for storage migration and rollback. See [project storage](../../../docs/implementation/project-runtime.md).
 
 ## Performance investigations
 

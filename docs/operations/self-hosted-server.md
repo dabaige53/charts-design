@@ -148,7 +148,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 三项全部未设置时不注册新入口。配置前须确认自有服务器可以保管 CloudBase 的 MCP 权限。将客户端原 MCP JSON 的 URL 改为自有服务器的 `https://<后端域名>/unified/mcp`，请求头使用 `Authorization: Bearer <统一入口令牌>`。不要使用 Pages 地址。
 
-从 `server-v1.2.33` 起，自托管镜像通过 `CHARTS_UNIFIED_MCP_MODE=model` 将统一入口限定为创作工具。直连 `/mcp` 的模式仍由 `CHARTS_MCP_MODE` 控制。更新后在 Agent 使用的地址重新初始化 MCP 会话，读取 `tools/list` 的全部页，并将 Charts Design 的工具名与该版本的 `AUTHOR_TOOLS` 逐项比对。通过 Magpie 连接时，按服务名前缀提取该项目的工具。`/health` 提供部署版本和提交号。
+本地、直连和统一入口使用同一份 Agent 工具清单。通过已有连接调用 `dataset_repartition` 为 COS 数据集生成分片版本。更新后在 Agent 使用的地址重新初始化会话，读取 `tools/list` 的全部页，逐项比对 `AUTHOR_TOOLS`。通过 Magpie 时按服务名前缀提取工具。`/health` 提供部署版本和提交号。
 
 每次工具调用都传 `projectRoot`。首次处理一个名字时，网关读取两端项目目录：只存在一处则自动固定归属；同名则须显式传 `backend: "server"` 或 `"cloudbase"`；新名字须在 `dashboard_create` 中指定 `backend`。例如 `{"projectRoot":"sales","dashboardId":"overview","title":"销售概览","backend":"server"}`。固定后无需再传 `backend`，传入冲突值会拒绝，另一端的同名项目仍可通过其直连入口使用。首次目录查询失败不转发；已绑定的项目只访问所属后端。写入响应中断后先检查原项目状态，不会自动重试或切到另一边。
 
