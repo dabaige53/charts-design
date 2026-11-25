@@ -1,13 +1,25 @@
 """CloudBase PostgreSQL access through its shared-instance HTTP gateway."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 import json
 import os
 import re
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from typing import TYPE_CHECKING
 
 from .model import DashboardError, require
+
+if TYPE_CHECKING:
+    from psycopg_pool import ConnectionPool
+
+
+_VIEW_CONNECTIONS: ContextVar[ConnectionPool | None] = ContextVar('neon_view_connections', default=None)
+_POOLED_VIEW_ACTIONS = frozenset({
+    'annotation_read', 'annotation_write', 'annotation_append', 'display_revision', 'generations_match',
+})
 
 
 _ANNOTATION_READ = """
@@ -66,6 +78,23 @@ def cloud_enabled():
     return backend in ('cloudbase', 'neon')
 
 
+@contextmanager
+def neon_view_connections():
+    if os.environ.get('CHARTS_STORAGE_BACKEND') != 'neon':
+        yield
+        return
+    from psycopg_pool import ConnectionPool
+
+    database = CloudDatabase()
+    with ConnectionPool(database.database_url, min_size=2, max_size=6, timeout=10, open=False,
+                        kwargs={'connect_timeout': 10, 'prepare_threshold': None, 'autocommit': True}) as pool:
+        token = _VIEW_CONNECTIONS.set(pool)
+        try:
+            yield
+        finally:
+            _VIEW_CONNECTIONS.reset(token)
+
+
 class CloudDatabase:
     def __init__(self):
         self.backend = os.environ.get('CHARTS_DATABASE_BACKEND',
@@ -120,13 +149,16 @@ class CloudDatabase:
         import psycopg
         from psycopg import sql
         from psycopg.types.json import Jsonb
+        from psycopg_pool import PoolTimeout
 
         function = self.url.rsplit('/', 1)[-1]
         require(function in ('charts_runtime', 'charts_assets', 'charts_release',
                              'charts_delete_checkpoint', 'charts_data_inventory'),
                 'Unknown PostgreSQL function', 'INVALID_CONFIG')
+        pool = _VIEW_CONNECTIONS.get() if function == 'charts_runtime' and action in _POOLED_VIEW_ACTIONS else None
         try:
-            with psycopg.connect(self.database_url, connect_timeout=60) as connection:
+            checkout = pool.connection() if pool is not None else psycopg.connect(self.database_url, connect_timeout=60)
+            with checkout as connection:
                 with connection.cursor() as cursor:
                     if function == 'charts_runtime' and action == 'annotation_read':
                         cursor.execute(_ANNOTATION_READ, (project, Jsonb({'board': payload['board']}), payload['includeTargets']))
@@ -136,13 +168,18 @@ class CloudDatabase:
                                                           Jsonb(args), Jsonb(payload['notes'])))
                     elif function == 'charts_runtime' and action == 'annotation_append':
                         # Share the commit lock and take the read snapshot after acquiring it.
-                        cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended('charts:' || %s, 0))", (project,))
                         note = payload['note']
-                        cursor.execute(_ANNOTATION_APPEND, {
-                            'project': project, 'board': Jsonb({'board': payload['board']}),
-                            'note': Jsonb(note), 'at': payload['at'],
-                            'component': note.get('componentId') if 'anchor' not in note else None,
-                        })
+                        with connection.transaction():
+                            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended('charts:' || %s, 0))", (project,))
+                            cursor.execute(_ANNOTATION_APPEND, {
+                                'project': project, 'board': Jsonb({'board': payload['board']}),
+                                'note': Jsonb(note), 'at': payload['at'],
+                                'component': note.get('componentId') if 'anchor' not in note else None,
+                            })
+                            row = cursor.fetchone()
+                        if row is None:
+                            raise DashboardError('CLOUD_DATABASE_FAILED', 'PostgreSQL function returned no row', 503)
+                        return row[0]
                     elif function == 'charts_runtime' and action == 'display_revision':
                         cursor.execute("SELECT public.charts_runtime('readable', %s, %s)->'revision'",
                                        (project, Jsonb({'board': payload['board']})))
@@ -161,6 +198,8 @@ class CloudDatabase:
                     if row is None:
                         raise DashboardError('CLOUD_DATABASE_FAILED', 'PostgreSQL function returned no row', 503)
                     return row[0]
+        except PoolTimeout:
+            raise DashboardError('CLOUD_DATABASE_UNAVAILABLE', 'PostgreSQL is busy; please retry', 503) from None
         except psycopg.Error as error:
             codes = {'REVISION_CONFLICT': 409, 'ANNOTATION_CONFLICT': 409,
                      'ALREADY_EXISTS': 409, 'NOT_FOUND': 404,

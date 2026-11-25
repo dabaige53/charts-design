@@ -979,6 +979,7 @@ class _ClosedStreamFilter:
 
 def serve(settings: ServerSettings):
     import logging
+    from .cloud_database import neon_view_connections
     logging.getLogger('mcp.server.streamable_http').addFilter(_ClosedStreamFilter())
     try:
         import uvicorn
@@ -990,5 +991,6 @@ def serve(settings: ServerSettings):
                       'auth': 'disabled (loopback trial)' if settings.insecure_no_auth else 'bearer', 'version': __version__}, ensure_ascii=False), flush=True)
     if settings.public_url.startswith('http://') and settings.host not in ('127.0.0.1', 'localhost', '::1'):
         print('Warning: publish this server through HTTPS (reverse proxy) before sharing links; tokens travel in requests.', file=sys.stderr)
-    uvicorn.run(app, host=settings.host, port=settings.port, access_log=False, log_level='warning',
-                proxy_headers=True, forwarded_allow_ips=settings.forwarded_allow_ips, server_header=False)
+    with neon_view_connections():
+        uvicorn.run(app, host=settings.host, port=settings.port, access_log=False, log_level='warning',
+                    proxy_headers=True, forwarded_allow_ips=settings.forwarded_allow_ips, server_header=False)
