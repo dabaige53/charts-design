@@ -98,6 +98,22 @@ class ProjectStore(Store):
                 self._annotation_files(db, board)
         return {'dashboardId': board, 'revision': expected, 'annotations': notes}
 
+    def append_annotation(self, board, note):
+        identifier(board)
+        validate_annotations([note])
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            state = self._annotation_state(db, board, bool(note.get('componentId') and 'anchor' not in note))
+            previous = state['annotations']
+            existing = next((item for item in previous if item['id'] == note['id']), None)
+            if existing is None:
+                validate_annotations([*previous, note], state['components'])
+                doc = {'id': board, 'revision': state['revision'], 'manifest': {'filters': state['filters']},
+                       'snapshot': {'datasetRefs': state['datasetRefs']}}
+                self._save_notes(db, doc, [*previous, note], previous)
+                self._annotation_files(db, board)
+        return {'dashboardId': board, 'revision': state['revision'], 'annotation': existing or note}
+
     def get(self, board_id, hydrate=True):
         doc = super().get(board_id, hydrate=False)
         with self.connect() as db:

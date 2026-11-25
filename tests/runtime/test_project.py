@@ -1,3 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 from dashboard_runtime.service import Service
 from dashboard_runtime.model import DashboardError
 import pytest
@@ -24,6 +27,39 @@ def test_annotations_use_their_own_read_and_write_path(tmp_path, monkeypatch):
         service.call('dashboard_annotations_update', {**args, 'annotations': []})
     assert failure.value.code == 'ANNOTATION_CONFLICT'
     assert service.call('dashboard_annotations', board)['annotations'] == saved['annotations']
+
+
+# @wu-test type=integration | scope=独立新增批注 | protects=同时新增时漏存一条，或重试时重复新增
+def test_concurrent_annotation_appends_are_merged(tmp_path, monkeypatch):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    board = {'dashboardId': 'board'}
+    service.call('dashboard_create', {**board, 'title': 'Board'})
+    initial = service.store.revision('board')
+
+    def unexpected(*args, **kwargs):
+        pytest.fail('Appending an annotation must not load or save the full dashboard')
+
+    monkeypatch.setattr(service.store, 'get', unexpected)
+    monkeypatch.setattr(service.store, 'mutate', unexpected)
+    ready = Barrier(2, timeout=5)
+
+    def append(note_id):
+        return service.call('dashboard_annotations_update', {**board, 'append': {
+            'id': note_id, 'componentId': None, 'text': note_id, 'createdAt': '2026-11-25',
+        }})
+
+    def submit(note_id):
+        ready.wait()
+        return append(note_id)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = list(pool.map(submit, ('first', 'second')))
+    assert all(item.keys() == {'dashboardId', 'revision', 'annotation'} and item['revision'] == initial
+               for item in (first, second))
+    assert append('first') == first
+    saved = service.call('dashboard_annotations', {**board, 'includeTargets': False})['annotations']
+    assert {item['id'] for item in saved} == {'first', 'second'}
+    assert len(saved) == 2
 
 
 # @wu-test type=integration | scope=项目草稿检查点 | protects=编辑恢复删除运行缓存后丢批注

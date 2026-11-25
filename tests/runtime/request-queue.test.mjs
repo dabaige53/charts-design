@@ -24,6 +24,20 @@ test('version actions start while four chart queries remain pending',async()=>{
  release();
  await Promise.all([...reads,control]);
 });
+// @wu-test type=behavior | scope=tool queue | protects=慢批注读取、版本检查或前一条保存阻塞新增批注
+test('two annotation appends can start before other calls finish',async()=>{
+ const queue=createToolQueue();let release;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const read=queue('dashboard_annotations',()=>gate);
+ const info=queue('runtime_info',()=>gate);
+ const control=queue('dashboard_checkpoint',()=>gate);
+ let savesStarted=0;
+ const saves=[1,2].map(id=>queue('dashboard_annotations_update',()=>{savesStarted++;return gate;},{append:{id}}));
+ await Promise.resolve();
+ assert.equal(savesStarted,2);
+ release();
+ await Promise.all([read,info,control,...saves]);
+});
 // @wu-test type=behavior | scope=packed records decoding | protects=展开记录丢失Unicode零或null
 test('column records preserve Unicode, zero, null and negative values',()=>{
  const value={computed:{components:{a:{data:{packedRecords:{keys:['value','label'],rows:[['西安','HO',0,null],['😀',null,-2,'机场']]}}}}}};

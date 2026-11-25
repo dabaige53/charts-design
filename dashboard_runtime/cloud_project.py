@@ -47,7 +47,7 @@ class CloudProjectStore(Store):
                 changed = [key for key, component in new['components'].items() if component != old['components'].get(key)]
         prepared = self.prepared_views.prepare(doc, component_ids=changed, include_filter_options=False)
         computed = prepared['computed']
-        previous_pages = previous['computed'].get('filterPages', {}) if changed is not None else {}
+        previous_pages = previous['computed'].get('filterPages', {}) if previous is not None and changed is not None else {}
         for selection in doc['manifest']['filters']:
             if (selection['op'] != 'in' or not selection.get('required')
                     or selection.get('selectionMode') != 'single'):
@@ -101,7 +101,14 @@ class CloudProjectStore(Store):
         return self._decode(doc)
 
     def display_revision(self, board):
-        return self.readable(board)['revision']
+        identifier(board)
+        if self.database.backend == 'neon':
+            revision = self.database.call('display_revision', self.project, board=board)
+        else:
+            stored = self.database.call('readable', self.project, board=board)
+            revision = stored['revision'] if stored else None
+        require(revision is not None, '暂无已保存版本', 'NO_SAVED_VERSION')
+        return revision
 
     def revision(self, board_id):
         return self.get(board_id)['revision']
@@ -139,6 +146,38 @@ class CloudProjectStore(Store):
         stored['manifest']['annotations'] = notes
         saved = self.database.call('commit', self.project, document=stored, **args)
         return {'dashboardId': board, 'revision': saved['revision'], 'annotations': saved['manifest']['annotations']}
+
+    def append_annotation(self, board, note):
+        identifier(board)
+        validate_annotations([note])
+        if self.database.backend == 'neon':
+            result = self.database.call('annotation_append', self.project, board=board, note=note, at=utcnow())
+            limit = result.pop('limitReached')
+            require(result['annotation'] is not None,
+                    'At most 100 annotations per document' if limit else 'Unknown annotation component')
+            return result
+        # The CloudBase gateway only exposes the existing compare-and-save RPC.
+        for attempt in range(5):
+            doc = self.database.call('get', self.project, board=board)
+            manifest = doc['manifest']
+            previous = manifest.get('annotations', [])
+            existing = next((item for item in previous if item['id'] == note['id']), None)
+            if existing is not None:
+                return {'dashboardId': board, 'revision': doc['revision'], 'annotation': existing}
+            notes = [*previous, note]
+            validate_annotations(notes, manifest.get('components'))
+            self._note_context(doc, [note], [])
+            manifest['annotations'] = notes
+            try:
+                self.database.call('commit', self.project, board=board, expected=doc['revision'],
+                                   previousNotes=previous, document=doc, at=utcnow())
+            except DashboardError as error:
+                if error.code not in ('REVISION_CONFLICT', 'ANNOTATION_CONFLICT'):
+                    raise
+                if attempt == 4:
+                    raise DashboardError('ANNOTATION_SAVE_RETRY', '批注暂未保存，请重试。', 503) from None
+            else:
+                return {'dashboardId': board, 'revision': doc['revision'], 'annotation': note}
 
     @staticmethod
     def _note_context(doc, notes, previous, preserve_incoming=False):

@@ -59,7 +59,7 @@ const send = (name: string, args: Config) =>
     if (response.status === 401) throw new WebAuthError();
     if (!response.ok) throw Object.assign(Error(value.error?.message || "请求失败"), { code: value.error?.code });
     return value;
-  });
+  }, args);
 const context = createProjectContext(send);
 const remoteCall: ToolCall = async (name, args = {}) =>
   resolveToolResult(

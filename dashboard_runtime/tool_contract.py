@@ -204,9 +204,14 @@ TOOLS = {
         'name': NAME,
     }, ('dashboardId',), oneOf=[{'required': ['expectedRevision'], 'not': {'required': ['createTitle']}},
                                {'required': ['createTitle', 'operations'], 'not': {'required': ['expectedRevision']}}])),
-    'dashboard_annotations_update': ('Update comments independently of the design revision and checkpoint. Supply the exact previously read list and its complete replacement.', schema({
+    'dashboard_annotations_update': ('Save comments independently of the design and checkpoint. To add one comment, send append with a stable ID. Concurrent additions are merged and retries with the same ID return the saved comment. To edit or delete, supply the previously read list and its replacement.', schema({
         'dashboardId': BOARD['dashboardId'], 'expectedRevision': EXPECTED, 'expectedAnnotations': ANNOTATIONS, 'annotations': ANNOTATIONS,
-    }, ('dashboardId', 'expectedRevision', 'expectedAnnotations', 'annotations'))),
+        'append': {**ANNOTATIONS['items'], 'description': 'One new comment. Keep its ID when retrying.'},
+    }, ('dashboardId',), oneOf=[
+        {'required': ['append'], 'not': {'anyOf': [{'required': [field]} for field in
+                                                  ('expectedRevision', 'expectedAnnotations', 'annotations')]}},
+        {'required': ['expectedRevision', 'expectedAnnotations', 'annotations'], 'not': {'required': ['append']}},
+    ])),
     'dataset_storage_inventory': ('Inspect CloudBase dataset versions, stored chunk sizes and conservative references from drafts, checkpoints, releases and annotation history. Incomplete or unreferenced versions require review; this never deletes data or returns business rows.', schema({})),
     'dataset_repartition': ('Stage a replacement private COS dataset partitioned by one string or date field. Reads the existing immutable dataset on the server and preserves its logical values and row order. Does not change a draft, checkpoint, share, or other references. Call only for approved repartitioning. After verifying the returned ref, use a revision-checked put_dataset_ref to attach it.', schema({
         **BOARD, 'datasetId': described(ID, 'Dataset ID in the current draft.'),

@@ -230,6 +230,10 @@ class Service:
             return self._publish(args)
         if tool == 'dashboard_annotations_update':
             require(self.project_root is not None, 'Independent annotation saves require a project', 'PROJECT_REQUIRED')
+            if 'append' in args:
+                require(not {'expectedRevision', 'expectedAnnotations', 'annotations'} & args.keys(),
+                        'Send append or a replacement list', 'INVALID_ARGUMENT')
+                return self.store.append_annotation(board, copy.deepcopy(args['append']))
             expected, previous = args.get('expectedRevision'), args.get('expectedAnnotations')
             require(type(expected) is int and expected > 0, 'expectedRevision is required', 'INVALID_ARGUMENT')
             require(isinstance(previous, list), 'expectedAnnotations must be an array', 'INVALID_ARGUMENT')

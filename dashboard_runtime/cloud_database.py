@@ -31,6 +31,33 @@ _ANNOTATION_WRITE = """
     SELECT jsonb_build_object('dashboardId', doc->'id', 'revision', doc->'revision',
                               'annotations', doc#>'{manifest,annotations}') FROM saved
 """
+_ANNOTATION_APPEND = """
+    WITH current AS MATERIALIZED (SELECT public.charts_runtime('get', %(project)s, %(board)s) AS doc),
+    state AS (
+        SELECT doc->'revision' AS revision, doc#>'{manifest,annotations}' AS notes,
+            doc#>'{manifest,components}' AS components, doc,
+            %(note)s::jsonb || jsonb_build_object('context', jsonb_build_object(
+                'designRevision', doc->'revision',
+                'dataVersions', coalesce(doc#>'{snapshot,datasetRefs}', '{}'::jsonb),
+                'filters', coalesce(nullif(doc#>'{manifest,filters}', 'null'::jsonb),
+                                    %(note)s::jsonb#>'{view,filters}', '[]'::jsonb))) AS note
+        FROM current),
+    merged AS MATERIALIZED (
+        SELECT *, (SELECT item FROM jsonb_array_elements(notes) AS item
+                   WHERE item->>'id' = note->>'id') AS existing
+        FROM state),
+    saved AS MATERIALIZED (
+        SELECT public.charts_runtime('commit', %(project)s, %(board)s || jsonb_build_object(
+            'expected', revision, 'at', %(at)s::text, 'previousNotes', notes,
+            'document', jsonb_set(doc, '{manifest,annotations}', notes || jsonb_build_array(note)))) AS doc
+        FROM merged WHERE existing IS NULL AND jsonb_array_length(notes) < 100
+            AND (%(component)s::text IS NULL OR components IS NULL OR components ? %(component)s::text))
+    SELECT jsonb_build_object('dashboardId', doc->'id', 'revision', revision,
+        'annotation', CASE WHEN existing IS NOT NULL THEN existing
+                           WHEN EXISTS (SELECT FROM saved) THEN note END,
+        'limitReached', jsonb_array_length(notes) >= 100)
+    FROM merged
+"""
 
 
 def cloud_enabled():
@@ -107,6 +134,18 @@ class CloudDatabase:
                         args = {key: payload[key] for key in ('board', 'expected', 'previousNotes', 'at')}
                         cursor.execute(_ANNOTATION_WRITE, (project, Jsonb({'board': payload['board']}), project,
                                                           Jsonb(args), Jsonb(payload['notes'])))
+                    elif function == 'charts_runtime' and action == 'annotation_append':
+                        # Share the commit lock and take the read snapshot after acquiring it.
+                        cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended('charts:' || %s, 0))", (project,))
+                        note = payload['note']
+                        cursor.execute(_ANNOTATION_APPEND, {
+                            'project': project, 'board': Jsonb({'board': payload['board']}),
+                            'note': Jsonb(note), 'at': payload['at'],
+                            'component': note.get('componentId') if 'anchor' not in note else None,
+                        })
+                    elif function == 'charts_runtime' and action == 'display_revision':
+                        cursor.execute("SELECT public.charts_runtime('readable', %s, %s)->'revision'",
+                                       (project, Jsonb({'board': payload['board']})))
                     else:
                         cursor.execute(
                             sql.SQL('SELECT public.{}(%s, %s, %s)').format(sql.Identifier(function)),

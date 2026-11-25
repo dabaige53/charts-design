@@ -254,9 +254,11 @@ class WorkspaceProjects:
         require(PROJECT_NAME.fullmatch(value) is not None, 'projectRoot must be a project name: letters, digits, "-" or "_" (at most 64 characters)', 'INVALID_PROJECT')
         return value
 
-    def exists(self, name: str) -> bool:
+    def exists(self, name: str, *, allow_loaded: bool = False) -> bool:
         from .cloud_database import CloudDatabase, cloud_enabled
         if cloud_enabled():
+            if allow_loaded and name in self._services:
+                return True
             return name in CloudDatabase().call('projects')
         return PROJECT_NAME.fullmatch(name or '') is not None and (self.settings.workspace / name / 'charts-project.json').is_file()
 
@@ -655,14 +657,17 @@ def create_app(server: RemoteServer):
             principal = server.principal(bearer(request), project)
             if principal is None:
                 raise DashboardError('UNAUTHORIZED', '链接已失效或缺少访问令牌，请重新打开分享链接', 401)
-            if not server.projects.exists(project):
-                raise DashboardError('NOT_FOUND', 'Project not found', 404)
             if request.headers.get('content-type', '').split(';')[0].strip() != 'application/json':
                 raise DashboardError('CONTENT_TYPE', 'Use application/json', 415)
             body = await read_body(request, MAX_BYTES)
             if not body:
                 raise DashboardError('INVALID_REQUEST', 'Body must contain a JSON object', 400)
-            result = await asyncio.to_thread(server.call_viewer, project, name, json.loads(body), principal)
+            def invoke():
+                if not server.projects.exists(project, allow_loaded=name in (
+                        'dashboard_annotations', 'dashboard_annotations_update', 'runtime_info')):
+                    raise DashboardError('NOT_FOUND', 'Project not found', 404)
+                return server.call_viewer(project, name, json.loads(body), principal)
+            result = await asyncio.to_thread(invoke)
             raw = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
             return compressed(request, raw, 'application/json', {'Cache-Control': 'no-store'})
         except Exception as error:  # noqa: BLE001 - mapped to bounded JSON errors

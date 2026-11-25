@@ -7,7 +7,7 @@ export function createRequestQueue(limit=4){
 
 // Keep a control slot available while chart queries are still loading.
 export function createToolQueue(){
-  const reads=createRequestQueue(4), controls=createRequestQueue(1);
-  const queries=new Set(['dashboard_view','dashboard_filter_options','component_data','dataset_export','semantic_inspect']);
-  return (name,work)=>(queries.has(name)?reads:controls)(work);
+  const reads=createRequestQueue(4), controls=createRequestQueue(1), annotations=createRequestQueue(4);
+  const queries=new Set(['dashboard_view','dashboard_filter_options','component_data','dataset_export','semantic_inspect','dashboard_annotations','runtime_info']);
+  return (name,work,{append}={})=>(name==='dashboard_annotations_update'&&append?annotations:queries.has(name)?reads:controls)(work);
 }

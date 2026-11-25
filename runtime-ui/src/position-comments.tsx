@@ -22,6 +22,8 @@ type Selection = {
   };
 };
 type Draft = Selection & { id: string; text: string; editing?: string; original?: Config };
+type NotesSnapshot = { revision: number; annotations: Config[]; independentSave: boolean };
+type Submission = Omit<Draft, "editing" | "original"> & { createdAt: string; view: { revision: number; filters: Filter[] } };
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
 function CommentAction({ label, children, disabled, destructive = false, onClick }: {
@@ -125,6 +127,8 @@ export function PositionComments({
   const [listOpen, setListOpen] = useState(false), [openId, setOpenId] = useState<string | null>(null);
   const [replies, setReplies] = useState<Record<string, string>>({});
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [submissions, setSubmissions] = useState<{ note: Submission; error?: string }[]>([]);
   const [hover, setHover] = useState<Rect | null>(null), [dragRect, setDragRect] = useState<Rect | null>(null);
   const [positions, setPositions] = useState<Record<string, Rect>>({});
   const [screen, setScreen] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -133,7 +137,10 @@ export function PositionComments({
   const draftRef = useRef(draft), busyRef = useRef(false), reanchor = useRef<Config | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const replyIds = useRef<Record<string, { text: string; id: string }>>({});
-  const loadedNotes = useRef<{ revision: number; annotations: Config[]; independentSave: boolean } | null>(null);
+  const loadedNotes = useRef<NotesSnapshot | null>(doc.progressive && Array.isArray(doc.manifest.annotations)
+    ? { revision: doc.revision, annotations: doc.manifest.annotations, independentSave: true } : null);
+  const notesRef = useRef(notes);
+  const loadingNotes = useRef<Promise<NotesSnapshot | null> | null>(null);
   const noteRequest = useRef(0);
   const key = `charts-position-draft:${JSON.stringify([projectRoot || location.pathname, doc.id, readOnly])}`;
   const reply = openId ? replies[openId] || "" : "";
@@ -146,8 +153,10 @@ export function PositionComments({
       return next;
     });
   };
-  const picking = active && !readOnly && !openId && !listOpen;
+  const picking = active && !readOnly && !openId && !listOpen && !savingDraft;
   const interacting = active || busy;
+  const failed = submissions.find((entry) => entry.error);
+  const pendingCount = submissions.filter((entry) => !entry.error).length;
   draftRef.current = draft;
 
   useEffect(() => {
@@ -156,12 +165,18 @@ export function PositionComments({
     const load = () => {
       if (document.visibilityState !== "visible" || busyRef.current) return;
       const request = ++noteRequest.current;
-      void call("dashboard_annotations", { dashboardId: doc.id, includeTargets: false }).then((value) => {
+      loadingNotes.current = call("dashboard_annotations", { dashboardId: doc.id, includeTargets: false }).then((value) => {
+        const snapshot = { revision: value.revision, annotations: value.annotations, independentSave: value.independentSave === true };
         if (live && request === noteRequest.current) {
-          loadedNotes.current = { revision: value.revision, annotations: value.annotations, independentSave: value.independentSave === true };
-          setNotes(value.annotations);
+          loadedNotes.current = snapshot;
+          notesRef.current = snapshot.annotations;
+          setNotes(snapshot.annotations);
         }
-      }).catch((failure) => { if (live && request === noteRequest.current) setError(String(failure)); });
+        return live && request === noteRequest.current ? snapshot : null;
+      }).catch((failure) => {
+        if (live && request === noteRequest.current && !busyRef.current) setError(String(failure));
+        return null;
+      });
     };
     load();
     document.addEventListener("visibilitychange", load);
@@ -192,6 +207,9 @@ export function PositionComments({
         if (value.replies && typeof value.replies === "object" && !Array.isArray(value.replies) &&
           Object.values(value.replies).every((text) => typeof text === "string"))
           setReplies(value.replies);
+        if (Array.isArray(value.submissions)) {
+          setSubmissions(value.submissions.map((note: Submission) => ({ note, error: "请重试上次提交" })));
+        }
       }
     } catch {
       setError("无法读取批注草稿；输入内容将只保留在当前页面。");
@@ -201,12 +219,13 @@ export function PositionComments({
   useEffect(() => {
     if (!hydrated) return;
     try {
-      if (draft || Object.keys(replies).length) sessionStorage.setItem(key, JSON.stringify({ draft, replies }));
+      if (draft || Object.keys(replies).length || submissions.length)
+        sessionStorage.setItem(key, JSON.stringify({ draft, replies, submissions: submissions.map(({ note }) => note) }));
       else sessionStorage.removeItem(key);
     } catch {
       setError("无法保存本地草稿，请在离开页面前提交批注。");
     }
-  }, [draft, replies, key, hydrated]);
+  }, [draft, replies, submissions, key, hydrated]);
   useEffect(() => {
     onActivityChange(interacting);
     return () => onActivityChange(false);
@@ -352,11 +371,11 @@ export function PositionComments({
 
   const write = async (change: (current: Config[]) => Config[]) => {
     if (readOnly || busyRef.current) return false;
-    const latest = loadedNotes.current;
-    if (!latest) { setError("批注正在加载，当前输入已保留。"); return false; }
-    noteRequest.current++;
     busyRef.current = true; setBusy(true); setError("");
     try {
+      const latest = loadedNotes.current ?? await loadingNotes.current;
+      if (!latest) throw Error("无法读取批注，请重新打开批注后再试。草稿已保留。");
+      noteRequest.current++;
       if (doc.progressive && latest.independentSave !== true)
         throw Error("批注服务需要重启 MCP 后更新；当前输入已保留。");
       const value = change(latest.annotations);
@@ -365,10 +384,14 @@ export function PositionComments({
         ? await call("dashboard_annotations_update", { ...target, expectedAnnotations: latest.annotations, annotations: value })
         : await call("dashboard_patch", { ...target, operations: [{ op: "set_annotations", value }] });
       if (result.ok === false) throw Error(result.error?.message || "批注保存失败");
-      const saved = latest.independentSave ? result.annotations : result.document.manifest.annotations;
+      const saved: Config[] = latest.independentSave ? result.annotations : result.document.manifest.annotations;
       const revision = latest.independentSave ? result.revision : result.document.revision;
-      loadedNotes.current = { ...latest, annotations: saved, revision };
-      setNotes(saved); onNotesChange(saved);
+      const added = notesRef.current.filter((note) =>
+        !latest.annotations.some((item) => item.id === note.id) && !saved.some((item) => item.id === note.id));
+      const merged = [...saved, ...added];
+      loadedNotes.current = { ...latest, annotations: merged, revision: Math.max(revision, loadedNotes.current?.revision ?? 0) };
+      notesRef.current = merged;
+      setNotes(merged); onNotesChange(merged);
       return true;
     } catch (failure) {
       const code = failure instanceof Error && 'code' in failure ? failure.code : undefined;
@@ -378,8 +401,36 @@ export function PositionComments({
       return false;
     } finally { busyRef.current = false; setBusy(false); }
   };
+  const append = async (note: Submission) => {
+    setSubmissions((entries) => [...entries.filter((entry) => entry.note.id !== note.id), { note }]);
+    try {
+      const result = await call("dashboard_annotations_update", { dashboardId: doc.id, append: note });
+      if (!result.annotation) throw Error(result.error?.message || "批注保存失败");
+      noteRequest.current++;
+      const latest = notesRef.current;
+      const saved = latest.some((item) => item.id === note.id)
+        ? latest.map((item) => item.id === note.id ? result.annotation : item)
+        : [...latest, result.annotation];
+      loadedNotes.current = { independentSave: true, annotations: saved,
+        revision: Math.max(result.revision, loadedNotes.current?.revision ?? 0) };
+      notesRef.current = saved;
+      setNotes(saved); onNotesChange(saved);
+      setSubmissions((entries) => entries.filter((entry) => entry.note.id !== note.id));
+    } catch (failure) {
+      setSubmissions((entries) => entries.map((entry) => entry.note.id === note.id
+        ? { note, error: failure instanceof Error ? failure.message : String(failure) } : entry));
+    }
+  };
   const submit = async () => {
-    if (!draft || !draft.text.trim() || !positions.draft) return;
+    if (busyRef.current || !draft || draftRef.current !== draft || !draft.text.trim() || !positions.draft) return;
+    if (!draft.editing && (projectRoot || doc.progressive || loadedNotes.current?.independentSave)) {
+      draftRef.current = null;
+      setDraft(null); setError("");
+      await append({ ...draft, text: draft.text.trim(), createdAt: new Date().toISOString(),
+        view: { revision: doc.revision, filters } });
+      return;
+    }
+    setSavingDraft(true);
     const saved = await write((current) => {
       if (draft.editing) {
         const existing = current.find((note) => note.id === draft.editing);
@@ -401,6 +452,7 @@ export function PositionComments({
         view: { revision: doc.revision, filters } }];
     });
     if (saved) { setDraft(null); setError(""); }
+    setSavingDraft(false);
   };
   const current = notes.find((note) => note.id === openId);
   const submitReply = async () => {
@@ -457,7 +509,11 @@ export function PositionComments({
       {(active || listOpen || current || draft || error || Object.keys(replies).length > 0) && (
         <div className="pointer-events-auto fixed bottom-4 left-1/2 flex max-w-[calc(100vw-24px)] -translate-x-1/2 flex-wrap items-center gap-2 border border-border bg-popover px-3 py-2 text-xs shadow-md">
           {picking && <><MousePointer2 className="size-4" /><span>点击元素或拖动框选，再输入批注</span></>}
-          {!picking && draft && <Button variant="ghost" size="sm" onClick={() => {
+          {savingDraft && <span role="status">正在保存批注…</span>}
+          {!!pendingCount && <span role="status">正在保存 {pendingCount} 条批注…</span>}
+          {failed && <Button variant="ghost" size="sm" onClick={() => void append(failed.note)}
+            title={failed.error}>重试未保存的批注</Button>}
+          {!picking && draft && !savingDraft && <Button variant="ghost" size="sm" onClick={() => {
             setOpenId(null); setListOpen(false);
           }}>继续未提交批注</Button>}
           {!current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => {
@@ -465,7 +521,7 @@ export function PositionComments({
           }}>继续未提交回复</Button>}
           {!current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => setReplies({})}>丢弃未提交回复</Button>}
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setListOpen(!listOpen); setOpenId(null); }}>批注列表（{notes.length}）</Button>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
+          <Button variant="ghost" size="sm" disabled={busy && !savingDraft} onClick={() => {
             onActiveChange(false); setListOpen(false); setOpenId(null); setHover(null);
           }}>退出批注</Button>
         </div>
@@ -549,7 +605,7 @@ export function PositionComments({
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" disabled={busy} onClick={() => { setDraft(null); setError(""); }}>取消</Button>
                 <Button type="submit" className="gap-1.5" disabled={busy || !showComposer.text.trim() || !positions.draft}>
-                  <ArrowUp aria-hidden="true" className="size-3.5" />{busy ? "正在保存…" : "提交批注"}
+                  <ArrowUp aria-hidden="true" className="size-3.5" />提交批注
                 </Button>
               </div>
             </form>}
