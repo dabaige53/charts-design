@@ -427,3 +427,39 @@ def test_multi_page_share_scope_and_revocation(tmp_path):
     assert error.value.code == 'FORBIDDEN'
     server.state.revoke('sales', 'second')
     assert server.principal(token, 'sales') is None
+
+
+# @wu-test type=integration | scope=签名编辑链接的鉴权 | protects=慢数据库查询阻塞其他 HTTP 请求
+def test_slow_share_authentication_does_not_block_health(tmp_path, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    server = RemoteServer(settings(tmp_path))
+    service = server.projects.service('sales')
+    service.call('dashboard_create', {'dashboardId': 'board', 'title': 'Board'})
+    token = server.links.share('sales', 'board', 'edit')['url'].split('#token=')[1]
+    entered = threading.Event()
+    release = threading.Event()
+    match = server.state.generations_match
+
+    def slow_match(project, pages):
+        entered.set()
+        assert release.wait(timeout=4), 'Health check could not run during share authentication'
+        return match(project, pages)
+
+    monkeypatch.setattr(server.state, 'generations_match', slow_match)
+
+    async def check():
+        async with AsyncClient(transport=ASGITransport(app=create_app(server)), base_url='http://test.local') as client:
+            pending = asyncio.create_task(client.post('/api/v1/p/sales/tools/dashboard_annotations',
+                json={'dashboardId': 'board', 'includeTargets': False},
+                headers={'Authorization': 'Bearer ' + token}))
+            try:
+                assert await asyncio.to_thread(entered.wait, 2)
+                assert (await client.get('/health')).status_code == 200
+                assert not pending.done()
+            finally:
+                release.set()
+                response = await pending
+            assert response.status_code == 200
+
+    asyncio.run(check())

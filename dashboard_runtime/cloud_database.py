@@ -146,6 +146,13 @@ class CloudDatabase:
                     elif function == 'charts_runtime' and action == 'display_revision':
                         cursor.execute("SELECT public.charts_runtime('readable', %s, %s)->'revision'",
                                        (project, Jsonb({'board': payload['board']})))
+                    elif function == 'charts_runtime' and action == 'generations_match':
+                        cursor.execute("""
+                            SELECT NOT EXISTS (
+                                SELECT FROM jsonb_each(%s) AS page(board, generation)
+                                WHERE page.generation IS DISTINCT FROM public.charts_runtime(
+                                    'generation', %s, jsonb_build_object('board', page.board)))
+                        """, (Jsonb(payload['pages']), project))
                     else:
                         cursor.execute(
                             sql.SQL('SELECT public.{}(%s, %s, %s)').format(sql.Identifier(function)),

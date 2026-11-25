@@ -222,6 +222,11 @@ class ShareState:
             row = self._db.execute('SELECT generation FROM share_generations WHERE project=? AND dashboard=?', (project, dashboard)).fetchone()
         return row[0] if row else 0
 
+    def generations_match(self, project, pages) -> bool:
+        if self.database is not None and self.database.backend == 'neon':
+            return self.database.call('generations_match', project, pages=pages)
+        return all(generation == self.generation(project, page) for page, generation in pages.items())
+
     def revoke(self, project, dashboard) -> int:
         if self.database is not None:
             return self.database.call('revoke', project, board=dashboard)
@@ -445,13 +450,13 @@ class RemoteServer:
         payload = self.signer.verify(token, 'share')
         if payload is None or payload.get('p') != project:
             return None
-        if payload.get('g') != self.state.generation(project, payload.get('d')):
+        dashboard, generation = payload.get('d'), payload.get('g')
+        pages = payload.get('pages', {dashboard: generation})
+        if not isinstance(pages, dict) or dashboard not in pages or pages[dashboard] != generation:
             return None
-        pages = payload.get('pages', {payload.get('d'): payload.get('g')})
-        if not isinstance(pages, dict) or payload.get('d') not in pages or any(
-                generation != self.state.generation(project, page) for page, generation in pages.items()):
+        if not self.state.generations_match(project, pages):
             return None
-        return Principal(admin=False, access=payload.get('a', 'view'), dashboard=payload.get('d'), dashboards=tuple(pages))
+        return Principal(admin=False, access=payload.get('a', 'view'), dashboard=dashboard, dashboards=tuple(pages))
 
     # Viewer API ---------------------------------------------------------
     def call_viewer(self, project: str, name: str, args, principal: Principal):
@@ -654,7 +659,7 @@ def create_app(server: RemoteServer):
         try:
             project, name = request.path_params['project'], request.path_params['name']
             # Authenticate before revealing whether a project exists.
-            principal = server.principal(bearer(request), project)
+            principal = await asyncio.to_thread(server.principal, bearer(request), project)
             if principal is None:
                 raise DashboardError('UNAUTHORIZED', '链接已失效或缺少访问令牌，请重新打开分享链接', 401)
             if request.headers.get('content-type', '').split(';')[0].strip() != 'application/json':
@@ -678,7 +683,7 @@ def create_app(server: RemoteServer):
             project, board = request.path_params['project'], request.path_params['dashboard']
             require(PROJECT_NAME.fullmatch(project) is not None and re.fullmatch(ID, board) is not None,
                     'Invalid project or dashboard', 'INVALID_ARGUMENT')
-            principal = server.principal(bearer(request), project)
+            principal = await asyncio.to_thread(server.principal, bearer(request), project)
             if principal is None:
                 raise DashboardError('UNAUTHORIZED', '访问令牌失效', 401)
             require(not principal.dashboard or board in principal.dashboards,
@@ -721,9 +726,9 @@ def create_app(server: RemoteServer):
             args = json.loads(await read_body(request, 64 * 1024) or b'{}')
             require(isinstance(args, dict), 'Arguments must be an object', 'INVALID_REQUEST')
             project = server.projects.name(args.get('project'))
-            if not server.projects.exists(project):
-                raise DashboardError('NOT_FOUND', 'Project not found', 404)
             def share():
+                if not server.projects.exists(project):
+                    raise DashboardError('NOT_FOUND', 'Project not found', 404)
                 service = server.projects.service(project)
                 return server.profile.call('dashboard_share', {k: v for k, v in args.items() if k != 'project'}, service)
             return JSONResponse(await asyncio.to_thread(share), headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store'})
