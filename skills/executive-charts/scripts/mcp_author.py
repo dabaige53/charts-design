@@ -52,10 +52,12 @@ def steps(work):
 
 
 def init(args):
+    project_root = None
     if args.from_document:
         if args.id or args.title or args.example or args.mode:
             raise ValueError("--from-document uses the original ID, title and mode")
         payload = read_json(args.from_document)
+        project_root = payload.get("projectRoot")
         original = payload.get("document", payload)
         # Keep the canonical artifact, excluding transport-only views and preloaded results.
         doc = validate({key: original[key] for key in ("schemaVersion", "id", "revision", "manifest", "snapshot")})
@@ -77,8 +79,8 @@ def init(args):
         directory = staging / "steps"
         directory.mkdir(parents=True)
         state = {"existing": bool(args.from_document), "document": doc}
-        if args.from_document and payload.get("projectRoot"):
-            state["projectRoot"] = payload["projectRoot"]
+        if project_root:
+            state["projectRoot"] = project_root
         (staging / "base.json").write_text(encode(state), encoding="utf-8")
         for number, op in enumerate(operations, 1):
             write_step(directory, number, op)
