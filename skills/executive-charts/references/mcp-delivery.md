@@ -14,14 +14,6 @@ For large local data, use the [remote upload client](../../../docs/operations/se
 
 For KPI comparisons, aggregate each period at the same scope and grain before calculating the change. Distinguish percentage changes from percentage-point differences. Tooltip totals, shares and detail tables must use the same denominator, including the declared treatment of hidden series.
 
-## Cloud storage
-
-Cloud projects default to `cos-v1`; local workspaces keep their local storage. For an existing dashboard inspect the document's `storageFormat` before importing. To partition existing COS data by branch or region, call `dataset_repartition` on the current connection with the dataset ID, version and partition field. Verify the returned reference before attaching it with `dashboard_submit`. For a project-wide storage inventory use the operator CLI.
-
-If an existing project reports `postgres`, use the [COS migration procedure](../../../docs/operations/self-hosted-server.md#cos-业务内容迁移与删除任务). Read its inventory first. Within the user's migration authorization, upload and verify datasets and all draft/checkpoint/release documents, then switch references atomically. Retain drafts, stable IDs, annotations and history unless the user explicitly requests deletion. Never change the format flag by itself or silently continue through the legacy path.
-
-Before handover, confirm `storageFormat: "cos-v1"`, data references and row counts, saved values and filter behavior. Distinguish application deployment, project migration, and editor verification in the result.
-
 ## Edit, check and display
 
 1. For a new artifact submit `createTitle` and initial `operations` together. Use `dashboard_create` when importing a complete reviewed document or when an empty container is needed before data import. For an existing artifact read `dashboard_get`.
@@ -41,7 +33,7 @@ Read `dashboard_annotations` for comments and their original targets, then inspe
 
 Annotations save independently of design revisions. Preserve their original context across restoration. To change comments when requested, use `dashboard_annotations_update` with the exact previously read `expectedAnnotations` and the replacement `annotations`.
 
-Use the version controls in the editor or the operator CLI for history, restoration and publication. A restored version creates a new draft; save it before opening the preview.
+Use the editor's **版本与分享 → 版本** tab to view or restore a saved version. A restored version creates a new draft. Save it before opening the preview.
 
 ## Export and publication
 
@@ -50,19 +42,16 @@ Use the version controls in the editor or the operator CLI for history, restorat
 | JSON configuration or HTML snapshot | `dashboard_export`; deliver the returned local file or remote download link |
 | Full matching CSV rows | `dataset_export`; deliver the returned CSV |
 | Standalone static website ZIP | `dashboard_export_site`; deliver the returned ZIP |
-| Formal publication of a saved version | Read `dashboard_version_status`, then `dashboard_version_publish` |
-| Tencent cloud share | Publish the intended version, then `dashboard_share_publish` |
-| Replace or revoke an existing cloud share | `dashboard_share_replace` or `dashboard_share_delete` using its returned share ID |
+| Publish a saved version | Open **版本与分享 → 版本** and choose **发布此版本** |
+| Create, replace, or revoke a share | Open **版本与分享 → 分享** and choose the corresponding action |
 
-Run publication and sharing operations when requested. Cloud shares are independent copies with their own access key and expiration. Static website ZIPs contain the React application and used dataset shards. Remote file exports return managed download links.
+The editor uses the current published version when creating or replacing a share. Cloud shares are independent copies with their own access key and expiration. Static website ZIPs contain the React application and used dataset shards. Remote file exports return managed download links.
 
 Details: [static website export](../../../docs/operations/static-deployment.md), [self-hosted service and sharing](../../../docs/operations/self-hosted-server.md).
 
 ## Diagnose a failed delivery
 
-Use the operator CLI for `runtime_info` to locate the installed backend, UI build and project assets. `UI_UNAVAILABLE` requires building and packaging the UI resources using the repository's [local update procedure](../../../docs/operations/local-mcp-update.md).
-
-Give the request ID to the operator for `runtime_diagnostics` in the CLI. Correct the reported cause and repeat the failed step. Keep credentials and raw business rows out of logs.
+For `UI_UNAVAILABLE`, see the [local update procedure](../../../docs/operations/local-mcp-update.md). For service failures, give the operator the request ID and follow the project's [transport diagnostics](../../../docs/operations/mcp-transport-diagnostics.md). Correct the reported cause and repeat the failed step. Keep credentials and raw business rows out of logs.
 
 If a tool returns `transport.resourceUri`, read that MCP resource for the complete JSON. Chunk assembly is a client protocol, not an authoring step. For hosts with resource size limits use the complete configuration download client.
 

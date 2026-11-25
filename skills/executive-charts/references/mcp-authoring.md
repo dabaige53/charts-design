@@ -54,7 +54,7 @@ author build "$work/revision" --format submit --project-root "$project" --out "$
 - `manifest.sources` 记录实际来源；`manifest.datasets` 声明行粒度对应的字段类型，行或版本引用位于 `snapshot`。少量数据用 `put_dataset`；已有版本用 `{"meta":…,"ref":…}` 交给 `stage dataset`，它生成 `put_dataset_ref`。同一引用必须在目标项目可读。大数据使用[已有导入和上传工具](mcp-delivery.md#project-and-data)。
 - `manifest.metrics` 保存业务定义、聚合、单位、比例和精度。区分行粒度汇总、按实体去重和基期计算。用 `dashboard_view` 核对实际计算结果。图形、表格和下载都应能追溯到审查表上的定义。
 - 图形用 `kind=legacy`、`family=chart`，`config.code` 决定渲染器，`binding` 决定数据集、分类、系列及指标。预设的堆叠、排名、气泡和跨数据集联动示例见[动态编码](../../../docs/implementation/dynamic-encoding.md)。先核对每个目标的原生能力；缺少事件或状态语义时，记录影响、现有适配入口与验证条件。
-- `set_filters` 整体替换保存的筛选定义。读者临时选值通过 `dashboard_view.filters` 提交，从当前 manifest 复制完整的筛选数组，仅修改选中的 `values`，保留其他条件及每项的字段和消费者。原生 `in` 条件的空数组表示清除此条件。读取选项用 `dashboard_filter_options` 的 filterId、offset、limit；候选集与当前已选值分别验证。Markdown 月报有正文级及独立表内筛选时，使用 `filtered-report`，表内条件写 `scope:"table"` 并给一个表格消费者。
+- `set_filters` 整体替换保存的筛选定义。读者临时选值通过 `dashboard_view.filters` 提交，从当前 manifest 复制完整的筛选数组，仅修改选中的 `values`，保留其他条件及每项的字段和消费者。原生 `in` 条件的空数组表示清除此条件。读取选项用 `dashboard_filter_options` 的 filterId、offset、limit；候选集与当前已选值分别验证。Markdown 报告有正文级及独立表内筛选时，使用 `filtered-report`，表内条件写 `scope:"table"` 并给一个表格消费者。
 - 如果来源已经是本项目 schema-v1 workspace，先用[工作区命令](dashboard-workspace.md)维护拆分资产，并用 Runtime CLI 的 `--project-root … import-workspace ID --path DIR` 导入新看板。检查返回的 migrationNotes，核对原始筛选和组件的数据绑定后再验收。任意第三方 HTML 或 Excel 走[外部历史报表审查](existing-project-checklist.md#从外部历史报表迁入-mcp)。
 
 ## 核对、保存与导出
