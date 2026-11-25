@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
-from .model import DashboardError, identifier, require
+from .model import DashboardError, identifier, json_bytes, require
 
 SHARE_ID = re.compile(r'^[0-9a-f]{32}$')
 ACCESS_KEY = re.compile(r'^[0-9]{8}$')
@@ -29,6 +29,14 @@ def checked_id(value):
 
 def key_digest(key, salt):
     return hashlib.pbkdf2_hmac('sha256', key.encode(), bytes.fromhex(salt), 200000).hex()
+
+
+def share_storage_errors():
+    try:
+        from qcloud_cos.cos_exception import CosClientError, CosServiceError
+    except ImportError:
+        return (DashboardError, OSError)
+    return (DashboardError, OSError, CosClientError, CosServiceError)
 
 
 class CloudShares:
@@ -69,7 +77,77 @@ class CloudShares:
                 '分享已过期或已撤销', 'SHARE_EXPIRED')
         return control
 
-    def publish(self, service, board, expected_revision, expiration='7d', access_key=None, pages=None):
+    def quick_identity(self, service, board, args, expiration):
+        from .server import load_secret
+
+        project = getattr(service.store, 'project', None) or str(Path(service.project_root).resolve())
+        request = json_bytes([project, board, args.get('expectedRevision'), args.get('revision'),
+                              expiration, args['share']['requestId']])
+        configured = os.environ.get('CHARTS_SERVER_SECRET')
+        secret = configured.encode() if configured else load_secret(service.transport.path.parent / 'quick-share-secret')
+        share_id = hmac.new(secret, b'quick-share-id:' + request, hashlib.sha256).hexdigest()[:32]
+        key = hmac.new(secret, b'quick-share-key:' + request, hashlib.sha256).digest()
+        return share_id, f'{int.from_bytes(key, "big") % 100000000:08d}'
+
+    def quick_result(self, share_id, access_key, expiration):
+        # A response may have been lost after the share became active. Return
+        # the same link and key without storing the plaintext visitor key.
+        from .cloud_database import cloud_enabled
+
+        raw = self.storage.get(f'shares/{share_id}/control.json')
+        registered = None
+        if cloud_enabled():
+            from .cloud_assets import AssetDatabase
+            registered = AssetDatabase().call('share_access', id=share_id)
+            require(not registered or registered['state'] != 'revoked', 'Share was revoked', 'SHARE_EXPIRED')
+        if raw is None or (registered and registered['state'] == 'uploading'):
+            return None
+        control = json.loads(raw)
+        require(control['state'] == 'active' and
+                (control['expiresAt'] is None or time.time() < control['expiresAt']),
+                'Share has expired or been revoked', 'SHARE_EXPIRED')
+        require(not control.get('registered') or registered is not None, 'Share is unavailable', 'SHARE_UNAVAILABLE')
+        job = self.storage.get(f'jobs/{share_id}.json')
+        if job is None or json.loads(job)['state'] != 'active':
+            return None
+        return self._receipt(share_id, access_key, expiration, control['expiresAt'], control['revision'], control['pages'])
+
+    def _receipt(self, share_id, access_key, expiration, expires, revision, pages):
+        url = self.public_url + '/s/' + share_id + '/'
+        return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
+                'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
+                'revision': revision, 'pages': pages, 'cleanupExecutor': self.executor}
+
+    def _stage(self, share_id, job):
+        key = f'jobs/{share_id}.json'
+        raw = self.storage.get(key)
+        if raw is not None:
+            previous = json.loads(raw)
+            require(previous['revision'] == job['revision'], 'Share request targets another revision', 'REVISION_CONFLICT')
+            require(previous['state'] in ('uploading', 'active'), 'Share was revoked', 'SHARE_EXPIRED')
+            return {**previous, **job, 'expiresAt': previous['expiresAt'], 'stagingUntil': previous['stagingUntil'],
+                    'cleanupAfter': previous['cleanupAfter']}
+        self._put_json(key, job)
+        return job
+
+    def quick_target(self, share_id, board, expected, revision, draft_revision, expiration):
+        path = f'jobs/{share_id}.json'
+        raw = self.storage.get(path)
+        if raw is not None:
+            job = json.loads(raw)
+            require(job['state'] in ('uploading', 'active'), 'Share is unavailable', 'SHARE_UNAVAILABLE')
+            return job['expectedDraftRevision'], job['revision'], True
+        require(expected == draft_revision, 'Reload before publishing', 'REVISION_CONFLICT')
+        self.storage.check_private()
+        now = int(time.time())
+        lifetime = EXPIRATIONS[expiration]
+        self._put_json(path, {'shareId': share_id, 'state': 'uploading', 'dashboardId': board,
+                              'expectedDraftRevision': expected, 'revision': revision,
+                              'expiresAt': now + lifetime if lifetime is not None else None,
+                              'stagingUntil': now + 3600, 'cleanupAfter': now + 3600, 'pages': []})
+        return expected, revision, False
+
+    def publish(self, service, board, expected_revision, expiration='7d', access_key=None, pages=None, *, share_id=None):
         require(expiration in EXPIRATIONS, 'expiration must be never, 7d or 30d', 'INVALID_ARGUMENT')
         access_key = access_key if access_key is not None else f'{secrets.randbelow(100000000):08d}'
         require(isinstance(access_key, str) and bool(ACCESS_KEY.fullmatch(access_key)),
@@ -105,9 +183,14 @@ class CloudShares:
                 'Confirm a successful six-hour cloud cleanup invocation before publishing',
                 'CLOUD_CLEANER_UNAVAILABLE')
         self.storage.check_private()
+        if share_id is not None:
+            previous = self.quick_result(share_id, access_key, expiration)
+            if previous is not None:
+                return previous
+        share_id = share_id or uuid.uuid4().hex
         if getattr(service.store, 'cos_enabled', False):
-            return self._publish_cos(service, documents, expiration, access_key)
-        share_id, now = uuid.uuid4().hex, int(time.time())
+            return self._publish_cos(service, documents, expiration, access_key, share_id)
+        now = int(time.time())
         lifetime = EXPIRATIONS[expiration]
         expires = now + lifetime if lifetime is not None else None
         owner = hashlib.sha256(str(Path(service.project_root or service.store.root).resolve()).encode()).hexdigest()
@@ -115,7 +198,9 @@ class CloudShares:
         job = {'shareId': share_id, 'state': 'uploading', 'cleanupAfter': now + 3600,
                'stagingUntil': now + 3600, 'expiresAt': expires, 'owner': owner, 'dashboardId': board,
                'revision': doc['revision'], 'pages': registered_pages}
-        self._put_json('jobs/' + share_id + '.json', job)
+        job = self._stage(share_id, job)
+        expires = job['expiresAt']
+        now = job['stagingUntil'] - 3600
         registry = getattr(service.store, 'assets', None)
         if registry:
             registry.call('share_register', id=share_id, pages=registered_pages, state='uploading', expiresAt=expires)
@@ -178,10 +263,7 @@ class CloudShares:
             if registry:
                 registry.call('share_register', id=share_id, pages=registered_pages, state='active',
                               expiresAt=expires, bytes=sum(path.stat().st_size for path in site.rglob('*') if path.is_file()))
-        url = self.public_url + '/s/' + share_id + '/'
-        return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
-                'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
-                'revision': doc['revision'], 'pages': entries, 'cleanupExecutor': self.executor}
+        return self._receipt(share_id, access_key, expiration, expires, doc['revision'], entries)
 
     def index_project(self, store):
         """Register old publications, including every page of a multi-page share."""
@@ -203,11 +285,11 @@ class CloudShares:
                               expiresAt=job['expiresAt'], bytes=size,
                               stagingUntil=job.get('stagingUntil', job.get('cleanupAfter')))
 
-    def _publish_cos(self, service, documents, expiration, access_key):
+    def _publish_cos(self, service, documents, expiration, access_key, share_id):
         from .assets import DIST, FAVICON_LINK, require_preview
         from .cos_view import web_document
         require_preview()
-        share_id, now = uuid.uuid4().hex, int(time.time())
+        now = int(time.time())
         lifetime = EXPIRATIONS[expiration]
         expires = now + lifetime if lifetime is not None else None
         owner = hashlib.sha256(str(Path(service.project_root).resolve()).encode()).hexdigest()
@@ -215,11 +297,14 @@ class CloudShares:
                   'path': 'document.json' if index == 0 else f'pages/{board}/document.json'}
                  for index, (board, doc) in enumerate(documents)]
         assets = service.store.assets
-        assets.call('share_register', id=share_id, pages=pages, state='uploading', expiresAt=expires)
         job = {'shareId': share_id, 'state': 'uploading', 'cleanupAfter': now + 3600,
                'stagingUntil': now + 3600, 'expiresAt': expires, 'owner': owner, 'dashboardId': pages[0]['id'],
                'revision': pages[0]['revision'], 'pages': pages}
-        self._put_json('jobs/' + share_id + '.json', job)
+        job = self._stage(share_id, job)
+        expires = job['expiresAt']
+        now = job['stagingUntil'] - 3600
+        assets.call('share_register', id=share_id, pages=pages, state='uploading', expiresAt=expires,
+                    stagingUntil=job['stagingUntil'])
         files, asset_files, total = [], {}, 0
         def put(name, raw, kind):
             nonlocal total
@@ -245,10 +330,7 @@ class CloudShares:
         self._put_json('shares/' + share_id + '/control.json', control)
         self._put_json('jobs/' + share_id + '.json', {**job, 'state': 'active', 'cleanupAfter': expires})
         assets.call('share_register', id=share_id, pages=pages, state='active', expiresAt=expires, bytes=total)
-        url = self.public_url + '/s/' + share_id + '/'
-        return {'shareId': share_id, 'url': url, 'accessUrl': url + '#key=' + access_key,
-                'accessKey': access_key, 'expiration': expiration, 'expiresAt': expires,
-                'revision': pages[0]['revision'], 'pages': pages, 'cleanupExecutor': self.executor}
+        return self._receipt(share_id, access_key, expiration, expires, pages[0]['revision'], pages)
 
     def authenticate(self, share_id, key):
         control = self.control(share_id)

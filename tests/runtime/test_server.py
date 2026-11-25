@@ -336,6 +336,7 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
         assert post(api + 'dashboard_get', {'dashboardId': 'other'}, token)[0] == 403
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'x'}]}, token)[0] == 403
         assert post(api + 'dashboard_submit', {'dashboardId': 'exec', 'expectedRevision': 1}, token)[0] == 403
+        assert post(api + 'dashboard_publish', {'dashboardId': 'exec'}, token)[0] == 403
         assert post(api + 'dashboard_list', {}, token)[1]['dashboards'] == [{'id': 'exec', 'revision': 1, 'title': value['document']['manifest']['title']}]
         info = post(api + 'runtime_info', {}, token)[1]
         assert 'moduleRoot' not in info and 'processId' not in info and info['projectRoot'] == 'sales'
@@ -353,7 +354,8 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
         assert status == 200 and '/edit/sales/exec#token=' in edit['url']
         edit_token = edit['url'].split('#token=')[1]
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Edited by link'}]}, edit_token)[0] == 200
-        assert post(api + 'dashboard_submit', {'dashboardId': 'exec', 'expectedRevision': 2}, edit_token)[1]['checkpoint']['revision'] == 2
+        published = post(api + 'dashboard_publish', {'dashboardId': 'exec', 'expectedRevision': 2}, edit_token)[1]
+        assert published['publishedRevision'] == published['versionStatus']['savedRevision'] == 2
         for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open',
                      'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
             status, denied = post(api + tool, {'dashboardId': 'exec'}, edit_token)

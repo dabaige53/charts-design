@@ -13,6 +13,8 @@ Write a report that answers the user's question with traceable data and figures.
 
 Read [shared MCP delivery](../executive-charts/references/mcp-delivery.md) for project routing and the editing flow. On an existing report, read `dashboard_get`, its Markdown, referenced components and data before changing it.
 
+For an explicit publication request, use `dashboard_publish` once. Include `share` when the user requests a visitor link.
+
 For interactive reports, use the shared [filter and selection defaults](../executive-charts/references/design_standards.md#操作与更新) for report-level and table-level controls.
 
 Inspect the source's grain, time range, units and calculations. Register sources, datasets and metrics so figures and prose use the same definitions. Read [metric definitions](../executive-charts/references/metric-definitions.md) when defining calculations.

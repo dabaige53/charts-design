@@ -8,6 +8,33 @@ Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: wi
 Object.defineProperty(globalThis, "NodeFilter", { configurable: true, value: window.NodeFilter });
 afterEach(cleanup);
 
+// @wu-test type=integration | scope=VersionCenter 快速发布 | protects=编辑器串行调用保存和发布或分享失败重试生成新请求
+it("uses one publication call and reuses the share request on retry", async () => {
+  const doc = { id: "board", revision: 3, manifest: { title: "Board", components: {}, datasets: {} } } as Document;
+  const status = { draftRevision: 3, savedRevision: 2, publishedRevision: 2, releases: [] };
+  let attempts = 0;
+  const call = mock(async (name: string, _args?: Config) => {
+    if (name === "dashboard_version_status") return status;
+    if (name === "dashboard_history") return { history: [] };
+    if (name !== "dashboard_publish") throw Error(`Unexpected tool ${name}`);
+    const receipt = { ok: true, publishedRevision: 3, versionStatus: { ...status, savedRevision: 3, publishedRevision: 3 } };
+    return ++attempts === 1
+      ? { ...receipt, shareError: { message: "存储暂不可用" } }
+      : { ...receipt, share: { url: "https://example.org/share", accessKey: "12345678" } };
+  });
+  render(<VersionCenter open onOpenChange={() => {}} document={doc} call={call} onRestore={async () => {}} onSaved={async () => {}} />);
+  const button = await screen.findByRole("button", { name: "发布当前草稿" }) as HTMLButtonElement;
+  await waitFor(() => expect(button.disabled).toBe(false));
+  fireEvent.click(screen.getByRole("checkbox", { name: "同时生成分享链接" }));
+  fireEvent.click(button);
+  await screen.findByText("版本 3 已发布。分享链接生成失败：存储暂不可用");
+  fireEvent.click(button);
+  await screen.findByRole("link", { name: "https://example.org/share" });
+  const actions = call.mock.calls.slice(2);
+  expect(actions.map(([name]) => name)).toEqual(["dashboard_publish", "dashboard_publish"]);
+  expect(actions[0][1]).toEqual(actions[1][1]);
+});
+
 // @wu-test type=integration | scope=VersionCenter 删除历史 | protects=删除影响未返回时无反馈或未确认就删除最新版本
 it("shows pending impact and requires confirmation before deleting the latest checkpoint", async () => {
   const doc = { id: "board", revision: 3, manifest: { title: "Board", components: {}, datasets: {} } } as Document;

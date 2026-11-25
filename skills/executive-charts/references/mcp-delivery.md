@@ -42,10 +42,11 @@ Use the editor's **版本与分享 → 版本** tab to view or restore a saved v
 | JSON configuration or HTML snapshot | `dashboard_export`; deliver the returned local file or remote download link |
 | Full matching CSV rows | `dataset_export`; deliver the returned CSV |
 | Standalone static website ZIP | `dashboard_export_site`; deliver the returned ZIP |
-| Publish a saved version | Open **版本与分享 → 版本** and choose **发布此版本** |
-| Create, replace, or revoke a share | Open **版本与分享 → 分享** and choose the corresponding action |
+| Publish the current draft or a specific saved version | Call `dashboard_publish` once. Omit `revision` to publish the current draft. |
+| Publish and return a visitor link | Call `dashboard_publish` once with `share`, including a new UUID v4 `requestId`. Omit `expiration` for a seven-day link. |
+| Manage existing shares | Open **版本与分享 → 分享** in the editor. |
 
-The editor uses the current published version when creating or replacing a share. Cloud shares are independent copies with their own access key and expiration. Static website ZIPs contain the React application and used dataset shards. Remote file exports return managed download links.
+The publication tool checks and saves the draft if needed. From the editor, use **版本与分享 → 版本 → 发布当前草稿** and select **同时生成分享链接** when needed. Each share is an independent copy with its own key and expiration. If the receipt contains `shareError`, report the published revision and link failure. Retry the same call with the same arguments and `share.requestId` when retrying link generation. Static website ZIPs contain the React application and used dataset shards. Remote file exports return managed download links.
 
 Details: [static website export](../../../docs/operations/static-deployment.md), [self-hosted service and sharing](../../../docs/operations/self-hosted-server.md).
 

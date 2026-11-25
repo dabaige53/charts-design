@@ -72,7 +72,7 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 
 工具定义由 `tool_contract.py` 维护，输入结构说明参数来源、默认值和替换影响。修改定义时同步发现资源与调用方，不在文档手工复制工具枚举。
 
-同一连接提供编辑、查询、展示、导出和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。历史、发布和分享由项目管理界面与程序调用处理。
+同一连接提供编辑、查询、展示、导出、快速发布和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。历史和已有分享由编辑器管理。
 
 ## 编辑与结果确认
 
@@ -81,6 +81,8 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 所有连接的 `tools/list` 返回同一套 Agent 工具。需要为 COS 数据集分片时，在当前连接调用 `dataset_repartition`。使用 CLI 执行存储盘点、上传暂存清理及存储迁移。直连服务为现有页面和上传程序保留协议回调，参数见 `charts://contract` 的 `clientTools`。
 
 项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。批注独立调用 `dashboard_annotations_update`，不创建设计版本。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
+
+用户要求发布时，调用一次 `dashboard_publish`。服务端检查发布目标，按需保存草稿，设为当前发布版本。显式传 `revision` 可选择历史保存版本，显式传 `share` 可同时生成独立访问链接。响应中的 `shareError` 表示版本已发布，链接生成失败。沿用相同参数和 `share.requestId` 重试分享。编辑器调用同一工具。
 
 `dashboard_get` 读取可编辑草稿，`dashboard_view` 返回实际计算结果。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态。
 

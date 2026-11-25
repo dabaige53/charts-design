@@ -30,6 +30,8 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   const [shares, setShares] = useState<Config[]>([]);
   const [expiration, setExpiration] = useState("7d");
   const [newShare, setNewShare] = useState<Config | null>(null);
+  const [publishWithShare, setPublishWithShare] = useState(false);
+  const pendingShare = useRef<{ target: string; requestId: string; expectedRevision: number } | null>(null);
   const refresh = useCallback(async () => {
     const [versions, saved] = await Promise.all([
       call("dashboard_version_status", { dashboardId: document.id }),
@@ -70,6 +72,33 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
     const list = await call("dashboard_list");
     setAvailablePages(list.dashboards.filter((page: Config) => page.id !== document.id));
   };
+  const quickPublish = async (revision?: number, withShare = false) => {
+    const args: Config = { dashboardId: document.id, expectedRevision: status?.draftRevision };
+    if (revision !== undefined) args.revision = revision;
+    if (withShare) {
+      const target = JSON.stringify([document.id, revision, expiration]);
+      if (target !== pendingShare.current?.target) {
+        pendingShare.current = { target, requestId: crypto.randomUUID(), expectedRevision: args.expectedRevision };
+      }
+      args.expectedRevision = pendingShare.current.expectedRevision;
+      args.share = { expiration, requestId: pendingShare.current.requestId };
+    }
+    const result = await call("dashboard_publish", args);
+    if (!result.ok) throw Error(result.error?.message || "发布失败");
+    setStatus(result.versionStatus);
+    setHistory((items) => {
+      const byRevision = new Map<number, Config>(items.map((item) => [item.revision, item]));
+      for (const release of result.versionStatus.releases || []) {
+        if (!byRevision.has(release.revision)) byRevision.set(release.revision, release);
+      }
+      return [...byRevision.values()].sort((a, b) => b.revision - a.revision);
+    });
+    if (result.shareError) throw Error(`版本 ${result.publishedRevision} 已发布。分享链接生成失败：${result.shareError.message}`);
+    if (result.share) {
+      setNewShare(result.share);
+      pendingShare.current = null;
+    }
+  };
   return <><Sheet open={open} onOpenChange={onOpenChange}>
     <SheetContent className="overflow-y-auto sm:max-w-xl">
       <SheetHeader>
@@ -85,6 +114,12 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
         </div>
         {error && <p role="alert" className="text-destructive">{error}</p>}
         {pendingAction && <p role="status">{pendingAction}</p>}
+        {newShare && <div className="rounded-lg border p-3">
+          <a className="break-all text-primary underline underline-offset-4" href={newShare.accessUrl || newShare.url}
+            target="_blank" rel="noreferrer">{newShare.accessUrl || newShare.url}</a>
+          <p className="mt-2">访问密钥：<strong>{newShare.accessKey}</strong></p>
+          <p className="mt-1 text-xs text-muted-foreground">请保存密钥；关闭后无法再次查看。</p>
+        </div>}
         {deleteResult?.state === "complete" && <p role="status">已删除，专属文件清理完成。</p>}
         {(status?.deletionJobs || []).map((job: Config) => <div key={job.id} role="status" className="rounded-lg border p-3">
           <p>版本 {job.revision} · {job.state === "failed" ? "访问已撤销，文件清理未完成" : "正在删除文件"}</p>
@@ -99,6 +134,19 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
             <Badge variant="outline">草稿 {status?.draftRevision ?? document.revision}</Badge>
             <Badge variant="outline">已保存 {status?.savedRevision ?? "—"}</Badge>
             <Badge>当前发布 {status?.publishedRevision ?? "未发布"}</Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button disabled={busy || !status} onClick={() => void run(() => quickPublish(undefined, publishWithShare), "正在发布…")}>
+              发布当前草稿
+            </Button>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={publishWithShare} disabled={busy} onChange={(event) => setPublishWithShare(event.target.checked)} />
+              同时生成分享链接
+            </label>
+            {publishWithShare && <select aria-label="分享有效期" className="rounded-md border bg-background px-3" disabled={busy}
+              value={expiration} onChange={(event) => setExpiration(event.target.value)}>
+              <option value="7d">7 天过期</option><option value="30d">30 天过期</option><option value="never">不过期</option>
+            </select>}
           </div>
           <div className="flex gap-2">
             <Input aria-label="版本名称" placeholder="版本名称（可选）" value={name} onChange={(e) => setName(e.target.value)} />
@@ -125,10 +173,8 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => {
                   await onRestore(item.revision); await refresh(); setPreview(null);
                 })}><RotateCcw />恢复为草稿</Button>
-                <Button size="sm" disabled={busy || status?.publishedRevision === item.revision} onClick={() => void run(async () => {
-                  await call("dashboard_version_publish", { dashboardId: document.id, expectedRevision: status?.draftRevision, revision: item.revision });
-                  await refresh();
-                })}><Send />发布此版本</Button>
+                <Button size="sm" disabled={busy || status?.publishedRevision === item.revision}
+                  onClick={() => void run(() => quickPublish(item.revision), "正在发布…")}><Send />发布此版本</Button>
                 <Button size="sm" variant="outline" className="text-destructive hover:text-destructive"
                   disabled={busy}
                   onClick={() => void run(async () => {
@@ -171,12 +217,6 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
               await loadShares();
             })}>新建分享</Button>
           </div>
-          {newShare && <div className="rounded-lg border p-3">
-            <a className="break-all text-primary underline underline-offset-4" href={newShare.accessUrl || newShare.url}
-              target="_blank" rel="noreferrer">{newShare.accessUrl || newShare.url}</a>
-            <p className="mt-2">访问密钥：<strong>{newShare.accessKey}</strong></p>
-            <p className="mt-1 text-xs text-muted-foreground">请保存密钥；关闭后无法再次查看。</p>
-          </div>}
           {shares.map((share) => <article key={share.shareId} className="rounded-lg border p-3">
             <p>{share.pages?.length > 1 ? `包含 ${share.pages.length} 个页面 · ` : ""}版本 {share.revision} · {share.expiresAt ? new Date(share.expiresAt * 1000).toLocaleString() : "不过期"}</p>
             <p className="my-2 text-xs text-muted-foreground">{share.cleanupState === "pending" ? "等待云端清理" : share.state === "active" ? "可访问" : share.state}</p>

@@ -154,14 +154,14 @@ MAINTENANCE_TOOLS = frozenset({
     'dashboard_migrate', 'dashboard_migration_rollback',
 })
 AUTHOR_TOOLS = frozenset({
-    'dashboard_list', 'dashboard_get', 'dashboard_create', 'dashboard_submit', 'dashboard_preview',
+    'dashboard_list', 'dashboard_get', 'dashboard_create', 'dashboard_submit', 'dashboard_preview', 'dashboard_publish',
     'dashboard_view', 'dashboard_filter_options', 'component_data', 'dashboard_annotations',
     'dashboard_annotations_update', 'dataset_import', 'dataset_attach', 'query_execute',
     'chart_recommend', 'chart_declarations', 'statistical_render',
     'dashboard_export', 'dataset_export', 'dashboard_export_site', 'dataset_repartition',
 })
 DESTRUCTIVE = {
-    'dashboard_patch', 'dashboard_submit', 'dashboard_annotations_update', 'dashboard_restore', 'dataset_import', 'dataset_attach',
+    'dashboard_patch', 'dashboard_submit', 'dashboard_publish', 'dashboard_annotations_update', 'dashboard_restore', 'dataset_import', 'dataset_attach',
     'query_execute', 'dashboard_migrate', 'dashboard_migration_rollback',
     'dashboard_checkpoint', 'dashboard_edit_finish', 'dashboard_version_label',
     'dashboard_share_revoke',
@@ -183,6 +183,20 @@ WRITE_FLOW = ' In project mode this saves a draft: use dashboard_submit with the
 TRANSFER_ENCODING = described({'type': 'string', 'enum': [BULK_ENCODING]},
                               'Use for all calls of a bulk upload. Omit for legacy 250-row JSON chunks.')
 TOOLS = {
+    'dashboard_publish': ('Publish a dashboard or report in one call after an explicit user request. '
+        'The service checks and saves the current draft if necessary, then publishes it. '
+        'Supply revision only to publish a specific saved version. Supply share only when a visitor link is requested. '
+        'Returns publishedRevision and, if requested, either share or shareError. '
+        'When retrying an interrupted share, reuse the same arguments and share.requestId.', schema({
+        'dashboardId': BOARD['dashboardId'],
+        'expectedRevision': described(INT, 'Draft revision if already known. Omit to use the current draft at the start of the request.'),
+        'revision': described(INT, 'Specific saved revision to publish. Omit to publish the current draft.'),
+        'share': described(schema({
+            'requestId': described({'type': 'string', 'pattern': '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'},
+                                   'New random UUID v4 for this share request. Reuse it only to retry this request.'),
+            'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'}, 'Visitor link lifetime. Defaults to seven days.'),
+        }, ('requestId',)), 'Create one independent read-only share link with a visitor key.'),
+    }, ('dashboardId',))),
     'dashboard_submit': ('Submit related design changes once. Applies operations atomically to the expected draft, checks all components and saves one checkpoint. Omit operations to check and save an already reviewed draft (e.g. after importing data). Never publishes or shares. On DOCTOR_FAILED the changed draft remains; fix it at the returned revision. On conflict or uncertain outcome inspect current state before retrying.', schema({
         'dashboardId': BOARD['dashboardId'], 'expectedRevision': EXPECTED,
         'createTitle': described({'type': 'string', 'minLength': 1}, 'Create a new dashboard and submit its initial operations in this call. An existing ID is rejected. On failure read dashboard_get before retrying.'),

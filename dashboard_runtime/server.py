@@ -62,7 +62,7 @@ VIEW_TOOLS = frozenset({
 })
 # An edit link additionally saves layout, titles, descriptions and checkpoints.
 EDIT_TOOLS = VIEW_TOOLS | frozenset({
-    'dashboard_submit', 'dashboard_annotations_update', 'dashboard_patch', 'dashboard_edit_begin', 'dashboard_edit_finish', 'dashboard_checkpoint',
+    'dashboard_submit', 'dashboard_publish', 'dashboard_annotations_update', 'dashboard_patch', 'dashboard_edit_begin', 'dashboard_edit_finish', 'dashboard_checkpoint',
     'dashboard_validate', 'dashboard_doctor', 'dashboard_history', 'dashboard_history_diff',
     'dashboard_restore', 'dashboard_version_label', 'runtime_diagnostics', 'dashboard_export_site',
     'dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish', 'dashboard_version_delete',

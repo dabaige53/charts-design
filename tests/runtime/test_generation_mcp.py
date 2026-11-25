@@ -162,3 +162,39 @@ def test_filtered_report_over_stdio(tmp_path):
                 assert doc['manifest']['report']['markdown'] == case['markdown']
                 assert [f['componentIds'] for f in doc['manifest']['filters']] == [['table-a', 'table-b'], ['table-a', 'table-b'], ['table-a'], ['table-b']]
     asyncio.run(check())
+
+
+# @wu-test type=integration | scope=dashboard_publish MCP | protects=一次调用无法保存并发布草稿或将过期预期版本覆盖为正式版本
+def test_publish_current_and_historical_report_over_stdio(tmp_path):
+    async def check():
+        params = StdioServerParameters(command=sys.executable, args=['-m', 'dashboard_runtime',
+            '--project-root', str(tmp_path / 'project'), '--runtime-root', str(tmp_path / 'state'), 'mcp'])
+        board = {'dashboardId': 'report'}
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            names = {tool.name for tool in (await session.list_tools()).tools}
+            assert 'dashboard_publish' in names
+            assert not names & {'dashboard_checkpoint', 'dashboard_version_publish', 'dashboard_share_publish'}
+
+            async def call(name, args):
+                result = await session.call_tool(name, {**board, **args})
+                assert not result.isError and result.structuredContent is not None, result
+                return result.structuredContent
+
+            await call('dashboard_create', {'title': 'Report'})
+            await call('dashboard_patch', {'expectedRevision': 1, 'operations': [
+                {'op': 'set_view_mode', 'value': 'report'},
+                {'op': 'set_report_markdown', 'value': '# Review\n\nA verified sample.'},
+            ]})
+            published = await call('dashboard_publish', {})
+            assert published['publishedRevision'] == published['versionStatus']['savedRevision'] == 2
+            assert 'share' not in published
+            stale = await session.call_tool('dashboard_publish', {**board, 'expectedRevision': 1})
+            assert stale.isError and stale.structuredContent is not None
+            assert stale.structuredContent['error']['code'] == 'REVISION_CONFLICT'
+            historical = await call('dashboard_publish', {'revision': 1, 'expectedRevision': 2})
+            assert historical['publishedRevision'] == 1
+            assert historical['versionStatus']['draftRevision'] == 2
+            assert [entry['revision'] for entry in historical['versionStatus']['releases']] == [1, 2]
+
+    asyncio.run(check())

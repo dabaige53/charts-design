@@ -148,6 +148,66 @@ class Service:
         write_json(self.transport.path.parent / 'doctor' / (board+'.json'), report)
         return report
 
+    def _publish(self, args):
+        from jsonschema import ValidationError, validate as validate_schema
+        from .cloud_shares import CloudShares, share_storage_errors
+        from .versions import Versions
+
+        try:
+            validate_schema(args, TOOLS['dashboard_publish'][1])
+        except ValidationError as error:
+            raise DashboardError('INVALID_ARGUMENT', error.message) from error
+        require(self.project_root is not None, 'Publish requires a project', 'PROJECT_REQUIRED')
+        board = args['dashboardId']
+        versions = Versions(self.store)
+        status = versions.status(board)
+        share_options = args.get('share')
+        expected = int(args.get('expectedRevision', status['draftRevision']))
+        revision = int(args.get('revision', expected))
+        already_published = False
+        prepared_share = None
+        if share_options is not None:
+            storage_errors = share_storage_errors()
+            expiration = share_options.get('expiration', '7d')
+            try:
+                shares = CloudShares.from_environment()
+                share_id, access_key = shares.quick_identity(self, board, args, expiration)
+                previous = shares.quick_result(share_id, access_key, expiration)
+                if previous is not None:
+                    return {'ok': True, 'dashboardId': board, 'publishedRevision': previous['revision'],
+                            'versionStatus': status, 'share': previous}
+                expected, revision, resuming = shares.quick_target(share_id, board, expected, revision,
+                                                                   status['draftRevision'], expiration)
+            except DashboardError:
+                raise
+            except storage_errors as error:
+                raise DashboardError('CLOUD_STORAGE_FAILED', 'Could not prepare the share request.', 503) from error
+            prepared_share = shares, expiration, access_key, share_id, storage_errors
+            already_published = resuming and status['publishedRevision'] == revision
+
+        if not already_published:
+            require(expected == status['draftRevision'], 'Reload before publishing', 'REVISION_CONFLICT')
+            if 'revision' not in args and status['savedRevision'] != revision:
+                saved = self._call('dashboard_checkpoint', {'dashboardId': board, 'expectedRevision': expected})
+                if not saved['ok']:
+                    return saved
+            else:
+                report = self._doctor(versions.read(board, revision), 'full', reuse=True)
+                if not report['passed']:
+                    return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
+                            'message': 'Version checks failed; the published version was not changed.'}, 'doctor': report}
+            status = versions.publish(board, expected, revision)
+        result = {'ok': True, 'dashboardId': board, 'publishedRevision': revision, 'versionStatus': status}
+        if prepared_share is not None:
+            shares, expiration, access_key, share_id, storage_errors = prepared_share
+            try:
+                result['share'] = shares.publish(self, board, revision, expiration, access_key, share_id=share_id)
+            except DashboardError as error:
+                result['shareError'] = error.as_dict()['error']
+            except storage_errors:
+                result['shareError'] = {'code': 'CLOUD_STORAGE_FAILED', 'message': 'Share storage request failed.'}
+        return result
+
     def _call(self, tool, args):
         require(isinstance(args, dict), 'Tool arguments must be an object')
         if tool == 'runtime_keepalive':
@@ -166,6 +226,8 @@ class Service:
             self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
+        if tool == 'dashboard_publish':
+            return self._publish(args)
         if tool == 'dashboard_annotations_update':
             updated = self._call('dashboard_patch', {
                 'dashboardId': board, 'expectedRevision': args['expectedRevision'],
