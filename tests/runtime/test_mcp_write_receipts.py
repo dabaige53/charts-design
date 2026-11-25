@@ -72,6 +72,8 @@ def test_write_receipts_preserve_storage_and_revision_flow(tmp_path):
                                       datasetId='sales', rows=[{'month': 'July', 'revenue': 100}])
                 assert imported['revision'] == 3 and imported['counts']['datasets'] == 1
                 assert imported['counts']['metrics'] == 1
+                assert imported['dataset']['id'] == 'sales' and imported['dataset']['rowCount'] == 1
+                assert imported['dataset']['version']
                 assert 'document' not in imported
                 finished = await call('dashboard_edit_finish', expectedRevision=imported['revision'],
                                       batchId=begun['batch_id'])

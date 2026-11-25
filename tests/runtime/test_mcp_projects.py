@@ -11,6 +11,7 @@ import pytest
 pytest.importorskip('mcp')
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.shared.exceptions import McpError
 from mcp.types import TextResourceContents
 from pydantic import AnyUrl
 
@@ -37,7 +38,7 @@ async def call(session, name, project=None, **args):
     return value
 
 
-# @wu-test type=integration | scope=MCP多项目 | protects=同ID看板批注分块串数据或刷新临时筛选被保存
+# @wu-test type=integration | scope=MCP多项目 | protects=同ID看板批注、响应资源或分片串项目，或刷新误存筛选
 def test_one_connection_handles_two_projects_and_restart(tmp_path):
     first, second = tmp_path / 'first', tmp_path / 'second'
 
@@ -86,12 +87,12 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                 assert relative.structuredContent is not None
                 assert relative.structuredContent['error']['code'] == 'INVALID_PROJECT'
 
-                batch = await call(session, 'dashboard_edit_begin', first, dashboardId='same', expectedRevision=1)
                 note = {'id': 'note', 'componentId': None, 'text': 'First only', 'createdAt': '2026-11-02'}
-                await call(session, 'dashboard_patch', first, dashboardId='same', expectedRevision=1,
-                    operations=[{'op': 'set_title', 'value': 'Updated first'}, {'op': 'set_annotations', 'value': [note]}])
-                done = await call(session, 'dashboard_edit_finish', first, dashboardId='same',
-                    expectedRevision=2, batchId=batch['batch_id'])
+                annotated = await call(session, 'dashboard_annotations_update', first, dashboardId='same',
+                                       expectedRevision=1, expectedAnnotations=[], annotations=[note])
+                assert annotated['revision'] == 1
+                done = await call(session, 'dashboard_submit', first, dashboardId='same', expectedRevision=1,
+                                  operations=[{'op': 'set_title', 'value': 'Updated first'}])
                 assert done['ok']
                 assert done['nextAction'] == 'dashboard_preview'
                 assert done['displayPolicy'] == 'saved-dashboard-ui'
@@ -106,6 +107,11 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
                     responseMode='full', operations=[{'op': 'set_report_markdown', 'value': text}])
                 assert packed['projectRoot'] == str(first)
                 transfer = packed['transport']
+                resource = (await session.read_resource(AnyUrl(transfer['resourceUri']))).contents[0]
+                assert isinstance(resource, TextResourceContents)
+                assert json.loads(resource.text)['document']['manifest']['report']['markdown'] == text
+                with pytest.raises(McpError, match='unavailable'):
+                    await session.read_resource(AnyUrl(transfer['resourceUri'].replace('first', 'second')))
                 wrong = await session.call_tool('runtime_result_chunk', {'projectRoot': str(second),
                     'requestId': transfer['requestId'], 'index': 0})
                 assert wrong.isError
@@ -133,6 +139,27 @@ def test_one_connection_handles_two_projects_and_restart(tmp_path):
             assert 'projectRoot' not in draft
             assert (project / 'data' / 'data.sqlite3').exists()
 
+    asyncio.run(check())
+
+
+# @wu-test type=boundary | scope=MCP工具发现 | protects=创作连接暴露发布或维护操作，或发布连接丢失发布入口
+@pytest.mark.parametrize('mode', ['author', 'model', 'release', 'maintenance'])
+def test_storage_maintenance_mode(tmp_path, monkeypatch, mode):
+    monkeypatch.setenv('CHARTS_MCP_MODE', mode)
+
+    async def check():
+        async with stdio_client(parameters(tmp_path)) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                names = {tool.name for tool in (await session.list_tools()).tools}
+                assert ('dataset_repartition' in names) == (mode == 'maintenance')
+                assert ('dashboard_patch' in names) == (mode in {'author', 'maintenance'})
+                assert ('dashboard_version_publish' in names) == (mode != 'model')
+                assert ('semantic_inspect' in names) == (mode in {'author', 'maintenance'})
+                assert 'dashboard_submit' in names
+                if mode != 'maintenance':
+                    denied = await session.call_tool('dataset_storage_inventory', {})
+                    assert denied.isError and denied.structuredContent and denied.structuredContent['error']['code'] == 'UNKNOWN_TOOL'
     asyncio.run(check())
 
 

@@ -13,11 +13,11 @@
 
 每次 MCP 项目调用都显式传入 `projectRoot`，值为报表资产目录的绝对路径；包括案例与声明发现、读取、编辑、诊断和分块读取。以下示例省略重复参数。旧启动默认项目仅用于兼容，不沿用上一次调用的项目。
 
-1. `generation_examples {}` 发现看板与报告案例；`generation_examples {"caseId":"academic-report"}` 返回母稿 Markdown、明确标注的合成来源、数据/指标/图表声明及完整 `operations`。
-2. 按需要使用 `chart_recommend {"intent":"trend","measures":1}` 按问题与数据形态排列候选图表；`chart_declarations {}` 发现类型索引与指标卡选型 `kpiGuide`，`chart_declarations {"code":"c01"}` 阅读所选声明要求与工作示例；`layout_templates {}` 选择构图；`charts://contract` 阅读操作合同。相应资源为 `charts://declarations`、`charts://catalog`、`charts://layouts`。
-3. `dashboard_create {"dashboardId":"my-report","title":"我的分析报告"}` 建立空白文档，取得 revision。
-4. 用当前 `expectedRevision` 调用 `dashboard_edit_begin` 开始或恢复编辑批次，保存返回的批次 ID。调用方根据自己的数据和问题编写内容，并通过一次或多次 `dashboard_patch` 提交 `put_source`、`put_dataset`、`put_metric`、`put_component`、`set_report_markdown`、`set_view_mode=report`。传入当前 `expectedRevision`。组件与 Markdown 引用在整批操作结束后统一校验，创建与嵌入可以在同一批完成。
-5. 调用 `dashboard_edit_finish` 结束编辑批次。成功后返回 `nextAction=dashboard_preview` 与 `displayPolicy=saved-dashboard-ui`，再打开一次已保存预览。
+1. 从 `charts://examples` 发现看板与报告案例。`charts://examples/academic-report` 提供母稿 Markdown、合成来源、数据、指标、图表声明及完整 `operations`。
+2. 按需要使用 `chart_recommend {"intent":"trend","measures":1}` 排列候选图表。通过 `chart_declarations {"code":"c01"}` 阅读所选声明要求与示例，从 `charts://layouts` 选择构图，从 `charts://contract` 阅读操作合同。
+3. 新报告选择 ID 与标题，已有报告用 `dashboard_get` 读取当前修订。
+4. 用 `dashboard_submit` 提交相关声明操作。新报告传 `createTitle`，修改已有报告传 `expectedRevision`。组件、指标与 Markdown 引用在同一组操作完成后统一校验，服务端检查草稿并保存。
+5. 成功后按 `nextAction=dashboard_preview` 打开已保存预览。若完整检查失败，读取保留的草稿并提交修正，不重复提交原操作。
 6. 通过 `dashboard_get` 核实草稿与组件声明，通过 `dashboard_view` 核对实际计算结果；检查数值与单位、图号、图文顺序、指标定义、来源与局限。发生版本冲突时先读取新版本，不盲目覆盖。
 
 ## 报告源文与兼容约定

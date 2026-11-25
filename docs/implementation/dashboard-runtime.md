@@ -72,11 +72,15 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 
 工具定义由 `tool_contract.py` 维护，输入结构说明参数来源、默认值和替换影响。修改定义时同步发现资源与调用方，不在文档手工复制工具枚举。
 
-`runtime_keepalive`、`runtime_report_error` 与本地 `dashboard_export_open` 标为 App 专用。可见范围是宿主路由规则，不是服务器鉴权。Agent 读取诊断和下载受管导出，不代替客户端上报渲染完成或触发桌面文件按钮。远程服务额外提供签名分享工具，并隐藏桌面文件操作。
+创作连接提供编辑、查询、展示与导出。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。发布连接用于管理历史、发布和分享。逐项判断见[工具审查](../records/2026-11-25-mcp-tool-audit.md)。
 
 ## 编辑与结果确认
 
-写操作使用最新 `expectedRevision`，一次 patch 的操作原子提交。项目草稿、检查点、独立批注、恢复及冲突恢复统一由项目存储约定管理；标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
+新看板已有初始声明时，一次调用 `dashboard_submit`，传 `dashboardId`、`createTitle` 和 `operations`。服务仅创建新 ID。已有 ID 会返回冲突；首次提交失败后，先读 `dashboard_get` 获取草稿状态，再用 `expectedRevision` 修正。导入完整文档或先建空看板时仍使用 `dashboard_create`。
+
+`CHARTS_MCP_MODE` 默认 `author`，在支持 MCP Apps 可见性规则的宿主中只向模型展示创作工具，并保留程序回调。忽略可见性规则的宿主会看到完整协议清单。模型专用连接使用 `model`，服务端仅列出并接受创作工具。`release` 在此基础上增加版本和分享工具。这两个模式通过 MCP 资源读取大结果；需要 App 回调的预览宿主使用 `author`。存储盘点、重建分区、上传暂存清理及存储迁移使用 `maintenance`。模式在连接启动时生效，沿用既有认证。
+
+项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。批注独立调用 `dashboard_annotations_update`，不创建设计版本。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
 
 `dashboard_get` 读取可编辑草稿，`dashboard_view` 返回实际计算结果。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态。
 

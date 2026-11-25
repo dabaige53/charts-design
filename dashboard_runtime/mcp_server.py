@@ -2,13 +2,16 @@
 from __future__ import annotations
 import asyncio
 import json
+import os
+import re
 import sys
+from urllib.parse import parse_qs, urlencode, urlsplit
 from .lifecycle import IdleLifetime, DEFAULT_IDLE_TIMEOUT
 from . import __version__
 from .assets import MIME_TYPE, render_html, ui_build_id, ui_resource_uri
 from .model import DashboardError, MAX_BYTES
 from .service import TOOLS
-from .tool_contract import APP_ONLY, tool_annotations
+from .tool_contract import APP_ONLY, AUTHOR_TOOLS, MAINTENANCE_TOOLS, RELEASE_TOOLS, tool_annotations
 from .mcp_results import DOCUMENT_WRITES, WRITE_RESPONSE_HELP, write_receipt, write_response_schema
 from .project_routing import ProjectResolver, ProjectServices, project_result, project_schema
 
@@ -45,10 +48,18 @@ class McpProfile:
         return project_result(result, selected)
 
 
-def create_server(service, lifetime=None, profile=None, routes=None):
+def create_server(service, lifetime=None, profile=None, routes=None, *, mode=None):
     lifetime = lifetime or IdleLifetime()
     profile = profile or McpProfile()
     projects = profile.projects(service)
+    if mode is None:
+        mode = os.environ.get('CHARTS_MCP_MODE', 'author')
+    if mode not in ('author', 'model', 'release', 'maintenance'):
+        raise DashboardError('INVALID_CONFIG', 'CHARTS_MCP_MODE must be author, model, release or maintenance')
+    hidden = profile.hidden_tools if mode == 'maintenance' else profile.hidden_tools | MAINTENANCE_TOOLS
+    if mode in ('model', 'release'):
+        allowed = AUTHOR_TOOLS | RELEASE_TOOLS if mode == 'release' else AUTHOR_TOOLS
+        hidden = hidden | ((TOOLS.keys() | profile.extra_tools.keys()) - allowed)
     try:
         import mcp.types as types
         from mcp.server.lowlevel import Server
@@ -63,7 +74,7 @@ def create_server(service, lifetime=None, profile=None, routes=None):
         result = []
         tools = {**TOOLS, **profile.extra_tools}
         for name, (description, schema) in tools.items():
-            if name in profile.hidden_tools:
+            if name in hidden:
                 continue
             description = profile.describe(name, description)
             schema = profile.schema(name, schema)
@@ -78,7 +89,7 @@ def create_server(service, lifetime=None, profile=None, routes=None):
             ui = {}
             if name == 'dashboard_preview' and ui_build_id() != 'unavailable':
                 ui['resourceUri'] = ui_resource_uri()
-            if name in APP_ONLY:
+            if name in APP_ONLY or (mode == 'author' and name not in AUTHOR_TOOLS):
                 ui['visibility'] = ['app']
             meta = {'ui': ui} if ui else None
             tool = types.Tool(name=name, description=description, inputSchema=schema, _meta=meta,
@@ -96,11 +107,12 @@ def create_server(service, lifetime=None, profile=None, routes=None):
     async def call_tool(name, arguments):
         selected = service
         try:
-            if name in profile.hidden_tools or (name not in TOOLS and name not in profile.extra_tools):
+            if name in hidden or (name not in TOOLS and name not in profile.extra_tools):
                 raise DashboardError('UNKNOWN_TOOL', f'Unsupported tool: {name}', 404)
             request = dict(arguments or {})
             if routes is not None:
-                owner = await routes.select(request.get('projectRoot'), request.pop('backend', None), name)
+                routing_action = 'dashboard_create' if name == 'dashboard_submit' and 'createTitle' in request else name
+                owner = await routes.select(request.get('projectRoot'), request.pop('backend', None), routing_action)
                 if owner == 'cloudbase':
                     return await routes.forward(name, request)
             response_mode = 'full'
@@ -125,6 +137,9 @@ def create_server(service, lifetime=None, profile=None, routes=None):
                 packed, text = selected.transport.encode(result, name)
                 if packed is not result:
                     result, text = profile.decorate('runtime_result_chunk', request, packed, selected), None
+                    project = result.get('projectRoot')
+                    query = '?' + urlencode({'projectRoot': project}) if project else ''
+                    result['transport']['resourceUri'] = f"charts://result/{packed['transport']['requestId']}{query}"
             # The measured compact JSON doubles as the text fallback; serialize once.
             return types.CallToolResult(isError=failed, content=[types.TextContent(type='text', text=text if text is not None else result_text(result))], structuredContent=result)
         except DashboardError as exc:
@@ -155,6 +170,24 @@ def create_server(service, lifetime=None, profile=None, routes=None):
     @server.read_resource()
     @lifetime.track
     async def read_resource(uri):
+        if str(uri).startswith('charts://result/'):
+            parts = urlsplit(str(uri))
+            if not re.fullmatch(r'/[a-f0-9]{32}', parts.path):
+                raise ValueError('Invalid result ID')
+            query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=True)
+            if query and (set(query) != {'projectRoot'} or len(query['projectRoot']) != 1):
+                raise ValueError('Invalid result project')
+            arguments = {'projectRoot': query['projectRoot'][0]} if query else {}
+            if routes is not None and await routes.select(arguments.get('projectRoot'), None, 'runtime_result_chunk') == 'cloudbase':
+                from .remote_client import connect
+                async with connect(routes.base_url + '/mcp', routes.token) as session:
+                    upstream = await session.read_resource(uri)
+                if len(upstream.contents) != 1 or not isinstance(upstream.contents[0], types.TextResourceContents):
+                    raise ValueError('Expected a complete JSON response from upstream')
+                return [ReadResourceContents(content=upstream.contents[0].text, mime_type='application/json')]
+            selected, _ = await asyncio.to_thread(projects.resolve, arguments)
+            content = await asyncio.to_thread(selected.transport.result_text, parts.path[1:])
+            return [ReadResourceContents(content=content, mime_type='application/json')]
         if str(uri).startswith('ui://charts-design/'):
             if str(uri) != ui_resource_uri():
                 raise DashboardError('UI_BUILD_EXPIRED', '请重新调用 dashboard_preview 打开当前组件构建。', 409)

@@ -200,8 +200,9 @@ def free_port():
         return probe.getsockname()[1]
 
 
-# @wu-test type=integration | scope=统一 MCP 固定归属和独立鉴权 | protects=同名或断线时错误写入另一后端，或旧令牌取得双端权限
+# @wu-test type=integration | scope=统一 MCP 路由和首次提交 | protects=同名项目写错后端、首次提交重试覆盖看板或旧令牌取得双端权限
 def test_unified_mcp_pins_backend(tmp_path, monkeypatch):
+    from pydantic import AnyUrl
     from dashboard_runtime.backend_routing import BackendRoutes
     from dashboard_runtime.remote_client import connect
 
@@ -240,7 +241,20 @@ def test_unified_mcp_pins_backend(tmp_path, monkeypatch):
             assert (await call('dashboard_create', 'fresh', dashboardId='board', title='New'))['error']['code'] == 'BACKEND_REQUIRED'
             assert (await call('dashboard_create', 'fresh', backend='cloudbase', dashboardId='board', title='New'))['revision'] == 1
             assert (await call('dashboard_list', 'fresh'))['dashboards'][0]['id'] == 'board'
+            report = '# Quarterly report\n' + 'Quarterly results.\n' * 4000
+            packed = await call('dashboard_patch', 'fresh', dashboardId='board', expectedRevision=1, responseMode='full',
+                                operations=[{'op': 'set_report_markdown', 'value': report}])
+            from mcp.types import TextResourceContents
+            resource = (await client.read_resource(AnyUrl(packed['transport']['resourceUri']))).contents[0]
+            assert isinstance(resource, TextResourceContents)
+            assert json.loads(resource.text)['document']['manifest']['report']['markdown'] == report
             assert not local.projects.exists('fresh')
+            initial = {'dashboardId': 'new', 'createTitle': 'Initial', 'operations': [
+                {'op': 'set_title', 'value': 'Submitted'}]}
+            assert (await call('dashboard_submit', 'first-submit', backend='server', **initial))['ok']
+            duplicate = await call('dashboard_submit', 'first-submit', **initial)
+            assert duplicate['error']['code'] == 'ALREADY_EXISTS'
+            assert (await call('dashboard_get', 'first-submit', dashboardId='new'))['document']['revision'] == 2
             assert (await call('dashboard_create', 'local-new', backend='server', dashboardId='board', title='Local'))['revision'] == 1
             assert not cloud.projects.exists('local-new')
 
@@ -323,6 +337,7 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
         assert status == 200 and value['document']['id'] == 'exec'
         assert post(api + 'dashboard_get', {'dashboardId': 'other'}, token)[0] == 403
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'x'}]}, token)[0] == 403
+        assert post(api + 'dashboard_submit', {'dashboardId': 'exec', 'expectedRevision': 1}, token)[0] == 403
         assert post(api + 'dashboard_list', {}, token)[1]['dashboards'] == [{'id': 'exec', 'revision': 1, 'title': value['document']['manifest']['title']}]
         info = post(api + 'runtime_info', {}, token)[1]
         assert 'moduleRoot' not in info and 'processId' not in info and info['projectRoot'] == 'sales'
@@ -340,6 +355,7 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
         assert status == 200 and '/edit/sales/exec#token=' in edit['url']
         edit_token = edit['url'].split('#token=')[1]
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Edited by link'}]}, edit_token)[0] == 200
+        assert post(api + 'dashboard_submit', {'dashboardId': 'exec', 'expectedRevision': 2}, edit_token)[1]['checkpoint']['revision'] == 2
         for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open',
                      'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
             status, denied = post(api + tool, {'dashboardId': 'exec'}, edit_token)

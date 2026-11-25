@@ -116,6 +116,22 @@ class Service:
             result['computed']['totalDurationMs'] = (time.perf_counter()-started)*1000
         return result
 
+    @staticmethod
+    def _component_evidence(doc, component_id):
+        manifest, snapshot = doc['manifest'], doc['snapshot']
+        component = manifest['components'].get(component_id)
+        require(component is not None, 'Component not found')
+        dataset_id = component.get('datasetId')
+        dataset = manifest['datasets'].get(dataset_id, {})
+        return {
+            'metrics': {key: manifest['metrics'][key] for key in component.get('measures', [])},
+            'source': manifest['sources'].get(dataset.get('sourceId') or component.get('sourceId')),
+            'dataset': dataset, 'snapshotUpdatedAt': snapshot['updatedAt'],
+            'localVersion': snapshot.get('datasetRefs', {}).get(dataset_id) or snapshot.get('componentDataRefs', {}).get(component_id),
+            'filters': [item for item in manifest['filters'] if component_id in item['componentIds']],
+            'certified': False,
+        }
+
     def _doctor(self, draft, mode, *, reuse=False):
         from .doctor import diagnose, document_fingerprint
         from .project import write_json
@@ -150,6 +166,33 @@ class Service:
             self.transport.log(request_id, 'preview', 'client', code, dashboard_id=args.get('dashboardId'), revision=args.get('revision'), duration_ms=duration)
             return {'ok': True}
         board = args.get('dashboardId')
+        if tool == 'dashboard_annotations_update':
+            updated = self._call('dashboard_patch', {
+                'dashboardId': board, 'expectedRevision': args['expectedRevision'],
+                'expectedAnnotations': args['expectedAnnotations'],
+                'operations': [{'op': 'set_annotations', 'value': args['annotations']}],
+            })['document']
+            return {'dashboardId': board, 'revision': updated['revision'], 'annotations': updated['manifest']['annotations']}
+        if tool == 'dashboard_submit':
+            require(self.project_root is not None, 'Submit requires a project', 'PROJECT_REQUIRED')
+            creating = 'createTitle' in args
+            require(creating != ('expectedRevision' in args), 'Supply either createTitle or expectedRevision')
+            if creating:
+                require(isinstance(args['createTitle'], str) and args['createTitle'] and args.get('operations'),
+                        'Creating a dashboard requires a title and initial operations')
+            revision = 1 if creating else args['expectedRevision']
+            if 'operations' in args:
+                operations = args['operations']
+                require(isinstance(operations, list), 'operations must be an array')
+                require(not any(isinstance(op, dict) and op.get('op') == 'set_annotations' for op in operations),
+                        'Use dashboard_annotations_update for independent comment edits')
+                if creating:
+                    self.store.create(board, args['createTitle'])
+                revision = self._call('dashboard_patch', {'dashboardId': board, 'expectedRevision': revision,
+                                      'operations': operations})['document']['revision']
+            saved = self._call('dashboard_checkpoint', {'dashboardId': board, 'expectedRevision': revision,
+                               'name': args.get('name', '')})
+            return {**saved, 'dashboardId': board, 'revision': revision}
         if tool == 'dataset_repartition':
             from .cloud_data import CloudData
             data = self.store.data
@@ -343,8 +386,11 @@ class Service:
             require(args.get('dataVersion', data_version(doc)) == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
             if args.get('expectedRevision', doc['revision']) != doc['revision']:
                 raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
-            require(args.get('responseMode', 'full') in ('full', 'patch'), 'Invalid response mode')
-            if args.get('responseMode') == 'patch':
+            evidence = args.get('includeEvidence', False)
+            mode = args.get('responseMode', 'patch' if evidence else 'full')
+            require(mode in ('full', 'patch') and (not evidence or mode == 'patch'),
+                    'Component evidence requires patch response mode')
+            if mode == 'patch':
                 ids = args.get('componentIds', list(doc['manifest']['components']))
                 require(isinstance(ids, list) and all(isinstance(k, str) for k in ids), 'componentIds must be an array of strings')
                 require(type(args.get('includeFilterOptions', False)) is bool, 'includeFilterOptions must be boolean')
@@ -362,6 +408,8 @@ class Service:
                     selected_doc['manifest']['components'] = {key: doc['manifest']['components'][key] for key in statistical}
                     artifacts = statistical_artifacts(self.store.statistical_document(selected_doc))
                 result = {'id': doc['id'], 'revision': doc['revision'], 'componentIds': ids, 'computed': doc['computed'], 'statisticalArtifacts': artifacts}
+                if evidence:
+                    result['evidence'] = {key: self._component_evidence(doc, key) for key in ids}
                 result['computed']['responseBytes'] = len(json_bytes(result))
                 return result
             return {'document': doc}
@@ -507,16 +555,15 @@ class Service:
                     'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
             doc = self.store.get(board, hydrate=False)
-            c = doc['manifest']['components'].get(args.get('componentId'))
-            require(c is not None, 'Component not found')
-            meta = doc['manifest']['datasets'].get(c.get('datasetId'), {})
-            source = doc['manifest']['sources'].get(meta.get('sourceId') or c.get('sourceId'))
+            info = self._component_evidence(doc, args.get('componentId'))
             if tool == 'query_inspect':
-                return {'source': source, 'snapshotUpdatedAt': doc['snapshot']['updatedAt'],
-                        'filters': [f for f in doc['manifest']['filters'] if args['componentId'] in f['componentIds']],
-                        'localVersion': doc['snapshot'].get('datasetRefs', {}).get(c.get('datasetId')),
+                return {**{key: info[key] for key in ('source', 'snapshotUpdatedAt', 'filters', 'localVersion')},
                         'note': 'Interactive filters query the immutable local data version; upstream source SQL is not re-executed.'}
-            return {'metrics': {key: doc['manifest']['metrics'][key] for key in c.get('measures', [])}, 'dataset': meta, 'originalPresentation': c.get('config',{}).get('presentation'), 'originalExplanation': c.get('config',{}).get('explanation'), 'statisticalAnalysis': c.get('analysis'), 'certified': False}
+            component = doc['manifest']['components'][args['componentId']]
+            return {'metrics': info['metrics'], 'dataset': info['dataset'],
+                    'originalPresentation': component.get('config', {}).get('presentation'),
+                    'originalExplanation': component.get('config', {}).get('explanation'),
+                    'statisticalAnalysis': component.get('analysis'), 'certified': False}
         if tool == 'legacy_render':
             from .assets import export_component
             doc = self.store.get(board)

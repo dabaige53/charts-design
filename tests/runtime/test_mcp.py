@@ -10,7 +10,7 @@ from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
-# @wu-test type=integration | scope=MCP stdio | protects=默认写入摘要泄漏全文或显式完整结果及分块读取失败
+# @wu-test type=integration | scope=MCP stdio | protects=内部保存步骤暴露给模型或旧客户端不能读取写入回执及分块
 def test_real_stdio_protocol(tmp_path):
     from dashboard_runtime.store import Store
     Store(tmp_path/'mcp').create('mcp-test', 'MCP')
@@ -23,12 +23,16 @@ def test_real_stdio_protocol(tmp_path):
                 assert 'dashboard_preview' in [t.name for t in tools.tools]
                 by_name = {tool.name: tool for tool in tools.tools}
                 assert not any(name.startswith('dashboard_preview_') for name in by_name)
-                app_only = {'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open'}
+                app_only = {'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open', 'dashboard_export_read', 'runtime_result_chunk',
+                            'dashboard_edit_begin', 'dashboard_patch', 'dashboard_edit_finish', 'dashboard_checkpoint',
+                            'dashboard_refresh', 'dashboard_version_query', 'legacy_render',
+                            'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'generation_examples'}
                 for name in app_only:
                     meta = by_name[name].meta
                     assert meta is not None
                     assert meta['ui']['visibility'] == ['app']
-                assert all(tool.meta is None for name,tool in by_name.items() if name not in app_only | {'dashboard_preview'})
+                assert by_name['dashboard_submit'].meta is None
+                assert 'dashboard_submit' in by_name and 'dataset_repartition' not in by_name
                 for name in ('dashboard_patch', 'dashboard_restore'):
                     annotations = by_name[name].annotations
                     assert annotations is not None
@@ -43,7 +47,6 @@ def test_real_stdio_protocol(tmp_path):
                 preview_meta = by_name['dashboard_preview'].meta
                 assert preview_meta is not None
                 assert preview_meta['ui']['resourceUri'].startswith('ui://charts-design/')
-                assert by_name['generation_examples'].meta is None
                 preview = await session.call_tool('dashboard_preview', {'dashboardId': 'mcp-test'})
                 assert not preview.isError
                 assert preview.structuredContent is not None
@@ -180,7 +183,7 @@ def test_failed_finish_preserves_draft_and_batch_over_stdio(tmp_path):
                 unavailable = tmp_path / 'unavailable.sqlite3'
                 data_path.rename(unavailable)
                 arguments = {'dashboardId': 'review', 'expectedRevision': 2, 'batchId': batch_id}
-                for name in ('dashboard_edit_finish', 'dashboard_checkpoint'):
+                for name in ('dashboard_edit_finish', 'dashboard_checkpoint', 'dashboard_submit'):
                     failed = await session.call_tool(name, arguments if name == 'dashboard_edit_finish' else
                                                      {'dashboardId': 'review', 'expectedRevision': 2})
                     assert failed.isError

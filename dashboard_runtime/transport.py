@@ -99,6 +99,14 @@ class ResultTransport:
     def pack(self, result, tool):
         return self.encode(result, tool)[0]
 
+    def result_text(self, request_id):
+        with self._lock:
+            row = self._results.execute('SELECT encoded FROM results WHERE request_id=? AND expires>=?',
+                                        (request_id, time.time())).fetchone()
+        if row is None:
+            raise DashboardError('RESULT_EXPIRED', 'Response unavailable; inspect current state before retrying.')
+        return base64.b64decode(row[0]).decode('utf-8')
+
     def chunk(self, args):
         token, index = args.get('requestId'), args.get('index')
         if not isinstance(token, str) or not isinstance(index, int) or isinstance(index, bool) or index < 0:

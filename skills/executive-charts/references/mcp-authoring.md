@@ -1,6 +1,6 @@
 # 用项目脚本构建 MCP 声明
 
-从 Charts Design 仓库或安装包根目录运行[声明脚本](../scripts/mcp_author.py)。使用随该版本提供的 Python 入口。先调用目标服务的 `runtime_info`、读取 `charts://contract` 和有关的 `chart_declarations(code)`；可用版本、操作参数、预设支持的绑定以该连接为准。业务输入、审查清单、工作文件和输出均放在业务工作区。
+从 Charts Design 仓库或安装包根目录运行[声明脚本](../scripts/mcp_author.py)。使用随该版本提供的 Python 入口。读取目标服务的 `charts://contract` 和有关的 `chart_declarations(code)`；操作参数和预设绑定以该连接为准。业务输入、审查清单、工作文件和输出均放在业务工作区。
 
 ## 初始化与调整
 
@@ -18,7 +18,7 @@ author stage "$work/monthly" component detail --value "$work/detail.json"
 author stage "$work/monthly" filters --value "$work/filters.json"
 author stage "$work/monthly" markdown --value "$work/report.md"
 author build "$work/monthly" --out "$work/document.json"
-author build "$work/monthly" --format create --project-root "$project" --out "$work/create.json"
+author build "$work/monthly" --format submit --project-root "$project" --out "$work/submit.json"
 ```
 
 若只准备声明文件，已有 Python 3.10+ 的环境也可在包根以 `PYTHONPATH="$PWD" /path/to/python skills/executive-charts/scripts/mcp_author.py` 执行相同子命令。这条路径只使用随包 Runtime 和 Python 标准库。
@@ -44,7 +44,7 @@ author stage "$work/revision" filters
 author stage "$work/revision" component detail
 # 修改上两条命令打印的文件，然后构建。
 author build "$work/revision" --out "$work/proposed.json"
-author build "$work/revision" --format patch --project-root "$project" --out "$work/patch.json"
+author build "$work/revision" --format submit --project-root "$project" --out "$work/submit.json"
 ```
 
 `document` 用于审阅整体 schema-v2 声明；已有设计的 patch 只携带选中的操作及基线 revision。修订其他页时另取该页基线。每次成功写入后再次修改，须以新草稿重新初始化；遇版本冲突也需对照新草稿合并。一个 patch 最多 200 个操作，超过时按能独立校验的依赖组拆批，后续批次取前一批成功回执的 revision。
@@ -60,6 +60,6 @@ author build "$work/revision" --format patch --project-root "$project" --out "$w
 ## 核对、保存与导出
 
 1. 让源端审查子代理据原件列出每页预期筛选。文件采用数组，每项含目标稳定 ID、field、**全部** componentIds；按业务需要增加 label、op、values、selectionMode、scope。无筛选的页写 `[]`。运行 `author check-filters "$work/document.json" "$work/expected-filters.json"`。命令会报告遗漏、多余及消费者差异，可重复对 `dashboard_get` 回读文件执行。此项只核对声明。用相同授权、数据版本及选中状态逐一重放源端事件，核实受影响与不受影响组件。数值证据来自原报表，不能从待验声明反推。
-2. 对新页，将 create 请求交给 `dashboard_create`，读取写入后的实际 revision，再调用 `dashboard_edit_begin`。对已有页，先用基线 revision 调用 `dashboard_edit_begin`，再将 patch 请求交给 `dashboard_patch`。本机可用 `charts-design-runtime --project-root "$project" call dashboard_patch --json-file "$work/patch.json"` 调用同名工具。远程用已连接的 MCP。保存 `batch_id` 和最新 revision。
-3. 用 `dashboard_data_inspect` 检查引用、行数，`dashboard_view` 检查受筛选的汇总或表格页。核对报告引用和筛选行为后调用 `dashboard_edit_finish`，传入 `batchId` 及最新 `expectedRevision`。Doctor 失败会保留草稿，修复后在同一批次重试。成功后调用 `dashboard_preview` 读已完成的检查点。
-4. 若交付独立交互网页，用 `dashboard_export_site` 并按 `dashboard_export_read(format=zip)` 回读完整 ZIP；生成的 `document.json`、Worker 和数据分片由 Runtime 导出。核对版本和文件清单，在目标宿主复验筛选、联动、数据权限和导出行数。静态包可包含所用数据集的全部行；有权限分区时须复用实际访问控制并验证直接读取分片的权限。详见[静态部署包](../../../docs/operations/static-deployment.md)。
+2. 将生成的 `submit.json` 交给 `dashboard_submit`。新页请求含 `createTitle`，已有页请求含基线 `expectedRevision`。服务执行编辑、检查并保存。导入已审阅的完整文档时才使用 `--format create` 和 `dashboard_create`，随后按返回版本提交检查。
+3. 从数据写入回执检查引用和行数，通过 `dashboard_view` 核对受筛选的汇总或表格页。Doctor 失败会保留草稿，读取并提交修正。成功后调用 `dashboard_preview` 读已完成的检查点。
+4. 若交付独立交互网页，用 `dashboard_export_site` 返回的本地文件或远程下载链接取得完整 ZIP。核对版本和文件清单，在目标宿主复验筛选、联动、数据权限和导出行数。静态包可包含所用数据集的全部行；有权限分区时须复用实际访问控制并验证直接读取分片的权限。详见[静态部署包](../../../docs/operations/static-deployment.md)。

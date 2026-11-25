@@ -150,7 +150,11 @@ def build(args):
     if not args.project_root:
         raise ValueError("MCP request files require --project-root")
     request = {"projectRoot": args.project_root, "dashboardId": doc["id"]}
-    if args.format == "patch":
+    if args.format == "submit" and not state["existing"]:
+        if not operations:
+            raise ValueError("submit requires at least one initial operation")
+        return {**request, "createTitle": doc["manifest"]["title"], "operations": operations}
+    if args.format in ("patch", "submit"):
         if not state["existing"] or not operations:
             raise ValueError("patch requires a dashboard_get base and at least one edit")
         original_project = state.get("projectRoot")
@@ -213,7 +217,7 @@ def main():
     edit.add_argument("--value", type=Path, help="native value file for a new step")
     compile_cmd = commands.add_parser("build", help="validate locally and write a document or MCP request")
     compile_cmd.add_argument("work", type=Path)
-    compile_cmd.add_argument("--format", choices=["document", "create", "patch"], default="document")
+    compile_cmd.add_argument("--format", choices=["document", "create", "patch", "submit"], default="document")
     compile_cmd.add_argument("--project-root")
     compile_cmd.add_argument("--out", required=True, type=Path)
     check = commands.add_parser("check-filters", help="compare every filter ID and its consumers with the source audit")

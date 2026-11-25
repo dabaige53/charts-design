@@ -62,11 +62,11 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 ## 编辑与展示
 
-`dashboard_edit_begin` 开始或恢复批次；`dashboard_patch` 只保存草稿并发编号。`dashboard_edit_finish` 完整检查后生成一个检查点，成功返回 `nextAction: dashboard_preview`。调用方只在完成后调用一次预览。已有页面通过版本检测原位更新；宿主是否复用打开的侧栏由宿主控制。
+Agent 用 `dashboard_submit` 一次提交相关修改，服务端检查并保存同一修订。成功后按 `nextAction: dashboard_preview` 打开一次预览。旧客户端仍可使用 `dashboard_edit_begin`、`dashboard_patch`、`dashboard_edit_finish`；两条入口共享草稿、完整检查和检查点，不新增存储格式。
 
 `dashboard_get` 读取可编辑草稿；项目预览与刷新读取最近完成的检查点。`dashboard_edit_finish` 和 `dashboard_checkpoint` 检查失败时返回 `DOCTOR_FAILED`，MCP 同时标记 `isError: true`；草稿与批次保留，不生成检查点。调用方检查 Doctor 问题、读取最新草稿并修复，再用最新版本完成。`REVISION_CONFLICT` 要求重新读取并合并当前修改，不能盲目重放写入。
 
-`dashboard_history` 分页读取检查点，默认每页 50 个、最多 100 个；`dashboard_history_diff` 比较；`dashboard_checkpoint` 创建或命名当前检查点，也会关闭当前编辑批次，普通 Agent 编辑使用带批次 ID 的 `dashboard_edit_finish`。`published` 保护检查点免于自动清理。`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，批注变更保存在独立事件记录。
+`dashboard_history` 分页读取检查点，默认每页 50 个、最多 100 个；`dashboard_history_diff` 比较；保存检查点也会关闭当前编辑批次。`published` 保护检查点免于自动清理。`dashboard_restore` 默认恢复设计及对应数据引用，可用 `useCurrentData` 明确保留当前数据。批注独立保存，批注变更保存在独立事件记录。
 
 版本列表允许删除最新、当前发布、曾发布及带保留标记的版本。`dashboard_version_delete_preview` 生成一次确认清单，包含将撤销的完整分享、专属 COS 对象、PostgreSQL 内容估算及保留引用。`dashboard_version_delete` 必须携带确认标识；项目状态变化或清单超过 15 分钟时重新确认。批注及其历史的数据引用采用保守匹配，无法排除引用的数据不删除。
 

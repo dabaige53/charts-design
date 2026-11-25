@@ -138,7 +138,7 @@ def test_discover_and_author_independent_academic_report_over_stdio(tmp_path):
     asyncio.run(check())
 
 
-# @wu-test type=integration | scope=MCP筛选式报告 | protects=案例无法通过协议保存和重新读取
+# @wu-test type=integration | scope=dashboard_submit | protects=一次提交未保存已检查的报告或过期重试覆盖新版本
 def test_filtered_report_over_stdio(tmp_path):
     async def check():
         params = StdioServerParameters(command=sys.executable, args=['-m', 'dashboard_runtime', '--project-root', str(tmp_path/'project'), '--runtime-root', str(tmp_path/'state'), 'mcp'], env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[2])+os.pathsep+os.environ.get('PYTHONPATH','')})
@@ -152,8 +152,14 @@ def test_filtered_report_over_stdio(tmp_path):
                     return result.structuredContent
                 case = await call('generation_examples', {'caseId': 'filtered-report'})
                 await call('dashboard_create', {'dashboardId': 'filtered', 'title': 'Blank'})
-                await call('dashboard_patch', {'dashboardId': 'filtered', 'expectedRevision': 1, 'operations': case['operations']})
-                doc = (await call('dashboard_get', {'dashboardId': 'filtered'}))['document']
+                submission = {'dashboardId': 'filtered', 'expectedRevision': 1, 'operations': case['operations']}
+                saved = await call('dashboard_submit', submission)
+                assert saved['ok'] and saved['revision'] == saved['checkpoint']['revision'] == 2
+                assert saved['doctor']['passed'] and saved['doctor']['mode'] == 'full'
+                stale = await session.call_tool('dashboard_submit', submission)
+                assert stale.isError and stale.structuredContent and stale.structuredContent['error']['code'] == 'REVISION_CONFLICT'
+                assert [entry['revision'] for entry in (await call('dashboard_history', {'dashboardId': 'filtered'}))['history']] == [2, 1]
+                doc = (await call('dashboard_preview', {'dashboardId': 'filtered'}))['document']
                 assert doc['manifest']['viewMode'] == 'filtered-report'
                 assert doc['manifest']['report']['markdown'] == case['markdown']
                 assert [f['componentIds'] for f in doc['manifest']['filters']] == [['table-a', 'table-b'], ['table-a', 'table-b'], ['table-a'], ['table-b']]

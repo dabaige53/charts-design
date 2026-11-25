@@ -55,6 +55,7 @@
 - [动态编码验收](records/dynamic-encoding-validation.md)、[迭代复盘](records/retro-20261028.md)、[MCP 优化交付](records/mcp-improvements-20261028.md)：2026-10-28 的对象、测量、改动与验证边界。
 - [自托管、构图与指标卡验收](records/2026-11-07-server-layout-kpi.md)：对应轮次的性能与部署检查。
 - [共享工作区交付检查](records/2026-11-10-polish-validation.md)：共享工作区、UI 分批调整、批注与保真的既有记录。
+- [看板 MCP 工具审查](records/2026-11-25-mcp-tool-audit.md)：44 项本地入口的用途、发布连接和一次真实看板的调用记录。
 - [测试清理](records/test-purge-20261106.md)、[测试清理变基](records/test-purge-rebase-20261108.md)：逐项处置和当次验证结果。
 - [性能原始记录](records/performance-results.json)、[共享工作区性能结果](records/2026-11-10-polish-performance.json)、[零售截图](images/dynamic-encoding-retail.png)、[虚拟看板截图](images/transfer-prototype-validation.png)：与对应历史记录一起阅读，不替代当前验证。
 

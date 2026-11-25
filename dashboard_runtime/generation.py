@@ -44,7 +44,7 @@ def generation_examples(case_id=None):
         return {'cases':[{'id':key, **value, 'uri':f'charts://examples/{key}'} for key,value in CASES.items()],
                 'presentationStatus':'unavailable',
                 'policy':'Examples are synthetic references, not user data. Select a case explicitly, replace data and recompute every narrative claim before real use.',
-                'workflow':['chart_recommend(intent, data shape)', 'chart_declarations(code)', 'layout_templates', 'generation_examples(caseId)', 'dashboard_create', 'dashboard_edit_begin', 'dashboard_patch(expectedRevision, operations incl. apply_layout_template)', 'dashboard_edit_finish', 'dashboard_get'],
+                'workflow':['chart_recommend(intent, data shape)', 'chart_declarations(code)', 'charts://layouts', 'charts://examples', 'dashboard_submit(createTitle or expectedRevision, operations incl. apply_layout_template)', 'dashboard_preview'],
                 'variety':'The two dashboard cases share data but differ in layout template, KPI shapes and chart codes. Choose per question with chart_recommend and the kpiGuide; do not reuse one composition for every dashboard.'}
     require(case_id in CASES, 'Unknown generation case', 'UNKNOWN_EXAMPLE')
     doc = {'filtered-report': filtered_report_document, 'academic-report': report_document, 'operations-scorecard': operations_document}.get(case_id, executive_document)('example')

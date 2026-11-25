@@ -149,9 +149,32 @@ READ_ONLY = {
     'dataset_transfer_status',
     'dataset_storage_inventory',
 }
-APP_ONLY = {'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open'}
+APP_ONLY = {
+    'runtime_keepalive', 'runtime_report_error', 'dashboard_export_open', 'dashboard_export_read', 'runtime_result_chunk',
+    'dashboard_edit_begin', 'dashboard_patch', 'dashboard_edit_finish',
+    'dashboard_refresh', 'dashboard_version_query', 'legacy_render', 'dashboard_checkpoint',
+    'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status',
+}
+MAINTENANCE_TOOLS = frozenset({
+    'dataset_storage_inventory', 'dataset_repartition', 'dataset_transfer_cleanup',
+    'dashboard_migrate', 'dashboard_migration_rollback',
+})
+AUTHOR_TOOLS = frozenset({
+    'dashboard_list', 'dashboard_get', 'dashboard_create', 'dashboard_submit', 'dashboard_preview',
+    'dashboard_view', 'dashboard_filter_options', 'component_data', 'dashboard_annotations',
+    'dashboard_annotations_update', 'dataset_import', 'dataset_attach', 'query_execute',
+    'chart_recommend', 'chart_declarations', 'statistical_render',
+    'dashboard_export', 'dataset_export', 'dashboard_export_site',
+})
+RELEASE_TOOLS = frozenset({
+    'dashboard_history', 'dashboard_history_diff', 'dashboard_restore',
+    'dashboard_version_get', 'dashboard_version_status', 'dashboard_version_label', 'dashboard_version_publish',
+    'dashboard_version_delete_preview', 'dashboard_version_delete', 'dashboard_version_delete_status',
+    'dashboard_version_delete_retry', 'dashboard_share_status', 'dashboard_share_publish',
+    'dashboard_share_replace', 'dashboard_share_delete', 'dashboard_share', 'dashboard_share_revoke',
+})
 DESTRUCTIVE = {
-    'dashboard_patch', 'dashboard_restore', 'dataset_import', 'dataset_attach',
+    'dashboard_patch', 'dashboard_submit', 'dashboard_annotations_update', 'dashboard_restore', 'dataset_import', 'dataset_attach',
     'query_execute', 'dashboard_migrate', 'dashboard_migration_rollback',
     'dashboard_checkpoint', 'dashboard_edit_finish', 'dashboard_version_label',
     'dashboard_share_revoke',
@@ -169,10 +192,20 @@ def tool_annotations(name):
             'idempotentHint': name in READ_ONLY and name != 'runtime_keepalive', 'openWorldHint': False}
 
 
-WRITE_FLOW = ' In project mode this saves a draft: finish the edit batch before previewing. On REVISION_CONFLICT read dashboard_get, reconcile, and use its latest revision.'
+WRITE_FLOW = ' In project mode this saves a draft: use dashboard_submit with the returned revision to check and save before previewing. On REVISION_CONFLICT read dashboard_get and reconcile.'
 TRANSFER_ENCODING = described({'type': 'string', 'enum': [BULK_ENCODING]},
                               'Use for all calls of a bulk upload. Omit for legacy 250-row JSON chunks.')
 TOOLS = {
+    'dashboard_submit': ('Submit related design changes once. Applies operations atomically to the expected draft, checks all components and saves one checkpoint. Omit operations to check and save an already reviewed draft (e.g. after importing data). Never publishes or shares. On DOCTOR_FAILED the changed draft remains; fix it at the returned revision. On conflict or uncertain outcome inspect current state before retrying.', schema({
+        'dashboardId': BOARD['dashboardId'], 'expectedRevision': EXPECTED,
+        'createTitle': described({'type': 'string', 'minLength': 1}, 'Create a new dashboard and submit its initial operations in this call. An existing ID is rejected. On failure read dashboard_get before retrying.'),
+        'operations': {**OPERATIONS, 'items': {'oneOf': [item for name, item in OPERATION_SCHEMAS.items() if name != 'set_annotations']}},
+        'name': NAME,
+    }, ('dashboardId',), oneOf=[{'required': ['expectedRevision'], 'not': {'required': ['createTitle']}},
+                               {'required': ['createTitle', 'operations'], 'not': {'required': ['expectedRevision']}}])),
+    'dashboard_annotations_update': ('Update comments independently of the design revision and checkpoint. Supply the exact previously read list and its complete replacement.', schema({
+        'dashboardId': BOARD['dashboardId'], 'expectedRevision': EXPECTED, 'expectedAnnotations': ANNOTATIONS, 'annotations': ANNOTATIONS,
+    }, ('dashboardId', 'expectedRevision', 'expectedAnnotations', 'annotations'))),
     'dataset_storage_inventory': ('Inspect CloudBase dataset versions, stored chunk sizes and conservative references from drafts, checkpoints, releases and annotation history. Incomplete or unreferenced versions require review; this never deletes data or returns business rows.', schema({})),
     'dataset_repartition': ('Stage a replacement private COS dataset partitioned by one string or date field. Reads the existing immutable dataset on the server and preserves its logical values and row order. Does not change a draft, checkpoint, share, or other references. Call only for approved repartitioning. After verifying the returned ref, use a revision-checked put_dataset_ref to attach it.', schema({
         **BOARD, 'datasetId': described(ID, 'Dataset ID in the current draft.'),
@@ -212,7 +245,7 @@ TOOLS = {
             'Optional shareId from dashboard_share_publish; omit to list this dashboard’s publications.'),
     }, ('dashboardId',))),
     'dashboard_share_publish': ('Publish a separate read-only static copy to private storage behind the configured HTTPS cloud gateway. '
-        'Project mode requires the current formal publication at expectedRevision: save with dashboard_checkpoint, then dashboard_version_publish. Requires a healthy cloud cleanup timer. '
+        'Project mode requires the current formal publication at expectedRevision: save with dashboard_submit, then dashboard_version_publish. Requires a healthy cloud cleanup timer. '
         'Returns shareId/url/accessUrl/accessKey/expiresAt (UTC Unix seconds, null for never). accessUrl carries the eight-digit key in a #key fragment for automatic form filling; give this link only to intended readers, or send url and accessKey separately. '
         'expiration defaults to 7d; never means no automatic expiry. At expiry the gateway rejects access immediately and scheduled cleanup removes the copy and key records. '
         'Does not delete the source project or other shares. Does not deploy cloud infrastructure. On an uncertain response call dashboard_share_status before publishing another copy.', schema({
@@ -243,7 +276,7 @@ TOOLS = {
     }, ('dashboardId',))),
     'dashboard_annotations': ('Read saved comments, original selection anchors and target identities without chart rows; returns revision, annotations and targets. Missing targets have componentExists=false. Before acting read dashboard_get; preserve comments unless asked to change them. Verify ambiguous visual anchors in the rendered page.', schema({'dashboardId': BOARD['dashboardId']} , ('dashboardId',))),
     'dashboard_get': ('Read the current editable draft and revision, including annotations and immutable data references. This may be newer than the checkpoint shown by dashboard_preview. Read before writing; use document.revision as expectedRevision. Returns document; use dashboard_view for computed data.', schema(BOARD, ('dashboardId',))),
-    'dashboard_preview': ('Open the saved dashboard/report in the MCP App; project mode shows the latest completed checkpoint, not unfinished draft edits. Call once after a successful dashboard_edit_finish, using the same project and dashboard. Returns document and a UI resource when built; UI_UNAVAILABLE requires building/packaging UI resources.', schema(BOARD, ('dashboardId',))),
+    'dashboard_preview': ('Open the saved dashboard/report in the MCP App; project mode shows the latest completed checkpoint, not unfinished draft edits. Call once after a successful dashboard_submit, using the same project and dashboard. Returns document and a UI resource when built; UI_UNAVAILABLE requires building/packaging UI resources.', schema(BOARD, ('dashboardId',))),
     'dashboard_validate': ('Validate schema and references of either a complete supplied document or a stored draft; does not run full component calculations or create a checkpoint. Supply document or dashboardId. Returns valid=true; failures return errors. Use dashboard_doctor for data/calculation checks.', schema({
         **BOARD, 'document': described({'type': 'object'}, 'Complete proposed schema-v2 document to validate without saving; omit to validate dashboardId.'),
     }, anyOf=[{'required': ['dashboardId']}, {'required': ['document']}])),
@@ -255,7 +288,7 @@ TOOLS = {
         **BOARD, 'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based checkpoint offset, project mode only.'),
         'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 50}, 'Maximum checkpoints per page, project mode only. A full page may require another call.'),
     }, ('dashboardId',))),
-    'dashboard_restore': ('Restore a retained checkpoint as a new draft revision; preserves history, project annotations and the current formal publication. By default restores its data references too. Returns the restored revision; inspect with dashboard_get and save with dashboard_checkpoint before dashboard_preview. Does not restore deleted/pruned checkpoints.' , schema({
+    'dashboard_restore': ('Restore a retained checkpoint as a new draft revision; preserves history, project annotations and the current formal publication. By default restores its data references too. Returns the restored revision; inspect with dashboard_get and save with dashboard_submit before dashboard_preview. Does not restore deleted/pruned checkpoints.' , schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'revision': described(INT, 'Retained checkpoint revision from dashboard_history, not the current draft revision.'),
         'useCurrentData': described({'type': 'boolean', 'default': False}, 'Project mode only: retain current data snapshot instead of historical data; restored definitions must remain compatible.'),
@@ -292,7 +325,7 @@ TOOLS = {
     'chart_declarations': ('Discover authoring schemas and working examples. Omit code for a compact index; provide a preset chart or KPI code from chart_catalog for its definition. Full common schemas: charts://declarations. Does not write data; validate final declarations before completing the edit.', schema({
         'code': described(STR, 'Installed chart or KPI code from chart_catalog (for example c01 or mc03); omit for the index.'),
     })),
-    'layout_templates': ('Read seven optional composition templates and application guidance without editing. Choose by the business question; apply via dashboard_patch op=apply_layout_template, or use explicit set_layout at every breakpoint. Returns template IDs and layout rules.', schema()),
+    'layout_templates': ('Read seven optional composition templates and application guidance without editing. Choose by the business question; submit apply_layout_template or explicit set_layout operations. Returns template IDs and layout rules.', schema()),
     'chart_recommend': ('Optionally rank installed chart codes for a business question and data shape; returns binding capabilities and KPI guidance, without editing. Existing dashboard context down-ranks used codes. Inspect chart_declarations for the selected code before authoring.', schema({
         'intent': described({'enum': ['comparison', 'ranking', 'trend', 'composition', 'distribution', 'relationship', 'flow', 'change', 'attribution', 'target', 'forecast']}, 'Business comparison or analysis intent, chosen from the user question.'),
         'categories': described(INT, 'Number of categories in the intended chart, if known.'),
@@ -313,6 +346,7 @@ TOOLS = {
         **VIEW, 'expectedRevision': EXPECTED,
         'responseMode': described({'enum': ['full', 'patch'], 'default': 'full'}, 'patch limits computation and response to componentIds; full returns the document and all computed results.'),
         'componentIds': described({'type': 'array', 'items': ID}, 'patch mode only: omit for all, [] for none, or list visible component IDs.'),
+        'includeEvidence': described({'type': 'boolean'}, 'Include the metric definitions, provenance, effective filters and data versions from the same revision as the computed values. Uses patch mode when responseMode is omitted.'),
         'includeFilterOptions': described({'type': 'boolean', 'default': False}, 'patch mode only: include filter options when they need reloading; otherwise use dashboard_filter_options.'),
         'dataVersion': described(STR, 'Data version from the same document as expectedRevision; mismatch requires reloading.'),
         'filterSequence': described({'type': 'integer', 'minimum': 0}, 'Optional caller-side filter generation; the caller must discard stale results.'),
@@ -332,7 +366,7 @@ TOOLS = {
         'table': described(STR, 'Existing table name in that source, supplied by the operator/project.'),
         'fields': described(common['datasetMetaSchema']['properties']['fields'], 'Optional field metadata keyed by source column; preserve known types and labels. Omit for inference.'),
     }, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'table'))),
-    'dataset_export': ('Create a managed CSV of all matching dataset/table rows with supplied filters, search, columns and sort; table grouping follows its presentation. Does not change the dashboard. Returns export ID/path/counts, not file contents. Download via dashboard_export_read (format=csv); remote MCP also returns downloadUrl.', schema({
+    'dataset_export': ('Create a managed CSV of all matching dataset/table rows with supplied filters, search, columns and sort; table grouping follows its presentation. Does not change the dashboard. Deliver the returned local path or remote downloadUrl; rowCount reports the exported scope.', schema({
         **TARGET, 'datasetId': described(ID, 'Existing dataset ID when componentId is omitted; componentId takes precedence when supplied.'),
         'filters': FILTERS, 'columns': described({'type': 'array', 'items': STR}, 'Ordered dataset field keys to export; omit for default/all configured columns.'),
         'sort': SORT, 'search': SEARCH,
@@ -344,7 +378,7 @@ TOOLS = {
         **BOARD, 'expectedRevision': EXPECTED,
         'backupId': described(STR, 'Managed backup ID returned by dashboard_migrate, not a filesystem path.'),
     }, ('dashboardId', 'expectedRevision', 'backupId'))),
-    'dashboard_export': ('Create a managed JSON configuration export or HTML snapshot of the current computed draft view, including supplied temporary reader state. Does not complete/publish an edit. Returns export ID/path; use dashboard_export_read to download. HTML is a view snapshot; dataset_export provides full matching CSV rows.', schema({
+    'dashboard_export': ('Create a managed JSON configuration export or HTML snapshot of the current computed draft view, including supplied temporary reader state. Does not complete/publish an edit. Deliver the returned local path or remote downloadUrl. HTML is a view snapshot; dataset_export provides full matching CSV rows.', schema({
         **VIEW, 'format': described({'enum': ['html', 'json']}, 'json preserves canonical configuration/data references; html captures the computed view and is not a live data connection.'),
     }, ('dashboardId', 'format'))),
     'runtime_result_chunk': ('Read one base64 page when a tool result returns transport.encoding=base64-json-v1. Use the same projectRoot and requestId, read all zero-based pages, concatenate in index order, then decode once as UTF-8 JSON and verify transport.bytes. Returns data; RESULT_EXPIRED requires repeating the original read or inspecting current state before retrying a write.', schema({
@@ -426,5 +460,5 @@ TOOLS = {
         'revision': described(INT, 'Saved version to delete, including latest or published versions.'),
         'confirmation': described(STR, 'Token from the user-reviewed deletion preview.'),
     }, ('dashboardId', 'expectedRevision', 'revision', 'confirmation'))),
-    'dashboard_export_site': ('Create a managed ZIP containing an independent static React site and used immutable dataset shards. Project mode exports the latest completed checkpoint; legacy storage exports the current document. Does not deploy, share or complete an edit batch. Returns export metadata; download with dashboard_export_read(format=zip). Static sites have no live backend.', schema(BOARD, ('dashboardId',))),
+    'dashboard_export_site': ('Create a managed ZIP containing an independent static React site and used immutable dataset shards. Project mode exports the latest completed checkpoint; legacy storage exports the current document. Deliver the returned local path or remote downloadUrl. Does not deploy or share. Static sites have no live backend.', schema(BOARD, ('dashboardId',))),
 }

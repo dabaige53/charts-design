@@ -151,7 +151,7 @@ class ProjectStore(Store):
             if expected_annotations is None:
                 db.execute('UPDATE boards SET revision=?,document=? WHERE id=?', (doc['revision'], json_bytes(stored).decode(), board_id))
         self._files(board_id)
-        return self.get(board_id)
+        return doc
 
     def migrate(self, board_id, expected_revision):
         # Migration rewrites stored checkpoints in place; refresh their mirrors.

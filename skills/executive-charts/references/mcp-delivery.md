@@ -16,7 +16,7 @@ For KPI comparisons, aggregate each period at the same scope and grain before ca
 
 ## Cloud storage
 
-Cloud projects default to `cos-v1`; local workspaces keep their local storage. Before cloud imports, call `dataset_storage_inventory` and inspect `cos.format`. For an existing dashboard, also check the returned document's `storageFormat` after saving.
+Cloud projects default to `cos-v1`; local workspaces keep their local storage. For an existing dashboard inspect the document's `storageFormat` before importing. For a project-level storage audit use `dataset_storage_inventory` on the maintenance MCP. Confirm the saved document's storage format before delivery.
 
 If an existing project reports `postgres`, use the [COS migration procedure](../../../docs/operations/self-hosted-server.md#cos-业务内容迁移与删除任务). Read its inventory first. Within the user's migration authorization, upload and verify datasets and all draft/checkpoint/release documents, then switch references atomically. Retain drafts, stable IDs, annotations and history unless the user explicitly requests deletion. Never change the format flag by itself or silently continue through the legacy path.
 
@@ -24,34 +24,32 @@ Before handover, confirm `storageFormat: "cos-v1"`, data references and row coun
 
 ## Edit, check and display
 
-1. For a new artifact call `dashboard_create`; for an existing one read `dashboard_get`.
-2. Call `dashboard_edit_begin` with the latest `expectedRevision` and retain its `batch_id`.
-3. Apply related operations with `dashboard_patch`, using each successful receipt's `revision` as the next `expectedRevision`. Writes default to compact summaries. Request `responseMode=full` or use `dashboard_get` when the updated declarations are needed. Replacement operations must include all fields being retained.
-4. Use `dashboard_view` for affected computed results. Match its revision and data version to the document being inspected. Verify source totals, units, ratios, baselines, filter scope and figure references.
-5. Call `dashboard_edit_finish` with the batch ID and current revision. This runs Doctor checks and creates the completed checkpoint.
-6. After success, call `dashboard_preview` once with the same project and dashboard. Deliver the saved result and relevant source details.
+1. For a new artifact submit `createTitle` and initial `operations` together. Use `dashboard_create` when importing a complete reviewed document or when an empty container is needed before data import. For an existing artifact read `dashboard_get`.
+2. For edits, call `dashboard_submit` with the latest `expectedRevision` and related `operations`. Replacement operations must include all fields being retained. Omit operations when saving an already reviewed draft, e.g. after a data import. The service checks all components and saves the checked revision. It never publishes.
+3. Use `dashboard_view` to verify totals, units, ratios, baselines and filter scope against the source. Automated checks cannot establish that a business definition is correct.
+4. After success, call `dashboard_preview` once with the same project and dashboard. Deliver the saved result and relevant source details.
 
 For an affected filter or chart interaction, check the [interaction defaults](design_standards.md#操作与更新) in the actual delivery view. Apply a filter and close the menu, or click a chart item and move the pointer away. Confirm the visible active state survives the update, the intended components update, and clearing the selection restores both the styling and the prior filter scope. Repeat in the standalone export when it is part of the delivery.
 
-`dashboard_get` reads the editable draft; project previews read the latest completed checkpoint. On `DOCTOR_FAILED`, read the issues, correct the draft and finish again. On `REVISION_CONFLICT`, read the current document and reconcile the requested changes before retrying.
+`dashboard_get` reads the editable draft; project previews read the latest completed checkpoint. On `DOCTOR_FAILED`, read the issues and submit corrections to the retained draft. On `REVISION_CONFLICT` or an uncertain write, read the current state before retrying.
 
-Use `dashboard_data_inspect` for dataset counts and version references. Refreshing data creates a new dataset version; authored prose must be recalculated for that version or remain explicitly tied to its earlier snapshot.
+Use data write receipts for row counts and version references. Request `includeEvidence: true` in a component `dashboard_view` to compare results with their sources and metric definitions in the same revision. Refreshing data creates a new dataset version; authored prose must be recalculated for that version or remain explicitly tied to its earlier snapshot.
 
 ## Comments and history
 
 Read `dashboard_annotations` for comments and their original targets, then inspect the current document. Use stable component IDs to locate the affected content. When a visual anchor is ambiguous, confirm its location before editing.
 
-Annotations save independently of design revisions. Preserve their original context across restoration. To change comments when requested, use `set_annotations` with the exact previously read `expectedAnnotations`.
+Annotations save independently of design revisions. Preserve their original context across restoration. To change comments when requested, use `dashboard_annotations_update` with the exact previously read `expectedAnnotations` and the replacement `annotations`.
 
-Read `dashboard_history` or `dashboard_version_status` for saved versions. `dashboard_version_get` reads a historical version. A requested `dashboard_restore` creates a new draft; complete its checkpoint before opening the restored preview.
+Use a `release` connection for version management and publication. Read `dashboard_history` or `dashboard_version_status` for saved versions. `dashboard_version_get` reads a historical version. A requested `dashboard_restore` creates a new draft; complete its checkpoint before opening the restored preview.
 
 ## Export and publication
 
 | Requested result | Route |
 | --- | --- |
-| JSON configuration or HTML snapshot | `dashboard_export`, then `dashboard_export_read` |
-| Full matching CSV rows | `dataset_export`, then `dashboard_export_read` with `format=csv` |
-| Standalone static website ZIP | `dashboard_export_site`, then `dashboard_export_read` with `format=zip` |
+| JSON configuration or HTML snapshot | `dashboard_export`; deliver the returned local file or remote download link |
+| Full matching CSV rows | `dataset_export`; deliver the returned CSV |
+| Standalone static website ZIP | `dashboard_export_site`; deliver the returned ZIP |
 | Formal publication of a saved version | Read `dashboard_version_status`, then `dashboard_version_publish` |
 | Tencent cloud share | Publish the intended version, then `dashboard_share_publish` |
 | Replace or revoke an existing cloud share | `dashboard_share_replace` or `dashboard_share_delete` using its returned share ID |
@@ -62,8 +60,10 @@ Details: [static website export](../../../docs/operations/static-deployment.md),
 
 ## Diagnose a failed delivery
 
-Use `runtime_info` to locate the installed backend, UI build and project assets. `UI_UNAVAILABLE` requires building and packaging the UI resources using the repository's [local update procedure](../../../docs/operations/local-mcp-update.md).
+On a maintenance connection, use `runtime_info` to locate the installed backend, UI build and project assets. `UI_UNAVAILABLE` requires building and packaging the UI resources using the repository's [local update procedure](../../../docs/operations/local-mcp-update.md).
 
-Use request IDs with `runtime_diagnostics` to locate query, serialization, transport or rendering failures. Read the reported data and configuration, correct the cause and repeat the failed step. Keep credentials and raw business rows out of logs.
+Give the request ID to the operator for `runtime_diagnostics` on the maintenance connection. Correct the reported cause and repeat the failed step. Keep credentials and raw business rows out of logs.
+
+If a tool returns `transport.resourceUri`, read that MCP resource for the complete JSON. Chunk assembly is a client protocol, not an authoring step. For hosts with resource size limits use the complete configuration download client.
 
 For a requested performance investigation, read [local data](local-data.md) and [transport diagnostics](../../../docs/operations/mcp-transport-diagnostics.md). Compare equivalent data and filters, and separate query duration from rendering duration.

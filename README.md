@@ -28,7 +28,7 @@
    - 本地 stdio MCP 与自托管 HTTP 远程 MCP（Streamable HTTP + Bearer 令牌）。
    - 有自己的服务器时，可选 [服务器 MCP/API、Neon 数据库和 Cloudflare Pages 网页](docs/operations/self-hosted-server.md#独立服务器neon-与-cloudflare-pages)，不需要腾讯云账号或 Cloudflare Containers。另有 [Cloudflare Containers 方案](docs/operations/self-hosted-server.md#cloudflare-独立部署)；原 CloudBase 发布流程仍可单独使用。
    - 腾讯云独立分享副本支持 8 位数字访问密钥、不过期/7 天/30 天；到期由云端 SCF 删除 COS 数据和访问记录。需要部署私有 COS、HTTPS 网关和 SCF 定时任务，见 [腾讯云分享](docs/operations/self-hosted-server.md#腾讯云在线分享与云端清理)。
-   - 提供版本化文档获取（`dashboard_get`）、原子修改（`dashboard_patch`）、指标计算、Markdown 报告正文维护及数据检查。项目编辑使用 `dashboard_edit_begin` → 修改草稿 → `dashboard_edit_finish`；完成检查后返回 `nextAction=dashboard_preview` 与 `displayPolicy=saved-dashboard-ui`，调用方先核对保存结果，再打开已保存预览。检查失败返回 `DOCTOR_FAILED`，保留草稿与批次，不生成检查点。
+   - 项目编辑使用 `dashboard_get` 读草稿，再用 `dashboard_submit` 一次提交修改、检查全部组件并保存。通过后按 `nextAction=dashboard_preview` 打开已保存版本；检查失败返回 `DOCTOR_FAILED`，保留草稿，不生成检查点。保存不会发布或分享。
    - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/operations/self-hosted-server.md)。
 
 5. **Seaborn 统计图后端（可选）**：

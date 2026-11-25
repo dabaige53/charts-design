@@ -19,7 +19,7 @@ Use `cos-v1` for cloud projects by default. Follow shared delivery's storage che
 
 Inspect the source's grain, time range, units and calculations. Register sources, datasets and metrics so figures and prose use the same definitions. Read [metric definitions](../executive-charts/references/metric-definitions.md) when defining calculations.
 
-For a new report, `generation_examples` with `{"caseId":"academic-report"}` returns the master Markdown and a complete synthetic declaration batch. Read [the academic master](references/academic-master.md) for its reading structure. Replace case-specific sources, data, IDs and claims with the current report's evidence.
+For a new report, read `charts://examples/academic-report` for the master Markdown and a complete synthetic declaration batch. Read [the academic master](references/academic-master.md) for its reading structure. Replace case-specific sources, data, IDs and claims with the current report's evidence.
 
 Read `charts://contract` for operations and `chart_declarations` for component fields. Query selected presets by `code`; [component rendering](../executive-charts/references/component-html-generation.md) covers native ECharts and custom HTML/JavaScript.
 
@@ -51,10 +51,10 @@ The renderer numbers notes in a final 注释 section with links back to the text
 
 ## Write and deliver
 
-1. Create the report with `dashboard_create` or read its latest revision with `dashboard_get`.
-2. Begin an edit batch. Apply source, dataset, metric and component declarations with `set_report_markdown` and `set_view_mode`=`report`. Components and their Markdown references resolve within the batch. Save structure diagrams using the [component diagram instructions](../executive-charts/SKILL.md#save-structure-diagrams).
+1. Choose the ID and title for a new report, or read the latest revision of an existing report with `dashboard_get`.
+2. Use `dashboard_submit` with `createTitle` for a new report or `expectedRevision` for an edit. Include source, dataset, metric and component operations together with `set_report_markdown` and `set_view_mode`=`report`. Component references resolve within the submission. Save structure diagrams using the [component diagram instructions](../executive-charts/SKILL.md#save-structure-diagrams).
 3. Inspect computed figure values with `dashboard_view`. Check numeric claims against the same dataset version and filter scope, then check figure references, notes, units and sources.
-4. Finish the batch, fix reported Doctor errors and open the saved report with `dashboard_preview`.
+4. On a failed check, submit corrections at the retained draft revision. Open the saved report with `dashboard_preview` only after success.
 5. Deliver the report or requested export with its main finding, data provenance and concrete unresolved issues.
 
 ## Revise or refresh

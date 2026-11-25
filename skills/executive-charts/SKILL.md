@@ -15,19 +15,18 @@ When migrating a non-MCP dashboard, treat each original page's observable layout
 
 Use the existing dashboard and asset directory when revising a result. Pass `projectRoot` on every project call: an absolute asset directory locally, or the configured project name on a remote server.
 
-Read `charts://contract` for the connected server's operations. `chart_declarations` returns the component index; query a selected preset with `{"code":"c01"}` to get its fields, binding support and example. `generation_examples` provides complete synthetic cases: `executive-dashboard` and `operations-scorecard`.
+Read `charts://contract` for the connected server's operations. `chart_declarations` returns the component index; query a selected preset with `{"code":"c01"}` to get its fields, binding support and example. Read `charts://examples` for synthetic cases, including `executive-dashboard` and `operations-scorecard`.
 
 | Task | Tools |
 | --- | --- |
 | Read declarations and editable revision | `dashboard_get` |
-| Inspect dataset versions and row counts | `dashboard_data_inspect` |
+| Inspect dataset references and row counts | Import or attachment receipt, existing references in `dashboard_get` |
 | Import rows/CSV or attach a configured SQLite table | `dataset_import`, `dataset_attach` |
-| Define sources, datasets, metrics, components and layout | `dashboard_patch` |
+| Submit declarations or layout, check and save | `dashboard_submit` |
 | Compute chart results and table pages | `dashboard_view` |
-| Save one editing session | `dashboard_edit_begin`, `dashboard_edit_finish` |
 | Show the completed dashboard | `dashboard_preview` |
-| Read comments and version history | `dashboard_annotations`, `dashboard_history`, `dashboard_version_status` |
-| Export a file or standalone website | `dashboard_export`, `dataset_export`, `dashboard_export_site`, `dashboard_export_read` |
+| Read comments or historical versions | `dashboard_annotations` for comments, `dashboard_history` on a release connection for history |
+| Export a file or standalone website | `dashboard_export`, `dataset_export`, `dashboard_export_site` |
 
 Read [shared delivery](references/mcp-delivery.md) for revisions, batches, comments and publication.
 
@@ -41,7 +40,7 @@ For cloud delivery, use `cos-v1` by default. Check the project's actual storage 
 2. **Register the inputs.** Define sources, datasets and metrics before binding components. Reuse a dataset across related calculations. Small imports accept rows or CSV; configured SQLite tables use `dataset_attach`. Read [local data](references/local-data.md) for large datasets, versioned references and exports.
 3. **Choose the presentation.** Arrange the overview, comparisons and detail in the order that answers the question. Choose KPI forms by the comparison they show using [KPI selection](references/kpi-cards.md). Use [layout templates](references/layout_templates.md) when they fit. `chart_recommend` can suggest presets.
 4. **Declare the components.** Select the renderer below, bind supported filters to explicit consumers and save each component's structure diagram. Put definitions, formulas, sources and detail rows in the shared detail view. KPI cards contain only titles, values, units, comparisons and concise graphical labels; narrative belongs in a separate text component.
-5. **Save and inspect.** Follow the shared edit-batch flow. Compare computed totals, ratios, comparison values and table rows with the source at the same filter scope. Complete the batch and open the saved preview once.
+5. **Save and inspect.** Submit related changes once. Compare computed totals, ratios, comparison values and table rows with the source at the same filter scope. Open the saved preview once.
 
 Use the reader's language for titles, labels, dates and state messages. Follow [data formatting](references/data_formatting_standards.md) for units and precision. Preserve actual comparison baselines; leave missing baselines missing.
 

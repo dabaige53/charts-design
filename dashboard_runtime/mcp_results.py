@@ -10,7 +10,7 @@ WRITE_RESPONSE_HELP = (
     ' MCP defaults to a summary without document: dashboardId, revision, affectedComponentIds, '
     'counts and operation metadata. Use top-level revision for the next expectedRevision. '
     'Request responseMode=full or dashboard_get when the document is needed. '
-    'Write success does not replace edit-finish validation.'
+    'A draft write is not a checked checkpoint; use dashboard_submit to check and save it.'
 )
 
 
@@ -30,6 +30,7 @@ def write_receipt(name, args, result):
     doc = result['document']
     manifest = doc['manifest']
     components = manifest['components']
+    receipt = {key: value for key, value in result.items() if key not in ('document', 'statisticalArtifacts')}
     if name == 'dashboard_patch':
         affected = set()
         for operation in args.get('operations', []):
@@ -40,13 +41,17 @@ def write_receipt(name, args, result):
                 # These shared definitions can affect multiple components.
                 affected.update(components)
     elif name in ('dataset_import', 'dataset_attach', 'query_execute'):
+        dataset_id = args['datasetId']
+        ref = doc['snapshot'].get('datasetRefs', {}).get(dataset_id)
+        if ref is not None:
+            receipt['dataset'] = {'id': dataset_id, 'rowCount': ref['rowCount'], 'version': ref['version']}
         affected = {key for key, component in components.items()
                     if component.get('datasetId') == args['datasetId']
                     or component.get('binding', {}).get('datasetId') == args['datasetId']}
     else:
         affected = set(components)
     return {
-        **{key: value for key, value in result.items() if key not in ('document', 'statisticalArtifacts')},
+        **receipt,
         'ok': True,
         'dashboardId': doc['id'],
         'revision': doc['revision'],

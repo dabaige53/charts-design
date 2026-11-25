@@ -14,5 +14,6 @@ COPY deploy/neon/ deploy/neon/
 ENV PATH=/app/.venv/bin:$PATH PYTHON=/app/.venv/bin/python PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=1 CHARTS_HOST=0.0.0.0 CHARTS_PORT=8000 CHARTS_STORAGE_BACKEND=neon CHARTS_WORKSPACE=/data/projects CHARTS_RUNTIME_ROOT=/data/runtime MPLCONFIGDIR=/tmp/matplotlib
 RUN useradd --system --uid 10001 charts && mkdir -p /data/projects /data/runtime && chown -R charts /data
 USER charts
+ENV CHARTS_UNIFIED_MCP_MODE=model
 EXPOSE 8000
 CMD ["python", "-m", "dashboard_runtime", "server"]

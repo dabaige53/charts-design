@@ -33,6 +33,47 @@ def test_drafts_checkpoints_notes_and_runtime_removal(tmp_path):
     assert not (runtime/'data.sqlite3').exists()
 
 
+# @wu-test type=integration | scope=dashboard_submit | protects=组件计算失败后丢失修订或把未通过的草稿保存为检查点
+def test_submit_keeps_failed_draft_for_correction(tmp_path, monkeypatch):
+    from dashboard_runtime.demo import executive_document
+
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    board = {'dashboardId': 'review'}
+    service.call('dashboard_create', {**board, 'document': executive_document('review')})
+
+    def unavailable(*args, **kwargs):
+        raise DashboardError('ASSET_UNAVAILABLE', 'Data unavailable')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(service.views, 'prepare', unavailable)
+        failed = service.call('dashboard_submit', {**board, 'expectedRevision': 1,
+                              'operations': [{'op': 'set_title', 'value': 'Updated'}]})
+    assert not failed['ok'] and failed['error']['code'] == 'DOCTOR_FAILED'
+    assert failed['revision'] == 2 and service.store.display_revision('review') == 1
+    assert service.store.get('review')['manifest']['title'] == 'Updated'
+    saved = service.call('dashboard_submit', {**board, 'expectedRevision': failed['revision']})
+    assert saved['ok'] and saved['checkpoint']['revision'] == 2
+
+
+# @wu-test type=integration | scope=dashboard_view | protects=筛选后计算值与返回的口径、来源或数据版本不一致
+def test_component_view_returns_evidence_for_the_effective_slice(tmp_path):
+    from dashboard_runtime.demo import executive_document
+
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    board = {'dashboardId': 'board'}
+    doc = service.call('dashboard_create', {**board, 'document': executive_document('board')})['document']
+    selected_filter = {**doc['manifest']['filters'][0], 'values': ['missing-region']}
+    view = service.call('dashboard_view', {**board, 'expectedRevision': doc['revision'],
+                        'componentIds': ['total'], 'filters': [selected_filter], 'includeEvidence': True})
+    evidence = view['evidence']['total']
+    assert view['revision'] == doc['revision'] and 'total' in view['computed']['components']
+    assert evidence['filters'] == [selected_filter]
+    assert evidence['localVersion']['version'] == doc['snapshot']['datasetRefs']['sales']['version']
+    assert evidence['metrics']['revenue'] == doc['manifest']['metrics']['revenue']
+    assert evidence['source'] == doc['manifest']['sources']['fixture']
+    assert service.store.get('board')['manifest']['filters'][0]['values'] == []
+
+
 # @wu-test type=integration | scope=dashboard_doctor 与 dashboard_checkpoint | protects=相同草稿保存时重复计算组件，或草稿改变后沿用旧检查
 def test_checkpoint_reuses_only_an_unchanged_full_doctor_report(tmp_path):
     from dashboard_runtime.demo import executive_document
