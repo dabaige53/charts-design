@@ -171,6 +171,10 @@ class CloudAssets:
         # Only the minimum metadata/references needed by transactional operations.
         return {'id': doc['id'], 'revision': doc['revision'], 'cosObject': obj['id'],
                 'manifest': {'title': doc['manifest']['title'],
+                             'viewMode': doc['manifest'].get('viewMode'),
+                             'filters': doc['manifest']['filters'],
+                             'components': {key: {'title': value.get('title', ''), 'kind': value['kind']}
+                                            for key, value in doc['manifest']['components'].items()},
                              'annotations': copy.deepcopy(doc['manifest'].get('annotations', []))},
                 'snapshot': {key: copy.deepcopy(doc['snapshot'].get(key, {}))
                              for key in ('datasetRefs', 'componentDataRefs')}}

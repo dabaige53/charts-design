@@ -229,12 +229,11 @@ class Service:
         if tool == 'dashboard_publish':
             return self._publish(args)
         if tool == 'dashboard_annotations_update':
-            updated = self._call('dashboard_patch', {
-                'dashboardId': board, 'expectedRevision': args['expectedRevision'],
-                'expectedAnnotations': args['expectedAnnotations'],
-                'operations': [{'op': 'set_annotations', 'value': args['annotations']}],
-            })['document']
-            return {'dashboardId': board, 'revision': updated['revision'], 'annotations': updated['manifest']['annotations']}
+            require(self.project_root is not None, 'Independent annotation saves require a project', 'PROJECT_REQUIRED')
+            expected, previous = args.get('expectedRevision'), args.get('expectedAnnotations')
+            require(type(expected) is int and expected > 0, 'expectedRevision is required', 'INVALID_ARGUMENT')
+            require(isinstance(previous, list), 'expectedAnnotations must be an array', 'INVALID_ARGUMENT')
+            return self.store.update_annotations(board, expected, previous, copy.deepcopy(args.get('annotations')))
         if tool == 'dashboard_submit':
             require(self.project_root is not None, 'Submit requires a project', 'PROJECT_REQUIRED')
             creating = 'createTitle' in args
@@ -553,26 +552,35 @@ class Service:
                     source['verification'] = 'supplied'
             return {'document': self.store.create(args['dashboardId'], args.get('title', 'Dashboard'), doc)}
         if tool == 'dashboard_annotations':
-            doc = self.store.get(board, hydrate=False)
-            manifest = doc['manifest']
-            notes = copy.deepcopy(manifest.get('annotations', []))
+            include_targets = args.get('includeTargets', True)
+            require(type(include_targets) is bool, 'includeTargets must be a boolean', 'INVALID_ARGUMENT')
+            if self.project_root is not None:
+                state = self.store.annotation_state(board, include_targets)
+            else:
+                doc = self.store.get(board, hydrate=False)
+                state = {**doc['manifest'], 'id': doc['id'], 'revision': doc['revision']}
+            notes = state.get('annotations', [])
+            result = {'dashboardId': state['id'], 'title': state['title'], 'revision': state['revision'],
+                      'annotations': notes, 'count': len(notes), 'independentSave': self.project_root is not None}
+            if not include_targets:
+                return result
             targets = {}
+            components = state.get('components')
             for note in notes:
                 component_id = note.get('componentId')
                 anchor = note.get('anchor', {})
                 target = {'scope': anchor.get('scope', 'component' if component_id else 'page')}
                 if component_id:
-                    component = manifest['components'].get(component_id)
-                    target.update({'componentExists': component is not None,
-                                   'sourcePath': 'manifest.components.' + component_id})
-                    if component is not None:
-                        target.update({'title': component.get('title', ''), 'kind': component['kind']})
+                    target['sourcePath'] = 'manifest.components.' + component_id
+                    if components is not None:
+                        component = components.get(component_id)
+                        target['componentExists'] = component is not None
+                        if component is not None:
+                            target.update({'title': component.get('title') or '', 'kind': component['kind']})
                 else:
-                    target['sourcePath'] = 'manifest.report.markdown' if manifest.get('viewMode') in ('report', 'filtered-report') else 'manifest'
+                    target['sourcePath'] = 'manifest.report.markdown' if state.get('viewMode') in ('report', 'filtered-report') else 'manifest'
                 targets[note['id']] = target
-            return {'dashboardId': doc['id'], 'title': manifest['title'], 'revision': doc['revision'],
-                    'annotations': notes, 'targets': targets, 'count': len(notes),
-                    'independentSave': self.project_root is not None}
+            return {**result, 'targets': targets, 'targetsResolved': components is not None}
         if tool == 'dashboard_preview':
             from .assets import require_preview
             require_preview()

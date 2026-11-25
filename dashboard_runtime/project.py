@@ -6,7 +6,7 @@ import json
 import uuid
 from .store import Store
 from .local_data import LocalData
-from .model import DashboardError, apply_operations, json_bytes, require, utcnow
+from .model import DashboardError, apply_operations, identifier, json_bytes, require, utcnow, validate_annotations
 
 DEFAULTS = {'history': {'keepCheckpoints': 100}, 'loading': {'debounceMs': 150, 'maxConcurrent': 4, 'pageSize': 50}}
 
@@ -57,14 +57,55 @@ class ProjectStore(Store):
         row = db.execute('SELECT payload FROM annotations WHERE board_id=?', (board,)).fetchone()
         return json.loads(row[0]) if row else []
 
+    def _annotation_state(self, db, board, include_targets):
+        row = db.execute("""SELECT revision, json_extract(document, '$.manifest.title') AS title,
+            json_extract(document, '$.manifest.viewMode') AS view_mode,
+            json_extract(document, '$.manifest.filters') AS filters,
+            json_extract(document, '$.snapshot.datasetRefs') AS refs
+            FROM boards WHERE id=?""", (board,)).fetchone()
+        if row is None:
+            raise DashboardError('NOT_FOUND', 'Dashboard not found', 404)
+        components = None
+        if include_targets:
+            components = {item[0]: {'title': item[1] or '', 'kind': item[2]} for item in db.execute("""
+                SELECT c.key, json_extract(c.value, '$.title'), json_extract(c.value, '$.kind')
+                FROM boards, json_each(document, '$.manifest.components') AS c WHERE boards.id=?
+                """, (board,))}
+        return {'id': board, 'revision': row['revision'], 'title': row['title'], 'annotations': self._notes(db, board),
+                'components': components, 'viewMode': row['view_mode'], 'filters': json.loads(row['filters'] or '[]'),
+                'datasetRefs': json.loads(row['refs'] or '{}')}
+
+    def annotation_state(self, board, include_targets=False):
+        identifier(board)
+        with self.connect() as db:
+            db.execute('BEGIN')
+            return self._annotation_state(db, board, include_targets)
+
+    def update_annotations(self, board, expected, previous, notes):
+        identifier(board)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            state = self._annotation_state(db, board, True)
+            if state['revision'] != expected:
+                raise DashboardError('REVISION_CONFLICT', '页面已更新，请重新打开批注。当前输入已保留。', 409)
+            if state['annotations'] != previous:
+                raise DashboardError('ANNOTATION_CONFLICT', '批注已被其他页面更新，请重新打开批注。当前输入已保留。', 409)
+            validate_annotations(notes, state['components'])
+            doc = {'id': board, 'revision': expected, 'manifest': {'filters': state['filters']},
+                   'snapshot': {'datasetRefs': state['datasetRefs']}}
+            self._save_notes(db, doc, notes, previous)
+            if notes != previous:
+                self._annotation_files(db, board)
+        return {'dashboardId': board, 'revision': expected, 'annotations': notes}
+
     def get(self, board_id, hydrate=True):
         doc = super().get(board_id, hydrate=False)
         with self.connect() as db:
             doc['manifest']['annotations'] = self._notes(db, board_id)
         return self.compatible(doc) if hydrate else doc
 
-    def _save_notes(self, db, doc, notes):
-        previous = {n['id']: n for n in self._notes(db, doc['id'])}
+    def _save_notes(self, db, doc, notes, previous_notes=None):
+        previous = {n['id']: n for n in (self._notes(db, doc['id']) if previous_notes is None else previous_notes)}
         for note in notes:
             if note['id'] in previous:
                 note['context'] = previous[note['id']].get('context', {})
@@ -75,15 +116,19 @@ class ProjectStore(Store):
             db.execute('INSERT OR REPLACE INTO annotations VALUES(?,?)', (doc['id'], raw))
             db.execute('INSERT INTO annotation_events VALUES(?,?,?,?)', (doc['id'], utcnow(), doc['revision'], raw))
 
+    def _annotation_files(self, db, board):
+        folder = self.root / board
+        write_json(folder / 'annotations.json', self._notes(db, board))
+        events = [dict(r) for r in db.execute('SELECT * FROM annotation_events WHERE board_id=?', (board,))]
+        write_json(folder / 'annotation-history.json', events)
+
     def _files(self, board, rewrite=False):
         """Portable readable mirrors; SQLite is the transactional project index."""
         folder = self.root / board
         with self.connect() as db:
             row = db.execute('SELECT document FROM boards WHERE id=?', (board,)).fetchone()
             write_json(folder / 'draft.json', json.loads(row[0]))
-            write_json(folder / 'annotations.json', self._notes(db, board))
-            events = [dict(r) for r in db.execute('SELECT * FROM annotation_events WHERE board_id=?', (board,))]
-            write_json(folder / 'annotation-history.json', events)
+            self._annotation_files(db, board)
             write_json(folder / 'history.json', [dict(r) for r in db.execute('SELECT r.revision,r.created_at,r.action,m.name,m.published FROM revisions r LEFT JOIN checkpoint_meta m ON r.board_id=m.board_id AND r.revision=m.revision WHERE r.board_id=? ORDER BY r.revision DESC',(board,))])
             # Checkpoint rows are immutable once written, so their readable
             # mirrors only need writing once. Rewriting every retained

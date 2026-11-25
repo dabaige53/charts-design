@@ -10,7 +10,7 @@ import uuid
 from .cloud_database import CloudDatabase
 from .cloud_data import CloudData
 from .model import (DashboardError, apply_operations, identifier, json_bytes,
-                    new_document, require, utcnow, validate, validate_component_content)
+                    new_document, require, utcnow, validate, validate_annotations, validate_component_content)
 from .project import DEFAULTS
 from .store import Store
 
@@ -109,6 +109,37 @@ class CloudProjectStore(Store):
     def list(self):
         return self.database.call('list', self.project)
 
+    def annotation_state(self, board, include_targets=False):
+        identifier(board)
+        if self.database.backend == 'neon':
+            return self.database.call('annotation_read', self.project, board=board, includeTargets=include_targets)
+        doc = self.database.call('get', self.project, board=board)
+        manifest = doc['manifest']
+        components = manifest.get('components') if include_targets else None
+        return {'id': board, 'revision': doc['revision'], 'title': manifest['title'],
+                'annotations': manifest.get('annotations', []), 'components': components,
+                'viewMode': manifest.get('viewMode'), 'filters': manifest.get('filters'),
+                'datasetRefs': doc['snapshot'].get('datasetRefs', {})}
+
+    def update_annotations(self, board, expected, previous, notes):
+        state = self.annotation_state(board, include_targets=True)
+        if state['revision'] != expected:
+            raise DashboardError('REVISION_CONFLICT', '页面已更新，请重新打开批注。当前输入已保留。', 409)
+        if state['annotations'] != previous:
+            raise DashboardError('ANNOTATION_CONFLICT', '批注已被其他页面更新，请重新打开批注。当前输入已保留。', 409)
+        validate_annotations(notes, state['components'])
+        self._note_context({'revision': expected, 'snapshot': {'datasetRefs': state['datasetRefs']},
+                            'manifest': {'filters': state['filters']}}, notes, previous)
+        if notes == previous:
+            return {'dashboardId': board, 'revision': expected, 'annotations': notes}
+        args = {'board': board, 'expected': expected, 'previousNotes': previous, 'at': utcnow()}
+        if self.database.backend == 'neon':
+            return self.database.call('annotation_write', self.project, notes=notes, **args)
+        stored = self.database.call('get', self.project, board=board)
+        stored['manifest']['annotations'] = notes
+        saved = self.database.call('commit', self.project, document=stored, **args)
+        return {'dashboardId': board, 'revision': saved['revision'], 'annotations': saved['manifest']['annotations']}
+
     @staticmethod
     def _note_context(doc, notes, previous, preserve_incoming=False):
         old = {n['id']: n for n in previous}
@@ -116,9 +147,13 @@ class CloudProjectStore(Store):
             if note['id'] in old:
                 note['context'] = copy.deepcopy(old[note['id']].get('context', {}))
             elif not (preserve_incoming and isinstance(note.get('context'), dict)):
+                filters = doc['manifest']['filters']
+                if filters is None:
+                    view = note.get('view')
+                    filters = view.get('filters') if isinstance(view, dict) else None
                 note['context'] = {'designRevision': doc['revision'],
                                    'dataVersions': doc['snapshot'].get('datasetRefs', {}),
-                                   'filters': doc['manifest']['filters']}
+                                   'filters': filters if isinstance(filters, list) else []}
 
     def mutate(self, board_id, expected_revision, operations=None, restore_revision=None,
                use_current_data=False, expected_annotations=None):

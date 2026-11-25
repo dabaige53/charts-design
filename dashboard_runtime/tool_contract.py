@@ -275,7 +275,10 @@ TOOLS = {
         **BOARD, 'title': described(STR, 'Title for an empty dashboard; defaults to Dashboard. A supplied document carries its own title.'),
         'document': described({'type': 'object'}, 'Optional complete schema-v2 artifact, not a patch. Omit to create an empty dashboard; get shape guidance from charts://contract and chart_declarations.'),
     }, ('dashboardId',))),
-    'dashboard_annotations': ('Read saved comments, original selection anchors and target identities without chart rows; returns revision, annotations and targets. Missing targets have componentExists=false. Before acting read dashboard_get; preserve comments unless asked to change them. Verify ambiguous visual anchors in the rendered page.', schema({'dashboardId': BOARD['dashboardId']} , ('dashboardId',))),
+    'dashboard_annotations': ('Read saved comments and original selection anchors. Target details are included when available; componentExists=false means a known missing target. Use dashboard_get to resolve target details when targetsResolved=false. Preserve comments unless asked to change them.', schema({
+        'dashboardId': BOARD['dashboardId'],
+        'includeTargets': described({'type': 'boolean', 'default': True}, 'Set false to read only annotations and their revision.'),
+    }, ('dashboardId',))),
     'dashboard_get': ('Read the current editable draft and revision, including annotations and immutable data references. This may be newer than the checkpoint shown by dashboard_preview. Read before writing; use document.revision as expectedRevision. Returns document; use dashboard_view for computed data.', schema(BOARD, ('dashboardId',))),
     'dashboard_preview': ('Open the saved dashboard/report in the MCP App; project mode shows the latest completed checkpoint, not unfinished draft edits. Call once after a successful dashboard_submit, using the same project and dashboard. Returns document and a UI resource when built; UI_UNAVAILABLE requires building/packaging UI resources.', schema(BOARD, ('dashboardId',))),
     'dashboard_validate': ('Validate schema and references of either a complete supplied document or a stored draft; does not run full component calculations or create a checkpoint. Supply document or dashboardId. Returns valid=true; failures return errors. Use dashboard_doctor for data/calculation checks.', schema({

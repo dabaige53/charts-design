@@ -133,6 +133,8 @@ export function PositionComments({
   const draftRef = useRef(draft), busyRef = useRef(false), reanchor = useRef<Config | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const replyIds = useRef<Record<string, { text: string; id: string }>>({});
+  const loadedNotes = useRef<{ revision: number; annotations: Config[]; independentSave: boolean } | null>(null);
+  const noteRequest = useRef(0);
   const key = `charts-position-draft:${JSON.stringify([projectRoot || location.pathname, doc.id, readOnly])}`;
   const reply = openId ? replies[openId] || "" : "";
   const setReply = (text: string) => {
@@ -149,13 +151,17 @@ export function PositionComments({
   draftRef.current = draft;
 
   useEffect(() => {
-    if (!active || busy) return;
+    if (!active) return;
     let live = true;
     const load = () => {
-      if (document.visibilityState !== "visible") return;
-      void call("dashboard_annotations", { dashboardId: doc.id }).then((value) => {
-        if (live) setNotes(value.annotations);
-      }).catch((failure) => { if (live) setError(String(failure)); });
+      if (document.visibilityState !== "visible" || busyRef.current) return;
+      const request = ++noteRequest.current;
+      void call("dashboard_annotations", { dashboardId: doc.id, includeTargets: false }).then((value) => {
+        if (live && request === noteRequest.current) {
+          loadedNotes.current = { revision: value.revision, annotations: value.annotations, independentSave: value.independentSave === true };
+          setNotes(value.annotations);
+        }
+      }).catch((failure) => { if (live && request === noteRequest.current) setError(String(failure)); });
     };
     load();
     document.addEventListener("visibilitychange", load);
@@ -163,7 +169,7 @@ export function PositionComments({
       live = false;
       document.removeEventListener("visibilitychange", load);
     };
-  }, [call, doc.id, active, busy]);
+  }, [call, doc.id, active]);
 
   useEffect(() => {
     try {
@@ -346,22 +352,29 @@ export function PositionComments({
 
   const write = async (change: (current: Config[]) => Config[]) => {
     if (readOnly || busyRef.current) return false;
+    const latest = loadedNotes.current;
+    if (!latest) { setError("批注正在加载，当前输入已保留。"); return false; }
+    noteRequest.current++;
     busyRef.current = true; setBusy(true); setError("");
     try {
-      const latest = await call("dashboard_annotations", { dashboardId: doc.id });
       if (doc.progressive && latest.independentSave !== true)
         throw Error("批注服务需要重启 MCP 后更新；当前输入已保留。");
       const value = change(latest.annotations);
-      const result = await call("dashboard_patch", {
-        dashboardId: doc.id, expectedRevision: latest.revision,
-        ...(doc.progressive ? { expectedAnnotations: latest.annotations } : {}),
-        operations: [{ op: "set_annotations", value }],
-      });
-      const saved = result.document.manifest.annotations;
+      const target = { dashboardId: doc.id, expectedRevision: latest.revision };
+      const result = latest.independentSave
+        ? await call("dashboard_annotations_update", { ...target, expectedAnnotations: latest.annotations, annotations: value })
+        : await call("dashboard_patch", { ...target, operations: [{ op: "set_annotations", value }] });
+      if (result.ok === false) throw Error(result.error?.message || "批注保存失败");
+      const saved = latest.independentSave ? result.annotations : result.document.manifest.annotations;
+      const revision = latest.independentSave ? result.revision : result.document.revision;
+      loadedNotes.current = { ...latest, annotations: saved, revision };
       setNotes(saved); onNotesChange(saved);
       return true;
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      const code = failure instanceof Error && 'code' in failure ? failure.code : undefined;
+      setError(code === 'ANNOTATION_CONFLICT' || code === 'REVISION_CONFLICT'
+        ? "页面或批注已更新，请重新打开批注。当前输入已保留。"
+        : failure instanceof Error ? failure.message : String(failure));
       return false;
     } finally { busyRef.current = false; setBusy(false); }
   };

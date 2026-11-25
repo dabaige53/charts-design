@@ -7,7 +7,7 @@
 
 选区使用组件 ID、文字引文和相对坐标，不保存 DOM 对象。标记随滚动、尺寸变化及组件移动更新；位置无法匹配时，保留内容并提示重新标记。面板挂在页面顶层，手机窗口使用底部面板。保存期间阻止重复操作，失败保留选区与正文；未提交正文和回复按项目、看板保存在当前标签页的 sessionStorage 中。批注活动期间暂停报表自动刷新，退出后恢复图表交互与刷新；保留的草稿不阻止切换看板，重新进入批注时可继续。
 
-项目模式提交前读取最新列表，使用 `dashboard_patch` 的 `expectedRevision` 与 `expectedAnnotations` 比对。只替换批注，不递增设计版本、不发布设计草稿、不创建布局检查点。并发修改冲突会显示错误，并保留当前输入。旧集中存储仍使用其原有版本行为。
+项目模式在打开批注和页面重新可见时读取列表及修订号。点击保存只发一次 `dashboard_annotations_update`，用已读的修订号和批注列表检查并发冲突。成功后使用回执更新列表。发生冲突时保留输入，重新打开批注后可重试。只替换批注，不递增设计版本。旧集中存储仍使用原有版本行为。
 
 当前未接入宿主“附到对话”扩展、Agent 自动通知和离线导出的编号显示。下文“附到宿主对话”描述目标能力，须在实际接入并确认后才能报告可用。
 
@@ -53,7 +53,7 @@ MCP 客户端同时声明 `experimental["openai/modelContext"]` 和 `updateModel
 
 ## Agent 读取并处理批注
 
-用户在对话中要求读取或按批注修改时，调用 `dashboard_annotations`，每次传入 `projectRoot` 和 `dashboardId`。结果包含当前版本、原始批注与锚点，以及按批注 ID 索引的目标标题、类型和配置位置；不读取图表明细或生成图表。组件已删除时返回 `componentExists: false`。通过 `dashboard_annotations` 返回的 `count` 发现已有批注。
+用户在对话中要求读取或按批注修改时，调用 `dashboard_annotations`，每次传入 `projectRoot` 和 `dashboardId`。结果包含当前版本、原始批注与锚点。已保存组件索引的页面还返回目标标题和类型。旧云端文档缺少索引时，`targetsResolved: false`，可从 `dashboard_get` 确认目标组件。只读取列表时传 `includeTargets: false`。
 
 根据批注 ID 和 componentId 定位，读取当前文档后，按共享交付流程开始编辑批次、使用最新 `expectedRevision` 修改、完成检查，再预览一次。附到对话的引用由用户发送后处理；保存页面批注本身不会自动触发 Agent。
 

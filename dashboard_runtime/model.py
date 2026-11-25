@@ -248,6 +248,38 @@ def compatibility(doc, component, chart_type):
             return 'Waterfall requires an additive delta metric; it is not a generic bar chart'
     return None
 
+def validate_annotations(annotations, components=None):
+    require(isinstance(annotations, list) and len(annotations) <= 100, 'At most 100 annotations per document')
+    annotation_ids = set()
+    for note in annotations:
+        require(isinstance(note, dict), 'Annotation must be an object')
+        identifier(note.get('id'), 'annotation id')
+        require(note['id'] not in annotation_ids, 'Duplicate annotation id')
+        annotation_ids.add(note['id'])
+        if note.get('componentId') is not None:
+            component = identifier(note['componentId'], 'annotation component')
+            require(components is None or component in components or isinstance(note.get('anchor'), dict)
+                    or isinstance(note.get('context'), dict), 'Unknown annotation component')
+        if 'anchor' in note:
+            anchor = note['anchor']
+            require(isinstance(anchor, dict), 'Annotation anchor must be an object')
+            require(anchor.get('scope') in ('component', 'text', 'page'), 'Invalid annotation scope')
+            require((anchor['scope'] == 'component') == (note.get('componentId') is not None), 'Annotation scope must match component')
+            require(anchor.get('kind') in ('element', 'area'), 'Invalid annotation selection')
+            require(isinstance(anchor.get('quote'), str) and len(anchor['quote']) <= 1000, 'Invalid annotation quote')
+            if anchor['scope'] == 'text':
+                require(bool(anchor['quote'].strip()), 'Annotation text anchor requires quote')
+                require(type(anchor.get('occurrence')) is int and 0 <= anchor['occurrence'] <= 10000, 'Invalid annotation occurrence')
+            rect = anchor.get('rect')
+            require(isinstance(rect, dict), 'Annotation rectangle required')
+            for axis in ('x', 'y', 'width', 'height'):
+                value = rect.get(axis)
+                require(type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1, 'Invalid annotation rectangle')
+            require(rect['x'] + rect['width'] <= 1.000001 and rect['y'] + rect['height'] <= 1.000001, 'Annotation rectangle exceeds target')
+        require(isinstance(note.get('text'), str) and bool(note['text'].strip()) and len(note['text']) <= 4000, 'Annotation text must contain 1-4000 characters')
+        require(isinstance(note.get('createdAt'), str) and 0 < len(note['createdAt']) <= 100, 'Annotation timestamp required')
+
+
 def validate(doc):
     json_bytes(doc)
     require(isinstance(doc, dict) and doc.get('schemaVersion') == 2, 'schemaVersion must be 2')
@@ -413,35 +445,7 @@ def validate(doc):
             else:
                 problem = compatibility(doc, c, c.get('chartType'))
                 require(problem is None, f'{key}: {problem}', 'INCOMPATIBLE_CHART')
-    annotations = m.get('annotations', [])
-    require(isinstance(annotations, list) and len(annotations) <= 100, 'At most 100 annotations per document')
-    annotation_ids = set()
-    for note in annotations:
-        require(isinstance(note, dict), 'Annotation must be an object')
-        identifier(note.get('id'), 'annotation id')
-        require(note['id'] not in annotation_ids, 'Duplicate annotation id')
-        annotation_ids.add(note['id'])
-        require(note.get('componentId') is None or note['componentId'] in m['components'] or isinstance(note.get('anchor'), dict) or isinstance(note.get('context'), dict), 'Unknown annotation component')
-        if note.get('componentId') is not None:
-            identifier(note['componentId'], 'annotation component')
-        if 'anchor' in note:
-            anchor = note['anchor']
-            require(isinstance(anchor, dict), 'Annotation anchor must be an object')
-            require(anchor.get('scope') in ('component', 'text', 'page'), 'Invalid annotation scope')
-            require((anchor['scope'] == 'component') == (note.get('componentId') is not None), 'Annotation scope must match component')
-            require(anchor.get('kind') in ('element', 'area'), 'Invalid annotation selection')
-            require(isinstance(anchor.get('quote'), str) and len(anchor['quote']) <= 1000, 'Invalid annotation quote')
-            if anchor['scope'] == 'text':
-                require(bool(anchor['quote'].strip()), 'Annotation text anchor requires quote')
-                require(type(anchor.get('occurrence')) is int and 0 <= anchor['occurrence'] <= 10000, 'Invalid annotation occurrence')
-            rect = anchor.get('rect')
-            require(isinstance(rect, dict), 'Annotation rectangle required')
-            for axis in ('x', 'y', 'width', 'height'):
-                value = rect.get(axis)
-                require(type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1, 'Invalid annotation rectangle')
-            require(rect['x'] + rect['width'] <= 1.000001 and rect['y'] + rect['height'] <= 1.000001, 'Annotation rectangle exceeds target')
-        require(isinstance(note.get('text'), str) and bool(note['text'].strip()) and len(note['text']) <= 4000, 'Annotation text must contain 1-4000 characters')
-        require(isinstance(note.get('createdAt'), str) and 0 < len(note['createdAt']) <= 100, 'Annotation timestamp required')
+    validate_annotations(m.get('annotations', []), m['components'])
     if 'report' in m:
         validate_report(m['report'], m['components'])
     require(isinstance(m.get('filters'), list) and len(m['filters']) <= 30, 'Invalid filters')

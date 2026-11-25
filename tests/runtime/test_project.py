@@ -3,6 +3,29 @@ from dashboard_runtime.model import DashboardError
 import pytest
 
 
+# @wu-test type=integration | scope=独立批注读写 | protects=读取或提交批注会加载整页，或者旧批注列表覆盖并发修改
+def test_annotations_use_their_own_read_and_write_path(tmp_path, monkeypatch):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    board = {'dashboardId': 'board'}
+    service.call('dashboard_create', {**board, 'title': 'Board'})
+
+    def unexpected(*args, **kwargs):
+        pytest.fail('Independent annotations must not load or save the full dashboard')
+
+    monkeypatch.setattr(service.store, 'get', unexpected)
+    monkeypatch.setattr(service.store, 'mutate', unexpected)
+    initial = service.call('dashboard_annotations', {**board, 'includeTargets': False})
+    args = {**board, 'expectedRevision': initial['revision'], 'expectedAnnotations': initial['annotations'],
+            'annotations': [{'id': 'note', 'componentId': None, 'text': 'Reviewed', 'createdAt': '2026-11-25'}]}
+    saved = service.call('dashboard_annotations_update', args)
+    assert saved['revision'] == initial['revision'] and 'document' not in saved
+    assert saved['annotations'][0]['text'] == 'Reviewed'
+    with pytest.raises(DashboardError, match='批注|annotations') as failure:
+        service.call('dashboard_annotations_update', {**args, 'annotations': []})
+    assert failure.value.code == 'ANNOTATION_CONFLICT'
+    assert service.call('dashboard_annotations', board)['annotations'] == saved['annotations']
+
+
 # @wu-test type=integration | scope=项目草稿检查点 | protects=编辑恢复删除运行缓存后丢批注
 def test_drafts_checkpoints_notes_and_runtime_removal(tmp_path):
     project, runtime = tmp_path/'project', tmp_path/'runtime'

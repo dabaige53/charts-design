@@ -10,6 +10,29 @@ from urllib.request import Request, urlopen
 from .model import DashboardError, require
 
 
+_ANNOTATION_READ = """
+    WITH current AS MATERIALIZED (SELECT public.charts_runtime('get', %s, %s) AS doc)
+    SELECT jsonb_build_object(
+        'id', doc->'id', 'revision', doc->'revision', 'title', doc#>'{manifest,title}',
+        'annotations', doc#>'{manifest,annotations}', 'viewMode', doc#>'{manifest,viewMode}',
+        'filters', doc#>'{manifest,filters}',
+        'datasetRefs', coalesce(doc#>'{snapshot,datasetRefs}', '{}'::jsonb),
+        'components', CASE WHEN %s AND doc#>'{manifest,components}' IS NOT NULL THEN
+            coalesce((SELECT jsonb_object_agg(key, jsonb_build_object('title', value->'title', 'kind', value->'kind'))
+                      FROM jsonb_each(doc#>'{manifest,components}')), '{}'::jsonb) END)
+    FROM current
+"""
+_ANNOTATION_WRITE = """
+    WITH current AS MATERIALIZED (SELECT public.charts_runtime('get', %s, %s) AS doc),
+    saved AS MATERIALIZED (
+        SELECT public.charts_runtime('commit', %s,
+            %s || jsonb_build_object('document', jsonb_set(doc, '{manifest,annotations}', %s))) AS doc
+        FROM current)
+    SELECT jsonb_build_object('dashboardId', doc->'id', 'revision', doc->'revision',
+                              'annotations', doc#>'{manifest,annotations}') FROM saved
+"""
+
+
 def cloud_enabled():
     backend = os.environ.get('CHARTS_STORAGE_BACKEND', 'local')
     require(backend in ('local', 'cloudbase', 'cloudflare', 'neon'), 'Unknown CHARTS_STORAGE_BACKEND', 'INVALID_CONFIG')
@@ -78,9 +101,16 @@ class CloudDatabase:
         try:
             with psycopg.connect(self.database_url, connect_timeout=60) as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute(
-                        sql.SQL('SELECT public.{}(%s, %s, %s)').format(sql.Identifier(function)),
-                        (action, project, Jsonb(payload)))
+                    if function == 'charts_runtime' and action == 'annotation_read':
+                        cursor.execute(_ANNOTATION_READ, (project, Jsonb({'board': payload['board']}), payload['includeTargets']))
+                    elif function == 'charts_runtime' and action == 'annotation_write':
+                        args = {key: payload[key] for key in ('board', 'expected', 'previousNotes', 'at')}
+                        cursor.execute(_ANNOTATION_WRITE, (project, Jsonb({'board': payload['board']}), project,
+                                                          Jsonb(args), Jsonb(payload['notes'])))
+                    else:
+                        cursor.execute(
+                            sql.SQL('SELECT public.{}(%s, %s, %s)').format(sql.Identifier(function)),
+                            (action, project, Jsonb(payload)))
                     row = cursor.fetchone()
                     if row is None:
                         raise DashboardError('CLOUD_DATABASE_FAILED', 'PostgreSQL function returned no row', 503)
