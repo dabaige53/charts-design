@@ -44,7 +44,7 @@ jobs:
             extension: '.exe'
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
-      RUSTFLAGS: ${{ runner.os == 'Windows' && '-C target-feature=+crt-static' || '' }}
+      RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
     defaults:
       run:
         shell: bash
