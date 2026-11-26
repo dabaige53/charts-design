@@ -11,7 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-# @wu-test type=integration | scope=MCP配置入口 | protects=重连丢失保存修改
+# @wu-test type=integration | scope=MCP配置入口 | protects=公开提交入口缺失或重连丢失保存修改
 def test_project_mcp_command_and_reconnect(tmp_path):
     root = Path(__file__).resolve().parents[2]
     config = json.loads(root.joinpath('mcp.json').read_text())['mcpServers']['charts-design']
@@ -26,13 +26,15 @@ def test_project_mcp_command_and_reconnect(tmp_path):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     names = {tool.name for tool in (await session.list_tools()).tools}
-                    assert {'dashboard_create', 'dashboard_patch', 'dashboard_preview', 'runtime_keepalive'} <= names
+                    assert {'dashboard_create', 'dashboard_submit', 'dashboard_get'} <= names
+                    assert not names & {'dashboard_patch', 'runtime_keepalive'}
                     if first:
                         created = await session.call_tool('dashboard_create', {'dashboardId': 'configured'})
                         assert not created.isError
-                        edited = await session.call_tool('dashboard_patch', {'dashboardId': 'configured',
+                        edited = await session.call_tool('dashboard_submit', {'dashboardId': 'configured',
                             'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Saved through configured MCP'}]})
                         assert not edited.isError
+                        assert edited.structuredContent['checkpoint']['revision'] == 2
                     result = await session.call_tool('dashboard_get', {'dashboardId': 'configured'})
                     assert not result.isError and result.structuredContent is not None
                     assert result.structuredContent['document']['revision'] == 2
