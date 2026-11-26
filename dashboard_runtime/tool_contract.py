@@ -23,6 +23,10 @@ BOARD = {
     'dataMode': described({'enum': ['snapshot', 'local']}, 'MCP defaults to local: immutable data references and bounded computed results. snapshot is for explicit legacy snapshot reads, not full-data export.'),
 }
 EXPECTED = described(INT, 'Latest revision: document.revision from dashboard_get/full results, or top-level revision from an MCP write summary. On REVISION_CONFLICT read dashboard_get and reconcile changes before retrying.')
+READING_VERSION = {
+    'expectedRevision': described(INT, 'Revision of the document being read: the current draft or latest displayed checkpoint. Omit to inspect the draft. On REVISION_CONFLICT reload; use dashboard_version_query for older saved revisions.'),
+    'dataVersion': described(STR, 'Data version from the same displayed document; a mismatch requires reloading.'),
+}
 TARGET = {**BOARD, 'componentId': described(ID, 'Existing component key from document.manifest.components, not its display title.')}
 PUBLISHED = described({'type': 'boolean', 'default': False}, 'Legacy retention marker. Saved content is immutable, but explicit confirmed deletion is allowed. Does not deploy a website or create a share link.')
 NAME = described(STR, 'Optional checkpoint label. Naming a version does not prevent explicit confirmed deletion.')
@@ -304,12 +308,12 @@ TOOLS = {
     }, ('dashboardId', 'expectedRevision', 'revision'))),
     'chart_catalog': ('Discover installed chart/KPI/table codes and binding capabilities without creating content. Returns charts, originalKpis and kpiGuide. Choose by the business question, then chart_declarations(code). Optional target fields are compatibility-only and do not narrow the catalog.', schema(TARGET)),
     'component_data': ('Read paged underlying rows for one dataset-bound component under temporary/saved filters. Returns rows and totalRows, not chart aggregates. Applies search/sort before paging. Use dashboard_view for aggregate results or dataset_export for all matching rows.', schema({
-        **TARGET, 'expectedRevision': EXPECTED, 'filters': FILTERS, 'sort': SORT, 'search': SEARCH,
+        **TARGET, **READING_VERSION, 'filters': FILTERS, 'sort': SORT, 'search': SEARCH,
         'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based matching-row offset.'),
         'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 1000, 'default': 1000}, 'Maximum rows in this response; advance offset to read more.'),
     }, ('dashboardId', 'componentId'))),
-    'query_inspect': ('Inspect component source/query provenance and local data reference without executing upstream SQL. Returns source, filters and snapshot time; supplied provenance is not certified execution. Use semantic_inspect for metric definitions.', schema(TARGET, ('dashboardId', 'componentId'))),
-    'semantic_inspect': ('Read the actual component metric definitions, units, aggregation and dataset metadata. Returns metrics and provenance-related presentation; certified=false is not approval. Do not replace unknown business definitions with guessed semantics.', schema(TARGET, ('dashboardId', 'componentId'))),
+    'query_inspect': ('Inspect component source/query provenance and local data reference without executing upstream SQL. Returns source, filters and snapshot time; supplied provenance is not certified execution. Use semantic_inspect for metric definitions.', schema({**TARGET, **READING_VERSION}, ('dashboardId', 'componentId'))),
+    'semantic_inspect': ('Read the actual component metric definitions, units, aggregation and dataset metadata. Returns metrics and provenance-related presentation; certified=false is not approval. Do not replace unknown business definitions with guessed semantics.', schema({**TARGET, **READING_VERSION}, ('dashboardId', 'componentId'))),
     'query_execute': ('Execute bounded read-only SQLite SQL through an operator-configured connection alias, then replace the destination dataset snapshot and provenance. The query is read-only but saving changes the dashboard. Returns the updated revision and execution metadata; inferred numeric metrics remain unverified.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'datasetId': described(ID, 'Destination dataset ID; an existing ID replaces its saved data and affects all bound components.'),
@@ -352,18 +356,17 @@ TOOLS = {
             'Reader value overrides keyed by existing filter id: only id and values are required. Omitted filters retain saved values and current definitions. A runtime-linkage entry must carry its complete declaration.'),
     }, ('dashboardId',))),
     'dashboard_view': ('Compute temporary local chart aggregates and table pages from immutable data versions; does not save filters or rerun source SQL. full returns document; patch returns only selected computed components. On REVISION_CONFLICT reload and reconcile. For reading use the preview/checkpoint revision; for draft inspection use dashboard_get revision.', schema({
-        **VIEW, 'expectedRevision': EXPECTED,
+        **VIEW, **READING_VERSION,
         'responseMode': described({'enum': ['full', 'patch'], 'default': 'full'}, 'patch limits computation and response to componentIds; full returns the document and all computed results.'),
         'componentIds': described({'type': 'array', 'items': ID}, 'patch mode only: omit for all, [] for none, or list visible component IDs.'),
         'includeEvidence': described({'type': 'boolean'}, 'Include the metric definitions, provenance, effective filters and data versions from the same revision as the computed values. Uses patch mode when responseMode is omitted.'),
         'includeFilterOptions': described({'type': 'boolean', 'default': False}, 'patch mode only: include filter options when they need reloading; otherwise use dashboard_filter_options.'),
-        'dataVersion': described(STR, 'Data version from the same document as expectedRevision; mismatch requires reloading.'),
         'filterSequence': described({'type': 'integer', 'minimum': 0}, 'Optional caller-side filter generation; the caller must discard stale results.'),
         'compactRecords': described({'type': 'boolean', 'default': False}, 'Opt into compact field/row wire records; only use when the caller supports decoding them.'),
     }, ('dashboardId',))),
     'dashboard_data_inspect': ('Read immutable dataset references, row counts, shared versions and file/config sizes without full rows. Returns datasets and sharedVersions; use this to check imports before computing views. Does not verify metric business definitions.', schema(BOARD, ('dashboardId',))),
     'dashboard_filter_options': ('Search/page all candidate values of a declared filter; does not narrow candidates by current reader conditions or save a selection. Returns values and paging metadata. Read every page before claiming all values are selected.', schema({
-        **BOARD, 'filterId': described(ID, 'Existing manifest.filters ID, not its field name or display label.'),
+        **BOARD, **READING_VERSION, 'filterId': described(ID, 'Existing manifest.filters ID, not its field name or display label.'),
         'search': described(STR, 'Candidate-label search; omit or empty to read all candidates.'),
         'offset': described({'type': 'integer', 'minimum': 0, 'default': 0}, 'Zero-based candidate offset.'),
         'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 1000, 'default': 100}, 'Maximum candidate values in one response.'),
@@ -376,7 +379,7 @@ TOOLS = {
         'fields': described(common['datasetMetaSchema']['properties']['fields'], 'Optional field metadata keyed by source column; preserve known types and labels. Omit for inference.'),
     }, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'table'))),
     'dataset_export': ('Create a managed CSV of all matching dataset/table rows with supplied filters, search, columns and sort; table grouping follows its presentation. Does not change the dashboard. Deliver the returned local path or remote downloadUrl; rowCount reports the exported scope.', schema({
-        **TARGET, 'datasetId': described(ID, 'Existing dataset ID when componentId is omitted; componentId takes precedence when supplied.'),
+        **TARGET, **READING_VERSION, 'datasetId': described(ID, 'Existing dataset ID when componentId is omitted; componentId takes precedence when supplied.'),
         'filters': FILTERS, 'columns': described({'type': 'array', 'items': STR}, 'Ordered dataset field keys to export; omit for default/all configured columns.'),
         'sort': SORT, 'search': SEARCH,
     }, ('dashboardId',), anyOf=[{'required': ['datasetId']}, {'required': ['componentId']}])),
@@ -387,8 +390,8 @@ TOOLS = {
         **BOARD, 'expectedRevision': EXPECTED,
         'backupId': described(STR, 'Managed backup ID returned by dashboard_migrate, not a filesystem path.'),
     }, ('dashboardId', 'expectedRevision', 'backupId'))),
-    'dashboard_export': ('Create a managed JSON configuration export or HTML snapshot of the current computed draft view, including supplied temporary reader state. Does not complete/publish an edit. Deliver the returned local path or remote downloadUrl. HTML is a view snapshot; dataset_export provides full matching CSV rows.', schema({
-        **VIEW, 'format': described({'enum': ['html', 'json']}, 'json preserves canonical configuration/data references; html captures the computed view and is not a live data connection.'),
+    'dashboard_export': ('Create a managed JSON configuration export or HTML snapshot of the selected reading revision, including supplied temporary reader state. Defaults to the draft when expectedRevision is omitted. Does not complete/publish an edit. Deliver the returned local path or remote downloadUrl. HTML is a view snapshot; dataset_export provides full matching CSV rows.', schema({
+        **VIEW, **READING_VERSION, 'format': described({'enum': ['html', 'json']}, 'json preserves canonical configuration/data references; html captures the computed view and is not a live data connection.'),
     }, ('dashboardId', 'format'))),
     'runtime_result_chunk': ('Read one base64 page when a tool result returns transport.encoding=base64-json-v1. Use the same projectRoot and requestId, read all zero-based pages, concatenate in index order, then decode once as UTF-8 JSON and verify transport.bytes. Returns data; RESULT_EXPIRED requires repeating the original read or inspecting current state before retrying a write.', schema({
         'requestId': described(STR, 'transport.requestId from the original result in this same project.'),
@@ -469,5 +472,8 @@ TOOLS = {
         'revision': described(INT, 'Saved version to delete, including latest or published versions.'),
         'confirmation': described(STR, 'Token from the user-reviewed deletion preview.'),
     }, ('dashboardId', 'expectedRevision', 'revision', 'confirmation'))),
-    'dashboard_export_site': ('Create a managed ZIP containing an independent static React site and used immutable dataset shards. Project mode exports the latest completed checkpoint; legacy storage exports the current document. Deliver the returned local path or remote downloadUrl. Does not deploy or share. Static sites have no live backend.', schema(BOARD, ('dashboardId',))),
+    'dashboard_export_site': ('Create a managed ZIP containing an independent static React site and used immutable dataset shards. Project mode exports the latest completed checkpoint; legacy storage exports the current document. Deliver the returned local path or remote downloadUrl. Does not deploy or share. Static sites have no live backend. Repeated Parquet exports reuse immutable data without re-encoding.', schema({
+        **BOARD, 'dataFormat': described({'enum': ['auto', 'parquet', 'json']},
+                                       'auto (default) uses Parquet when the native exporter and matching UI are installed, otherwise gzip JSON. parquet requires native support and never silently falls back. The receipt declares the actual dataFormat.'),
+    }, ('dashboardId',))),
 }

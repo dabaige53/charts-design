@@ -1,6 +1,12 @@
 FROM ghcr.io/astral-sh/uv:0.12.13 AS uv
+FROM rust:1.91.1-bookworm AS native
+WORKDIR /build/runtime-core
+COPY runtime-core/ ./
+RUN cargo build --release --locked
+
 FROM python:3.11-slim
 COPY --from=uv /uv /usr/local/bin/uv
+COPY --from=native /build/runtime-core/target/release/charts-design-core /usr/local/bin/charts-design-core
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --locked --no-dev --no-install-project --extra mcp --extra cloud --extra neon --extra statistics

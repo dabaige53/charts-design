@@ -13,10 +13,14 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 | `cloud_assets.py`、`cos_view.py`、`cos_migrate.py` | COS 内容包与引用登记、统一网页描述、显式项目迁移 |
 | `remote_client.py`、`bin/remote-project.py`、`bin/transfer-project.py` | 远程完整响应读取、上传前检查、分块续传与首次项目迁移 |
 | `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
+| `runtime-core/`、`columnar.py` | Rust 只读 SQLite→Parquet 导出、不可变编码缓存及与现有 MCP 的桥接 |
+| `file_lock.py` | 镜像同步与导出缓存的跨进程文件锁，不承载业务版本状态 |
 | `server.py`、`http_app.py` | 自托管远程服务与本机网页入口 |
 | `runtime-ui/src/` | 展示组件、应用状态、布局和宿主能力适配 |
 
 展示组件接收 props 和事件，不访问数据库或直接调用 MCP；应用适配层管理工具请求、结果合并和宿主能力。画布与应用共享组件，分别构建与打包。业务状态通过 Service 修改，不手工维护 SQLite 的 JSON 镜像。
+
+Rust 通过受控本机进程接入独立网页、COS 业务行与候选项编码，以及显式迁移前的实际 Parquet 解码校验；MCP/HTTP、版本事务和服务端查询仍由 Python 承担。该边界复用已有工具，不增加常驻服务。网页部署只需要导出的静态包；具体格式、原生程序准备及兼容行为见[静态部署](../operations/static-deployment.md)。
 
 ## 启动与依赖
 
@@ -142,7 +146,7 @@ bun bin/python-runtime.js -m dashboard_runtime --root ./boards --sources ./sourc
 | 交付 | 数据与操作范围 |
 | --- | --- |
 | JSON | 保存配置与不可变本地引用 |
-| HTML | 当前计算视图的只读快照，不连接上游来源 |
+| HTML | 选定读取版本及当前查看条件的只读快照，不连接上游来源；不传版本参数时读取草稿 |
 | CSV | 导出全部匹配记录；筛选、排序和列选择在完整结果上执行 |
 | 静态网页 ZIP | 使用中的完整数据集分片及共享应用；格式与离线能力见 [静态部署包](../operations/static-deployment.md) |
 | 远程网页与腾讯云副本 | 鉴权、密钥、存储、有效期和 SCF 清理见 [自托管服务器](../operations/self-hosted-server.md) |

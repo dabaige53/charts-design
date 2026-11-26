@@ -28,11 +28,13 @@ test('deployment only accepts an exact stable package version tag', () => {
 // @wu-test type=boundary | scope=CloudBase源码包 | protects=本地凭据缓存及设计归档进入云端源码包
 test('source package excludes private configuration and generated files', () => {
   for (const name of ['runtime-ui/.env', 'bin/dev.env.local', 'bin/key.pem',
+    'runtime-core/target/release/charts-design-core', 'dashboard_runtime/native/charts-design-core',
     'runtime-ui/node_modules/a.js', 'runtime-ui/dist/app.js', 'docs/design-system/tokens.json',
     '.git/config', 'boards/data.csv', 'dashboard_runtime/__pycache__/a.pyc']) {
     assert.equal(includeSource(name), false, name);
   }
   for (const name of ['runtime-ui/bun.lock', 'runtime-ui/src/main.tsx',
+    'runtime-core/Cargo.toml', 'runtime-core/Cargo.lock', 'runtime-core/src/lib.rs',
     'dashboard_runtime/server.py', 'package.json', 'skills/executive-charts/SKILL.md']) {
     assert.equal(includeSource(name), true, name);
   }

@@ -1,0 +1,19 @@
+[package]
+name = "charts-design-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.1"
+publish = false
+
+[dependencies]
+arrow-array = "=60.2.0"
+arrow-schema = "=60.2.0"
+parquet = { version = "=60.2.0", default-features = false, features = ["arrow", "snap"] }
+rusqlite = { version = "=0.41.1", features = ["bundled"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.149", features = ["preserve_order"] }
+sha2 = "=0.10.9"
+
+[profile.release]
+lto = "thin"
+strip = true

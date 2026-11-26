@@ -188,6 +188,14 @@ class LocalData:
         with self._connect() as db:
             return self._version(db, {'version': version})[1]
 
+    def sqlite_source(self, ref):
+        """Resolve a validated native query file, including attached cloud caches."""
+        with self._connect() as db:
+            table, metadata = self._version(db, ref)
+            alias = table.split('.', 1)[0] if '.' in table else 'main'
+            path = next(row[2] for row in db.execute('PRAGMA database_list') if row[1] == alias)
+            return Path(path).resolve(strict=True), metadata
+
     @staticmethod
     def _decode(keys, row, fields, missing=None):
         omitted = set(json.loads(missing)) if missing else set()

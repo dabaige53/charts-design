@@ -40,7 +40,7 @@ bun bin/python-runtime.js -m dashboard_runtime server --workspace /data/projects
 
 `deploy/` 提供可直接改用的文件：
 
-- `deploy/Dockerfile`、`deploy/docker-compose.yml`：纯 Python 后端镜像，以非 root 用户运行，数据卷挂载 `/data`。在仓库根目录执行 `docker compose -f deploy/docker-compose.yml up -d --build`，配置写入 `deploy/charts.env`（从 `deploy/environment.example` 复制，不提交 Git）。
+- `deploy/Dockerfile`、`deploy/docker-compose.yml`：包含 Python 后端与原生 Parquet 导出程序的镜像，以非 root 用户运行，数据卷挂载 `/data`。在仓库根目录执行 `docker compose -f deploy/docker-compose.yml up -d --build`，配置写入 `deploy/charts.env`（从 `deploy/environment.example` 复制，不提交 Git）。
 - `deploy/charts-design.service`：systemd 单元，假设代码位于 `/opt/charts-design` 并使用其中的虚拟环境。
 - `deploy/nginx.conf`：TLS 反向代理示例；`/mcp` 关闭缓冲以支持 SSE，`/mcp` 与 `/files/` 关闭访问日志，避免令牌进入日志。
 
@@ -370,6 +370,10 @@ stderr 输出 JSON 进度，包括本地准备、分块编码、请求耗时、�
 
 上线时先应用 `20261112020000_cos_assets.sql` 和 `20261112030000_cos_editor.sql`，再部署兼容版本的 Runtime。后一个迁移修复删除预览与确认的 SQL 变量引用，并让新建云端项目默认使用 `cos-v1`。原项目在显式迁移前仍使用 PostgreSQL 业务行；不能直接改格式标记来代替迁移。通过 `dataset_storage_inventory` 的 `cos.format` 检查实际格式，在线编辑接口返回的文档应包含 `storageFormat: "cos-v1"`。
 
+新创建的 COS 数据包使用 Rust 从已校验的 SQLite 表生成 Parquet 行分片和单列候选项分片，保留 `query.sqlite3` 供服务器查询与缓存恢复。包描述新增 `dataFormat: "parquet-v1"`，沿用现有对象登记、数据版本与引用清理协议，不增加数据库迁移。原生程序或匹配的 UI 资源缺失时明确报错，不改写成 JSON 新包；服务器镜像已包含原生程序。旧包继续按原格式读取，元数据和版本声明仍使用 JSON。
+
+配置分区字段时，Parquet 包保留分区到文件的索引和原始行序列，网页筛选仅下载匹配分片，跨分区明细与 CSV 仍按原行序输出。缺失字段与显式 null 分别保存。候选项可跨多个 Parquet 分片，读取旧包时仍兼容原 JSON 候选项索引。
+
 迁移工具接收项目名和工作区根目录，凭据由运行环境提供。默认输出元数据清单，不上传或删除业务内容：
 
 ```sh
@@ -377,7 +381,7 @@ bun run python -- -m dashboard_runtime.cos_migrate \
   --project <项目名> --workspace <工作区绝对路径>
 ```
 
-明确安排迁移后才能加 `--apply`。可重复传入 `--partition-field <字段名>`，将匹配的字符串或日期字段保存为项目分片索引配置。工具复用已上传的数据包，检查数据校验值、上传分片行数、查询文件和配置内容，并在项目状态仍一致时原子切换指针。切换事务删除 PostgreSQL 中已迁移的业务分块；原草稿、检查点及发布配置改为 COS 引用。未完成分块没有可验证的数据版本时，必须先处理传输状态，不能直接清空。
+明确安排迁移后才能加 `--apply`。可重复传入 `--partition-field <字段名>`，将匹配的字符串或日期字段保存为项目分片索引配置。工具复用已上传的数据包，检查数据校验值、上传分片行数、查询文件和配置内容；Parquet 分片下载并校验 SHA-256 后，再由原生程序实际解码核对字段与行数，候选项分片也逐片核验。仅在项目状态仍一致时原子切换指针。切换事务删除 PostgreSQL 中已迁移的业务分块；原草稿、检查点及发布配置改为 COS 引用。未完成分块没有可验证的数据版本时，必须先处理传输状态，不能直接清空。
 
 迁移失败时保留源数据。新上传但尚未引用的对象保留在清单中，清理前检查其引用和迁移状态。全部切换后，重新加载兼容版本的服务进程以读取项目分片配置。回退时先完成反向数据迁移，再切换旧镜像。迁移期间暂停编辑；工具检查项目状态，并拒绝提交已经变化的快照。
 
@@ -385,4 +389,4 @@ bun run python -- -m dashboard_runtime.cos_migrate \
 
 删除任务保存在 PostgreSQL，先撤销访问，再删除 COS 对象的全部物理版本，最后清除业务行。失败任务可从版本中心继续清理。SCF 每 6 小时处理到期分享与失败删除任务，发布前继续要求最近 7 小时的成功清理记录。清理函数需要同一环境的 PostgreSQL 服务凭据及 COS 权限。函数仅在全部清理成功后更新成功心跳。部署后读取云端配置，确认告警和触发器的实际状态。
 
-独立分享保持私有网关鉴权，新分享的数据文件引用统一 COS 包；到期清理只删除分享自身内容，不删除项目数据包。分享撤销阻止后续请求，不收回已经下载到浏览器的数据。物理数据清理以确认清单中的引用关系为准，不等同于数据库计费空间立即下降。
+独立分享保持私有网关鉴权。新分享直接引用已有 Parquet COS 包；引用旧 JSON 包时，从其查询文件生成分享自己的 Parquet 行分片与候选项分片，保留原分区与行序，同一次多页分享按数据版本复用一次转换。旧数据包和既有分享不重写；不同新分享的旧数据转换文件各自持有，编码可复用本地缓存。到期清理只删除分享自身内容，不删除项目数据包。分享撤销阻止后续请求，不收回已经下载到浏览器的数据。物理数据清理以确认清单中的引用关系为准，不等同于数据库计费空间立即下降。

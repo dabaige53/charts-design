@@ -1,20 +1,30 @@
 """Project-owned assets, draft revisions and explicit checkpoints."""
 from pathlib import Path
 from typing import cast
+from contextlib import contextmanager
 import copy
 import json
+import tempfile
 import uuid
 from .store import Store
 from .local_data import LocalData
+from .file_lock import exclusive_file_lock
 from .model import DashboardError, apply_operations, identifier, json_bytes, require, utcnow, validate_annotations
 
 DEFAULTS = {'history': {'keepCheckpoints': 100}, 'loading': {'debounceMs': 150, 'maxConcurrent': 4, 'pageSize': 50}}
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2))
-    temporary.replace(path)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                         prefix='.' + path.name + '.', suffix='.tmp', delete=False) as output:
+            temporary = Path(output.name)
+            json.dump(value, output, ensure_ascii=False, indent=2)
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 class ProjectStore(Store):
     def __init__(self, project_root, runtime_root):
@@ -35,6 +45,7 @@ class ProjectStore(Store):
                 CREATE TABLE IF NOT EXISTS batches (board_id TEXT PRIMARY KEY, batch_id TEXT, base_revision INTEGER);
                 CREATE TABLE IF NOT EXISTS annotations (board_id TEXT PRIMARY KEY, payload TEXT);
                 CREATE TABLE IF NOT EXISTS annotation_events (board_id TEXT, at TEXT, revision INTEGER, payload TEXT);
+                CREATE INDEX IF NOT EXISTS annotation_events_board ON annotation_events(board_id);
             ''')
 
     def compatible(self, document):
@@ -45,9 +56,9 @@ class ProjectStore(Store):
             return db.execute('SELECT max(revision) FROM revisions WHERE board_id=?',(board,)).fetchone()[0]
 
     def readable(self, board):
-        revision=self.display_revision(board)
         with self.connect() as db:
-            row=db.execute('SELECT document FROM revisions WHERE board_id=? AND revision=?',(board,revision)).fetchone()
+            db.execute('BEGIN')
+            row=db.execute('SELECT document FROM revisions WHERE board_id=? ORDER BY revision DESC LIMIT 1',(board,)).fetchone()
             require(row is not None, '暂无已保存版本', 'NO_SAVED_VERSION')
             doc=json.loads(row[0])
             doc['manifest']['annotations']=self._notes(db,board)
@@ -94,8 +105,9 @@ class ProjectStore(Store):
             doc = {'id': board, 'revision': expected, 'manifest': {'filters': state['filters']},
                    'snapshot': {'datasetRefs': state['datasetRefs']}}
             self._save_notes(db, doc, notes, previous)
-            if notes != previous:
-                self._annotation_files(db, board)
+        # The previous request may have committed before a mirror write failed.
+        # A successful no-op retry repairs those files without adding an event.
+        self._files(board, draft=False, history=False, checkpoints=())
         return {'dashboardId': board, 'revision': expected, 'annotations': notes}
 
     def append_annotation(self, board, note):
@@ -111,7 +123,7 @@ class ProjectStore(Store):
                 doc = {'id': board, 'revision': state['revision'], 'manifest': {'filters': state['filters']},
                        'snapshot': {'datasetRefs': state['datasetRefs']}}
                 self._save_notes(db, doc, [*previous, note], previous)
-                self._annotation_files(db, board)
+        self._files(board, draft=False, history=False, checkpoints=())
         return {'dashboardId': board, 'revision': state['revision'], 'annotation': existing or note}
 
     def get(self, board_id, hydrate=True):
@@ -131,25 +143,47 @@ class ProjectStore(Store):
         if notes != list(previous.values()):
             db.execute('INSERT OR REPLACE INTO annotations VALUES(?,?)', (doc['id'], raw))
             db.execute('INSERT INTO annotation_events VALUES(?,?,?,?)', (doc['id'], utcnow(), doc['revision'], raw))
+            return True
+        return False
 
     def _annotation_files(self, db, board):
         folder = self.root / board
         write_json(folder / 'annotations.json', self._notes(db, board))
-        events = [dict(r) for r in db.execute('SELECT * FROM annotation_events WHERE board_id=?', (board,))]
+        events = [dict(r) for r in db.execute('SELECT * FROM annotation_events WHERE board_id=? ORDER BY rowid', (board,))]
         write_json(folder / 'annotation-history.json', events)
 
-    def _files(self, board, rewrite=False):
+    @contextmanager
+    def _mirror_db(self, board):
+        """Serialize mirror readers/writers without holding SQLite's write lock."""
+        folder = self.root / board
+        with exclusive_file_lock(folder / '.mirror.lock'):
+            with self.connect() as db:
+                db.execute('BEGIN')
+                yield db
+
+    def _files(self, board, rewrite=False, *, draft=True, annotations=True, history=True, checkpoints=None):
         """Portable readable mirrors; SQLite is the transactional project index."""
         folder = self.root / board
-        with self.connect() as db:
-            row = db.execute('SELECT document FROM boards WHERE id=?', (board,)).fetchone()
-            write_json(folder / 'draft.json', json.loads(row[0]))
-            self._annotation_files(db, board)
-            write_json(folder / 'history.json', [dict(r) for r in db.execute('SELECT r.revision,r.created_at,r.action,m.name,m.published FROM revisions r LEFT JOIN checkpoint_meta m ON r.board_id=m.board_id AND r.revision=m.revision WHERE r.board_id=? ORDER BY r.revision DESC',(board,))])
-            # Checkpoint rows are immutable once written, so their readable
-            # mirrors only need writing once. Rewriting every retained
-            # checkpoint on each draft patch made edits O(history).
+        with self._mirror_db(board) as db:
+            if draft:
+                row = db.execute('SELECT document FROM boards WHERE id=?', (board,)).fetchone()
+                write_json(folder / 'draft.json', json.loads(row[0]))
+            if annotations:
+                self._annotation_files(db, board)
+            if history:
+                write_json(folder / 'history.json', [dict(r) for r in db.execute('SELECT r.revision,r.created_at,r.action,m.name,m.published FROM revisions r LEFT JOIN checkpoint_meta m ON r.board_id=m.board_id AND r.revision=m.revision WHERE r.board_id=? ORDER BY r.revision DESC',(board,))])
             directory = folder / 'checkpoints'
+            # Normal writes know which checkpoint changed. Only creation and
+            # migration need to reconcile the entire directory.
+            if checkpoints is not None:
+                for revision in checkpoints:
+                    path = directory / f'{revision}.json'
+                    row = db.execute('SELECT document FROM revisions WHERE board_id=? AND revision=?', (board, revision)).fetchone()
+                    if row is None:
+                        path.unlink(missing_ok=True)
+                    elif not path.exists():
+                        write_json(path, json.loads(row[0]))
+                return
             existing = {path.name for path in directory.glob('*.json')} if directory.exists() else set()
             if rewrite:
                 for name in existing:
@@ -206,12 +240,13 @@ class ProjectStore(Store):
                 return self.compatible(current)
             if expected_annotations is None:
                 doc['revision'] += 1
-            self._save_notes(db, doc, doc['manifest'].get('annotations', []))
+            notes_changed = self._save_notes(db, doc, doc['manifest'].get('annotations', []), current['manifest']['annotations'])
             stored = copy.deepcopy(doc)
             stored['manifest'].pop('annotations', None)
             if expected_annotations is None:
                 db.execute('UPDATE boards SET revision=?,document=? WHERE id=?', (doc['revision'], json_bytes(stored).decode(), board_id))
-        self._files(board_id)
+        self._files(board_id, draft=expected_annotations is None, annotations=notes_changed,
+                    history=False, checkpoints=())
         return doc
 
     def migrate(self, board_id, expected_revision):
@@ -239,7 +274,7 @@ class ProjectStore(Store):
             if name or published:
                 db.execute('INSERT OR REPLACE INTO checkpoint_meta VALUES(?,?,?,?)', (board, expected, name, int(published)))
             db.execute('DELETE FROM batches WHERE board_id=?', (board,))
-        self._files(board)
+        self._files(board, draft=False, annotations=False, checkpoints=(expected,))
         return {'dashboardId': board, 'revision': expected, 'name': name, 'published': published}
 
     def history(self, board_id, offset=0, limit=50):
@@ -254,7 +289,7 @@ class ProjectStore(Store):
             require(current is not None and current[0]==expected, 'Reload before labeling', 'REVISION_CONFLICT')
             require(db.execute('SELECT 1 FROM revisions WHERE board_id=? AND revision=?',(board,revision)).fetchone() is not None, 'Checkpoint not found')
             db.execute('INSERT OR REPLACE INTO checkpoint_meta VALUES(?,?,?,?)',(board,revision,name,int(published)))
-        self._files(board)
+        self._files(board, draft=False, annotations=False, checkpoints=())
         return {'revision':revision,'name':name,'published':published}
 
     def diff(self, board, first, second):

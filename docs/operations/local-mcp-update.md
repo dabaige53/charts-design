@@ -6,6 +6,8 @@
 
 该操作先通过 `ui:prepare` 核对已有资源，输入和产物相符时复用，否则构建一次，再打包到本机 Documents 的现有工具目录。验证 MCP 启动和预览资源后，将 analyst-workspace 的 `mcp_servers.charts-design.command` 切换为 Bun，并替换 `args[0]`。安装包记录本次使用的 uv 虚拟环境解释器绝对路径，不复制旧的独立依赖目录。此入口用于已有项目配置的兼容更新；统一注册与多项目路由由 Magpie 管理，不为各业务项目新增注册。
 
+需要 Parquet 导出时，在打包前通过 `bun run native:install` 或 `bun run native:build` 准备本机原生程序。`dashboard_runtime/native/<平台>-<架构>/` 随包保留，安装更新不会丢失已准备的程序；未准备时继续支持原有 JSON 导出，显式请求 Parquet 会提示缺少程序。原生安装与独立网页部署见[静态部署包](static-deployment.md)。
+
 ```sh
 bun bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace
 ```

@@ -6,7 +6,7 @@ import copy
 from .model import DashboardError, require
 
 
-def web_document(store, document, url_for, editable=False):
+def web_document(store, document, url_for, editable=False, *, dataset_asset=None):
     doc = copy.deepcopy(document)
     doc['staticFiles'], doc['staticOptions'], doc['staticPartitionIndexes'] = {}, {}, {}
     pages = doc.get('computed', {}).get('filterPages', {})
@@ -27,12 +27,16 @@ def web_document(store, document, url_for, editable=False):
             doc['staticComponentDatasets'][component_id] = key
             doc['staticDatasetFields'][key] = ref['fields']
     for key, ref in refs.items():
-        obj = store.assets.call('object_get', version=ref['version'])
+        obj = (dataset_asset(ref) if dataset_asset else
+               store.assets.call('object_get', version=ref['version']))
         require(obj is not None, 'Dataset files unavailable', 'ASSET_UNAVAILABLE')
         descriptor = obj['descriptor']
         doc['staticFiles'][key] = [url_for(obj['id'], name) for name in descriptor['shards']]
-        doc['staticOptions'][key] = {field: url_for(obj['id'], name)
-                                    for field, name in descriptor['options'].items()}
+        doc['staticOptions'][key] = {
+            field: (url_for(obj['id'], entry) if isinstance(entry, str) else
+                    {'field': entry['field'], 'files': [url_for(obj['id'], name) for name in entry['files']]})
+            for field, entry in descriptor['options'].items()
+        }
         if descriptor.get('partitionIndex'):
             index = descriptor['partitionIndex']
             doc['staticPartitionIndexes'][key] = {'field': index['field'],
@@ -59,6 +63,8 @@ def authorized_file(store, document, object_id, name):
     require(obj['kind'] == 'dataset'
             and any(ref['version'] == obj['version'] for ref in refs),
             'File is outside the selected version', 'FORBIDDEN')
-    allowed = [*obj['descriptor']['shards'], *obj['descriptor']['options'].values()]
+    allowed = [*obj['descriptor']['shards'],
+               *(name for entry in obj['descriptor']['options'].values()
+                 for name in ([entry] if isinstance(entry, str) else entry['files']))]
     require(name in allowed, 'File is not a browser data resource', 'FORBIDDEN')
     return store.assets.read_file(obj, name)

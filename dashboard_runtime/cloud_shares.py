@@ -287,8 +287,11 @@ class CloudShares:
 
     def _publish_cos(self, service, documents, expiration, access_key, share_id):
         from .assets import DIST, FAVICON_LINK, require_preview
+        from .cloud_assets import parquet_resources
+        from .columnar import FORMAT, copy_package, export_format
         from .cos_view import web_document
         require_preview()
+        _, binary = export_format('parquet')
         now = int(time.time())
         lifetime = EXPIRATIONS[expiration]
         expires = now + lifetime if lifetime is not None else None
@@ -306,17 +309,45 @@ class CloudShares:
         assets.call('share_register', id=share_id, pages=pages, state='uploading', expiresAt=expires,
                     stagingUntil=job['stagingUntil'])
         files, asset_files, total = [], {}, 0
+        datasets, converted = {}, set()
         def put(name, raw, kind):
             nonlocal total
             self.storage.put('shares/' + share_id + '/site/' + name, raw, kind)
             files.append(name)
             total += len(raw)
+
+        def dataset_asset(ref):
+            version = ref['version']
+            if version in datasets:
+                return datasets[version]
+            obj = assets.call('object_get', version=version)
+            require(obj is not None, 'Dataset files unavailable', 'ASSET_UNAVAILABLE')
+            descriptor = obj['descriptor']
+            require(descriptor['metadata'] == ref, 'Remote data metadata differs', 'DATA_CONFLICT')
+            if descriptor.get('dataFormat') != FORMAT:
+                # Keep old immutable objects and their existing publications.
+                # A new share owns this conversion and its ordinary cleanup job.
+                with tempfile.TemporaryDirectory(prefix='charts-share-data-') as temporary:
+                    directory = Path(temporary)
+                    receipt = copy_package(
+                        directory, service.store.data, ref, service.store.runtime_root / 'parquet-cache', binary,
+                        partition_field=descriptor.get('partitionIndex', {}).get('field'), include_options=True,
+                    )
+                    for item in [*receipt['files'], *(entry for group in receipt['options'].values() for entry in group)]:
+                        put(f"data/{obj['id']}/{item['path']}", (directory / item['path']).read_bytes(),
+                            'application/octet-stream')
+                obj = {**obj, 'descriptor': {**descriptor, **parquet_resources(receipt)}}
+                converted.add(obj['id'])
+            datasets[version] = obj
+            return obj
+
         for index, ((board, doc), page) in enumerate(zip(documents, pages)):
             def url_for(object_id, name):
                 path = f'data/{object_id}/{name}'
-                asset_files[path] = {'object': object_id, 'name': name, 'board': board, 'revision': doc['revision']}
+                if object_id not in converted:
+                    asset_files[path] = {'object': object_id, 'name': name, 'board': board, 'revision': doc['revision']}
                 return path if index == 0 else '../../' + path
-            web = web_document(service.store, doc, url_for)
+            web = web_document(service.store, doc, url_for, dataset_asset=dataset_asset)
             if index == 0:
                 web['staticPages'] = pages
             put(page['path'], json.dumps(web, ensure_ascii=False).encode(), 'application/json')

@@ -16,10 +16,10 @@ export function validateTag(tag, version) {
 }
 
 export function includeSource(path) {
-  if (path.split('/').some(part => /^(node_modules|dist|generated|__pycache__)$/.test(part)
+  if (path.split('/').some(part => /^(node_modules|dist|target|native|generated|__pycache__)$/.test(part)
     || part.startsWith('.') || /\.(pyc|pem|key|pfx)$/.test(part) || /\.env($|\.)/.test(part))) return false;
   if (/^docs\/(design-system|design-canvas|images)\//.test(path)) return false;
-  return /^(dashboard_runtime|runtime-ui|bin|docs)\//.test(path)
+  return /^(dashboard_runtime|runtime-ui|runtime-core|bin|docs)\//.test(path)
     || /^skills\/(executive-charts|analytical-reports)\//.test(path)
     || /^(package\.json|pyproject\.toml|uv\.lock|README\.md)$/.test(path);
 }

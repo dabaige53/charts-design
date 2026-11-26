@@ -703,7 +703,9 @@ def create_app(server: RemoteServer):
                     doc = Versions(store).read(board, revision)
                 return authorized_file(store, doc, request.path_params['object'], request.path_params['name'])
             raw = await asyncio.to_thread(read)
-            return Response(raw, media_type='application/gzip',
+            name = request.path_params['name']
+            kind = 'application/gzip' if name.endswith('.gz') else 'application/octet-stream'
+            return Response(raw, media_type=kind,
                             headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
         except Exception as error:  # noqa: BLE001
             return failure(error)

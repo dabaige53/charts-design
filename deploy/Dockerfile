@@ -1,6 +1,11 @@
 # Build from the repository root; all dependency versions come from lockfiles.
 FROM ghcr.io/astral-sh/uv:0.12.13 AS uv
 
+FROM rust:1.91.1-bookworm AS native
+WORKDIR /build/runtime-core
+COPY runtime-core/ ./
+RUN cargo build --release --locked
+
 FROM python:3.11-slim AS dependencies
 COPY --from=uv /uv /usr/local/bin/uv
 RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
@@ -35,6 +40,7 @@ ENV PATH=/app/.venv/bin:$PATH \
     CHARTS_PORT=8000
 WORKDIR /app
 COPY --from=dependencies /app/.venv/ /app/.venv/
+COPY --from=native /build/runtime-core/target/release/charts-design-core /usr/local/bin/charts-design-core
 COPY dashboard_runtime/ dashboard_runtime/
 COPY --from=ui /build/dashboard_runtime/web/dist/ dashboard_runtime/web/dist/
 COPY skills/executive-charts/ skills/executive-charts/

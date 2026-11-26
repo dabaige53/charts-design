@@ -23,6 +23,7 @@
    - 管理多项目路由、SQLite 存储、数据计算、批次修改与版本检查点。
    - 支持 JSON 配置导出：`charts-design-runtime --root ./boards export <id> --format json --output ./export.json`。
    - 详细接口与数据模式见 [Runtime 说明](docs/implementation/dashboard-runtime.md) 与 [项目资产与加载](docs/implementation/project-runtime.md)。
+   - 通过 `bun run native:install` 安装固定版本的预编译 Parquet 导出程序，无需安装 Rust；源码开发可用 `bun run native:build`。服务器容器包含原生程序。`dashboard_export_site` 可导出包含完整运行资源的独立网页，数据格式与交付方式见 [静态部署包](docs/operations/static-deployment.md)。
 
 4. **MCP 协议服务**：
    - 本地 stdio MCP 与自托管 HTTP 远程 MCP（Streamable HTTP + Bearer 令牌）。
@@ -83,6 +84,7 @@ charts-design/
 ├── deploy/                             # 自托管后端容器镜像与部署配置
 ├── dashboard_runtime/                  # SQLite 状态、数据计算、查询与 MCP 服务
 │   └── examples/academic-report.md      # 分析报告案例唯一 Markdown 基础稿
+├── runtime-core/                       # Rust 原生 Parquet 导出与锁定依赖
 ├── skills/
 │   ├── executive-charts/               # 看板设计规范、指标卡、布局模板与 workspace 脚本
 │   └── analytical-reports/             # 分析报告 Skill 与学术规范

@@ -148,6 +148,26 @@ class Service:
         write_json(self.transport.path.parent / 'doctor' / (board+'.json'), report)
         return report
 
+    def _reading_document(self, board, args):
+        """Keep all reader queries on the same draft or displayed checkpoint."""
+        doc = self.store.get(board, hydrate=False)
+        expected = args.get('expectedRevision', doc['revision'])
+        if self.project_root and expected != doc['revision']:
+            try:
+                saved = self.store.readable(board)
+            except DashboardError as error:
+                if error.code != 'NO_SAVED_VERSION':
+                    raise
+            else:
+                if saved['revision'] == expected:
+                    doc = saved
+        if expected != doc['revision']:
+            raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
+        if 'dataVersion' in args:
+            from .doctor import data_version
+            require(args['dataVersion'] == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
+        return doc
+
     def _publish(self, args):
         from jsonschema import ValidationError, validate as validate_schema
         from .cloud_shares import CloudShares, share_storage_errors
@@ -434,23 +454,17 @@ class Service:
             return read_export(self.store.root, board, args.get('exportId'), args.get('format'), args.get('offset', 0), args.get('limit', 262144))
         if tool == 'dashboard_export_site':
             from .deployment import export_site
-            return export_site(self.store, board)
+            return export_site(self.store, board, data_format=args.get('dataFormat', 'auto'))
         if tool == 'dashboard_export':
             from .exports import export_dashboard
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._reading_document(board, args))
             view = self.views.prepare(doc, args.get('filters'), args.get('tableStates'), args.get('granularities'))
             if args.get('format') == 'html':
                 from .statistical import statistical_artifacts
                 view['statisticalArtifacts'] = statistical_artifacts(self.store.statistical_document(view))
             return export_dashboard(self.store.root, view, args.get('format'), self.store.data)
         if tool == 'dashboard_view':
-            doc = self.store.get(board, hydrate=False)
-            if self.project_root and args.get('expectedRevision') != doc['revision'] and args.get('expectedRevision') == self.store.display_revision(board):
-                doc = self.store.readable(board)
-            from .doctor import data_version
-            require(args.get('dataVersion', data_version(doc)) == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
-            if args.get('expectedRevision', doc['revision']) != doc['revision']:
-                raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
+            doc = self._reading_document(board, args)
             evidence = args.get('includeEvidence', False)
             mode = args.get('responseMode', 'patch' if evidence else 'full')
             require(mode in ('full', 'patch') and (not evidence or mode == 'patch'),
@@ -479,7 +493,7 @@ class Service:
                 return result
             return {'document': doc}
         if tool == 'dashboard_filter_options':
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._reading_document(board, args))
             return self.views.filter_options(doc, args.get('filterId'), args.get('search', ''), args.get('offset', 0), args.get('limit', 100))
         if tool == 'dashboard_data_inspect':
             doc = self.store.compact(self.store.get(board, hydrate=False))
@@ -507,8 +521,7 @@ class Service:
                    {'op': 'set_data_mode', 'value': 'local'}]
             return {'document': self.store.mutate(board, args.get('expectedRevision'), ops), 'import': {'rowCount': ref['rowCount'], 'logicalBytes': ref['bytes'], 'durationMs': (time.perf_counter()-imported_at)*1000}}
         if tool == 'component_data':
-            doc = self.store.compact(self.store.get(board, hydrate=False))
-            require(args.get('expectedRevision', doc['revision']) == doc['revision'], 'Data changed; reopen the component explanation')
+            doc = self.store.compact(self._reading_document(board, args))
             key = args.get('componentId')
             component = doc['manifest']['components'].get(key)
             require(component is not None, 'Component not found')
@@ -525,7 +538,7 @@ class Service:
             return self.store.data.rows(ref, active, sort=args.get('sort'), search=search, offset=offset, limit=limit)
         if tool == 'dataset_export':
             import uuid
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._reading_document(board, args))
             key = args.get('componentId')
             component = doc['manifest']['components'].get(key) if key else None
             ds = component.get('datasetId') if component else args.get('datasetId')
@@ -628,7 +641,7 @@ class Service:
                     'kpiGuide': kpi_guide(kpis), 'kpiPatterns': PATTERNS,
                     'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
-            doc = self.store.get(board, hydrate=False)
+            doc = self._reading_document(board, args)
             info = self._component_evidence(doc, args.get('componentId'))
             if tool == 'query_inspect':
                 return {**{key: info[key] for key in ('source', 'snapshotUpdatedAt', 'filters', 'localVersion')},

@@ -152,6 +152,8 @@ export function DashboardApp({
     const state = runtime.view.tables[id] || doc.computed?.tables?.[id] || {};
     const result = await call("dataset_export", {
       dashboardId: doc.id,
+      expectedRevision: doc.revision,
+      ...(doc.dataVersion ? { dataVersion: doc.dataVersion } : {}),
       componentId: id,
       filters: runtime.view.filters,
       search: state.keyword || "",
@@ -240,13 +242,17 @@ export function DashboardApp({
         tableState={runtime.view.tables[id]}
         onTableChange={(s) => runtime.setTable(id, s)}
         onInspect={() =>
-          call("semantic_inspect", { dashboardId: doc.id, componentId: id })
+          call("semantic_inspect", {
+            dashboardId: doc.id, componentId: id, expectedRevision: doc.revision,
+            ...(doc.dataVersion ? { dataVersion: doc.dataVersion } : {}),
+          })
         }
         onReadData={(doc.manifest.components[id].datasetId || doc.manifest.components[id].binding?.datasetId || doc.staticComponentDatasets?.[id])
           ? (state) => call("component_data", {
               dashboardId: doc.id,
               componentId: id,
               expectedRevision: doc.revision,
+              ...(doc.dataVersion ? { dataVersion: doc.dataVersion } : {}),
               filters: runtime.view.filters,
               offset: (state.page - 1) * state.pageSize,
               limit: state.pageSize,
@@ -369,6 +375,8 @@ export function DashboardApp({
                 guard(async () => {
                   const result = await call("dashboard_export", {
                     dashboardId: doc.id,
+                    expectedRevision: doc.revision,
+                    ...(doc.dataVersion ? { dataVersion: doc.dataVersion } : {}),
                     format: "html",
                     filters: runtime.view.filters,
                     tableStates: runtime.view.tables,
@@ -543,17 +551,23 @@ function SelectionFilter({
   call,
   onChange,
   dashboardId,
+  revision,
+  dataVersion,
 }: {
   filter: Filter;
   options: any[];
   call: ToolCall;
   onChange: (values: any[]) => void;
   dashboardId: string;
+  revision: number;
+  dataVersion?: string;
 }) {
   const load: ChoiceLoader = React.useCallback(
     async (search, offset) => {
       const result = await call("dashboard_filter_options", {
         dashboardId,
+        expectedRevision: revision,
+        ...(dataVersion ? { dataVersion } : {}),
         filterId: filter.id,
         search,
         offset,
@@ -568,7 +582,7 @@ function SelectionFilter({
         total: result.totalValues,
       };
     },
-    [call, dashboardId, filter.id],
+    [call, dashboardId, revision, dataVersion, filter.id],
   );
   return (
     <MultiSelect
@@ -607,6 +621,8 @@ function FilterControl({
         options={doc.computed?.filterOptions?.[f.id] || []}
         call={call}
         dashboardId={doc.id}
+        revision={doc.revision}
+        dataVersion={doc.dataVersion}
         onChange={(values) => onChange(f.id, values)}
       />
     );

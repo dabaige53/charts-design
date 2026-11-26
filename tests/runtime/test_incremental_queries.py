@@ -1,9 +1,11 @@
 """Incremental view and immutable query cache acceptance."""
+import copy
 import importlib.util
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import threading
 import time
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -187,3 +189,112 @@ def test_semantic_alias_does_not_collide_with_group_field(tmp_path):
     assert not hit and first == [{'__metric_0': 'a', 'sum': 5}]
     second, hit = local.aggregate(ref, {'renamed': {'aggregation': 'sum', 'field': 'n'}}, [], ['__metric_0'])
     assert hit and second == [{'__metric_0': 'a', 'renamed': 5}]
+
+
+# @wu-test type=integration | scope=Doctor组件检查 | protects=逐组件重复复制和编码整页，或检查原地污染设计
+def test_doctor_shares_definitions_without_copying_or_encoding_them_per_component(service, monkeypatch):
+    import dashboard_runtime.local_view as module
+    from dashboard_runtime.doctor import diagnose
+
+    doc = service.store.get('acceptance', hydrate=False)
+    original = copy.deepcopy(doc)
+    encoded_documents = []
+    encode = module.json_bytes
+
+    def encode_once(value):
+        if 'manifest' in value:
+            encoded_documents.append(value)
+        return encode(value)
+
+    def copy_component(value):
+        assert value is not doc and value is not doc['manifest']
+        return copy.deepcopy(value)
+
+    monkeypatch.setattr(module, 'json_bytes', encode_once)
+    monkeypatch.setattr(module, 'copy', SimpleNamespace(deepcopy=copy_component))
+    report = diagnose(service, doc)
+    assert report['passed']
+    assert [item['componentId'] for item in report['checks'] if item['check'] == 'component'] == benchmark.COMPONENT_IDS
+    assert len(encoded_documents) == 1
+    assert doc == original
+
+
+# @wu-test type=integration | scope=Doctor错误隔离 | protects=单个表格计算失败中止其他检查或污染共享设计
+def test_doctor_reports_component_failure_and_continues(service, monkeypatch):
+    from dashboard_runtime.doctor import diagnose
+
+    doc = service.store.get('acceptance', hydrate=False)
+    components = doc['manifest']['components']
+    doc['manifest']['components'] = {'details': components['details'],
+                                   **{key: value for key, value in components.items() if key != 'details'}}
+    original = copy.deepcopy(doc)
+
+    def unavailable(*args, **kwargs):
+        raise ValueError('Table data unavailable')
+
+    monkeypatch.setattr(service.store.data, 'rows', unavailable)
+    report = diagnose(service, doc)
+    checks = {item['componentId']: item for item in report['checks'] if item['check'] == 'component'}
+    assert not report['passed']
+    assert checks['details']['status'] == 'failed'
+    assert checks['details']['message'] == 'Table data unavailable'
+    assert all(checks[key]['status'] == 'passed' for key in ('total', 'rate', 'category'))
+    assert doc == original
+
+
+# @wu-test type=boundary | scope=Doctor响应校验 | protects=拆分编码绕过完整响应大小与有限JSON校验
+def test_component_checker_retains_response_size_and_finite_json_limits(service, monkeypatch):
+    import dashboard_runtime.local_view as module
+    import dashboard_runtime.model as model
+
+    doc = service.store.get('acceptance', hydrate=False)
+    prepared = service.views.prepare(doc, component_ids=['details'], include_filter_options=False)
+    definition = {key: value for key, value in prepared.items() if key != 'computed'}
+    limit = len(model.json_bytes(definition)) + len(model.json_bytes(prepared['computed'])) // 2
+    with monkeypatch.context() as patcher:
+        patcher.setattr(model, 'MAX_BYTES', limit)
+        patcher.setattr(module, 'MAX_BYTES', limit)
+        for calculate in (lambda: service.views.prepare(doc, component_ids=['details'], include_filter_options=False),
+                          lambda: service.views.component_checker(doc)('details')):
+            with pytest.raises(DashboardError) as failure:
+                calculate()
+            assert failure.value.code == 'PAYLOAD_TOO_LARGE'
+
+    monkeypatch.setattr(service.store.data, 'rows', lambda *args, **kwargs: {
+        'totalRows': 1, 'rows': [{'amount': float('inf')}], 'durationMs': 0,
+    })
+    with pytest.raises(DashboardError) as failure:
+        service.views.component_checker(doc)('details')
+    assert failure.value.code == 'INVALID_JSON'
+
+
+# @wu-test type=integration | scope=Doctor统计图检查 | protects=统计后端失败仍通过完整检查，或中止后续组件检查
+def test_doctor_propagates_statistical_render_failure_and_checks_remaining_components(service, monkeypatch):
+    import dashboard_runtime.statistical as statistical
+    from dashboard_runtime.doctor import diagnose
+    from dashboard_runtime.model import apply_operations
+
+    doc = apply_operations(service.store.get('acceptance', hydrate=False), [{
+        'op': 'put_component', 'id': 'distribution', 'value': {
+            'kind': 'statistical', 'title': 'Distribution', 'datasetId': 'facts',
+            'plot': {'type': 'histogram', 'x': 'amount', 'bins': 10},
+            'analysis': {'definition': 'One row per synthetic fact', 'unit': 'units'},
+        },
+    }])
+    components = doc['manifest']['components']
+    doc['manifest']['components'] = {'distribution': components['distribution'],
+                                   **{key: value for key, value in components.items() if key != 'distribution'}}
+    original = copy.deepcopy(doc)
+
+    def unavailable(*args, **kwargs):
+        raise DashboardError('SEABORN_NOT_INSTALLED', 'Statistical backend unavailable')
+
+    monkeypatch.setattr(statistical, '_render', unavailable)
+    report = diagnose(service, doc)
+    checks = {item['componentId']: item for item in report['checks'] if item['check'] == 'component'}
+    assert not report['passed']
+    assert checks['distribution']['status'] == 'failed'
+    assert checks['distribution']['code'] == 'SEABORN_NOT_INSTALLED'
+    assert checks['distribution']['message'] == 'Statistical backend unavailable'
+    assert all(checks[key]['status'] == 'passed' for key in benchmark.COMPONENT_IDS)
+    assert doc == original

@@ -63,9 +63,41 @@ jobs:
       - name: Development workflow checks
         run: bun test ./tests/development ./tests/deploy
 
+  native:
+    name: Native Parquet exporter
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install pinned Rust toolchain
+        working-directory: runtime-core
+        run: rustup show
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            runtime-core/target
+          key: native-${{ runner.os }}-1.91.1-${{ hashFiles('runtime-core/Cargo.lock') }}
+      - name: Native format and correctness checks
+        working-directory: runtime-core
+        run: |
+          cargo fmt --check
+          cargo test --locked
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo build --release --locked
+      - uses: actions/upload-artifact@v5
+        with:
+          name: native-${{ github.sha }}
+          path: runtime-core/target/release/charts-design-core
+          if-no-files-found: error
+          retention-days: 14
+
   ui:
     name: Shared UI build
-    needs: changes
+    needs: [changes, native]
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -74,6 +106,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+      - uses: actions/download-artifact@v5
+        with:
+          name: native-${{ github.sha }}
+          path: dashboard_runtime/native/
+      - run: chmod +x dashboard_runtime/native/charts-design-core
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
@@ -90,6 +127,9 @@ jobs:
           retention-days: 14
       - name: React component and interaction tests
         working-directory: runtime-ui
+        env:
+          CHARTS_CORE_BIN: ${{ github.workspace }}/dashboard_runtime/native/charts-design-core
+          PYTHON: python3
         run: |
           mkdir -p reports
           bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
@@ -102,7 +142,7 @@ jobs:
 
   unit:
     name: Unit tests (Python ${{ matrix.python }})
-    needs: [changes, ui]
+    needs: [changes, ui, native]
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -125,6 +165,11 @@ jobs:
           enable-cache: true
       - name: Install locked backend dependencies
         run: uv sync --locked --all-extras --no-install-project --python ${{ matrix.python }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: native-${{ github.sha }}
+          path: dashboard_runtime/native/
+      - run: chmod +x dashboard_runtime/native/charts-design-core
       - uses: actions/download-artifact@v5
         with:
           name: shared-ui-${{ github.sha }}
@@ -170,6 +215,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - uses: astral-sh/setup-uv@v7
         with:
           version: '0.12.13'
@@ -182,5 +230,5 @@ jobs:
           EOF
       - name: Build the deployable image
         run: docker build -f deploy/Dockerfile -t charts-design:ci .
-      - name: Run the image and exercise remote MCP and JSON downloads
+      - name: Run remote MCP and verify independent Parquet site downloads
         run: uv run --no-project --python 3.11 python tests/deploy/container_smoke.py --image charts-design:ci

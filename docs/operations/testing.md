@@ -10,6 +10,8 @@
 
 安装对应版本的 Bun 与 uv 后，在仓库根目录执行 `bun run setup`。该入口使用冻结锁文件安装两套 Bun 依赖和 uv 环境，保存本机解释器配置；迁移旧配置前在系统临时目录保留原件。安装不运行应用构建或测试。
 
+原生导出是独立的 Rust Cargo 包，工具链由 `runtime-core/rust-toolchain.toml` 固定，依赖由 `runtime-core/Cargo.lock` 锁定。需要使用已发布的 Parquet 程序时执行 `bun run native:install`；修改原生源码或版本尚未发布时执行 `bun run native:build`，将 release 二进制准备到忽略提交的 `dashboard_runtime/native/<平台>-<架构>/`。普通查询与旧 JSON 导出不因此要求用户安装 Rust。
+
 各工作树在自己的 `.venv` 和 `node_modules` 中安装依赖，并通过 uv 与 Bun 的默认本机缓存复用已下载的包。`UV_CACHE_DIR` 和 `BUN_INSTALL_CACHE_DIR` 可显式指定缓存位置。
 
 Python 命令使用 `bun run python -- <参数>`，它只启动已准备的解释器，不自动安装依赖；uv 负责环境安装与同步。源码无需安装成 Python 包，通过项目入口加载。`PYTHON` 可显式指定其他环境，缺少解释器时直接报错，不自动回退系统 Python。
@@ -28,6 +30,7 @@ Docker 只在 GitHub 或部署平台构建；开发机不必安装 Docker。容�
 | Python、Bun、协议或数据处理 | 直接受影响的用例；需要排错时才执行 | 完整后端与数据测试、共享 UI 资源、容器检查 |
 | React、样式、共享 Worker 或依赖 | 按需类型检查；需要预览时运行 `bun run ui:prepare` | 类型检查、构建、组件测试、后端测试与容器检查 |
 | CI、开发脚本或未知路径 | 脚本语法与相关局部测试 | 完整工作流 |
+| Rust 原生导出或 Parquet 读取 | 对应 Cargo 用例及静态格式兼容用例 | Rust 检查与构建，Python/网页跨语言读取及导出回归 |
 
 本项目的常规 GitHub 工作流按上述范围自动执行，包含 Python、Bun、React 组件及容器检查。手动 `workflow_dispatch` 执行完整工作流。本地全量测试仍需针对当前任务的明确授权，不因提交、PR 或云端 CI 授权而自动执行；浏览器自动化和目标宿主验收另行授权。
 
@@ -36,11 +39,15 @@ Docker 只在 GitHub 或部署平台构建；开发机不必安装 Docker。容�
 ## CI 作业与产物
 
 - Static checks：Python ruff、语法、文档与 Skill 链接、开发流程及发布脚本的 Bun 检查。
+- Native Parquet exporter：锁定 Rust 的格式、Clippy、测试及 release 构建，向 UI 和 Python 作业交付同一二进制。容器仍在独立构建阶段编译，运行阶段不携带 Rust 工具链。
+- Native runtime packages：独立工作流在原生程序或安装器变更的 PR 中验证五个目标平台，使用实际产物检查安装器；发布标签才会创建原生 GitHub Release，不部署服务。
 - Shared UI build：安装锁定依赖、类型检查、构建一次，并上传 `shared-ui-<提交号>`；执行 React 组件与 Runtime 交互测试，上传 JUnit 报告。
 - Unit tests：Python 3.10、3.11、3.13 下载同一 UI 产物并打包到后端，不重复安装前端依赖或构建。检查 Runtime、MCP、Bun 数据模块、工作区合同；Runtime 覆盖率下限保留 84%。
 - Container image smoke test：独立从源码构建部署镜像，经 HTTP 验证 MCP、预览、下载、非 root 权限和环境文件隔离。保留该独立构建，检查真实部署路径。
 
 前端依赖缓存按锁文件区分。新提交取消同一 PR 的旧 CI；失败时先读取对应作业日志及报告，不在本地重新跑整套。JUnit、覆盖率和 UI 构建产物保留 14 天。构建产物与报告由 Actions 保存，`runtime-ui/dist/`、后端资源副本和本地依赖不提交 Git。
+
+`runtime-ui/src/static-data.test.ts` 在设置 `CHARTS_CORE_BIN` 时执行真实 Rust→Parquet→网页读取检查，未提供原生程序的本地环境明确跳过这两项跨语言用例；CI 的 native 作业产物为必需依赖，并设置该路径。Python 导出测试还使用打包 Worker 核对实际分片，不将 receipt 行数当作数据正确性证据。
 
 需要使用 GitHub 生成的 UI 时，从目标提交成功的工作流下载 `shared-ui-<提交号>`，解压到该提交检出的 `runtime-ui/dist/`，再执行 `bun run ui:prepare`。脚本核对源码与产物；对应时只打包，不重建。交付使用目标提交成功工作流生成的产物。
 

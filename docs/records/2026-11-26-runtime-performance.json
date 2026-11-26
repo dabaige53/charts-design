@@ -1,0 +1,1269 @@
+{
+  "date": "2026-11-26",
+  "synthetic": true,
+  "baselineCommit": "0b77d0cadf429da49b852c1701cd1f45cd353374",
+  "doctor": {
+    "synthetic": true,
+    "scope": "warm backend Doctor only, including definition/data checks and diagnostic writes; not browser, transport or production throughput",
+    "rows": 2400,
+    "components": 60,
+    "annotations": 20,
+    "documentBytes": 266636,
+    "samplesPerVersion": 7,
+    "baselineCommit": "0b77d0cadf429da49b852c1701cd1f45cd353374",
+    "results": {
+      "before": {
+        "medianMs": 144.904,
+        "minMs": 141.163,
+        "maxMs": 150.382,
+        "wholeDocumentCopies": 60,
+        "wholeDocumentEncodes": 60,
+        "allEncodedBytes": 16015977
+      },
+      "after": {
+        "medianMs": 10.396,
+        "minMs": 9.813,
+        "maxMs": 11.706,
+        "wholeDocumentCopies": 0,
+        "wholeDocumentEncodes": 1,
+        "allEncodedBytes": 283806
+      }
+    }
+  },
+  "columnarInitial": {
+    "schema": 1,
+    "recordedAtUtc": "2026-11-26T13:11:44Z",
+    "baseCommit": "0b77d0cadf429da49b852c1701cd1f45cd353374",
+    "environment": {
+      "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+      "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "logicalCpuCount": 9,
+      "hostMemory": "10206468 kB",
+      "python": "3.11.16 (main, Sep  1 2026, 14:18:37) [Clang 22.1.3 ]",
+      "bun": "1.3.8",
+      "rust": "rustc 1.91.1 (ed61e7d7e 2025-11-07)"
+    },
+    "dataset": {
+      "rows": 1000000,
+      "fields": {
+        "id": {
+          "type": "number"
+        },
+        "month": {
+          "type": "date"
+        },
+        "region": {
+          "type": "string"
+        },
+        "revenue": {
+          "type": "number"
+        },
+        "passengers": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "version": "743022a80a618766229cbf347a826cb4285646c82608e3567851adc7cf7cc6ae",
+      "sqliteBytes": 43077632,
+      "construction": "id=i, month=i%12, 7 regions, revenue=((i*37)%1000003)/4, passengers=i%300+1, active=i%3!=0; deterministic sparse missing/nulls; no random seed needed",
+      "importSecondsExcluded": 28.50340486899995
+    },
+    "measurements": {
+      "gzip_json": {
+        "seconds": [
+          28.61761979200014,
+          17.74868833000005,
+          13.494264287000078
+        ],
+        "medianSeconds": 17.74868833000005,
+        "fileCount": 200,
+        "bytes": 9644755
+      },
+      "parquet_cache_miss": {
+        "seconds": [
+          1.1602870210001583,
+          0.9514246799999455,
+          1.1592918740000187
+        ],
+        "medianSeconds": 1.1592918740000187,
+        "fileCount": 123,
+        "bytes": 13151172
+      },
+      "parquet_cache_hit": {
+        "seconds": [
+          0.05277346000002581,
+          0.06566239199992197,
+          0.0765890400000444
+        ],
+        "medianSeconds": 0.06566239199992197,
+        "fileCount": 123,
+        "bytes": 13151172
+      }
+    },
+    "validation": {
+      "decoder": "runtime-ui/src/static-data.ts decodeParquet via Bun, one shard at a time",
+      "parquet": {
+        "rows": 1000000,
+        "revenue": 122501375557.25,
+        "passengers": 147463768,
+        "revenueNull": 11136,
+        "revenueMissing": 8850,
+        "passengersNull": 10207,
+        "passengersMissing": 9901,
+        "activeNull": 5954,
+        "activeMissing": 5781
+      },
+      "gzipJson": {
+        "rows": 1000000,
+        "revenue": 122501375557.25,
+        "passengers": 147463768
+      },
+      "expected": {
+        "rows": 1000000,
+        "revenue": 122501375557.25,
+        "passengers": 147463768,
+        "revenueNull": 11136,
+        "revenueMissing": 8850,
+        "passengersNull": 10207,
+        "passengersMissing": 9901,
+        "activeNull": 5954,
+        "activeMissing": 5781
+      },
+      "decoderWallSecondsNotAnExportMeasurement": 1.797997660999954,
+      "passed": true
+    },
+    "artifacts": {
+      "releaseBinaryBytes": 7633128,
+      "releaseBinarySha256": "4b7fc635a60cbe98a72d43b21afec3f0a4abcfea178c89e16722f3a349e095fd",
+      "worker": {
+        "base": {
+          "minifiedBytes": 13402,
+          "gzipBytes": 5492,
+          "sha256": "0df91cf0444626bbcb3e022221e6393207bb34486ea0e3727e162988073f08b5"
+        },
+        "current": {
+          "minifiedBytes": 74840,
+          "gzipBytes": 24246,
+          "sha256": "7771616ad4398faf97836d8150046ff7ffdcdb84bc3592856b15da01c748f9f1"
+        },
+        "deltaMinifiedBytes": 61438,
+        "deltaGzipBytes": 18754,
+        "method": "HEAD web/*.mjs rebuilt with the same installed esbuild options; current worker is the existing UI build."
+      }
+    },
+    "scope": [
+      "Only dataset file generation/copying is timed; import, UI copying, ZIP creation, full export_site orchestration, and verification are excluded.",
+      "Gzip-JSON is the existing _write_shards + iter_rows path with gzip default compression. Parquet miss uses write_parquet + native release process + verified file copies.",
+      "Parquet hit retains immutable encoded cache, checks receipts and performs SHA256-verified copies. It does not skip copying data into the independent site.",
+      "Each miss removes the application cache before timing; OS filesystem caches are not cleared. These are not physical-disk cold-start numbers.",
+      "One synthetic, narrow-table workload on this host; no browser, network, production concurrency, or production latency claims."
+    ]
+  },
+  "columnarOptimized": {
+    "schema": 1,
+    "label": "delta-binary-and-byte-stream-split",
+    "comparisonBaseline": "columnarInitial in this record",
+    "recordedAtUtc": "2026-11-26T13:14:25Z",
+    "baseCommit": "0b77d0cadf429da49b852c1701cd1f45cd353374",
+    "environment": {
+      "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+      "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "logicalCpuCount": 9,
+      "hostMemory": "10206468 kB",
+      "python": "3.11.16 (main, Sep  1 2026, 14:18:37) [Clang 22.1.3 ]",
+      "bun": "1.3.8",
+      "rust": "rustc 1.91.1 (ed61e7d7e 2025-11-07)"
+    },
+    "dataset": {
+      "rows": 1000000,
+      "fields": {
+        "id": {
+          "type": "number"
+        },
+        "month": {
+          "type": "date"
+        },
+        "region": {
+          "type": "string"
+        },
+        "revenue": {
+          "type": "number"
+        },
+        "passengers": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "version": "743022a80a618766229cbf347a826cb4285646c82608e3567851adc7cf7cc6ae",
+      "sqliteBytes": 43077632,
+      "construction": "id=i, month=i%12, 7 regions, revenue=((i*37)%1000003)/4, passengers=i%300+1, active=i%3!=0; deterministic sparse missing/nulls; no random seed needed",
+      "importSecondsExcluded": 22.06765155900007
+    },
+    "measurements": {
+      "parquet_cache_miss": {
+        "seconds": [
+          2.167634489999955,
+          2.3128240049998112,
+          1.8843970639998133
+        ],
+        "medianSeconds": 2.167634489999955,
+        "fileCount": 123,
+        "bytes": 1810023
+      },
+      "parquet_cache_hit": {
+        "seconds": [
+          0.008737384999903952,
+          0.014175604999991265,
+          0.019510600999865346
+        ],
+        "medianSeconds": 0.014175604999991265,
+        "fileCount": 123,
+        "bytes": 1810023
+      }
+    },
+    "validation": {
+      "decoder": "runtime-ui/src/static-data.ts decodeParquet via Bun, one shard at a time",
+      "parquet": {
+        "rows": 1000000,
+        "revenue": 122501375557.25,
+        "passengers": 147463768,
+        "revenueNull": 11136,
+        "revenueMissing": 8850,
+        "passengersNull": 10207,
+        "passengersMissing": 9901,
+        "activeNull": 5954,
+        "activeMissing": 5781
+      },
+      "gzipJson": null,
+      "expected": {
+        "rows": 1000000,
+        "revenue": 122501375557.25,
+        "passengers": 147463768,
+        "revenueNull": 11136,
+        "revenueMissing": 8850,
+        "passengersNull": 10207,
+        "passengersMissing": 9901,
+        "activeNull": 5954,
+        "activeMissing": 5781
+      },
+      "decoderWallSecondsNotAnExportMeasurement": 3.177145752000115,
+      "passed": true
+    },
+    "artifacts": {
+      "releaseBinaryBytes": 7640168,
+      "releaseBinarySha256": "2124b8df3641f418d67955a84f25f8ae0befbd36f025c1fb3258492759ae028f",
+      "worker": {
+        "base": {
+          "minifiedBytes": 13402,
+          "gzipBytes": 5492,
+          "sha256": "0df91cf0444626bbcb3e022221e6393207bb34486ea0e3727e162988073f08b5"
+        },
+        "current": {
+          "minifiedBytes": 74840,
+          "gzipBytes": 24246,
+          "sha256": "7771616ad4398faf97836d8150046ff7ffdcdb84bc3592856b15da01c748f9f1"
+        },
+        "deltaMinifiedBytes": 61438,
+        "deltaGzipBytes": 18754,
+        "method": "HEAD web/*.mjs rebuilt with the same installed esbuild options; current worker is the existing UI build."
+      }
+    },
+    "scope": [
+      "Only dataset file generation/copying is timed; import, UI copying, ZIP creation, full export_site orchestration, and verification are excluded.",
+      "Gzip-JSON is the existing _write_shards + iter_rows path with gzip default compression. Parquet miss uses write_parquet + native release process + verified file copies.",
+      "Parquet hit retains immutable encoded cache, checks receipts and performs SHA256-verified copies. It does not skip copying data into the independent site.",
+      "Each miss removes the application cache before timing; OS filesystem caches are not cleared. These are not physical-disk cold-start numbers.",
+      "One synthetic, narrow-table workload on this host; no browser, network, production concurrency, or production latency claims."
+    ]
+  },
+  "staticQueryFinal": {
+    "synthetic": true,
+    "runtime": {
+      "bun": "1.3.8",
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "scope": "First static query over already decoded rows, one source and repeated category groups; excludes network, Parquet decoding, DOM rendering and MCP.",
+    "cache": "Each timed query has a new row-array identity; source objects are immutable. Baseline and candidate run in separate Bun processes. Explicit GC occurs before each sample.",
+    "baselineRevision": "0b77d0cadf429da49b852c1701cd1f45cd353374",
+    "source": {
+      "baseline": {
+        "static-query.mjs": "0a49833a84a5e381494d815a47ae716accb5f0def5d25aee4611a1f94ad0a6eb",
+        "engine.mjs": "ef00d98deb2b05fe248f460fbe21409f160d7f73c0a4bef01cc5edace6f66f87",
+        "bindings.mjs": "def5beacba01a6f4f8fb347165d260eb379023ebce7f71b082feb66d7235a023",
+        "encoding.mjs": "57bd70ff3cd07e627c9e0a3de1484d763263ec4a937f39643d303a1b1a8f4ec9",
+        "request-queue.mjs": "a269d159c4f14557a2e9f63894bece07f0255d1e2abe06cb4c1b710c099552e8"
+      },
+      "candidate": {
+        "static-query.mjs": "8820385fa4e5763c44ff938714be3f3f75f4ae687d8ebec386fdfaece90464da",
+        "engine.mjs": "29886208e78a8f95ce37a05697a1b5ddd7822cd5f743a8bacf91db8060d5f833",
+        "bindings.mjs": "e1e8530864f2288c8ea9764a9d220807d3edf84dab80e35fa2f217350fa85651",
+        "encoding.mjs": "c7ad935ce59edd9090b6f5563e00840ef5feefd9d70218e93bbf5c8e89f738fe",
+        "request-queue.mjs": "a269d159c4f14557a2e9f63894bece07f0255d1e2abe06cb4c1b710c099552e8"
+      }
+    },
+    "results": {
+      "baseline": {
+        "timing": {
+          "rows": 1000000,
+          "components": 24,
+          "samplesMs": [
+            3190.6316239999996,
+            2772.1487970000007,
+            2112.035315000001
+          ],
+          "medianMs": 2772.1487970000007,
+          "heapUsedMiB": 237.539794921875,
+          "maxRssMiB": 538.86328125,
+          "categoryReads": 0,
+          "amountReads": 0
+        },
+        "work": {
+          "rows": 20000,
+          "components": 24,
+          "samplesMs": [
+            89.56328200000002
+          ],
+          "medianMs": 89.56328200000002,
+          "heapUsedMiB": 0.9823694229125977,
+          "maxRssMiB": 76.859375,
+          "categoryReads": 480000,
+          "amountReads": 320000
+        }
+      },
+      "candidate": {
+        "timing": {
+          "rows": 1000000,
+          "components": 24,
+          "samplesMs": [
+            378.017057,
+            455.196541,
+            682.4830939999999
+          ],
+          "medianMs": 455.196541,
+          "heapUsedMiB": 213.92037963867188,
+          "maxRssMiB": 571.125,
+          "categoryReads": 0,
+          "amountReads": 0
+        },
+        "work": {
+          "rows": 20000,
+          "components": 24,
+          "samplesMs": [
+            22.551539000000005
+          ],
+          "medianMs": 22.551539000000005,
+          "heapUsedMiB": 0.9821844100952148,
+          "maxRssMiB": 78.8671875,
+          "categoryReads": 40000,
+          "amountReads": 20000
+        }
+      }
+    }
+  },
+  "staticTableFinal": {
+    "synthetic": true,
+    "runtime": {
+      "bun": "1.3.8",
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "scope": "One decoded dataset; calculated ratio columns; first page, next page, first sort and next sorted page. Page size 10. Excludes network, Parquet decoding and DOM rendering.",
+    "cache": "One query engine per process; subsequent pages retain its cache. Baseline and candidate run in separate Bun processes.",
+    "baselineRevision": "0b77d0cadf429da49b852c1701cd1f45cd353374",
+    "source": {
+      "baseline": {
+        "static-query.mjs": "0a49833a84a5e381494d815a47ae716accb5f0def5d25aee4611a1f94ad0a6eb",
+        "engine.mjs": "ef00d98deb2b05fe248f460fbe21409f160d7f73c0a4bef01cc5edace6f66f87",
+        "bindings.mjs": "def5beacba01a6f4f8fb347165d260eb379023ebce7f71b082feb66d7235a023",
+        "encoding.mjs": "57bd70ff3cd07e627c9e0a3de1484d763263ec4a937f39643d303a1b1a8f4ec9",
+        "request-queue.mjs": "a269d159c4f14557a2e9f63894bece07f0255d1e2abe06cb4c1b710c099552e8"
+      },
+      "candidate": {
+        "static-query.mjs": "8820385fa4e5763c44ff938714be3f3f75f4ae687d8ebec386fdfaece90464da",
+        "engine.mjs": "29886208e78a8f95ce37a05697a1b5ddd7822cd5f743a8bacf91db8060d5f833",
+        "bindings.mjs": "e1e8530864f2288c8ea9764a9d220807d3edf84dab80e35fa2f217350fa85651",
+        "encoding.mjs": "c7ad935ce59edd9090b6f5563e00840ef5feefd9d70218e93bbf5c8e89f738fe",
+        "request-queue.mjs": "a269d159c4f14557a2e9f63894bece07f0255d1e2abe06cb4c1b710c099552e8"
+      }
+    },
+    "results": {
+      "baseline": {
+        "rows": 1000000,
+        "samplesMs": {
+          "firstPage": 399.43277,
+          "secondPage": 0.08636599999999817,
+          "sortFirst": 1873.596336,
+          "sortNext": 1749.036169
+        },
+        "maxRssMiB": 462.5078125
+      },
+      "candidate": {
+        "rows": 1000000,
+        "samplesMs": {
+          "firstPage": 3.2481459999999913,
+          "secondPage": 0.4058430000000044,
+          "sortFirst": 1801.004234,
+          "sortNext": 0.20161400000006324
+        },
+        "maxRssMiB": 211.453125
+      }
+    }
+  },
+  "queryDifferential": {
+    "fixtures": 40,
+    "rowsPerFixture": 200,
+    "queriesPerFixture": 9,
+    "result": "360 original/optimized results identical",
+    "seed": 713
+  },
+  "uiArchiveBefore": {
+    "rows": 100000,
+    "components": [
+      "4 bound KPI",
+      "2 bound charts",
+      "details table"
+    ],
+    "exports": [
+      {
+        "label": "cache_miss",
+        "totalSeconds": 0.8986818850000873,
+        "stages": {
+          "read_saved": {
+            "calls": 1,
+            "seconds": 0.0010663240000212681
+          },
+          "statistical_document (inside compact)": {
+            "calls": 1,
+            "seconds": 0.00038363299995580746
+          },
+          "compact": {
+            "calls": 1,
+            "seconds": 0.0029737739998836332
+          },
+          "statistical_document": {
+            "calls": 1,
+            "seconds": 0.0004003209999154933
+          },
+          "statistical_artifacts": {
+            "calls": 1,
+            "seconds": 6.3460001911153086e-06
+          },
+          "write_parquet": {
+            "calls": 1,
+            "seconds": 0.5908260610001435
+          },
+          "copy_ui_resource": {
+            "calls": 3,
+            "seconds": 0.023773135000055845
+          },
+          "zip.write": {
+            "calls": 20,
+            "seconds": 0.2725275060004151
+          },
+          "zip.close": {
+            "calls": 2,
+            "seconds": 0.00010961399993902887
+          }
+        },
+        "zipBytes": 1360085,
+        "entries": [
+          {
+            "name": "README.txt",
+            "rawBytes": 174,
+            "zipBytes": 174
+          },
+          {
+            "name": "app.css",
+            "rawBytes": 637636,
+            "zipBytes": 404180
+          },
+          {
+            "name": "app.js",
+            "rawBytes": 3003099,
+            "zipBytes": 869764
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-0.parquet",
+            "rawBytes": 12454,
+            "zipBytes": 3913
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-1.parquet",
+            "rawBytes": 13078,
+            "zipBytes": 4492
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-10.parquet",
+            "rawBytes": 12805,
+            "zipBytes": 4246
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-11.parquet",
+            "rawBytes": 12656,
+            "zipBytes": 4015
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-12.parquet",
+            "rawBytes": 5306,
+            "zipBytes": 2561
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-2.parquet",
+            "rawBytes": 12948,
+            "zipBytes": 4423
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-3.parquet",
+            "rawBytes": 12434,
+            "zipBytes": 3932
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-4.parquet",
+            "rawBytes": 12969,
+            "zipBytes": 4401
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-5.parquet",
+            "rawBytes": 12786,
+            "zipBytes": 4307
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-6.parquet",
+            "rawBytes": 13096,
+            "zipBytes": 4526
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-7.parquet",
+            "rawBytes": 13020,
+            "zipBytes": 4422
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-8.parquet",
+            "rawBytes": 12541,
+            "zipBytes": 4071
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-9.parquet",
+            "rawBytes": 12808,
+            "zipBytes": 4129
+          },
+          {
+            "name": "document.json",
+            "rawBytes": 15316,
+            "zipBytes": 3739
+          },
+          {
+            "name": "export-manifest.json",
+            "rawBytes": 232,
+            "zipBytes": 163
+          },
+          {
+            "name": "index.html",
+            "rawBytes": 882,
+            "zipBytes": 601
+          },
+          {
+            "name": "static-worker.js",
+            "rawBytes": 74840,
+            "zipBytes": 24260
+          }
+        ],
+        "manifest": {
+          "dashboardId": "audit",
+          "revision": 1,
+          "uiBuildId": "5b0d798edf115457",
+          "backendBuildId": "69209c263b63183f",
+          "dataFormat": "parquet",
+          "datasets": {
+            "sales": 100000
+          },
+          "encodings": {
+            "sales": {
+              "format": "parquet-v1",
+              "cacheHit": false,
+              "bytes": 158901
+            }
+          }
+        }
+      },
+      {
+        "label": "cache_hit",
+        "totalSeconds": 0.3559429929998714,
+        "stages": {
+          "read_saved": {
+            "calls": 1,
+            "seconds": 0.0007913150000149471
+          },
+          "statistical_document (inside compact)": {
+            "calls": 1,
+            "seconds": 0.0017223390000253858
+          },
+          "compact": {
+            "calls": 1,
+            "seconds": 0.004494785999895612
+          },
+          "statistical_document": {
+            "calls": 1,
+            "seconds": 0.0003679509998164576
+          },
+          "statistical_artifacts": {
+            "calls": 1,
+            "seconds": 2.6170000637648627e-06
+          },
+          "write_parquet": {
+            "calls": 1,
+            "seconds": 0.001049925999950574
+          },
+          "copy_ui_resource": {
+            "calls": 3,
+            "seconds": 0.010790006999968682
+          },
+          "zip.write": {
+            "calls": 20,
+            "seconds": 0.3179115230004754
+          },
+          "zip.close": {
+            "calls": 2,
+            "seconds": 0.00013191499988352007
+          }
+        },
+        "zipBytes": 1360084,
+        "entries": [
+          {
+            "name": "README.txt",
+            "rawBytes": 174,
+            "zipBytes": 174
+          },
+          {
+            "name": "app.css",
+            "rawBytes": 637636,
+            "zipBytes": 404180
+          },
+          {
+            "name": "app.js",
+            "rawBytes": 3003099,
+            "zipBytes": 869764
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-0.parquet",
+            "rawBytes": 12454,
+            "zipBytes": 3913
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-1.parquet",
+            "rawBytes": 13078,
+            "zipBytes": 4492
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-10.parquet",
+            "rawBytes": 12805,
+            "zipBytes": 4246
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-11.parquet",
+            "rawBytes": 12656,
+            "zipBytes": 4015
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-12.parquet",
+            "rawBytes": 5306,
+            "zipBytes": 2561
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-2.parquet",
+            "rawBytes": 12948,
+            "zipBytes": 4423
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-3.parquet",
+            "rawBytes": 12434,
+            "zipBytes": 3932
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-4.parquet",
+            "rawBytes": 12969,
+            "zipBytes": 4401
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-5.parquet",
+            "rawBytes": 12786,
+            "zipBytes": 4307
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-6.parquet",
+            "rawBytes": 13096,
+            "zipBytes": 4526
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-7.parquet",
+            "rawBytes": 13020,
+            "zipBytes": 4422
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-8.parquet",
+            "rawBytes": 12541,
+            "zipBytes": 4071
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-9.parquet",
+            "rawBytes": 12808,
+            "zipBytes": 4129
+          },
+          {
+            "name": "document.json",
+            "rawBytes": 15316,
+            "zipBytes": 3739
+          },
+          {
+            "name": "export-manifest.json",
+            "rawBytes": 231,
+            "zipBytes": 162
+          },
+          {
+            "name": "index.html",
+            "rawBytes": 882,
+            "zipBytes": 601
+          },
+          {
+            "name": "static-worker.js",
+            "rawBytes": 74840,
+            "zipBytes": 24260
+          }
+        ],
+        "manifest": {
+          "dashboardId": "audit",
+          "revision": 1,
+          "uiBuildId": "5b0d798edf115457",
+          "backendBuildId": "69209c263b63183f",
+          "dataFormat": "parquet",
+          "datasets": {
+            "sales": 100000
+          },
+          "encodings": {
+            "sales": {
+              "format": "parquet-v1",
+              "cacheHit": true,
+              "bytes": 158901
+            }
+          }
+        }
+      }
+    ],
+    "http": [
+      {
+        "path": "index.html",
+        "status": 200,
+        "bytes": 882,
+        "contentType": "text/html"
+      },
+      {
+        "path": "document.json",
+        "status": 200,
+        "bytes": 15316,
+        "contentType": "application/json"
+      },
+      {
+        "path": "app.js",
+        "status": 200,
+        "bytes": 3003099,
+        "contentType": "text/javascript"
+      },
+      {
+        "path": "app.css",
+        "status": 200,
+        "bytes": 637636,
+        "contentType": "text/css"
+      },
+      {
+        "path": "static-worker.js",
+        "status": 200,
+        "bytes": 74840,
+        "contentType": "text/javascript"
+      },
+      {
+        "path": "export-manifest.json",
+        "status": 200,
+        "bytes": 231,
+        "contentType": "application/json"
+      }
+    ],
+    "scope": "One run per cache state; plain local HTTP at a subpath and real packaged worker; no browser or MCP server. Stage timings are inclusive when parent is shown.",
+    "validation": {
+      "rowCount": 100000,
+      "revenue": "124,987,500 万元",
+      "lastRow": {
+        "month": "2026-04-01",
+        "region": "华东",
+        "revenue": 2499.75,
+        "passengers": 100,
+        "seats": 120,
+        "budget": 1500,
+        "yieldDelta": 1499.75,
+        "yieldBase": 1000
+      },
+      "httpResources": 6,
+      "worker": "real packaged worker fetched shards from plain static HTTP at /site/"
+    }
+  },
+  "uiArchiveAfter": {
+    "label": "ui-template-cache",
+    "environment": {
+      "python": "3.11.16",
+      "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+      "logicalCpuCount": 9,
+      "bun": "1.3.8"
+    },
+    "rows": 100000,
+    "components": [
+      "4 bound KPI",
+      "2 bound charts",
+      "details table"
+    ],
+    "exports": [
+      {
+        "label": "cache_miss",
+        "totalSeconds": 0.3782152710000446,
+        "stages": {
+          "read_saved": {
+            "calls": 1,
+            "seconds": 0.0006761390000065148
+          },
+          "statistical_document (inside compact)": {
+            "calls": 1,
+            "seconds": 0.0005128389998390048
+          },
+          "compact": {
+            "calls": 1,
+            "seconds": 0.0035928439997405803
+          },
+          "statistical_document": {
+            "calls": 1,
+            "seconds": 0.00060598200025197
+          },
+          "statistical_artifacts": {
+            "calls": 1,
+            "seconds": 4.797999736183556e-06
+          },
+          "write_parquet": {
+            "calls": 1,
+            "seconds": 0.15933435499982807
+          },
+          "copy_file": {
+            "calls": 3,
+            "seconds": 0.0016103850002764375
+          },
+          "zip.write (inside prepare_ui_archive)": {
+            "calls": 3,
+            "seconds": 0.19211519100008445
+          },
+          "zip.close (inside prepare_ui_archive)": {
+            "calls": 2,
+            "seconds": 4.382700035421294e-05
+          },
+          "copy_file (inside prepare_ui_archive)": {
+            "calls": 1,
+            "seconds": 0.0005123810001350648
+          },
+          "prepare_ui_archive": {
+            "calls": 1,
+            "seconds": 0.20105031799994322
+          },
+          "zip.write": {
+            "calls": 17,
+            "seconds": 0.007084908000251744
+          },
+          "zip.close": {
+            "calls": 2,
+            "seconds": 0.00010993800015057786
+          }
+        },
+        "zipBytes": 1360084,
+        "entries": [
+          {
+            "name": "app.js",
+            "rawBytes": 3003099,
+            "zipBytes": 869764
+          },
+          {
+            "name": "app.css",
+            "rawBytes": 637636,
+            "zipBytes": 404180
+          },
+          {
+            "name": "static-worker.js",
+            "rawBytes": 74840,
+            "zipBytes": 24260
+          },
+          {
+            "name": "README.txt",
+            "rawBytes": 174,
+            "zipBytes": 174
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-0.parquet",
+            "rawBytes": 12454,
+            "zipBytes": 3913
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-1.parquet",
+            "rawBytes": 13078,
+            "zipBytes": 4492
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-10.parquet",
+            "rawBytes": 12805,
+            "zipBytes": 4246
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-11.parquet",
+            "rawBytes": 12656,
+            "zipBytes": 4015
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-12.parquet",
+            "rawBytes": 5306,
+            "zipBytes": 2561
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-2.parquet",
+            "rawBytes": 12948,
+            "zipBytes": 4423
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-3.parquet",
+            "rawBytes": 12434,
+            "zipBytes": 3932
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-4.parquet",
+            "rawBytes": 12969,
+            "zipBytes": 4401
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-5.parquet",
+            "rawBytes": 12786,
+            "zipBytes": 4307
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-6.parquet",
+            "rawBytes": 13096,
+            "zipBytes": 4526
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-7.parquet",
+            "rawBytes": 13020,
+            "zipBytes": 4422
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-8.parquet",
+            "rawBytes": 12541,
+            "zipBytes": 4071
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-9.parquet",
+            "rawBytes": 12808,
+            "zipBytes": 4129
+          },
+          {
+            "name": "document.json",
+            "rawBytes": 15316,
+            "zipBytes": 3739
+          },
+          {
+            "name": "export-manifest.json",
+            "rawBytes": 232,
+            "zipBytes": 162
+          },
+          {
+            "name": "index.html",
+            "rawBytes": 882,
+            "zipBytes": 601
+          }
+        ],
+        "manifest": {
+          "dashboardId": "audit",
+          "revision": 1,
+          "uiBuildId": "5b0d798edf115457",
+          "backendBuildId": "ded670739109e122",
+          "dataFormat": "parquet",
+          "datasets": {
+            "sales": 100000
+          },
+          "encodings": {
+            "sales": {
+              "format": "parquet-v1",
+              "cacheHit": false,
+              "bytes": 158901
+            }
+          }
+        }
+      },
+      {
+        "label": "cache_hit",
+        "totalSeconds": 0.0355237250000755,
+        "stages": {
+          "read_saved": {
+            "calls": 1,
+            "seconds": 0.0005798809997941134
+          },
+          "statistical_document (inside compact)": {
+            "calls": 1,
+            "seconds": 0.0005917789999330125
+          },
+          "compact": {
+            "calls": 1,
+            "seconds": 0.0039568420002069615
+          },
+          "statistical_document": {
+            "calls": 1,
+            "seconds": 0.0006098759999986214
+          },
+          "statistical_artifacts": {
+            "calls": 1,
+            "seconds": 2.581999979156535e-06
+          },
+          "write_parquet": {
+            "calls": 1,
+            "seconds": 0.0007210359999589855
+          },
+          "copy_file": {
+            "calls": 3,
+            "seconds": 0.003614191000451683
+          },
+          "copy_file (inside prepare_ui_archive)": {
+            "calls": 1,
+            "seconds": 0.0003473789997769927
+          },
+          "prepare_ui_archive": {
+            "calls": 1,
+            "seconds": 0.018211109999811015
+          },
+          "zip.write": {
+            "calls": 17,
+            "seconds": 0.00473971999826972
+          },
+          "zip.close": {
+            "calls": 2,
+            "seconds": 5.231000022831722e-05
+          }
+        },
+        "zipBytes": 1360083,
+        "entries": [
+          {
+            "name": "app.js",
+            "rawBytes": 3003099,
+            "zipBytes": 869764
+          },
+          {
+            "name": "app.css",
+            "rawBytes": 637636,
+            "zipBytes": 404180
+          },
+          {
+            "name": "static-worker.js",
+            "rawBytes": 74840,
+            "zipBytes": 24260
+          },
+          {
+            "name": "README.txt",
+            "rawBytes": 174,
+            "zipBytes": 174
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-0.parquet",
+            "rawBytes": 12454,
+            "zipBytes": 3913
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-1.parquet",
+            "rawBytes": 13078,
+            "zipBytes": 4492
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-10.parquet",
+            "rawBytes": 12805,
+            "zipBytes": 4246
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-11.parquet",
+            "rawBytes": 12656,
+            "zipBytes": 4015
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-12.parquet",
+            "rawBytes": 5306,
+            "zipBytes": 2561
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-2.parquet",
+            "rawBytes": 12948,
+            "zipBytes": 4423
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-3.parquet",
+            "rawBytes": 12434,
+            "zipBytes": 3932
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-4.parquet",
+            "rawBytes": 12969,
+            "zipBytes": 4401
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-5.parquet",
+            "rawBytes": 12786,
+            "zipBytes": 4307
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-6.parquet",
+            "rawBytes": 13096,
+            "zipBytes": 4526
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-7.parquet",
+            "rawBytes": 13020,
+            "zipBytes": 4422
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-8.parquet",
+            "rawBytes": 12541,
+            "zipBytes": 4071
+          },
+          {
+            "name": "data/95c120a1e9b0f2024682a64b76865d66691851f8411bf98499f2a61c545b521e-9.parquet",
+            "rawBytes": 12808,
+            "zipBytes": 4129
+          },
+          {
+            "name": "document.json",
+            "rawBytes": 15316,
+            "zipBytes": 3739
+          },
+          {
+            "name": "export-manifest.json",
+            "rawBytes": 231,
+            "zipBytes": 161
+          },
+          {
+            "name": "index.html",
+            "rawBytes": 882,
+            "zipBytes": 601
+          }
+        ],
+        "manifest": {
+          "dashboardId": "audit",
+          "revision": 1,
+          "uiBuildId": "5b0d798edf115457",
+          "backendBuildId": "ded670739109e122",
+          "dataFormat": "parquet",
+          "datasets": {
+            "sales": 100000
+          },
+          "encodings": {
+            "sales": {
+              "format": "parquet-v1",
+              "cacheHit": true,
+              "bytes": 158901
+            }
+          }
+        }
+      }
+    ],
+    "http": [
+      {
+        "path": "index.html",
+        "status": 200,
+        "bytes": 882,
+        "contentType": "text/html"
+      },
+      {
+        "path": "document.json",
+        "status": 200,
+        "bytes": 15316,
+        "contentType": "application/json"
+      },
+      {
+        "path": "app.js",
+        "status": 200,
+        "bytes": 3003099,
+        "contentType": "text/javascript"
+      },
+      {
+        "path": "app.css",
+        "status": 200,
+        "bytes": 637636,
+        "contentType": "text/css"
+      },
+      {
+        "path": "static-worker.js",
+        "status": 200,
+        "bytes": 74840,
+        "contentType": "text/javascript"
+      },
+      {
+        "path": "export-manifest.json",
+        "status": 200,
+        "bytes": 231,
+        "contentType": "application/json"
+      }
+    ],
+    "scope": "One run per cache state; plain local HTTP at a subpath and real packaged worker; no browser or MCP server. Stage timings are inclusive when parent is shown.",
+    "validation": {
+      "rowCount": 100000,
+      "revenue": "124,987,500 万元",
+      "lastRow": {
+        "month": "2026-04-01",
+        "region": "华东",
+        "revenue": 2499.75,
+        "passengers": 100,
+        "seats": 120,
+        "budget": 1500,
+        "yieldDelta": 1499.75,
+        "yieldBase": 1000
+      },
+      "httpResources": 6,
+      "worker": "real packaged worker fetched shards from plain static HTTP at /site/"
+    }
+  },
+  "scope": "Local synthetic component benchmarks; final query measurements supersede exploratory timings. Not production SLA, end-to-end browser timings, or total cloud storage/billing savings.",
+  "finalArtifacts": {
+    "nativeBytes": 11475688,
+    "nativeSha256": "0d79b27168ae03bd4c638c201988144b5eafe403756efca98e1263df97397b5c",
+    "uiBuild": {
+      "id": "2ee05c3da83f17d5",
+      "format": 1,
+      "entries": [
+        "app.js",
+        "app.css",
+        "static-worker.js"
+      ],
+      "staticDataFormats": [
+        "json-gzip",
+        "parquet-v1"
+      ],
+      "components": 40,
+      "metrics": 16
+    },
+    "worker": {
+      "base": {
+        "minifiedBytes": 13402,
+        "gzipBytes": 5492,
+        "sha256": "0df91cf0444626bbcb3e022221e6393207bb34486ea0e3727e162988073f08b5"
+      },
+      "current": {
+        "minifiedBytes": 80313,
+        "gzipBytes": 26120,
+        "sha256": "758399da1d90f0276613421780d6cfba68447e897166827db8ee93a5b22af7c9"
+      },
+      "deltaMinifiedBytes": 66911,
+      "deltaGzipBytes": 20628,
+      "baseRef": "0b77d0cadf429da49b852c1701cd1f45cd353374",
+      "method": "Historical source rebuilt with the current installed dependencies and esbuild options; current worker is the packaged UI build."
+    }
+  }
+}

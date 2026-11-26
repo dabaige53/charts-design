@@ -1,11 +1,12 @@
 import {createStaticQuery} from './static-query.mjs';
+import {readStaticData} from '../../runtime-ui/src/static-data.ts';
 let engine;
 self.onmessage=async({data})=>{
   const {id,type,args}=data;
   try{
     if(type==='init'){
       const {document,base,headers={}}=args;
-      engine=createStaticQuery(document,async path=>{const response=await fetch(new URL(path,base),{headers});if(!response.ok)throw Error(`数据加载失败 (${response.status})`);return path.endsWith('.gz')?new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json():response.json();});
+      engine=createStaticQuery(document,async path=>{const url=new URL(path,base);return readStaticData(await fetch(url,{headers}),url.pathname);});
       self.postMessage({id,result:{ready:true}});return;
     }
     self.postMessage({id,result:await engine.query(args)});

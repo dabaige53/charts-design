@@ -46,6 +46,7 @@
 
 ## 历史记录与附件
 
+- [Runtime 性能与交付改造](records/2026-11-26-runtime-performance.md)：版本一致性、Rust/Parquet、新旧云分享兼容、网页查询及独立部署的实现边界、实测与复现入口。
 - [Magpie 双后端 MCP 交接](records/2026-11-24-magpie-unified-mcp-handoff.md)记录客户端切换结果，以及另一台服务器的接入、验证和恢复步骤。
 - [服务器、Neon 与 Pages 生产验收](records/2026-11-21-neon-pages.md)：同一项目的 MCP、网页编辑、容器重启、密钥分享和清理结果。
 - [COS 统一存储发布](records/2026-11-12-cos-release.md)：版本发布、数据库结构、清理函数与迁移边界。

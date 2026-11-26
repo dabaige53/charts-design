@@ -42,7 +42,9 @@ def test_health_reports_release_identity_only_when_configured(tmp_path, monkeypa
 
 
 # @wu-test type=integration | scope=COS editable content reads | protects=重复读取当前草稿或用错误修订授权数据文件
-def test_edit_asset_authorizes_current_or_requested_revision(tmp_path, monkeypatch):
+@pytest.mark.parametrize('filename,mime', [('rows.json.gz', 'application/gzip'),
+                                         ('rows.parquet', 'application/octet-stream')])
+def test_edit_asset_authorizes_current_or_requested_revision(tmp_path, monkeypatch, filename, mime):
     from types import SimpleNamespace
 
     from starlette.testclient import TestClient
@@ -62,7 +64,7 @@ def test_edit_asset_authorizes_current_or_requested_revision(tmp_path, monkeypat
         return {'id': board, 'revision': revision}
 
     def asset(_store, doc, object_id, name):
-        assert (object_id, name) == ('fixture', 'rows.json.gz')
+        assert (object_id, name) == ('fixture', filename)
         return str(doc['revision']).encode()
 
     app = create_app(server)
@@ -71,12 +73,13 @@ def test_edit_asset_authorizes_current_or_requested_revision(tmp_path, monkeypat
     monkeypatch.setattr(server.projects, 'service', lambda _name: SimpleNamespace(store=store))
     monkeypatch.setattr(versions.Versions, 'read', history)
     monkeypatch.setattr(cos_view, 'authorized_file', asset)
-    url = '/api/v1/p/default/content/board/{}/fixture/rows.json.gz'
+    url = '/api/v1/p/default/content/board/{}/fixture/' + filename
     with TestClient(app) as client:
         assert client.get(url.format(3)).status_code == 401
         headers = {'Authorization': 'Bearer ' + TOKEN}
         current = client.get(url.format(3), headers=headers)
         assert (current.status_code, current.content) == (200, b'3')
+        assert current.headers['content-type'] == mime
         assert reads == [('draft', 'board')]
         saved = client.get(url.format(2), headers=headers)
         assert (saved.status_code, saved.content) == (200, b'2')

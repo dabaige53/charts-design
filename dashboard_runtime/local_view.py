@@ -6,7 +6,7 @@ import json
 import time
 from decimal import Decimal, ROUND_HALF_UP
 
-from .model import apply_operations, json_bytes, require
+from .model import MAX_BYTES, apply_operations, json_bytes, require
 from .bindings import KPI_NUMERIC_TARGETS
 from .local_data import QueryCache, semantic_filters
 
@@ -54,18 +54,45 @@ class LocalView:
 
     def prepare(self, document, filters=None, table_states=None, granularities=None, component_ids=None, include_filter_options=True):
         started = time.perf_counter()
-        doc = copy.deepcopy(document)
-        if filters is not None:
-            doc = apply_operations(doc, [{'op': 'set_filters', 'value': filters}])
+        # Applying filters already creates an isolated document; do not copy it twice.
+        doc = (apply_operations(document, [{'op': 'set_filters', 'value': filters}])
+               if filters is not None else copy.deepcopy(document))
+        return self._prepare(doc, table_states, granularities, component_ids, include_filter_options, started=started)
+
+    def component_checker(self, document):
+        """Share immutable definitions and their encoded size for one diagnostic run."""
+        response_base_bytes = None
+
+        def response_size(doc):
+            nonlocal response_base_bytes
+            if response_base_bytes is None:
+                definition = {key: value for key, value in doc.items() if key != 'computed'}
+                response_base_bytes = len(json_bytes(definition)) + len(b',"computed":')
+            # Keep finite-JSON and complete-response size checks, including a
+            # document that fits the limit until a component result is attached.
+            return response_base_bytes + len(json_bytes(doc['computed']))
+
+        def check(component_id):
+            # Calculation only writes the envelope/snapshot and fresh results.
+            # Definitions remain read-only, including when a component fails.
+            doc = {**document, 'snapshot': {**document['snapshot']}}
+            self._prepare(doc, component_ids=[component_id], include_filter_options=False,
+                          response_size=response_size)
+
+        return check
+
+    def _prepare(self, doc, table_states=None, granularities=None, component_ids=None,
+                 include_filter_options=True, response_size=None, started=None):
+        started = time.perf_counter() if started is None else started
         m, s = doc['manifest'], doc['snapshot']
         require(not s['datasets'], 'Local preview requires versioned datasets')
         refs = s.get('datasetRefs', {})
         computed = {'components': {}, 'tables': {}, 'grouped': {}, 'filterOptions': {}, 'filterPages': {}, 'cacheHits': 0}
         table_states, granularities = table_states or {}, granularities or {}
-        require(set(table_states) <= set(m['components']), 'Unknown table view component')
-        require(set(granularities) <= set(m['components']) and all(v in ('month', 'quarter') for v in granularities.values()), 'Invalid chart granularity')
-        selected = set(m['components']) if component_ids is None else set(component_ids)
-        require(selected <= set(m['components']), 'Unknown view component')
+        require(all(key in m['components'] for key in table_states), 'Unknown table view component')
+        require(all(key in m['components'] for key in granularities) and all(v in ('month', 'quarter') for v in granularities.values()), 'Invalid chart granularity')
+        selected = m['components'] if component_ids is None else dict.fromkeys(component_ids)
+        require(all(key in m['components'] for key in selected), 'Unknown view component')
         if component_ids is None:
             for ds, ref in refs.items():
                 declared = {f['field'] for f in m['filters'] if any(m['components'][cid].get('datasetId') == ds for cid in f['componentIds'])}
@@ -73,9 +100,8 @@ class LocalView:
                     if c.get('datasetId') == ds and (c.get('family') == 'table' or c.get('kind') == 'table'):
                         declared.update(k for k, v in ref['fields'].items() if v['type'] == 'number')
                 self.data.prepare_indexes(ref, declared)
-        for key, c in m['components'].items():
-            if key not in selected:
-                continue
+        for key in selected:
+            c = m['components'][key]
             family = c.get('family', 'chart') if c['kind'] == 'legacy' else c['kind']
             if family in ('text', 'statistical'):
                 continue
@@ -210,7 +236,9 @@ class LocalView:
         computed['sourceRows'] = {key: ref['rowCount'] for key, ref in refs.items()}
         computed['sourceBytes'] = sum(ref['bytes'] for ref in refs.values())
         doc['computed'] = computed
-        computed['responseBytes'] = len(json_bytes(doc))
+        size = response_size(doc) if response_size is not None else len(json_bytes(doc))
+        require(size <= MAX_BYTES, 'Artifact exceeds 16 MiB', 'PAYLOAD_TOO_LARGE')
+        computed['responseBytes'] = size
         return doc
 
     def filter_options(self, document, filter_id, search='', offset=0, limit=100):
