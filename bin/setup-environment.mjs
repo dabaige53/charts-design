@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, mkdtempSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdtempSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,11 +8,7 @@ import { tmpdir } from 'node:os';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const version = readFileSync(path.join(root, '.bun-version'), 'utf8').trim();
 if (process.versions.bun !== version) throw Error(`项目需要 Bun ${version}，当前为 ${process.versions.bun ?? '非 Bun 运行时'}。`);
-const env = { ...process.env, UV_CACHE_DIR: path.join(root, '.runtime-cache/uv'),
-  BUN_INSTALL_CACHE_DIR: path.join(root, '.runtime-cache/bun') };
-mkdirSync(env.UV_CACHE_DIR, { recursive: true });
-mkdirSync(env.BUN_INSTALL_CACHE_DIR, { recursive: true });
-const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, env, stdio: 'inherit' });
+const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, stdio: 'inherit' });
 run('uv', ['sync', '--locked', '--all-extras', '--no-install-project', '--python', readFileSync(path.join(root, '.python-version'), 'utf8').trim()]);
 run(process.execPath, ['install', '--frozen-lockfile']);
 run(process.execPath, ['install', '--frozen-lockfile'], path.join(root, 'runtime-ui'));

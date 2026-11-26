@@ -10,6 +10,8 @@
 
 安装对应版本的 Bun 与 uv 后，在仓库根目录执行 `bun run setup`。该入口使用冻结锁文件安装两套 Bun 依赖和 uv 环境，保存本机解释器配置；迁移旧配置前在系统临时目录保留原件。安装不运行应用构建或测试。
 
+各工作树在自己的 `.venv` 和 `node_modules` 中安装依赖，并通过 uv 与 Bun 的默认本机缓存复用已下载的包。`UV_CACHE_DIR` 和 `BUN_INSTALL_CACHE_DIR` 可显式指定缓存位置。
+
 Python 命令使用 `bun run python -- <参数>`，它只启动已准备的解释器，不自动安装依赖；uv 负责环境安装与同步。源码无需安装成 Python 包，通过项目入口加载。`PYTHON` 可显式指定其他环境，缺少解释器时直接报错，不自动回退系统 Python。
 
 修改 Python 依赖后执行 `uv lock`，修改 Bun 包依赖后在对应包目录执行 `bun install`，将声明与锁文件一起提交；普通安装使用 `--locked` 或 `--frozen-lockfile`。单独执行 `uv sync` 会按所选依赖组同步环境，完整开发环境统一回到 `bun run setup`。
