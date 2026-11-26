@@ -270,7 +270,7 @@
 | tests/runtime/test_runtime.py:34 | test_ambiguous_kpi_comparison_cannot_be_saved | KEEP | - | boundary | 无基准非零对比文本被保存 | 新旧KPI均拒绝 |
 | tests/runtime/test_runtime.py:44 | test_incompatible_charts_rejected | KEEP | - | boundary | 不兼容类型应用到旧文档 | 四种类型模型操作失败 |
 | tests/runtime/test_runtime.py:52 | test_compatible_charts | KEEP | - | behavior | 兼容类型无法在历史文档切换 | 五种旧类型模型操作结果 |
-| tests/runtime/test_runtime.py:61 | test_atomic_rollback | DELETE | D7 | - | - | set_chart被service执行前拒绝无法证明已执行修改回滚 |
+| tests/runtime/test_runtime.py:61 | test_atomic_rollback | DELETE | D7 | - | - | service 在执行前拒绝 set_chart，测试未进入修改和回滚路径 |
 | tests/runtime/test_runtime.py:78 | test_concurrent_edits_have_one_winner | KEEP | - | integration | 同版本并发同时成功覆盖数据 | 两线程竞争一成功一冲突 |
 | tests/runtime/test_runtime.py:98 | test_restore_creates_new_revision | KEEP | - | behavior | 恢复覆盖历史或未创建新版本 | 修改恢复检查版本内容历史 |
 | tests/runtime/test_runtime.py:107 | test_layout_overlap_and_wrong_field | KEEP | - | boundary | 重叠布局不存在字段被接受 | 构造重叠无效字段 |
