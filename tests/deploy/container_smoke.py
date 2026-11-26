@@ -101,7 +101,7 @@ def wait_healthy(base, seconds=90):
     raise AssertionError(f'{base}/health did not become healthy within {seconds}s')
 
 
-# @wu-test type=integration | scope=部署镜像 | protects=部署后鉴权失效或编辑批次失败或只读令牌可写或JSON下载失败
+# @wu-test type=integration | scope=部署镜像 | protects=部署后鉴权失效或公开提交无法保存或只读令牌可写或JSON下载失败
 def run_checks(base, token):
     wait_healthy(base)
     status, _, _ = http('POST', base + '/mcp', {}, {'Content-Type': 'application/json'})
@@ -114,23 +114,28 @@ def run_checks(base, token):
     client.protocol = info.get('protocolVersion')
     client.notify('notifications/initialized')
     names = {tool['name'] for tool in client.request('tools/list')['tools']}
-    check({'dashboard_share', 'dashboard_preview', 'layout_templates', 'chart_recommend'} <= names, 'expected server tools are missing')
-    check('dashboard_export_open' not in names, 'desktop-only tool is exposed remotely')
+    expected = {'dashboard_submit', 'dashboard_get', 'dashboard_list', 'dashboard_export'}
+    check(expected <= names, f'expected server tools are missing: {sorted(expected - names)}')
+    private = {'dashboard_export_open', 'dashboard_patch', 'dashboard_share'}
+    check(not names & private, f'non-public tools are listed: {sorted(names & private)}')
     print(f'ok  MCP initialize ({client.protocol}) and {len(names)} tools')
 
     outside = client.request('tools/call', {'name': 'dashboard_list', 'arguments': {'projectRoot': '/etc'}})
     check(outside.get('isError'), 'a path outside the workspace was accepted')
-    operations = client.tool('generation_examples', {'caseId': 'operations-scorecard'})['operations']
-    revision = client.tool('dashboard_create', {'dashboardId': BOARD, 'title': 'Smoke'})['revision']
-    batch = client.tool('dashboard_edit_begin', {'dashboardId': BOARD, 'expectedRevision': revision})
-    revision = client.tool('dashboard_patch', {'dashboardId': BOARD, 'expectedRevision': revision, 'operations': operations})['revision']
-    finished = client.tool('dashboard_edit_finish', {'dashboardId': BOARD, 'expectedRevision': revision, 'batchId': batch['batch_id']})
-    check(finished.get('ok'), f'edit batch failed Doctor checks: {finished.get("doctor")}')
+    resource = client.request('resources/read', {'uri': 'charts://examples/operations-scorecard'})
+    operations = json.loads(resource['contents'][0]['text'])['operations']
+    submitted = client.tool('dashboard_submit', {'dashboardId': BOARD, 'createTitle': 'Smoke', 'operations': operations})
+    revision = submitted['revision']
+    check(submitted['checkpoint']['revision'] == revision, 'submission did not save its revision')
     saved = client.tool('dashboard_get', {'dashboardId': BOARD})
     check(len(saved['document']['manifest']['components']) == 10, 'authored dashboard is incomplete')
-    print(f'ok  authored {BOARD!r} through an edit batch (revision {revision})')
+    print(f'ok  authored {BOARD!r} through dashboard_submit (revision {revision})')
 
-    link = client.tool('dashboard_share', {'dashboardId': BOARD, 'access': 'view'})['url']
+    author = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token}
+    status, _, raw = http('POST', base + '/api/v1/share',
+                          {'project': PROJECT, 'dashboardId': BOARD, 'access': 'view'}, author)
+    check(status == 200, f'creating a viewer link returned {status}')
+    link = json.loads(raw)['url']
     _, share = link.split('#token=')
     api = f'{base}/api/v1/p/{PROJECT}/tools/'
     viewer = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + share}

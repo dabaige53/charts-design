@@ -1,32 +1,40 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, mock } from "bun:test";
-import React, { useEffect, useState } from "react";
-
-mock.module("./dashboard", () => ({
-  DashboardApp: ({ initial, call }: any) => {
-    const [title, setTitle] = useState(initial.manifest.title);
-    const [pages, setPages] = useState<any[]>([]);
-    useEffect(() => { void call("dashboard_list").then((result: any) => setPages(result.dashboards)); }, []);
-    return <><span>{title}</span>{pages.map((page) => <button key={page.id} onClick={() => void call("dashboard_get", { dashboardId: page.id }).then((result: any) => setTitle(result.document.manifest.title))}>{page.id}</button>)}</>;
-  },
-}));
 import { StaticSite } from "./static";
+import type { Document } from "./types";
 
 const originalFetch = globalThis.fetch;
-afterEach(() => { cleanup(); globalThis.fetch = originalFetch; mock.restore(); });
+const originalLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+afterEach(() => {
+  cleanup();
+  globalThis.fetch = originalFetch;
+  if (originalLocation) Object.defineProperty(globalThis, "location", originalLocation);
+  else Reflect.deleteProperty(globalThis, "location");
+});
 
 // @wu-test type=integration | scope=StaticSite 页面切换 | protects=多页面分享无法读取所选页面或误加载未选页面
 it("loads selected pages from the shared site", async () => {
   Object.defineProperty(globalThis, "location", { configurable: true, value: new URL("https://charts.example/s/share/") });
-  const first = { id: "first", manifest: { title: "第一页" }, staticPages: [
+  const pages = [
     { id: "first", title: "第一页", path: "document.json" },
     { id: "second", title: "第二页", path: "pages/second/document.json" },
-  ] };
-  const fetchMock = mock(async (url: any) => ({ ok: true, json: async () => String(url).includes("pages/second/") ? { id: "second", manifest: { title: "第二页" } } : first }));
-  globalThis.fetch = fetchMock as any;
+  ];
+  const documents = Object.fromEntries(pages.map(({ id, path, title }) => {
+    const doc: Document = {
+      id, revision: 1, staticPages: pages,
+      manifest: { title, viewMode: "report", report: { markdown: "" },
+        components: {}, filters: [], layout: {}, metrics: {}, datasets: {} },
+      snapshot: { datasets: {} },
+    };
+    return [new URL(path, location.href).href, doc];
+  }));
+  const fetchMock = mock(async (url: RequestInfo | URL) => Response.json(documents[String(url)]));
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
   render(<StaticSite />);
-  await screen.findByText("第一页");
-  fireEvent.click(await screen.findByRole("button", { name: "second" }));
-  await waitFor(() => expect(screen.getByText("第二页")).toBeTruthy());
+  await screen.findByRole("heading", { name: "第一页" });
+  const select = await screen.findByRole("combobox", { name: "切换看板" });
+  fireEvent.keyDown(select, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "第二页" }));
+  await screen.findByRole("heading", { name: "第二页" });
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
