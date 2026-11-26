@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import copy
 import sqlite3
+from contextlib import closing, contextmanager
 from pathlib import Path
 from .model import DashboardError, MAX_ROWS, apply_operations, identifier, inferred_fields, json_bytes, new_document, require, utcnow, validate, validate_component_content
 from .local_data import LocalData
@@ -28,10 +29,13 @@ class Store:
         except OSError:
             pass
 
+    @contextmanager
     def connect(self):
-        connection = sqlite3.connect(str(self.path), timeout=10)
-        connection.row_factory = sqlite3.Row
-        return connection
+        """One independent transaction whose connection closes on every exit."""
+        with closing(sqlite3.connect(str(self.path), timeout=10)) as connection:
+            connection.row_factory = sqlite3.Row
+            with connection:
+                yield connection
 
     def compact(self, document):
         """Persist immutable data once; revision records contain references only."""

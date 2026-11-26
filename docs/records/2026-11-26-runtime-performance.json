@@ -1265,5 +1265,87 @@
       "baseRef": "0b77d0cadf429da49b852c1701cd1f45cd353374",
       "method": "Historical source rebuilt with the current installed dependencies and esbuild options; current worker is the packaged UI build."
     }
+  },
+  "connectionLifecycle": {
+    "format": "charts-connection-lifecycle-v1",
+    "python": "3.11.16",
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "baseCommit": "d4c31e243075e402f93d74a92e277fb838c71849",
+    "method": "For each operation: collect GC, count project SQLite file descriptors via /proc/self/fd, disable automatic GC, call 100 times, count descriptors before collection, explicitly collect, count again. No Service or persistent transport connection is created.",
+    "iterations": 100,
+    "before": {
+      "storeSourceSHA256": "cc47efc087dfa2ca924b0b9b4c15c1a5a9a0225eb18d6d772a0f36f3e0b50d7b",
+      "measurements": [
+        {
+          "operation": "Store.revision",
+          "before": {},
+          "afterBeforeGC": {
+            "dashboards.sqlite3": 100,
+            "dashboards.sqlite3-wal": 100,
+            "dashboards.sqlite3-shm": 1
+          },
+          "afterGC": {},
+          "collectedObjects": 1100
+        },
+        {
+          "operation": "Versions.status",
+          "before": {},
+          "afterBeforeGC": {
+            "dashboards.sqlite3": 100,
+            "dashboards.sqlite3-wal": 100,
+            "dashboards.sqlite3-shm": 1
+          },
+          "afterGC": {},
+          "collectedObjects": 1900
+        },
+        {
+          "operation": "LocalData.describe",
+          "before": {},
+          "afterBeforeGC": {},
+          "afterGC": {},
+          "collectedObjects": 0
+        },
+        {
+          "operation": "LocalData.sqlite_source",
+          "before": {},
+          "afterBeforeGC": {},
+          "afterGC": {},
+          "collectedObjects": 0
+        }
+      ]
+    },
+    "after": {
+      "storeSourceSHA256": "8a0e0aa728cbe86c2cc327091f06d09ae0f18e9cc9679c28c96aec60579e87d9",
+      "measurements": [
+        {
+          "operation": "Store.revision",
+          "before": {},
+          "afterBeforeGC": {},
+          "afterGC": {},
+          "collectedObjects": 0
+        },
+        {
+          "operation": "Versions.status",
+          "before": {},
+          "afterBeforeGC": {},
+          "afterGC": {},
+          "collectedObjects": 0
+        },
+        {
+          "operation": "LocalData.describe",
+          "before": {},
+          "afterBeforeGC": {},
+          "afterGC": {},
+          "collectedObjects": 0
+        },
+        {
+          "operation": "LocalData.sqlite_source",
+          "before": {},
+          "afterBeforeGC": {},
+          "afterGC": {},
+          "collectedObjects": 0
+        }
+      ]
+    }
   }
 }

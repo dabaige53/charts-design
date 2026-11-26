@@ -1,3 +1,5 @@
+from contextlib import closing, contextmanager
+
 import pytest
 import json
 import sqlite3
@@ -66,10 +68,11 @@ def test_repeated_version_reads_do_not_take_a_database_write_lock(tmp_path, monk
     versions = Versions(store)
     versions.publish('board', 1, 1)
 
+    @contextmanager
     def connect_without_wait():
-        connection = sqlite3.connect(store.path, timeout=0)
-        connection.row_factory = sqlite3.Row
-        return connection
+        with closing(sqlite3.connect(store.path, timeout=0)) as connection, connection:
+            connection.row_factory = sqlite3.Row
+            yield connection
 
     monkeypatch.setattr(store, 'connect', connect_without_wait)
     with store.connect() as writer:
@@ -122,10 +125,11 @@ def test_status_uses_one_snapshot_across_concurrent_publication(tmp_path, monkey
                     writer.execute('UPDATE version_heads SET published=2 WHERE board_id=?', ('board',))
             return super().execute(sql, parameters)
 
+    @contextmanager
     def connect():
-        db = sqlite3.connect(store.path, timeout=0, factory=InterleavingConnection)
-        db.row_factory = sqlite3.Row
-        return db
+        with closing(sqlite3.connect(store.path, timeout=0, factory=InterleavingConnection)) as db, db:
+            db.row_factory = sqlite3.Row
+            yield db
 
     monkeypatch.setattr(store, 'connect', connect)
     status = versions.status('board')
@@ -157,10 +161,11 @@ def test_release_fallback_keeps_its_snapshot_during_deletion(tmp_path, monkeypat
                     writer.execute('UPDATE version_heads SET published=NULL WHERE board_id=?', ('board',))
             return super().execute(sql, parameters)
 
+    @contextmanager
     def connect():
-        db = sqlite3.connect(store.path, timeout=0, factory=InterleavingConnection)
-        db.row_factory = sqlite3.Row
-        return db
+        with closing(sqlite3.connect(store.path, timeout=0, factory=InterleavingConnection)) as db, db:
+            db.row_factory = sqlite3.Row
+            yield db
 
     monkeypatch.setattr(store, 'connect', connect)
     assert versions.read('board', 1)['manifest']['title'] == 'Original'

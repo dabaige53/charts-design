@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from threading import Barrier
 import json
 import sqlite3
@@ -6,6 +7,53 @@ import sqlite3
 from dashboard_runtime.service import Service
 from dashboard_runtime.model import DashboardError
 import pytest
+
+
+# @wu-test type=boundary | scope=Store connection lifecycle | protects=成功异常或提交失败后连接依赖GC回收、回滚丢失或嵌套连接共用未提交事务
+@pytest.mark.parametrize('outcome', ['commit', 'body_error', 'commit_error'])
+def test_store_connections_close_after_commit_and_rollback(tmp_path, outcome):
+    from dashboard_runtime.store import Store
+
+    store = Store(tmp_path / 'store')
+    with store.connect() as setup:
+        setup.execute('CREATE TABLE lifecycle_parent (id INTEGER PRIMARY KEY)')
+        setup.execute('CREATE TABLE lifecycle_child (parent INTEGER REFERENCES lifecycle_parent(id) DEFERRABLE INITIALLY DEFERRED)')
+        setup.execute('INSERT INTO lifecycle_parent VALUES(1)')
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        setup.execute('SELECT 1')
+
+    def transaction():
+        nonlocal connection, nested
+        with store.connect() as connection:
+            connection.execute('PRAGMA foreign_keys=ON')
+            connection.execute('INSERT INTO lifecycle_parent VALUES(2)')
+            with store.connect() as nested:
+                assert nested is not connection
+                assert [row['id'] for row in nested.execute('SELECT id FROM lifecycle_parent')] == [1]
+            with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+                nested.execute('SELECT 1')
+            assert connection.execute('SELECT count(*) FROM lifecycle_parent').fetchone()[0] == 2
+            if outcome == 'body_error':
+                raise RuntimeError('body failed')
+            if outcome == 'commit_error':
+                connection.execute('INSERT INTO lifecycle_child VALUES(99)')
+
+    connection = nested = None
+    if outcome == 'commit':
+        transaction()
+    else:
+        expected = RuntimeError if outcome == 'body_error' else sqlite3.IntegrityError
+        with pytest.raises(expected):
+            transaction()
+    # Keep the actual objects alive: success must not depend on refcount or GC.
+    assert connection is not None and nested is not None
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        connection.execute('SELECT 1')
+    with store.connect() as verified:
+        assert [row['id'] for row in verified.execute('SELECT id FROM lifecycle_parent')] == ([1, 2] if outcome == 'commit' else [1])
+        assert verified.execute('SELECT count(*) FROM lifecycle_child').fetchone()[0] == 0
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        verified.execute('SELECT 1')
 
 
 # @wu-test type=integration | scope=独立批注读写 | protects=读取或提交批注会加载整页，或者旧批注列表覆盖并发修改
@@ -354,7 +402,7 @@ def test_annotation_mirrors_follow_commit_without_blocking_database_writes(tmp_p
     def check_commit(db, board):
         # A separate writer must be able to start even while the mirror is being
         # generated, and must already see the committed annotation.
-        with sqlite3.connect(store.path, timeout=0) as probe:
+        with closing(sqlite3.connect(store.path, timeout=0)) as probe, probe:
             probe.execute('BEGIN IMMEDIATE')
             committed.append(json.loads(probe.execute('SELECT payload FROM annotations WHERE board_id=?', (board,)).fetchone()[0]))
         original_files(db, board)

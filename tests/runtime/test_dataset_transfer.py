@@ -76,6 +76,40 @@ def native_cos():
         pytest.skip('New COS packages require the native exporter built by the native CI job')
 
 
+# @wu-test type=boundary | scope=remote transfer source lifecycle | protects=批量上传源迭代耗尽提前关闭或校验失败后SQLite连接仍占用文件资源
+@pytest.mark.parametrize('completion', ['exhaust', 'close', 'metadata_error'])
+def test_transfer_batches_close_source_connection(tmp_path, monkeypatch, completion):
+    import sqlite3
+
+    from dashboard_runtime import remote_client
+
+    data = LocalData(tmp_path / 'data')
+    rows = [{'value': 1}, {'value': 2}, {'value': None}]
+    ref = data.import_rows(rows, {'value': {'type': 'number'}})
+    connections, connect = [], sqlite3.connect
+
+    def tracked(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(remote_client.sqlite3, 'connect', tracked)
+    source = remote_client.batches(tmp_path, {**ref, 'rowCount': 4} if completion == 'metadata_error' else ref, size=1)
+    if completion == 'metadata_error':
+        with pytest.raises(ValueError, match='differs'):
+            next(source)
+    else:
+        assert next(source) == rows[:1]
+        assert connections[0].execute('SELECT 1').fetchone() == (1,)
+        if completion == 'close':
+            source.close()
+        else:
+            assert list(source) == [[row] for row in rows[1:]]
+    assert len(connections) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        connections[0].execute('SELECT 1')
+
+
 # @wu-test type=integration | scope=COS dataset repartition | protects=重建分区篡改原数据或更新看板引用
 def test_repartition_stages_one_replacement_and_preserves_original(tmp_path, monkeypatch, native_cos):
     from dashboard_runtime.server import EDIT_TOOLS
