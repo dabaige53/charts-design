@@ -19,6 +19,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from . import __version__
 from .file_lock import exclusive_file_lock
 from .model import DashboardError, identifier, json_bytes, require
 
@@ -74,7 +75,11 @@ class LocalShares:
                 yield db
 
     def _request(self, method, path, *, headers=None, archive=None):
-        request_headers = {'Authorization': 'Bearer ' + self.token, **(headers or {})}
+        request_headers = {
+            'Authorization': 'Bearer ' + self.token,
+            'User-Agent': 'Charts-Design-Publisher/' + __version__,
+            **(headers or {}),
+        }
         opener = build_opener(_NoRedirect())
         try:
             with (archive.open('rb') if archive else nullcontext(None)) as body:
@@ -127,50 +132,39 @@ class LocalShares:
         return '/api/v1/publications/' + quote(share_id) + '?' + urlencode({
             'source': self.source, 'project': self.project, 'dashboardId': board})
 
-    def publish_request(self, args):
+    def publish(self, board, revision, expiration='7d', *, annotation_mode='view', request_id):
         from .deployment import export_site
         from .versions import Versions
 
-        board = identifier(args.get('dashboardId'))
-        options = args.get('share')
-        require(isinstance(options, dict), 'A share request is required', 'INVALID_ARGUMENT')
-        request_id = options.get('requestId')
+        identifier(board)
+        require(type(revision) is int and revision > 0, 'Choose a saved revision', 'INVALID_ARGUMENT')
         require(isinstance(request_id, str) and UUID_V4.fullmatch(request_id) is not None,
-                'Use a stable UUID v4 share.requestId when retrying', 'INVALID_ARGUMENT')
-        expiration, mode = options.get('expiration', '7d'), options.get('annotationMode', 'view')
-        require(expiration in ('never', '7d', '30d') and mode in ('view', 'annotate'), 'Invalid share options', 'INVALID_ARGUMENT')
+                'Use a stable UUID v4 requestId when retrying', 'INVALID_ARGUMENT')
+        require(expiration in ('never', '7d', '30d') and annotation_mode in ('view', 'annotate'),
+                'Invalid share options', 'INVALID_ARGUMENT')
         versions = Versions(self.service.store)
-        fingerprint = hashlib.sha256(json_bytes([board, args.get('revision'), args.get('expectedRevision'),
-                                                 expiration, mode, self.url, self.project])).hexdigest()
+        # The empty draft-revision slot preserves existing standalone receipts.
+        fingerprint = hashlib.sha256(json_bytes([board, revision, None, expiration,
+                                                 annotation_mode, self.url, self.project])).hexdigest()
         # The lock serializes uncertain retries without holding a SQLite write
         # transaction across data encoding or a network request.
         with exclusive_file_lock(self.root / '.share-locks' / (request_id + '.lock')):
             with self.connect() as db:
                 row = db.execute('SELECT * FROM requests WHERE id=?', (request_id,)).fetchone()
-            status = versions.status(board)
             if row:
                 require(row['fingerprint'] == fingerprint, 'This request ID was used for different share options', 'IDEMPOTENCY_CONFLICT')
-                revision = row['revision']
                 if row['receipt']:
                     receipt = json.loads(row['receipt'])
                     self.feedback(board, receipt['shareId'])  # Recheck revocation/expiry before reporting a retry as successful.
-                    return {'ok': True, 'dashboardId': board, 'publishedRevision': revision,
-                            'versionStatus': status, 'share': receipt}
+                    return receipt
             else:
-                expected = args.get('expectedRevision', status['draftRevision'])
-                require(expected == status['draftRevision'], 'Reload before publishing', 'REVISION_CONFLICT')
-                revision = args.get('revision', status['savedRevision'])
-                require(type(revision) is int and revision > 0, 'Choose a saved version before sharing', 'NO_SAVED_VERSION')
                 document = versions.read(board, revision)
                 report = self.service._doctor(document, 'full', reuse=True)
-                if not report['passed']:
-                    return {'ok': False, 'error': {'code': 'DOCTOR_FAILED', 'message': 'Saved version checks failed.'}, 'doctor': report}
-                status = versions.publish(board, expected, revision)
+                require(report['passed'], 'Saved version checks failed.', 'DOCTOR_FAILED')
                 with self.connect() as db:
                     db.execute('INSERT INTO requests(id,board,fingerprint,revision,service_url,project,state,created_at) VALUES(?,?,?,?,?,?,?,?)',
                                (request_id, board, fingerprint, revision, self.url, self.project, 'uploading', time.time()))
                     row = db.execute('SELECT * FROM requests WHERE id=?', (request_id,)).fetchone()
-            result = {'ok': True, 'dashboardId': board, 'publishedRevision': revision, 'versionStatus': status}
             try:
                 if row['archive']:
                     archive = Path(row['archive'])
@@ -186,29 +180,17 @@ class LocalShares:
                 receipt = self._request('POST', '/api/v1/publications', archive=archive, headers={
                     'Content-Type': 'application/zip', 'X-Charts-Source': self.source,
                     'X-Charts-Project': self.project, 'X-Charts-Request': request_id,
-                    'X-Charts-Expiration': expiration, 'X-Charts-Annotation-Mode': mode})
+                    'X-Charts-Expiration': expiration, 'X-Charts-Annotation-Mode': annotation_mode})
                 require(isinstance(receipt.get('shareId'), str) and SHARE_ID.fullmatch(receipt['shareId']) is not None
-                        and receipt.get('revision') == revision and receipt.get('annotationMode', 'view') == mode,
+                        and isinstance(receipt.get('url'), str) and bool(receipt['url'])
+                        and isinstance(receipt.get('accessKey'), str) and re.fullmatch(r'[0-9]{8}', receipt['accessKey']) is not None
+                        and receipt.get('revision') == revision and receipt.get('annotationMode', 'view') == annotation_mode,
                         'Share service returned a different publication', 'SHARE_SERVICE_FAILED')
                 with self.connect() as db:
                     db.execute('UPDATE requests SET receipt=?,state=? WHERE id=?', (json.dumps(receipt, ensure_ascii=False), 'active', request_id))
-                result['share'] = receipt
-            except DashboardError as error:
-                result['shareError'] = error.as_dict()['error']
-            except OSError:
-                result['shareError'] = {'code': 'SHARE_EXPORT_FAILED', 'message': 'Could not prepare the fixed publication copy.'}
-            return result
-
-    def publish(self, board, revision, expiration='7d', access_key=None, pages=None, *, annotation_mode='view', request_id=None):
-        require(not pages, 'Sharing accepts one saved page per publication', 'INVALID_ARGUMENT')
-        require(access_key is None, 'The configured share service generates the visitor key', 'INVALID_ARGUMENT')
-        result = self.publish_request({'dashboardId': board, 'revision': revision,
-            'share': {'requestId': request_id or str(uuid.uuid4()), 'expiration': expiration, 'annotationMode': annotation_mode}})
-        if result.get('shareError'):
-            error = result['shareError']
-            raise DashboardError(error['code'], error['message'], 503)
-        require(result.get('ok') is True and 'share' in result, 'Saved version checks failed', 'DOCTOR_FAILED')
-        return result['share']
+            except OSError as error:
+                raise DashboardError('SHARE_EXPORT_FAILED', 'Could not prepare the fixed publication copy.', 503) from error
+            return receipt
 
     def feedback(self, board, share_id):
         _, receipt = self._reference(board, share_id)

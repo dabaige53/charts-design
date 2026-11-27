@@ -204,7 +204,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             parsed = urlparse(self.path)
             path = parsed.path
-            principal = self.check(authenticated=path.startswith('/api/'))
+            # Only the authenticated /api/ branches use this principal.
+            principal = cast(tuple[str, str | None], self.check(authenticated=path.startswith('/api/')))
             if path == '/' or path.startswith(('/edit/', '/view/')):
                 board = unquote(path.split('/', 2)[2]) if path != '/' else None
                 if board is not None:
@@ -253,6 +254,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             principal = self.check()
+            assert principal is not None
             path = urlparse(self.path).path
             args = self.read_body()
             if path.startswith('/api/annotations/'):
@@ -263,6 +265,7 @@ class Handler(BaseHTTPRequestHandler):
             if not path.startswith('/api/tools/'):
                 raise DashboardError('NOT_FOUND', 'Unknown endpoint', 404)
             name = path.removeprefix('/api/tools/')
+            args.pop('projectRoot', None)  # This loopback endpoint is bound to one project.
             if principal[0] != 'edit':
                 if name not in PREVIEW_TOOLS:
                     raise DashboardError('FORBIDDEN', 'This preview cannot change content or versions', 403)
@@ -277,7 +280,7 @@ class Handler(BaseHTTPRequestHandler):
             result = self.runtime.service.call(name, args)
             if principal[0] != 'edit' and name == 'dashboard_list':
                 result['dashboards'] = [item for item in result['dashboards'] if item['id'] == principal[1]]
-            if path == '/api/tools/dashboard_preview':
+            if name in ('dashboard_get', 'dashboard_preview'):
                 result['projectRoot'] = str(self.runtime.service.project_root) if self.runtime.service.project_root else None
             self.send(result)
         except Exception as exc:

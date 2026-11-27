@@ -10,11 +10,10 @@ import pytest
 from dashboard_runtime.assets import FAVICON_LINK, render_html
 from dashboard_runtime.demo import executive_document
 from dashboard_runtime.deployment import _write_shards
-from dashboard_runtime.model import MAX_BYTES
+from dashboard_runtime.model import MAX_BYTES, DashboardError, apply_operations, new_document
 from dashboard_runtime.service import Service
 from dashboard_runtime import columnar, deployment
-from dashboard_runtime.model import DashboardError
-from static_fixture import worker_rows
+from static_fixture import worker_query, worker_rows
 
 
 # @wu-test type=integration | scope=静态部署入口 | protects=导出缺少运行资源和网页图标或改写已保存文档
@@ -110,6 +109,46 @@ def native_service(tmp_path):
     service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
     service.call('dashboard_create', {'dashboardId': 'demo', 'document': executive_document('demo')})
     return service
+
+
+# @wu-test type=integration | scope=独立分享的预生成筛选候选项 | protects=展开月份或区域时读取明细分片，或者高基数列表被截断和草稿值泄漏到保存版
+def test_site_export_inlines_complete_small_filter_option_lists(tmp_path):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    fields = {'month': {'type': 'date'}, 'region': {'type': 'string'}, 'route': {'type': 'number'}}
+    meta = {'fields': fields, 'sourceId': 'fixture'}
+    operations = [{'op': 'put_source', 'id': 'fixture', 'value': {'kind': 'fixture', 'name': 'Synthetic data'}}]
+    for key, rows in (
+        ('inbound', [{'month': '2026-01-01', 'region': '华东', 'route': i} for i in range(101)]),
+        ('outbound', [{'month': '2026-02-01', 'region': '华北', 'route': 1}]),
+    ):
+        operations.extend([
+            {'op': 'put_dataset', 'id': key, 'meta': meta, 'rows': rows},
+            {'op': 'put_component', 'id': key, 'value': {'kind': 'table', 'title': key, 'datasetId': key}},
+        ])
+    operations.append({'op': 'set_filters', 'value': [
+        {'id': field, 'field': field, 'label': field, 'op': 'in', 'componentIds': ['inbound', 'outbound'],
+         'values': ['华东'] if field == 'region' else []}
+        for field in fields
+    ]})
+    doc = apply_operations(new_document('filters', 'Shared filters'), operations)
+    service.store.create('filters', 'Shared filters', doc)
+    service.store.mutate('filters', 1, [
+        {'op': 'put_dataset', 'id': 'outbound', 'meta': meta,
+         'rows': [{'month': '2026-03-01', 'region': '华南', 'route': 1}]},
+    ])
+
+    exported = service.call('dashboard_export_site', {'dashboardId': 'filters', 'dataFormat': 'json'})['export']
+    with zipfile.ZipFile(exported['path']) as archive:
+        published = json.loads(archive.read('document.json'))
+        files = {name: archive.read(name) for group in published['staticFiles'].values() for name in group}
+    assert published['staticFilterOptions'] == {'region': ['华东', '华北'], 'month': ['2026-01-01', '2026-02-01']}
+    months, regions, routes = worker_query(published, files, [
+        {'filterId': 'month'}, {'filterId': 'region', 'search': '北'}, {'filterId': 'route', 'limit': 100},
+    ])
+    assert months['result']['values'] == ['2026-01-01', '2026-02-01'] and months['files'] == []
+    assert regions['result']['values'] == ['华北'] and regions['files'] == []
+    assert routes['result']['values'] == list(range(100))
+    assert routes['result']['hasMore'] is True and routes['result']['totalValues'] == 101 and routes['files']
 
 
 # @wu-test type=integration | scope=Parquet独立导出与缓存 | protects=导出未保存草稿丢行依赖外网或仅改标题就重新编码数据

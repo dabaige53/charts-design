@@ -136,15 +136,37 @@ SHARE_PROCESS = '''
 import json,os,sys,time
 from pathlib import Path
 import uvicorn
+from starlette.responses import PlainTextResponse
 from dashboard_runtime.server import RemoteServer,ServerSettings,create_app
 from dashboard_runtime.cloudflare_shares import storage
+from dashboard_runtime.cloud_shares import CloudShares
+from dashboard_runtime.model import DashboardError
 root=Path(sys.argv[1]);port=int(sys.argv[2])
 os.environ.update(CHARTS_STORAGE_BACKEND='cloudflare', CHARTS_RUNTIME_ROOT=str(root/'runtime'),
                   CHARTS_PUBLIC_URL='https://127.0.0.1:'+str(port))
 storage().put('cleaner-status.json',json.dumps({'completedAt':int(time.time())}).encode())
 server=RemoteServer(ServerSettings(workspace=root/'workspace',runtime=root/'runtime',tokens=(sys.argv[3],),
                                   public_url=os.environ['CHARTS_PUBLIC_URL'], role='sharing'))
-uvicorn.run(create_app(server),host='127.0.0.1',port=port,log_level='error',access_log=False,
+import_site = CloudShares.import_site
+drop_once = True
+def interrupt_receipt(self, *args, **kwargs):
+    global drop_once
+    receipt = import_site(self, *args, **kwargs)
+    if drop_once:
+        drop_once = False
+        raise DashboardError('SHARE_SERVICE_UNAVAILABLE', 'Test interruption after storing the share', 503)
+    return receipt
+CloudShares.import_site = interrupt_receipt
+app = create_app(server)
+async def require_publisher_identity(scope, receive, send):
+    if scope['type'] == 'http' and scope['method'] == 'POST' and scope['path'] == '/api/v1/publications':
+        headers = dict(scope['headers'])
+        if (headers.get(b'authorization') == ('Bearer ' + sys.argv[3]).encode()
+                and not headers.get(b'user-agent', b'').startswith(b'Charts-Design-Publisher/')):
+            await PlainTextResponse('Missing publisher identity', status_code=403)(scope, receive, send)
+            return
+    await app(scope, receive, send)
+uvicorn.run(require_publisher_identity,host='127.0.0.1',port=port,log_level='error',access_log=False,
             ssl_certfile=sys.argv[4],ssl_keyfile=sys.argv[5])
 '''
 
@@ -184,7 +206,7 @@ def _process(script, args, url, env, *, verify: bool | ssl.SSLContext = True):
         stderr.close()
 
 
-# @wu-test type=integration | scope=local and server workspaces to independent sharing HTTP and Worker journey | protects=shares depending on the author process, author routes leaking onto the share domain, missing durable feedback or shares silently following a newer draft
+# @wu-test type=integration | scope=本机与服务器独立分享 HTTP 和查询 Worker | protects=发布请求缺少客户端标识、重试重复分享、作者离线后内容或批注不可用、展开区域筛选读取明细分片
 @pytest.mark.parametrize('author_mode', ['local', 'server'])
 def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path, author_mode):
     from dashboard_runtime.columnar import native_binary
@@ -220,12 +242,22 @@ def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path
             assert reader.post('/api/v1/publications', headers=auth(TOKEN), content=b'').status_code == 401
             with _process(author_script, [author_root, local_port, TOKEN], local_url + '/', local_environment) as author:
                 with httpx.Client(base_url=local_url, headers=auth(TOKEN), trust_env=False, timeout=60) as client:
-                    request = {'dashboardId': 'board', 'expectedRevision': 1, 'revision': 1,
-                               'share': {'requestId': str(uuid.uuid4()), 'annotationMode': 'annotate', 'expiration': '7d'}}
-                    result = client.post(tools + 'dashboard_publish', json=request).json()
-                    assert result.get('share'), result
-                    receipt = result['share']
-                    assert client.post(tools + 'dashboard_publish', json=request).json()['share']['shareId'] == receipt['shareId']
+                    request = {'dashboardId': 'board', 'revision': 1, 'requestId': str(uuid.uuid4()),
+                               'annotationMode': 'annotate', 'expiration': '7d'}
+                    failed = client.post(tools + 'dashboard_share_publish', json=request)
+                    assert failed.status_code == 503 and failed.json()['error']['code'] == 'SHARE_SERVICE_UNAVAILABLE'
+                    stored_copies = cloud_root / 'runtime' / 'private-shares' / 'shares'
+                    stored_share_ids = {path.name for path in stored_copies.iterdir() if path.is_dir()}
+                    assert len(stored_share_ids) == 1
+                    state = client.post(tools + 'dashboard_version_status', json={'dashboardId': 'board'}).json()
+                    assert state['publishedRevision'] is None and state['releases'] == []
+                    result = client.post(tools + 'dashboard_share_publish', json=request)
+                    assert result.status_code == 200, result.text
+                    receipt = result.json()
+                    assert {path.name for path in stored_copies.iterdir() if path.is_dir()} == stored_share_ids == {receipt['shareId']}
+                    assert client.post(tools + 'dashboard_share_publish', json=request).json()['shareId'] == receipt['shareId']
+                    state = client.post(tools + 'dashboard_version_status', json={'dashboardId': 'board'}).json()
+                    assert state['publishedRevision'] is None and state['releases'] == []
                     page = f"/s/{receipt['shareId']}/"
                     if not local:
                         assert client.post('/api/v1/publications', content=b'').status_code == 404
@@ -255,10 +287,12 @@ def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path
                 from static_fixture import worker_query
                 independent_files = {name: reader.get(page + name).content for name in files}
                 filters = [{'field': 'region', 'op': 'in', 'values': ['East'], 'componentIds': ['details']}]
-                queried = worker_query(reader.get(page + 'document.json').json(), independent_files, [
+                options, *queried = worker_query(reader.get(page + 'document.json').json(), independent_files, [
+                    {'filterId': 'region'},
                     {'detail': True, 'componentId': 'details', 'filters': filters, 'limit': 1, 'offset': 0},
                     {'detail': True, 'componentId': 'details', 'filters': filters, 'limit': 1, 'offset': 1},
                 ])
+                assert options['result']['values'] == ['East', 'South'] and options['files'] == []
                 assert [item['result']['totalRows'] for item in queried] == [3, 3]
                 assert [item['result']['rows'][0]['revenue'] for item in queried] == [80, 102]
                 assert queried[0]['files'] and queried[1]['files'] == []  # Same immutable dataset cache.
@@ -288,7 +322,7 @@ def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path
                     assert all(item['id'] != 'reader-note' for item in source.store.annotation_state('board')['annotations'])
 
 
-# @wu-test type=regression | scope=CloudBase and Neon workspace annotation context | protects=preview annotations being attributed to the latest draft or re-encoding cloud assets
+# @wu-test type=integration | scope=CloudBase and Neon workspace annotation context | protects=preview annotations being attributed to the latest draft or re-encoding cloud assets
 @pytest.mark.parametrize('backend', ['cloudbase', 'neon'])
 def test_cloud_annotation_uses_displayed_checkpoint_without_rewriting_content(backend):
     from copy import deepcopy

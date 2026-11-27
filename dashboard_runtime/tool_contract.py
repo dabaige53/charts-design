@@ -159,6 +159,7 @@ MAINTENANCE_TOOLS = frozenset({
 })
 AUTHOR_TOOLS = frozenset({
     'dashboard_list', 'dashboard_get', 'dashboard_create', 'dashboard_submit', 'dashboard_preview', 'dashboard_publish',
+    'dashboard_share_publish', 'dashboard_share_status',
     'dashboard_view', 'dashboard_filter_options', 'component_data', 'dashboard_annotations',
     'dashboard_annotations_update', 'dataset_import', 'dataset_attach', 'query_execute',
     'chart_recommend', 'chart_declarations', 'statistical_render',
@@ -180,29 +181,21 @@ DESTRUCTIVE = {
 
 def tool_annotations(name):
     return {'readOnlyHint': name in READ_ONLY, 'destructiveHint': name in DESTRUCTIVE,
-            'idempotentHint': name in READ_ONLY and name != 'runtime_keepalive', 'openWorldHint': False}
+            'idempotentHint': name == 'dashboard_share_publish' or name in READ_ONLY and name != 'runtime_keepalive',
+            'openWorldHint': name in ('dashboard_share_publish', 'dashboard_share_replace', 'dashboard_share_delete')}
 
 
 WRITE_FLOW = ' In project mode this saves a draft: use dashboard_submit with the returned revision to check and save before previewing. On REVISION_CONFLICT read dashboard_get and reconcile.'
 TRANSFER_ENCODING = described({'type': 'string', 'enum': [BULK_ENCODING]},
                               'Use for all calls of a bulk upload. Omit for legacy 250-row JSON chunks.')
 TOOLS = {
-    'dashboard_publish': ('Publish a dashboard or report in one call after an explicit user request. '
-        'The service checks and saves the current draft if necessary, then publishes it. '
-        'Supply revision only to publish a specific saved version. Supply share only when a visitor link is requested. '
-        'Returns publishedRevision and, if requested, either share or shareError. '
-        'When retrying an interrupted share, reuse the same arguments and share.requestId.', schema({
+    'dashboard_publish': ('Set an explicitly selected saved version as the formal publication. '
+        'Checks the saved content, updates the formal publication pointer and returns publishedRevision. '
+        'Use dashboard_submit to save a draft and dashboard_share_publish to create a visitor link.', schema({
         'dashboardId': BOARD['dashboardId'],
         'expectedRevision': described(INT, 'Draft revision if already known. Omit to use the current draft at the start of the request.'),
-        'revision': described(INT, 'Specific saved revision to publish. Omit to publish the current draft.'),
-        'share': described(schema({
-            'requestId': described({'type': 'string', 'pattern': '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'},
-                                   'New random UUID v4 for this share request. Reuse it only to retry this request.'),
-            'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'}, 'Visitor link lifetime. Defaults to seven days.'),
-            'annotationMode': described({'enum': ['view', 'annotate'], 'default': 'view'},
-                                       'Allow reader annotations only when explicitly selected. Content always remains read-only.'),
-        }, ('requestId',)), 'Create one independent read-only share link with a visitor key.'),
-    }, ('dashboardId',))),
+        'revision': described(INT, 'Specific saved revision to set as the formal publication.'),
+    }, ('dashboardId', 'revision'))),
     'dashboard_submit': ('Submit related design changes once. Applies operations atomically to the expected draft, checks all components and saves one checkpoint. Omit operations to check and save an already reviewed draft (e.g. after importing data). Never publishes or shares. On DOCTOR_FAILED the changed draft remains; fix it at the returned revision. On conflict or uncertain outcome inspect current state before retrying.', schema({
         'dashboardId': BOARD['dashboardId'], 'expectedRevision': EXPECTED,
         'createTitle': described({'type': 'string', 'minLength': 1}, 'Create a new dashboard and submit its initial operations in this call. An existing ID is rejected. On failure read dashboard_get before retrying.'),
@@ -256,21 +249,21 @@ TOOLS = {
             'Optional shareId from dashboard_share_publish; omit to list this dashboard’s publications.'),
     }, ('dashboardId',))),
     'dashboard_share_publish': ('Upload a fixed saved version from this workspace to the configured HTTPS sharing service. '
-        'Choose a saved revision at expectedRevision. The service requires a healthy cloud cleanup timer. '
+        'Choose a saved revision with revision. The service requires a healthy cloud cleanup timer. '
         'Returns shareId/url/accessUrl/accessKey/expiresAt (UTC Unix seconds, null for never). accessUrl carries the eight-digit key in a #key fragment for automatic form filling; give this link only to intended readers, or send url and accessKey separately. '
         'expiration defaults to 7d; never means no automatic expiry. At expiry the gateway rejects access immediately and scheduled cleanup removes the copy and key records. '
-        'Does not delete the source project or other shares. Does not deploy cloud infrastructure. On an uncertain response call dashboard_share_status before publishing another copy.', schema({
-        **BOARD, 'expectedRevision': described(INT, 'Saved revision to publish; drafts may be newer without changing this share.'),
+        'Preserves the draft, saved history and formal publication pointer. Retry an uncertain result with identical arguments and the same requestId.', schema({
+        **BOARD, 'revision': described(INT, 'Saved revision to share; it may differ from the formal publication.'),
         'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'},
             'Lifetime from publication: never, seven days, or thirty days. Choose the period requested by the user.'),
         'annotationMode': described({'enum': ['view', 'annotate'], 'default': 'view'},
             'Independent permission to save reader annotations on this copy. Existing shares stay view-only.'),
         'requestId': described({'type': 'string', 'pattern': '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'},
             'Stable UUID v4 for this publication attempt. Reuse it after an uncertain response.'),
-    }, ('dashboardId', 'expectedRevision'))),
-    'dashboard_share_replace': ('Replace one selected share with the current formally published version. Creates a new URL and random eight-digit key, then revokes the old link and its sessions; other shares stay unchanged. Upload failure leaves the old share usable. Returns new share credentials and previousRevoked. If previousRevoked=false, retain the returned new credentials and retry dashboard_share_delete for previousShareId; do not republish. Scheduled cleanup removes the old copy.', schema({
+    }, ('dashboardId', 'revision', 'requestId'))),
+    'dashboard_share_replace': ('Replace one selected share with a selected saved version. Creates a new URL and random eight-digit key, then revokes the old link and its sessions; other shares stay unchanged. Upload failure leaves the old share usable. Returns new share credentials and previousRevoked. If previousRevoked=false, retain the returned new credentials and retry dashboard_share_delete for previousShareId; do not republish. Scheduled cleanup removes the old copy.', schema({
         **BOARD, 'shareId': described({'type': 'string', 'pattern': '^[0-9a-f]{32}$'}, 'Active share to replace; obtain from dashboard_share_status.'),
-        'expectedRevision': described(INT, 'Current publishedRevision from dashboard_version_status.'),
+        'expectedRevision': described(INT, 'Saved revision selected for the replacement.'),
         'expiration': described({'enum': ['never', '7d', '30d'], 'default': '7d'}, 'New share lifetime measured from replacement.'),
     }, ('dashboardId', 'shareId', 'expectedRevision'))),
     'dashboard_share_delete': ('Revoke one cloud publication immediately and queue deletion, including never-expiring shares. '

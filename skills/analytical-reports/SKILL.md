@@ -5,7 +5,7 @@ description: Migrate external legacy reports. Create, revise and refresh evidenc
 
 # Analytical Reports
 
-Write a report that answers the user's question with traceable data and figures. Save Markdown as the report source; the shared React renderer presents it in the academic single-column layout.
+Write a report that answers the user's question with traceable data and figures. Save Markdown as the report source. The shared renderer presents `report` as a standalone, full-width academic reading page. Use MCP or CLI to revise the source and chart declarations.
 
 迁移其他项目或系统的历史报告时，先委派一个子代理完成[逐页源端审查与 MCP 映射](../executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp)，覆盖正文、图表、表内筛选和指标口径。用[通用构建脚本](../executive-charts/references/mcp-authoring.md)维护正文与声明。
 
@@ -13,9 +13,9 @@ Write a report that answers the user's question with traceable data and figures.
 
 Read [shared MCP delivery](../executive-charts/references/mcp-delivery.md) for project routing and the editing flow. On an existing report, read `dashboard_get`, its Markdown, referenced components and data before changing it.
 
-For an explicit publication request, use `dashboard_publish` once. Include `share` when the user requests a visitor link.
+Use `dashboard_publish` with a saved `revision` to set the formal publication. For a requested visitor link, use `dashboard_share_publish` with a saved `revision` and a stable UUID v4 `requestId`.
 
-For interactive reports, use the shared [filter and selection defaults](../executive-charts/references/design_standards.md#操作与更新) for report-level and table-level controls.
+When readers need filter controls, use `filtered-report` and the shared [filter and selection defaults](../executive-charts/references/design_standards.md#操作与更新).
 
 Inspect the source's grain, time range, units and calculations. Register sources, datasets and metrics so figures and prose use the same definitions. Read [metric definitions](../executive-charts/references/metric-definitions.md) when defining calculations.
 

@@ -168,33 +168,30 @@ class Service:
             require(args['dataVersion'] == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
         return doc
 
-    def _publish(self, args: dict) -> dict:
+    @staticmethod
+    def _validate_tool_args(tool, args):
         from jsonschema import ValidationError, validate as validate_schema
-        from .versions import Versions
 
         try:
-            validate_schema(args, TOOLS['dashboard_publish'][1])
+            validate_schema(args, TOOLS[tool][1])
         except ValidationError as error:
             raise DashboardError('INVALID_ARGUMENT', error.message) from error
+
+    def _publish(self, args: dict) -> dict:
+        from .versions import Versions
+
+        self._validate_tool_args('dashboard_publish', args)
         require(self.project_root is not None, 'Publish requires a project', 'PROJECT_REQUIRED')
-        if args.get('share') is not None:
-            from .local_shares import LocalShares
-            return LocalShares(self).publish_request(args)
         board = args['dashboardId']
         versions = Versions(self.store)
         status = versions.status(board)
         expected = int(args.get('expectedRevision', status['draftRevision']))
-        revision = int(args.get('revision', expected))
+        revision = args['revision']
         require(expected == status['draftRevision'], 'Reload before publishing', 'REVISION_CONFLICT')
-        if 'revision' not in args and status['savedRevision'] != revision:
-            saved = self._call('dashboard_checkpoint', {'dashboardId': board, 'expectedRevision': expected})
-            if not saved['ok']:
-                return saved
-        else:
-            report = self._doctor(versions.read(board, revision), 'full', reuse=True)
-            if not report['passed']:
-                return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
-                        'message': 'Version checks failed; the published version was not changed.'}, 'doctor': report}
+        report = self._doctor(versions.read(board, revision), 'full', reuse=True)
+        if not report['passed']:
+            return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
+                    'message': 'Version checks failed; the published version was not changed.'}, 'doctor': report}
         status = versions.publish(board, expected, revision)
         return {'ok': True, 'dashboardId': board, 'publishedRevision': revision, 'versionStatus': status}
 
@@ -284,11 +281,11 @@ class Service:
                 raise DashboardError('CLOUD_STORAGE_FAILED', 'Transfer storage request failed; check the configured COS permissions.', 503) from error
         if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
             from .local_shares import LocalShares
+            self._validate_tool_args(tool, args)
             shares = LocalShares(self)
             if tool == 'dashboard_share_publish':
-                return shares.publish(board, args['expectedRevision'], args.get('expiration', '7d'),
-                                      args.get('accessKey'), args.get('pages'),
-                                      annotation_mode=args.get('annotationMode', 'view'), request_id=args.get('requestId'))
+                return shares.publish(board, args['revision'], args.get('expiration', '7d'),
+                                      annotation_mode=args.get('annotationMode', 'view'), request_id=args['requestId'])
             if tool == 'dashboard_share_replace':
                 return shares.replace(board, args['shareId'], args['expectedRevision'], args.get('expiration', '7d'))
             if tool == 'dashboard_share_status':

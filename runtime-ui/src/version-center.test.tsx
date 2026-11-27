@@ -7,31 +7,34 @@ Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: wi
 Object.defineProperty(globalThis, "NodeFilter", { configurable: true, value: window.NodeFilter });
 afterEach(cleanup);
 
-// @wu-test type=integration | scope=VersionCenter 快速发布 | protects=编辑器串行调用保存和发布或分享失败重试生成新请求
-it("uses one publication call and reuses the share request on retry", async () => {
+// @wu-test type=integration | scope=VersionCenter 保存与正式发布 | protects=保存草稿自动发布或正式发布顺带创建分享
+it("saves a draft and formally publishes a saved version in separate actions", async () => {
   const doc = { id: "board", revision: 3, manifest: { title: "Board", components: {}, datasets: {} } } as Document;
-  const status = { draftRevision: 3, savedRevision: 2, publishedRevision: 2, releases: [] };
-  let attempts = 0;
+  let savedRevision = 2;
+  const status = { draftRevision: 3, savedRevision, publishedRevision: 2, releases: [] };
   const call = mock(async (name: string, _args?: Config) => {
-    if (name === "dashboard_version_status") return status;
-    if (name === "dashboard_history") return { history: [] };
-    if (name !== "dashboard_publish") throw Error(`Unexpected tool ${name}`);
-    const receipt = { ok: true, publishedRevision: 3, versionStatus: { ...status, savedRevision: 3, publishedRevision: 3 } };
-    return ++attempts === 1
-      ? { ...receipt, shareError: { message: "存储暂不可用" } }
-      : { ...receipt, share: { url: "https://example.org/share", accessKey: "12345678" } };
+    if (name === "dashboard_version_status") return { ...status, savedRevision };
+    if (name === "dashboard_history") return { history: [{ revision: savedRevision }] };
+    if (name === "dashboard_checkpoint") {
+      savedRevision = 3;
+      return { ok: true };
+    }
+    if (name === "dashboard_publish") return { ok: true, publishedRevision: 3, versionStatus: { ...status, savedRevision, publishedRevision: 3 } };
+    throw Error(`Unexpected tool ${name}`);
   });
   render(<VersionCenter open onOpenChange={() => {}} document={doc} call={call} onRestore={async () => {}} onSaved={async () => {}} />);
-  const button = await screen.findByRole("button", { name: "发布当前草稿" }) as HTMLButtonElement;
+  const button = await screen.findByRole("button", { name: "保存版本" }) as HTMLButtonElement;
   await waitFor(() => expect(button.disabled).toBe(false));
-  fireEvent.click(screen.getByRole("checkbox", { name: "同时生成分享链接" }));
   fireEvent.click(button);
-  await screen.findByText("版本 3 已发布。分享链接生成失败：存储暂不可用");
-  fireEvent.click(button);
-  await screen.findByRole("link", { name: "https://example.org/share" });
-  const actions = call.mock.calls.slice(2);
-  expect(actions.map(([name]) => name)).toEqual(["dashboard_publish", "dashboard_publish"]);
-  expect(actions[0][1]).toEqual(actions[1][1]);
+  await screen.findByText("已保存 3");
+  expect(call.mock.calls.some(([name]) => name === "dashboard_publish")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "设为正式发布版" }));
+  await screen.findByText("当前发布 3");
+  const actions = call.mock.calls.filter(([name]) => !["dashboard_version_status", "dashboard_history"].includes(name));
+  expect(actions).toEqual([
+    ["dashboard_checkpoint", { dashboardId: "board", expectedRevision: 3, name: "" }],
+    ["dashboard_publish", { dashboardId: "board", revision: 3, expectedRevision: 3 }],
+  ]);
 });
 
 // @wu-test type=integration | scope=VersionCenter 删除历史 | protects=删除影响未返回时无反馈或未确认就删除最新版本
@@ -81,15 +84,15 @@ it("reports a failed impact preview without deleting and enables retry", async (
 // @wu-test type=integration | scope=VersionCenter 固定版本分享 | protects=分享历史版误发草稿、遗漏批注权限或失败后刷新重试生成重复分享
 it("shares the selected saved version with independent annotation permission and a stable retry key", async () => {
   const doc = { id: "board", revision: 9, manifest: { title: "B版", components: {}, datasets: {} } } as Document;
-  const status = { draftRevision: 9, savedRevision: 8, publishedRevision: 4, releases: [] };
+  const status = { draftRevision: 9, savedRevision: 8, publishedRevision: 2, releases: [] };
   let attempts = 0;
   const call = mock(async (name: string, _args?: Config) => {
     if (name === "dashboard_version_status") return status;
     if (name === "dashboard_history") return { history: [{ revision: 4, name: "A版" }] };
-    if (name === "dashboard_publish") {
+    if (name === "dashboard_share_status") return { shares: [] };
+    if (name === "dashboard_share_publish") {
       if (++attempts === 1) throw Error("分享服务暂不可用");
-      return { ok: true, versionStatus: status, publishedRevision: 4,
-        share: { url: "https://example.org/s/fixed/", accessKey: "12345678", annotationMode: "annotate" } };
+      return { shareId: "fixed", url: "https://example.org/s/fixed/", accessKey: "12345678", annotationMode: "annotate" };
     }
     throw Error(`Unexpected tool ${name}`);
   });
@@ -97,15 +100,21 @@ it("shares the selected saved version with independent annotation permission and
   fireEvent.change(screen.getByRole("combobox", { name: "分享权限" }), { target: { value: "annotate" } });
   fireEvent.click(await screen.findByRole("button", { name: "分享此版本" }));
   await screen.findByText("分享服务暂不可用");
+  expect(screen.getByText("当前发布 2")).toBeTruthy();
   first.unmount();
   render(<VersionCenter open onOpenChange={() => {}} document={doc} call={call} onRestore={async () => {}} onSaved={async () => {}} />);
-  fireEvent.click(await screen.findByRole("button", { name: "分享此版本" }));
+  fireEvent.click(screen.getByRole("tab", { name: "分享" }));
+  const retry = await screen.findByRole("button", { name: "新建分享" }) as HTMLButtonElement;
+  await waitFor(() => expect(retry.disabled).toBe(false));
+  expect((screen.getByRole("combobox", { name: "用于分享的保存版" }) as HTMLSelectElement).value).toBe("4");
+  fireEvent.click(retry);
   await screen.findByRole("link", { name: "https://example.org/s/fixed/" });
-  const publications = call.mock.calls.filter(([name]) => name === "dashboard_publish");
+  const publications = call.mock.calls.filter(([name]) => name === "dashboard_share_publish");
   expect(publications).toHaveLength(2);
   expect(publications[0][1]).toEqual(publications[1][1]);
-  expect(publications[0][1]).toMatchObject({ dashboardId: "board", revision: 4, expectedRevision: 9,
-    share: { expiration: "7d", annotationMode: "annotate", requestId: expect.any(String) } });
+  expect(publications[0][1]).toEqual({ dashboardId: "board", revision: 4,
+    expiration: "7d", annotationMode: "annotate", requestId: expect.any(String) });
+  expect(call.mock.calls.some(([name]) => name === "dashboard_publish")).toBe(false);
 });
 
 // @wu-test type=integration | scope=VersionCenter 分享反馈 | protects=反馈打开当前草稿、反馈读取走MCP、受阻弹窗丢失原版访问入口

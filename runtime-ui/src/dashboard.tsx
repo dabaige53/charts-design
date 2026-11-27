@@ -29,7 +29,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "./components/ui/in
 import { Empty, EmptyHeader, EmptyTitle } from "./components/ui/empty";
 import { ComponentView } from "./component-view";
 import { DashboardGrid } from "./grid";
-import { ReportView } from "./report";
+import { AnalyticalReportPage, ReportView } from "./report";
 import {
   ActiveFilters,
   ChoiceSelect,
@@ -119,6 +119,7 @@ export function DashboardApp({
 }) {
   const runtime = useDashboardRuntime(initial, call),
     doc = runtime.document;
+  const analytical = doc.manifest.viewMode === "report";
   const fullscreenElement = useFullscreenElement();
   const isPageFullscreen = pageFullscreen || fullscreenElement === document.documentElement;
   const editUnavailable = "此链接为查看预览，请使用编辑预览链接操作";
@@ -154,6 +155,7 @@ export function DashboardApp({
     setTitle(doc.manifest.title);
   }, [doc.id, doc.manifest.title]);
   useEffect(() => {
+    if (analytical) return;
     let live = true;
     call("dashboard_list")
       .then((r) => {
@@ -163,12 +165,30 @@ export function DashboardApp({
     return () => {
       live = false;
     };
-  }, [call, doc.id]);
+  }, [analytical, call, doc.id]);
   useVisibleVersionCheck({
-    call, dashboardId: doc.id, revision: doc.revision, buildId, staticMode,
+    call, dashboardId: doc.id, revision: doc.revision, buildId, staticMode: staticMode || analytical,
     blocked: editing || annotationBusy || notesOpen || runtime.saving,
     reload: runtime.reload, setError: runtime.setError,
   });
+  if (analytical) {
+    return (
+      <AnalyticalReportPage document={doc} component={(id) => (
+        <VisibleComponent key={id} id={id} onVisible={runtime.activate}>
+          <ComponentView
+            document={doc}
+            id={id}
+            reading
+            tableState={runtime.view.tables[id]}
+            onTableChange={(state) => runtime.setTable(id, state)}
+            loading={runtime.loading.includes(id)}
+            error={runtime.errors[id]}
+            onRetry={() => void runtime.retry(id)}
+          />
+        </VisibleComponent>
+      )} />
+    );
+  }
   const guard = (work: () => Promise<void>) => {
     void work().catch((e) => runtime.setError(String(e)));
   };
@@ -510,7 +530,7 @@ export function DashboardApp({
           onClear={doc.manifest.viewMode === "filtered-report" ? () => runtime.view.filters.filter((f) => f.scope !== "table").forEach((f) => runtime.setFilter(f.id, [])) : runtime.clear}
           primaryFilterIds={primaryFilterIds}
         />
-        {doc.manifest.viewMode === "report" || doc.manifest.viewMode === "filtered-report" ? (
+        {doc.manifest.viewMode === "filtered-report" ? (
           <ReportView document={doc} component={component} tableFilters={(id) => {
             const filters = runtime.view.filters.filter((f) => f.scope === "table" && f.componentIds[0] === id);
             return <FilterBar key={`${doc.id}:${id}`} document={doc} filters={filters} call={call} onChange={runtime.setFilter} onApply={runtime.setFilters} onClear={() => filters.forEach((f) => runtime.setFilter(f.id, []))} />;

@@ -1,3 +1,5 @@
+import { sharing } from "./sharing.mjs";
+
 const routes = [
   ["POST", /^\/api\/v1\/publications$/],
   ["GET", /^\/api\/v1\/publications\/[0-9a-f]{32}$/],
@@ -10,6 +12,12 @@ const routes = [
 
 export default {
   async fetch(request, env) {
+    if (env.SHARE_DB) {
+      if (request.method !== "HEAD") return sharing(request, env);
+      const response = await sharing(new Request(request, { method: "GET" }), env);
+      await response.body?.cancel();
+      return new Response(null, { status: response.status, headers: response.headers });
+    }
     const incoming = new URL(request.url);
     const method = request.method === "HEAD" ? "GET" : request.method;
     if (/%(?:2f|5c|00)/i.test(incoming.pathname) ||

@@ -220,19 +220,102 @@
 .prose-report-filtered {
   max-width: none;
   min-width: 0;
-  padding: clamp(14px, 2vw, 24px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  --report-inline-padding: clamp(14px, 2vw, 24px);
+}
+.analytical-report-page {
+  min-height: 100vh;
+  background: var(--card);
+}
+.analytical-report-page > .prose-report {
+  max-width: none;
+}
+article.prose-report {
+  padding: clamp(20px, 4vw, 48px) var(--report-inline-padding, clamp(16px, 4vw, 56px));
   background: var(--card);
   color: var(--card-foreground);
+  font-family: "Noto Serif CJK SC", "Songti SC", STSong, "Lora Variable", serif;
+  line-height: 1.95;
 }
-.prose-report-filtered > h3 {
-  margin: 24px 0 6px;
+article.prose-report > h1 {
+  font-family: inherit;
+  font-size: clamp(25px, 3vw, 32px);
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 0 0 20px;
+  text-align: center;
+  text-wrap: balance;
+}
+article.prose-report > p {
+  text-align: justify;
+  text-indent: 2em;
+}
+article.prose-report > table {
+  width: 100%;
+}
+article.prose-report > .report-subtitle {
+  color: var(--muted-foreground);
   font-size: 18px;
+  margin: -8px 0 26px;
+  text-align: center;
+  text-indent: 0;
+}
+.report-subtitle em {
+  font-style: normal;
+}
+article.prose-report > :is(.report-abstract, .report-keywords) {
+  font-size: 14px;
+  text-indent: 0;
+}
+article.prose-report > h2 {
+  font-family: inherit;
+  font-size: 21px;
   font-weight: 600;
 }
-.prose-report-filtered > h3 + p {
-  margin: 6px 0 12px;
+article.prose-report > h3 {
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 24px 0 6px;
+}
+.report-figure {
+  margin: 24px 0;
+  scroll-margin-top: 24px;
+}
+.report-plot {
+  height: clamp(250px, 31vw, 360px);
+}
+.report-figure figcaption,
+.report-figure .report-figure-source {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 14px;
+}
+.report-figure .report-figure-source {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.report-figure[data-report-chart] [data-slot="card"][data-family="chart"] {
+  background: transparent;
+  box-shadow: none;
+  padding-block: 0;
+}
+.report-figure[data-report-chart] :is([data-slot="card-title"], [data-slot="card-description"]) {
+  display: none;
+}
+.report-figure[data-report-chart] [data-slot="card-content"] {
+  padding-inline: 0;
+}
+.report-figure[data-report-monochrome] canvas {
+  filter: grayscale(1);
+}
+@media print {
+  article.prose-report {
+    max-width: none;
+    padding: 0;
+  }
+  .report-figure {
+    break-inside: avoid;
+  }
 }
 .prose-report h1 {
   font-size: 32px;

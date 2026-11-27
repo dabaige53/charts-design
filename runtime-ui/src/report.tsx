@@ -3,6 +3,15 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Alert, AlertDescription } from "./components/ui/alert";
 import type { Document } from "./types";
+
+export function AnalyticalReportPage({ document, component }: React.ComponentProps<typeof ReportView>) {
+  return (
+    <main className="analytical-report-page">
+      <ReportView document={document} component={component} />
+    </main>
+  );
+}
+
 export function ReportView({
   document: doc,
   component,
@@ -18,11 +27,11 @@ export function ReportView({
     let figure = 0,
       section = 0,
       table = 0;
-    for (const block of tree.children) {
+    for (const [index, block] of tree.children.entries()) {
       if (block.type === "code" && block.lang === "chart") {
         const ref = JSON.parse(block.value);
         const c = doc.manifest.components[ref.componentId];
-        const isTable = filtered && (c?.kind === "table" || (c?.kind === "legacy" && c.family === "table"));
+        const isTable = c?.kind === "table" || (c?.kind === "legacy" && c.family === "table");
         const number = isTable ? ++table : ++figure;
         if (!isTable && !figures.has(ref.componentId)) figures.set(ref.componentId, number);
         block.data = {
@@ -37,6 +46,22 @@ export function ReportView({
             "data-section": ++section,
           },
         };
+      } else if (block.type === "paragraph") {
+        const first = block.children[0];
+        const label = first?.type === "strong" ? first.children[0]?.value : first?.value;
+        const previous = tree.children[index - 1];
+        const className =
+          previous?.type === "heading" && previous.depth === 1 &&
+          block.children.length === 1 && first?.type === "emphasis"
+            ? "report-subtitle"
+            : label && /^(摘要|abstract)\s*(?:[:：]|$)/i.test(label)
+              ? "report-abstract"
+              : label && /^(关键词|keywords)\s*(?:[:：]|$)/i.test(label)
+                ? "report-keywords"
+                : undefined;
+        if (className) {
+          block.data = { ...block.data, hProperties: { ...block.data?.hProperties, className } };
+        }
       }
     }
   };
@@ -82,20 +107,29 @@ export function ReportView({
                     {ref.source && <p className="text-xs text-muted-foreground">{ref.source}</p>}
                   </section>
                 );
+                const definition = doc.manifest.components[ref.componentId];
+                const chart = definition?.kind === "chart" || definition?.family === "chart";
+                const monochrome = definition?.kind === "chart"
+                  ? ["bar", "line"].includes(definition.chartType ?? "")
+                  : definition?.family === "chart" &&
+                    ["c01", "c02", "t01"].includes(definition.config?.code);
+                const caption = ref.caption ?? definition?.title;
                 return (
                   <figure
                     id={`fig-${ref.componentId}${figures.get(ref.componentId) === number ? "" : "-" + number}`}
-                    className="my-6"
+                    className="report-figure"
+                    data-report-chart={chart || undefined}
+                    data-report-monochrome={monochrome || undefined}
                   >
-                    <div className="h-[420px]">
+                    <div className={chart ? "report-plot" : "h-[420px]"}>
                       {component(ref.componentId)}
                     </div>
-                    <figcaption className="mt-2 text-sm">
+                    <figcaption>
                       图 {number}
-                      {ref.caption ? `　${ref.caption}` : ""}
+                      {caption ? `　${caption}` : ""}
                     </figcaption>
                     {ref.source && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="report-figure-source">
                         {ref.source}
                       </p>
                     )}

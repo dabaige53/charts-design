@@ -164,8 +164,8 @@ def test_filtered_report_over_stdio(tmp_path):
     asyncio.run(check())
 
 
-# @wu-test type=integration | scope=dashboard_publish MCP | protects=一次调用无法保存并发布草稿或将过期预期版本覆盖为正式版本
-def test_publish_current_and_historical_report_over_stdio(tmp_path):
+# @wu-test type=integration | scope=dashboard_publish MCP | protects=正式发布隐式保存草稿、接受组合分享请求或覆盖过期预期版本
+def test_publish_only_saved_reports_over_stdio(tmp_path):
     async def check():
         params = StdioServerParameters(command=sys.executable, args=['-m', 'dashboard_runtime',
             '--project-root', str(tmp_path / 'project'), '--runtime-root', str(tmp_path / 'state'), 'mcp'])
@@ -173,8 +173,8 @@ def test_publish_current_and_historical_report_over_stdio(tmp_path):
         async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
             await session.initialize()
             names = {tool.name for tool in (await session.list_tools()).tools}
-            assert 'dashboard_publish' in names
-            assert not names & {'dashboard_checkpoint', 'dashboard_version_publish', 'dashboard_share_publish'}
+            assert {'dashboard_publish', 'dashboard_share_publish', 'dashboard_share_status'} <= names
+            assert not names & {'dashboard_checkpoint', 'dashboard_version_publish'}
 
             async def call(name, args):
                 result = await session.call_tool(name, {**board, **args})
@@ -186,10 +186,20 @@ def test_publish_current_and_historical_report_over_stdio(tmp_path):
                 {'op': 'set_view_mode', 'value': 'report'},
                 {'op': 'set_report_markdown', 'value': '# Review\n\nA verified sample.'},
             ]})
-            published = await call('dashboard_publish', {})
+            for args in ({}, {'revision': 1, 'share': {}}):
+                rejected = await session.call_tool('dashboard_publish', {**board, **args})
+                assert rejected.isError
+            unsaved = await session.call_tool('dashboard_publish', {**board, 'revision': 2})
+            assert unsaved.isError and unsaved.structuredContent is not None
+            assert unsaved.structuredContent['error']['code'] == 'NOT_FOUND'
+            preview = await call('dashboard_preview', {})
+            assert preview['document']['revision'] == 1
+            saved = await call('dashboard_submit', {'expectedRevision': 2})
+            assert saved['checkpoint']['revision'] == 2
+            published = await call('dashboard_publish', {'revision': 2})
             assert published['publishedRevision'] == published['versionStatus']['savedRevision'] == 2
             assert 'share' not in published
-            stale = await session.call_tool('dashboard_publish', {**board, 'expectedRevision': 1})
+            stale = await session.call_tool('dashboard_publish', {**board, 'expectedRevision': 1, 'revision': 1})
             stale_content = stale.structuredContent
             assert stale.isError and stale_content is not None
             assert stale_content['error']['code'] == 'REVISION_CONFLICT'

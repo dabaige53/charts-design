@@ -110,11 +110,11 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | --- | --- | --- | --- |
 | 在线只读链接 | `dashboard_share`，`access=view` | 自有服务器项目的已保存检查点及其数据 | 链接包含访问令牌；按 `expiresInHours` 或服务器默认值过期，可撤销 |
 | 在线编辑链接 | `dashboard_share`，`access=edit` | 同一服务端项目；支持网页提供的编辑、版本管理和恢复 | 同在线只读链接，权限包含网页支持的编辑操作 |
-| 独立分享链接 | 正式发布后调用 `dashboard_share_publish` | 副本保留发布时的网页和数据；保存在腾讯云私有 COS 或 Cloudflare 私有工作区，不跟随原项目更新 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
+| 独立分享链接 | 对指定保存版调用 `dashboard_share_publish` | 副本保留发布时的网页和数据；保存在腾讯云私有 COS 或 Cloudflare 私有工作区，不跟随原项目更新 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
 
 `dashboard_preview` 在支持 MCP Apps 的宿主中打开已保存检查点。远程工作区需要浏览器链接时使用 `dashboard_share`；本机 stdio 的预览回执另提供 `browserLinks`，可直接进入同进程提供的普通浏览器编辑和预览页。
 
-- `dashboard_share`：`access` 为 `view`（内容只读）或 `edit`，`expiresInHours` 为 1–8784 小时。`view` 可显式设置 `annotationMode: "annotate"` 允许新增批注；默认 `view` 及没有此字段的旧签名令牌均不能写批注。
+- `dashboard_share`：`access` 为 `view`（内容只读）或 `edit`，`expiresInHours` 为 1–8784 小时。`view` 可显式设置 `annotationMode: "annotate"` 允许新增批注；默认 `view`，包括省略此字段的签名令牌，授予查看权限。
 - `dashboard_share_revoke`：使该看板此前签发的全部链接立即失效。
 - 命令行：`bun bin/python-runtime.js -m dashboard_runtime share <项目> <看板> --workspace ... --public-url ... [--access edit] [--hours 24]`，只需能读取签名密钥。
 - 管理入口 `/`：输入服务器令牌后列出项目与看板，点击生成 12 小时有效的预览或编辑链接。
@@ -123,7 +123,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | --- | --- |
 | 只读链接 | 阅读看板或报告、筛选、表格分页与搜索、图表切换为表、查看指标定义与来源、导出文件、查看已有批注 |
 | 编辑链接 | 另可拖动布局、修改标题与说明、编辑报告 Markdown、版本历史与恢复、运行诊断、生成网页部署包 |
-| 明确授予批注权限的只读链接 | 另可新增位置批注；不能修改布局、标题、数据定义或版本，也不能修改、删除他人批注 |
+| 明确授予批注权限的只读链接 | 查看内容和新增位置批注 |
 
 浏览器的批注读写直接走 HTTP，不通过 MCP 工具调用。工作区批注写入原项目的独立批注状态，不生成内容版本；批注上下文依据当时实际展示的检查点，不能误用最新草稿的组件与版本。
 
@@ -159,7 +159,7 @@ charts-design-runtime --project-root /absolute/path/project \
 ```
 
 1. 使用启动回执的 `editUrl` 编辑、保存；`viewUrl` 查看最新已保存版本并批注。本地和远程 MCP 的 `dashboard_preview` 都返回 `browserLinks.editUrl` 和 `browserLinks.viewUrl`。远程链接使用作者服务器的公开地址。
-2. 在编辑页的版本中心选择一个已保存版本，再选择「仅查看」或「可批注」，点击该版本的「分享此版本」。发布通过既有正式发布检查，回执包含独立 `accessUrl`；失败显示实际错误，不能把版本已发布误报为分享成功。
+2. 在编辑页选择已保存版本和「仅查看」或「可批注」，点击「分享此版本」。服务检查并打包该版本，成功后返回独立 `accessUrl`。要更新正式发布版，另行点击「设为正式发布版」。
 3. 读者在分享链接查看、筛选、分页，并按授权新增批注。作者电脑可以关机；页面、数据和批注均由分享服务提供。
 4. 作者回到该项目的「版本与分享 → 分享」，在对应记录点击「查看读者批注」。每次打开或重新读取才向服务请求；反馈在原分享版本打开并定位，不合并到当前草稿。即使当前草稿移除组件，原分享中的锚点仍可读取。
 
@@ -175,6 +175,7 @@ charts-design-runtime --project-root /absolute/path/project \
 | --- | --- | --- |
 | CloudBase + 私有 COS | 既有 HTTPS 网关鉴权；COS 保存独立副本及 Parquet 数据 | Runtime HTTP 接口调用 PostgreSQL `charts_share_annotations` RPC；按分享 ID、页面和发布版本独立保存 |
 | Cloudflare Worker + Container | Container 提供页面与数据；既有 Durable Object SQLite 工作区 checkpoint 跨冷启动恢复 | 每个分享独立 SQLite；每次成功批注在返回前只保存该 SQLite 的增量 checkpoint，不重新归档网页或 Parquet |
+| Cloudflare Pages + D1 | Pages 提供界面；D1 保存选定版本的页面定义与私有数据分片 | Pages Functions 校验访问与批注权限，D1 按分享 ID 保存批注 |
 | Cloudflare Pages 分享代理（可选） | Pages 转发分享资源，由分享源站提供副本 | 分享源站持久化批注 |
 | 纯静态 ZIP | 包内页面与使用中的完整数据 | 无后端，不提供可提交状态 |
 
@@ -203,6 +204,18 @@ SQLite 方案使用 `deploy/docker-compose.yml`。使用 Neon 时，`deploy/neon
 如需以 Pages 域名公开读者链接，运行 `bun deploy/pages/build.mjs <输出目录>`，把生成的分享代理部署到 Pages。绑定 `ORIGIN_URL` 到运行 `sharing` 角色的 HTTPS 源站。Pages 的 `ORIGIN_TOKEN` 与源站的 `CHARTS_ORIGIN_TOKEN` 配对。源站 `CHARTS_PUBLIC_URL` 使用 Pages 公开地址，使读者链接和表单来源对应。
 
 Pages 只转发 `/s/…`、发布管理接口和健康检查。工作区页面和 MCP 地址使用自有服务器域名。该代理独立打包，分享页资源由发布副本提供。
+
+### Cloudflare Pages 与 D1 直接分享
+
+在 Cloudflare 创建分享专用 D1，执行 `deploy/pages/schema.sql`，把数据库绑定到 Pages 的 `SHARE_DB`。在 Pages 设置 `CHARTS_SHARE_SERVICE_TOKEN` 和独立的 `CHARTS_SHARE_SIGNING_SECRET`。预览与正式部署分别绑定自己的数据库和密钥。签名密钥用于保护已有访问链接和会话，应随环境长期保留。
+
+```sh
+bun run ui:prepare
+bun deploy/pages/build.mjs /private/tmp/charts-pages --d1
+wrangler pages deploy /private/tmp/charts-pages --project-name charts-design
+```
+
+`/health` 返回 `role: "sharing"`、`storage: "d1"` 和界面构建号后，把作者环境的 `CHARTS_SHARE_SERVICE_URL` 指向 Pages 域名，设置同一发布令牌。原有发布、读者批注、反馈和撤销接口沿用相同路径。分享 ZIP 上限 16 MiB。Pages 从部署包提供界面资源，从 D1 读取固定版本的数据分片。发布请求的重试使用原请求 ID，撤销立即删除分片与批注并保留分享标识以防重试重新发布。到期立即关闭访问，后续发布时分批清理已到期内容。
 
 ## Cloudflare 独立部署
 
@@ -267,7 +280,7 @@ bun run release -- 1.2.1
 
 ### 从作者工作区发布
 
-用 `dashboard_submit` 保存内容，再调用作者工作区的 `dashboard_publish`，提供明确的保存版本 `revision` 和 `share` 选项。Web 版本中心的「分享此版本」使用同一个入口。分享选项包括 `expiration`（`7d`、`30d`、`never`）、`annotationMode`（`view` 或 `annotate`）和 UUID v4 `requestId`。请求结果不确定时，沿用同一请求 ID。
+用 `dashboard_submit` 保存内容，再调用作者工作区的 `dashboard_share_publish`，传入已保存的 `revision` 和 UUID v4 `requestId`。可选 `expiration`（`7d`、`30d`、`never`）及 `annotationMode`（`view` 或 `annotate`）。Web 版本中心的「分享此版本」使用相同入口。回执不确定时，沿用原请求 ID、版本和选项重试。
 
 结果包含 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`annotationMode`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`。腾讯云的清理执行方为 `tencent-scf`。
 
@@ -277,7 +290,7 @@ bun run release -- 1.2.1
 
 `dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
 
-`dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；替换时保留原分享的批注权限。其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
+`dashboard_share_replace` 以选定的保存版创建替代分享，保留原分享的批注权限。新副本上传完成后撤销旧分享，并返回新链接和新密钥。若 `previousRevoked=false`，保留新凭据，并按 `followUp` 撤销旧分享。
 
 `dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试。作者工作区保留该分享的撤销引用。此操作也适用于不过期分享。
 

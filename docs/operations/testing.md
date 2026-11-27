@@ -65,6 +65,16 @@ Python 使用项目解释器和 `pyproject.toml` 中的依赖；运行配置见 
 
 ## 测试维护
 
+### 可重复使用的看板与报告
+
+[合成验收项目](../../tests/fixtures/charts_acceptance.py)生成同一批 48 条航线经营记录和五份页面配置。四个看板页覆盖总览、运量与运力、区域与渠道、可筛选明细，使用六种标准指标卡。分析报告使用同一批数据说明月度、区域和渠道变化。
+
+```sh
+PYTHONPATH=. bun run python -- tests/fixtures/charts_acceptance.py --output /private/tmp/charts-acceptance
+```
+
+在本机或自有服务器的测试项目中，将生成的 JSON 作为 `dashboard_create.document` 导入，再用 `dashboard_submit` 保存。打开总览，通过「切换看板」检查多个页面。月份、区域、航线类型和销售渠道常显，舱位在「更多筛选」。未筛选的收入应为 3,383.09 万元，直营筛选后应剩 24 条记录。同一套配置可用于静态导出和固定版本分享验收。
+
 - 选择能保护本次行为、边界或已知回归的最小检查；通过后停止，无新改动或失败证据不重复执行。
 - 每个新增或修改用例在定义前保留 `@wu-test type=<类型> | scope=<代码范围> | protects=<具体失败后果>`；标注规则与全局约定一致。
 - 不通过跳过、删除或放宽断言让 CI 变绿。明确的环境条件可跳过并记录原因，例如本地配置更新器需要 Python 3.11 的 `tomllib`。

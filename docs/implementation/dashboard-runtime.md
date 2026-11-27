@@ -79,7 +79,7 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 
 工具定义由 `tool_contract.py` 维护，输入结构说明参数来源、默认值和替换影响。修改定义时同步发现资源与调用方，不在文档手工复制工具枚举。
 
-同一连接提供编辑、查询、展示、导出、快速发布和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。历史和已有分享由编辑器管理。
+同一连接提供编辑、查询、展示、导出、正式发布、创建分享和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。编辑器提供版本历史和分享管理。
 
 ## 编辑与结果确认
 
@@ -87,9 +87,9 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 
 所有连接的 `tools/list` 返回同一套 Agent 工具。需要为 COS 数据集分片时，在当前连接调用 `dataset_repartition`。使用 CLI 执行存储盘点、上传暂存清理及存储迁移。直连服务为现有页面和上传程序保留协议回调，参数见 `charts://contract` 的 `clientTools`。
 
-项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。既有 Agent 工具 `dashboard_annotations`、`dashboard_annotations_update` 保留兼容；网页读取和提交批注直接走 HTTP，不调用 MCP，也不创建设计版本。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
+项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。既有 Agent 工具 `dashboard_annotations`、`dashboard_annotations_update` 保留兼容；网页通过 HTTP 直接读取和提交独立保存的批注。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
 
-用户要求发布时，调用一次 `dashboard_publish`。服务端检查发布目标，按需保存草稿，设为当前发布版本。显式传 `revision` 可选择历史保存版本，显式传 `share` 可同时生成独立访问链接。响应中的 `shareError` 表示版本已发布，链接生成失败。沿用相同参数和 `share.requestId` 重试分享。编辑器调用同一工具。
+用 `dashboard_submit` 保存草稿。作者明确要求设置正式发布版时，调用 `dashboard_publish` 并传入已保存的 `revision`。服务端检查该版本并更新正式发布指针。创建访客链接调用 `dashboard_share_publish`，传入已保存的 `revision` 和 UUID v4 `requestId`。分享成功或失败都不改变草稿、检查点或正式发布指针。回执不确定时，沿用原参数及 `requestId` 重试。编辑器与 MCP 使用相同的发布和分享入口。
 
 本机项目向已配置的分享服务发布时，必须选择已保存版本；“版本与分享”中的“分享此版本”同时选择“仅查看”或“可批注”。`local_shares.py` 上传该版本的独立数据副本并在项目内保留分享引用，服务凭据只留在作者进程。分享收到的批注通过对应分享按需读取，不回写草稿；配置和引用位置见 [项目资产与加载](project-runtime.md#保存发布与恢复)。
 
@@ -160,7 +160,7 @@ bun bin/python-runtime.js -m dashboard_runtime --root ./boards --sources ./sourc
 
 导出文件使用受管 ID，通过读取工具或远程下载链接交付。
 
-只读 HTML 和静态 ZIP 移除本机批注及运行权限字段，包括 `browserLinks`、`annotationAccess` 和发布管理入口；导入过的预览文档也不能把编辑链接或令牌带入这些导出。正式分享只在服务端为发布副本设置该分享自己的批注权限和接口。
+只读 HTML 和静态 ZIP 移除本机批注及运行权限字段，包括 `browserLinks`、`annotationAccess` 和发布管理入口；导出预览文档时同样移除编辑链接和令牌。正式分享只在服务端为发布副本设置该分享自己的批注权限和接口。
 
 测试层次与授权边界统一见 [测试与 CI](../operations/testing.md)。普通维护只运行受影响的局部检查。
 

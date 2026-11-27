@@ -1,14 +1,27 @@
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-if (args.length !== 1) {
-  console.error("Usage: bun deploy/pages/build.mjs <output-directory>");
+const withD1 = args[1] === "--d1";
+if (args.length !== (withD1 ? 2 : 1)) {
+  console.error("Usage: bun deploy/pages/build.mjs <output-directory> [--d1]");
   process.exit(1);
 }
 const output = resolve(args[0]);
 await mkdir(output, { recursive: true });
-await copyFile(resolve(here, "worker.mjs"), resolve(output, "_worker.js"));
+const bundle = await Bun.build({ entrypoints: [resolve(here, "worker.mjs")], target: "browser",
+  minify: true, naming: "_worker.js" });
+if (!bundle.success) throw new AggregateError(bundle.logs, "Pages worker build failed");
+await Bun.write(resolve(output, "_worker.js"), bundle.outputs[0]);
+if (withD1) {
+  const source = resolve(here, "../../dashboard_runtime/web/dist");
+  const target = resolve(output, "runtime");
+  const { id } = JSON.parse(await readFile(resolve(source, "build.json"), "utf8"));
+  if (!id) throw Error("Missing UI build version. Run bun run ui:prepare.");
+  await mkdir(target, { recursive: true });
+  for (const name of ["app.js", "app.css", "static-worker.js", "build.json"])
+    await copyFile(resolve(source, name), resolve(target, name));
+}
 await writeFile(resolve(output, "_routes.json"), JSON.stringify({ version: 1, include: ["/*"], exclude: [] }));

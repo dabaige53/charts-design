@@ -31,30 +31,33 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   const previewSequence = useRef(0);
   const [tab, setTab] = useState<"versions" | "shares">("versions");
   const [shares, setShares] = useState<Config[]>([]);
+  const [selectedShareRevision, setSelectedShareRevision] = useState<number>();
   const [expiration, setExpiration] = useState("7d");
   const [annotationMode, setAnnotationMode] = useState<"view" | "annotate">("view");
   const [newShare, setNewShare] = useState<Config | null>(null);
   const [feedback, setFeedback] = useState<Config | null>(null);
-  const [publishWithShare, setPublishWithShare] = useState(false);
-  const pendingShare = useRef<{ target: string; requestId: string; expectedRevision: number } | null>(null);
-  const pendingShareKey = `charts-share-request:${JSON.stringify([shareScope || publicationApiBase || window.location.pathname, document.id])}`;
+  const pendingShares = useRef<{ requests: Record<string, string>; lastTarget?: string }>({ requests: {} });
+  const pendingShareKey = `charts-share-requests:${JSON.stringify([shareScope || publicationApiBase || window.location.pathname, document.id])}`;
+  const shareRevision = selectedShareRevision ?? status?.savedRevision;
   useEffect(() => {
-    pendingShare.current = null;
+    pendingShares.current = { requests: {} };
+    setSelectedShareRevision(undefined);
     try {
       const saved = JSON.parse(window.sessionStorage.getItem(pendingShareKey) || "null");
-      if (typeof saved?.target === "string" && typeof saved?.requestId === "string" && Number.isInteger(saved?.expectedRevision)) {
-        pendingShare.current = saved;
-        const target = JSON.parse(saved.target);
-        if (["7d", "30d", "never"].includes(target[2])) setExpiration(target[2]);
-        if (["view", "annotate"].includes(target[3])) setAnnotationMode(target[3]);
+      if (saved?.requests && !Array.isArray(saved.requests) && typeof saved.requests === "object") {
+        pendingShares.current.requests = saved.requests;
+        if (typeof saved.lastTarget === "string") {
+          const [revision, lifetime, mode] = JSON.parse(saved.lastTarget);
+          if (Number.isInteger(revision)) setSelectedShareRevision(revision);
+          if (["7d", "30d", "never"].includes(lifetime)) setExpiration(lifetime);
+          if (mode === "view" || mode === "annotate") setAnnotationMode(mode);
+        }
       }
     } catch { /* Keep in-memory retries available when browser storage is unavailable. */ }
   }, [pendingShareKey]);
-  const rememberPendingShare = (value: typeof pendingShare.current) => {
-    pendingShare.current = value;
+  const persistPendingShares = (pending: typeof pendingShares.current) => {
     try {
-      if (value) window.sessionStorage.setItem(pendingShareKey, JSON.stringify(value));
-      else window.sessionStorage.removeItem(pendingShareKey);
+      window.sessionStorage.setItem(pendingShareKey, JSON.stringify(pending));
     } catch { /* The current tab still retains the original idempotency key. */ }
   };
   const refresh = useCallback(async () => {
@@ -95,18 +98,10 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
     const result = await call("dashboard_share_status", { dashboardId: document.id });
     setShares(result.shares);
   };
-  const quickPublish = async (revision?: number, withShare = false) => {
-    const args: Config = { dashboardId: document.id, expectedRevision: status?.draftRevision };
-    if (revision !== undefined) args.revision = revision;
-    if (withShare) {
-      const target = JSON.stringify([document.id, revision, expiration, annotationMode]);
-      if (target !== pendingShare.current?.target) {
-        rememberPendingShare({ target, requestId: crypto.randomUUID(), expectedRevision: args.expectedRevision });
-      }
-      args.expectedRevision = pendingShare.current!.expectedRevision;
-      args.share = { expiration, annotationMode, requestId: pendingShare.current!.requestId };
-    }
-    const result = await call("dashboard_publish", args);
+  const publishVersion = async (revision: number) => {
+    const result = await call("dashboard_publish", {
+      dashboardId: document.id, revision, expectedRevision: status?.draftRevision,
+    });
     if (!result.ok) throw Error(result.error?.message || "发布失败");
     setStatus(result.versionStatus);
     setHistory((items) => {
@@ -116,11 +111,24 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
       }
       return [...byRevision.values()].sort((a, b) => b.revision - a.revision);
     });
-    if (result.shareError) throw Error(`版本 ${result.publishedRevision} 已发布。分享链接生成失败：${result.shareError.message}`);
-    if (result.share) {
-      setNewShare(result.share);
-      rememberPendingShare(null);
-    }
+  };
+  const createShare = async (revision: number) => {
+    const target = JSON.stringify([revision, expiration, annotationMode]);
+    const pending = pendingShares.current;
+    const requestId = pending.requests[target] ?? crypto.randomUUID();
+    pending.requests[target] = requestId;
+    pending.lastTarget = target;
+    setSelectedShareRevision(revision);
+    persistPendingShares(pending);
+    const result = await call("dashboard_share_publish", {
+      dashboardId: document.id, revision, expiration, annotationMode, requestId,
+    });
+    if (result.ok === false || !result.shareId || !(result.accessUrl || result.url))
+      throw Error(result.error?.message || "未取得分享回执，请重试");
+    delete pending.requests[target];
+    pending.lastTarget = Object.keys(pending.requests).at(-1);
+    persistPendingShares(pending);
+    setNewShare(result);
   };
   const openFeedback = async (share: Config, popup?: Window | null) => {
     let receipt = share;
@@ -197,15 +205,6 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
             <Badge variant="outline">已保存 {status?.savedRevision ?? "—"}</Badge>
             <Badge>当前发布 {status?.publishedRevision ?? "未发布"}</Badge>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button disabled={busy || !status} onClick={() => void run(() => quickPublish(undefined, publishWithShare), "正在发布…")}>
-              发布当前草稿
-            </Button>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={publishWithShare} disabled={busy} onChange={(event) => setPublishWithShare(event.target.checked)} />
-              同时生成分享链接
-            </label>
-          </div>
           <div className="flex gap-2">
             <Input aria-label="版本名称" placeholder="版本名称（可选）" value={name} onChange={(e) => setName(e.target.value)} />
             <Button disabled={busy || !status} onClick={() => void run(async () => {
@@ -232,9 +231,9 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
                   await onRestore(item.revision); await refresh(); setPreview(null);
                 })}><RotateCcw />恢复为草稿</Button>
                 <Button size="sm" disabled={busy || status?.publishedRevision === item.revision}
-                  onClick={() => void run(() => quickPublish(item.revision), "正在发布…")}><Send />发布此版本</Button>
+                  onClick={() => void run(() => publishVersion(item.revision), "正在设为正式发布版…")}><Send />设为正式发布版</Button>
                 <Button size="sm" variant="outline" disabled={busy}
-                  onClick={() => void run(() => quickPublish(item.revision, true), `正在分享版本 ${item.revision}…`)}><ExternalLink />分享此版本</Button>
+                  onClick={() => void run(() => createShare(item.revision), `正在分享版本 ${item.revision}…`)}><ExternalLink />分享此版本</Button>
                 <Button size="sm" variant="outline" className="text-destructive hover:text-destructive"
                   disabled={busy}
                   onClick={() => void run(async () => {
@@ -254,17 +253,18 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
               <li key={event.id}>版本 {event.revision} · {event.created_at}</li>)}</ul>
           </section>}
         </> : <>
-          <p className="text-sm text-muted-foreground">每个分享固定使用所选发布版本，批注分别保存。替换分享会生成新链接和新密钥，旧链接与旧会话失效；其他分享保持原样。</p>
+          <p className="text-sm text-muted-foreground">分享固定在所选保存版。替换分享会生成新链接和密钥，旧链接和会话随即失效。</p>
           <div className="flex gap-2">
-            <Button disabled={busy || !status?.publishedRevision} onClick={() => void run(async () => {
-              const target = JSON.stringify([document.id, status?.publishedRevision, expiration, annotationMode]);
-              if (target !== pendingShare.current?.target) rememberPendingShare({ target, requestId: crypto.randomUUID(), expectedRevision: status?.publishedRevision });
-              const result = await call("dashboard_share_publish", { dashboardId: document.id,
-                expectedRevision: pendingShare.current!.expectedRevision, expiration, annotationMode, requestId: pendingShare.current!.requestId });
-              if (result.ok === false || !(result.accessUrl || result.url)) throw Error(result.error?.message || "分享链接生成失败");
-              setNewShare(result); rememberPendingShare(null);
-              await loadShares();
-            })}>新建分享</Button>
+            <select aria-label="用于分享的保存版" className="h-8 border bg-background px-3" disabled={busy || !history.length}
+              value={shareRevision ?? ""} onChange={(event) => setSelectedShareRevision(Number(event.target.value))}>
+              {!history.length && <option value="">暂无保存版</option>}
+              {history.map((item) => <option key={item.revision} value={item.revision}>{item.name || `版本 ${item.revision}`}</option>)}
+            </select>
+            <Button disabled={busy || !history.some((item) => item.revision === shareRevision)} onClick={() => void run(async () => {
+              await createShare(shareRevision);
+              try { await loadShares(); }
+              catch { throw Error("分享已创建，暂时无法刷新分享列表。"); }
+            }, "正在创建分享…")}>新建分享</Button>
           </div>
           {shares.map((share) => <article key={share.shareId} className="rounded-lg border p-3">
             <p>{share.pages?.length > 1 ? `包含 ${share.pages.length} 个页面 · ` : ""}版本 {share.revision} · {share.expiresAt ? new Date(share.expiresAt * 1000).toLocaleString() : "不过期"}</p>
@@ -273,14 +273,14 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
             {(publicationApiBase || /^https?:\/\//.test(share.feedbackUrl || "")) && <Button size="sm" variant="outline" className="mr-2"
               disabled={busy || share.state !== "active" || share.cleanupState === "pending"}
               onClick={() => openFeedbackWindow(share)}><MessageSquareText />查看读者批注</Button>}
-            <Button size="sm" variant="outline" className="mr-2" disabled={busy || share.cleanupState === "pending" || !status?.publishedRevision} onClick={() => void run(async () => {
+            <Button size="sm" variant="outline" className="mr-2" disabled={busy || share.cleanupState === "pending" || !history.some((item) => item.revision === shareRevision)} onClick={() => void run(async () => {
               const replacement = await call("dashboard_share_replace", {
-                dashboardId: document.id, shareId: share.shareId, expectedRevision: status?.publishedRevision, expiration,
+                dashboardId: document.id, shareId: share.shareId, expectedRevision: shareRevision, expiration,
               });
               setNewShare(replacement);
               await loadShares();
               if (!replacement.previousRevoked) setError("新分享已创建，旧分享撤销失败。请保留新密钥，并再次撤销旧分享。");
-            })}>替换为当前发布版本</Button>
+            })}>替换为所选保存版</Button>
             <Button size="sm" variant="outline" disabled={busy || share.cleanupState === "pending"} onClick={() => void run(async () => {
               await call("dashboard_share_delete", { dashboardId: document.id, shareId: share.shareId });
               setNewShare(null); await loadShares();

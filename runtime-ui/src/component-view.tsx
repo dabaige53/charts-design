@@ -132,6 +132,7 @@ export function ComponentView({
   tableState,
   onTableChange,
   editing = false,
+  reading = false,
   onGrain,
   onInspect,
   onReadData,
@@ -153,6 +154,7 @@ export function ComponentView({
   tableState?: TableState;
   onTableChange?: (s: TableState) => void;
   editing?: boolean;
+  reading?: boolean;
   onGrain?: (g: string) => void;
   onInspect?: () => Promise<Config>;
   onReadData?: (state: TableState) => Promise<Config>;
@@ -261,13 +263,13 @@ export function ComponentView({
   const localError = detailError;
   const card = (
         <Card
-          className="h-full min-h-0"
+          className={reading ? "h-full min-h-0 gap-0 bg-transparent py-0 shadow-none ring-0" : "h-full min-h-0"}
           size={family === "kpi" ? "sm" : "default"}
           data-component-id={id}
           data-family={family}
           aria-busy={loading}
         >
-          <CardHeader className={`shrink-0${family === "chart" || family === "table" ? " component-header-with-tools" : ""}`}>
+          {!reading && <CardHeader className={`shrink-0${family === "chart" || family === "table" ? " component-header-with-tools" : ""}`}>
             <CardTitle className="flex items-start gap-2">
               {editing && (
                 <GripVertical className="resize-handle mt-1 size-4 shrink-0 text-muted-foreground" />
@@ -330,8 +332,8 @@ export function ComponentView({
                 </IconAction>
               )}
             </CardAction>
-          </CardHeader>
-          <CardContent className="relative flex min-h-0 flex-1 flex-col">
+          </CardHeader>}
+          <CardContent className={`relative flex min-h-0 flex-1 flex-col${reading ? " px-0" : ""}`}>
           {actionError && (
             <RecoveryAlert title="操作未完成" message={actionError} onRetry={() => setActionError("")} retryLabel="返回组件" />
           )}
@@ -369,6 +371,7 @@ export function ComponentView({
                 visible: tableState?.visible ?? config.tableState?.visible,
               }}
               onChange={onTableChange}
+              reading={reading}
               onSaveState={editing ? onSaveTable : undefined}
               onExport={onExport ? () => run(onExport) : undefined}
               loading={loading}

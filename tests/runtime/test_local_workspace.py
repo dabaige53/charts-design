@@ -1,4 +1,3 @@
-import copy
 from contextlib import contextmanager
 import io
 import json
@@ -40,7 +39,7 @@ def request(base, path, token, body=None):
         return json.load(response)
 
 
-def note(key='note', component='trend'):
+def note(key='note', component: str | None = 'trend'):
     return {'id': key, 'componentId': component, 'text': '请核对这个位置', 'createdAt': '2026-11-27T00:00:00Z',
             'anchor': {'scope': 'component' if component else 'text', 'kind': 'element',
                        'quote': '季度结论', 'occurrence': 0,
@@ -56,7 +55,7 @@ def workspace(tmp_path, monkeypatch):
     return service
 
 
-# @wu-test type=integration | scope=本机预览批注HTTP与固定版本锚点 | protects=批注版本错位、刷新丢失、重复追加或自填署名冒充验证账户
+# @wu-test type=integration | scope=本机编辑、预览启动与批注 HTTP | protects=启动结果丢失项目标识、批注版本错位、刷新丢失、重复追加或冒充验证账户
 def test_local_preview_annotations_survive_reload_without_content_revision(workspace):
     service = workspace
     service.store.mutate('board', 1, [{'op': 'remove_component', 'id': 'trend'}])
@@ -69,6 +68,10 @@ def test_local_preview_annotations_survive_reload_without_content_revision(works
         assert server.token not in json.dumps(bootstrap)
         preview = request(base, '/api/tools/dashboard_get', preview_token, {'dashboardId': 'board'})
         assert preview['document']['revision'] == 1
+        editor_boot = request(base, '/edit/board', '')
+        draft = request(base, '/api/tools/dashboard_get', server.token, {'dashboardId': 'board'})
+        assert draft['projectRoot'] == editor_boot['projectRoot'] == preview['projectRoot'] == bootstrap['projectRoot']
+        assert draft['document']['revision'] == 2
         payload = {'revision': 1, 'authorName': '  数据读者  ',
                    'append': {**note(), 'author': {'name': '伪造账户', 'verified': True, 'id': 'account'}}}
         for invalid_name in ('x' * 81, {'name': 'not a string'}):
@@ -164,7 +167,7 @@ def share_gateway(tmp_path, monkeypatch):
     state = {'requests': {}, 'attempts': 0, 'fail_once': True, 'active': True}
 
     class Gateway(BaseHTTPRequestHandler):
-        def log_message(self, *args):
+        def log_message(self, format, *args):
             pass
 
         def answer(self, value, status=200):
@@ -211,7 +214,7 @@ def share_gateway(tmp_path, monkeypatch):
         yield state
 
 
-# @wu-test type=integration | scope=本机发布持久引用与幂等HTTP上传 | protects=响应丢失后重复分享、泄露私人批注、编辑B改变已发A或重启丢失反馈入口
+# @wu-test type=integration | scope=独立分享持久引用与幂等 HTTP 上传 | protects=丢失回执后重复创建链接、覆写正式发布版、泄露项目批注或重启丢失原版反馈
 def test_local_publication_reuses_frozen_archive_and_persistent_reference(workspace, share_gateway, monkeypatch, tmp_path):
     from dashboard_runtime import deployment
 
@@ -230,18 +233,29 @@ def test_local_publication_reuses_frozen_archive_and_persistent_reference(worksp
 
     monkeypatch.setattr(deployment, 'export_site', json_fixture_export)
     workspace.store.append_annotation('board', note('private'))
-    args = {'dashboardId': 'board', 'expectedRevision': 1, 'revision': 1,
-            'share': {'requestId': str(uuid.uuid4()), 'expiration': 'never', 'annotationMode': 'annotate'}}
-    first = LocalShares(workspace).publish_request(args)
-    assert first['shareError']['code'] == 'SHARE_SERVICE_UNAVAILABLE' and 'share' not in first
     workspace.store.mutate('board', 1, [{'op': 'set_title', 'value': 'B'}])
     workspace.store.checkpoint('board', 2)
+    board = {'dashboardId': 'board'}
+    workspace.call('dashboard_publish', {**board, 'revision': 2})
+    formal = workspace.call('dashboard_version_status', board)
+    args = {**board, 'revision': 1, 'requestId': str(uuid.uuid4()),
+            'expiration': 'never', 'annotationMode': 'annotate'}
+    for invalid in ({k: v for k, v in args.items() if k != 'requestId'}, {**args, 'revision': 3}):
+        with pytest.raises(DashboardError):
+            workspace.call('dashboard_share_publish', invalid)
+    assert share_gateway['attempts'] == 0
+    with pytest.raises(DashboardError) as first:
+        workspace.call('dashboard_share_publish', args)
+    assert first.value.code == 'SHARE_SERVICE_UNAVAILABLE'
+    assert workspace.call('dashboard_version_status', board) == formal
+    workspace.store.mutate('board', 2, [{'op': 'set_title', 'value': 'C'}])
     reopened = Service(tmp_path / 'new-runtime', project_root=workspace.project_root)
     shares = LocalShares(reopened)
-    second = shares.publish_request(args)
-    receipt = second['share']
+    receipt = reopened.call('dashboard_share_publish', args)
     assert receipt['revision'] == 1 and len(share_gateway['requests']) == 1
+    assert reopened.call('dashboard_share_publish', args) == receipt
     assert share_gateway['attempts'] == 2
+    assert reopened.call('dashboard_version_status', board) == {**formal, 'draftRevision': 3}
     assert shares.feedback('board', receipt['shareId'])['revision'] == 1
     assert shares.status('board')['shares'][0]['revision'] == 1
     raw, _, source = next(iter(share_gateway['requests'].values()))
@@ -251,10 +265,8 @@ def test_local_publication_reuses_frozen_archive_and_persistent_reference(worksp
     assert frozen['revision'] == 1 and frozen['manifest']['title'] != 'B'
     assert not frozen['manifest'].get('annotations')
     assert b'service-only-secret' not in raw
-    changed = copy.deepcopy(args)
-    changed['share']['annotationMode'] = 'view'
     with pytest.raises(DashboardError) as conflict:
-        shares.publish_request(changed)
+        reopened.call('dashboard_share_publish', {**args, 'annotationMode': 'view'})
     assert conflict.value.code == 'IDEMPOTENCY_CONFLICT'
     share_gateway['active'] = False
     with pytest.raises(DashboardError) as expired:

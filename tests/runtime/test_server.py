@@ -6,6 +6,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 import pytest
 
@@ -279,7 +280,7 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path, monkeypatch):
         assert status == 200 and value['document']['id'] == 'exec'
         opened = post(api + 'dashboard_preview', {'dashboardId': 'exec'}, token)[1]
         assert 'browserLinks' not in opened and 'browserLinks' not in opened['document']
-        status, error = post(api + 'dashboard_share_publish', {'dashboardId': 'exec', 'expectedRevision': 1}, TOKEN)
+        status, error = post(api + 'dashboard_share_publish', {'dashboardId': 'exec', 'revision': 1, 'requestId': str(uuid.uuid4())}, TOKEN)
         assert status >= 400 and error['error']['code'] == 'CLOUD_SHARE_NOT_CONFIGURED'
         assert server.projects.service('sales').store.revision('exec') == 1
         assert post(api + 'dashboard_get', {'dashboardId': 'other'}, token)[0] == 403
@@ -303,7 +304,9 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path, monkeypatch):
         assert status == 200 and '/edit/sales/exec#token=' in edit['url']
         edit_token = edit['url'].split('#token=')[1]
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Edited by link'}]}, edit_token)[0] == 200
-        published = post(api + 'dashboard_publish', {'dashboardId': 'exec', 'expectedRevision': 2}, edit_token)[1]
+        saved = post(api + 'dashboard_submit', {'dashboardId': 'exec', 'expectedRevision': 2}, edit_token)[1]
+        assert saved['checkpoint']['revision'] == 2
+        published = post(api + 'dashboard_publish', {'dashboardId': 'exec', 'expectedRevision': 2, 'revision': 2}, edit_token)[1]
         assert published['publishedRevision'] == published['versionStatus']['savedRevision'] == 2
         for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open',
                      'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):

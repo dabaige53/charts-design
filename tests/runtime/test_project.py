@@ -168,26 +168,27 @@ def test_submit_keeps_failed_draft_for_correction(tmp_path, monkeypatch):
     assert saved['ok'] and saved['checkpoint']['revision'] == 2
 
 
-# @wu-test type=behavior | scope=dashboard_publish 内容检查 | protects=检查失败的草稿被保存为检查点或替换线上版本
+# @wu-test type=behavior | scope=dashboard_publish 内容检查 | protects=检查失败的保存版替换正式发布版
 def test_publish_preserves_previous_release_on_failed_checks(tmp_path, monkeypatch):
     from dashboard_runtime.demo import executive_document
 
     service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
     board = {'dashboardId': 'review'}
     service.call('dashboard_create', {**board, 'document': executive_document('review')})
-    assert service.call('dashboard_publish', board)['publishedRevision'] == 1
+    assert service.call('dashboard_publish', {**board, 'revision': 1})['publishedRevision'] == 1
     service.call('dashboard_patch', {**board, 'expectedRevision': 1,
                  'operations': [{'op': 'set_title', 'value': 'Updated'}]})
+    service.store.checkpoint('review', 2)
 
     def unavailable(*args, **kwargs):
         raise DashboardError('ASSET_UNAVAILABLE', 'Data unavailable')
 
     monkeypatch.setattr(service.views, 'aggregate', unavailable)
-    failure = service.call('dashboard_publish', board)
+    failure = service.call('dashboard_publish', {**board, 'revision': 2})
     assert not failure['ok'] and failure['error']['code'] == 'DOCTOR_FAILED'
     status = service.call('dashboard_version_status', board)
     assert status['draftRevision'] == 2
-    assert status['publishedRevision'] == status['savedRevision'] == 1
+    assert status['publishedRevision'] == 1 and status['savedRevision'] == 2
 
 
 # @wu-test type=integration | scope=dashboard_view | protects=筛选后计算值与返回的口径、来源或数据版本不一致

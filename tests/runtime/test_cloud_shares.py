@@ -125,7 +125,9 @@ def test_cos_share_converts_legacy_once_reuses_parquet_and_cleans_only_owned_fil
     from static_fixture import worker_query
 
     service, storage, shares, assets, registry, rows = cos_publication(tmp_path, monkeypatch)
-    originals = dict(assets.storage.objects)
+    asset_storage = assets.storage
+    assert isinstance(asset_storage, MemoryStorage)
+    originals = dict(asset_storage.objects)
     original_doc = service.store.get('board', hydrate=False)
     refs = original_doc['snapshot']['datasetRefs']
     old_obj = registry.by_version[refs['old']['version']]
@@ -172,19 +174,21 @@ def test_cos_share_converts_legacy_once_reuses_parquet_and_cleans_only_owned_fil
     assert results[2]['result']['values'] == [None, 3]
     assert results[3]['result']['rows'] == rows['new']
     assert service.store.get('board', hydrate=False) == original_doc
-    assert assets.storage.objects == originals
+    assert asset_storage.objects == originals
     assert shares.content(old_share, old_path) == old_bytes
     assert [call['state'] for call in registry.shares] == ['uploading', 'active']
     assert cleanup_due(storage, result['expiresAt']) == {'removed': 1, 'failed': []}
     assert not storage.list('shares/' + share_id + '/')
-    assert assets.storage.objects == originals
+    assert asset_storage.objects == originals
     assert shares.content(old_share, old_path) == old_bytes
 
 
 # @wu-test type=boundary | scope=COS legacy-share conversion retry | protects=转换上传失败仍激活分享或重试改变原包及遗失暂存清理任务
 def test_cos_share_failed_conversion_upload_keeps_staging_and_same_id_retries(tmp_path, monkeypatch):
     service, storage, shares, assets, registry, _ = cos_publication(tmp_path, monkeypatch)
-    originals = dict(assets.storage.objects)
+    asset_storage = assets.storage
+    assert isinstance(asset_storage, MemoryStorage)
+    originals = dict(asset_storage.objects)
     share_id = 'f' * 32
     put, attempts = storage.put, []
 
@@ -200,16 +204,18 @@ def test_cos_share_failed_conversion_upload_keeps_staging_and_same_id_retries(tm
         with pytest.raises(OSError, match='publication upload failed'):
             shares.publish(service, 'board', 1, '7d', '01234567', share_id=share_id)
     assert storage.get('shares/' + share_id + '/control.json') is None
-    staged = json.loads(storage.get('jobs/' + share_id + '.json'))
+    job = storage.get('jobs/' + share_id + '.json')
+    assert job is not None
+    staged = json.loads(job)
     assert staged['state'] == 'uploading' and staged['cleanupAfter'] == staged['stagingUntil']
     assert [call['state'] for call in registry.shares] == ['uploading']
     assert storage.get(attempts[0]) is not None
-    assert assets.storage.objects == originals
+    assert asset_storage.objects == originals
     result = shares.publish(service, 'board', 1, '7d', '01234567', share_id=share_id)
     assert result['shareId'] == share_id
     assert shares.authenticate(share_id, '01234567')['state'] == 'active'
     assert [call['state'] for call in registry.shares] == ['uploading', 'uploading', 'active']
-    assert assets.storage.objects == originals
+    assert asset_storage.objects == originals
 
 
 # @wu-test type=integration | scope=腾讯云分享副本与到期清理 | protects=到期仅失效链接却残留远程数据密钥或误删原稿和其他分享
@@ -339,7 +345,7 @@ def test_partial_replacement_returns_new_credentials(tmp_path, monkeypatch):
     put = storage.put
 
     def fail_revoke(key, content, content_type='application/octet-stream'):
-        if key == 'shares/' + old['shareId'] + '/control.json':
+        if key == 'jobs/' + old['shareId'] + '.json':
             raise OSError('simulated revoke failure')
         put(key, content, content_type)
 

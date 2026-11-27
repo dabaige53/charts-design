@@ -14,6 +14,8 @@ from .file_lock import exclusive_file_lock
 from .model import MAX_BYTES, json_bytes, require
 
 UI_RESOURCES = ('app.js', 'app.css', 'static-worker.js')
+INLINE_FILTER_LIMIT = 100
+INLINE_FILTER_BYTES = 16 * 1024
 
 
 def _sha256(path):
@@ -75,6 +77,26 @@ def _write_shards(site, key, rows):
     return files, count
 
 
+def _static_filter_options(data, manifest, refs):
+    """Inline complete small option sets so readers can open filters before loading rows."""
+    options = {}
+    components = manifest['components']
+    for entry in manifest['filters']:
+        if entry['op'] != 'in':
+            continue
+        datasets = dict.fromkeys(components[key]['datasetId'] for key in entry['componentIds'])
+        if not all(dataset in refs for dataset in datasets):
+            continue
+        sources = [refs[dataset] for dataset in datasets]
+        field = entry['field']
+        if len({source['fields'][field]['type'] for source in sources}) != 1:
+            continue
+        page = data.option_page(sources, field, limit=INLINE_FILTER_LIMIT)
+        if not page['hasMore'] and len(json_bytes(page['values'])) <= INLINE_FILTER_BYTES:
+            options[entry['id']] = page['values']
+    return options
+
+
 def export_site(store, board, output_root=None, document=None, data_format='auto'):
     require_preview()
     from .columnar import export_format, write_parquet
@@ -130,6 +152,7 @@ def export_site(store, board, output_root=None, document=None, data_format='auto
         # capabilities must not become portable content or leak editor tokens.
         for key in ('browserLinks', 'annotationAccess', 'publicationApiBase', 'publication', 'annotationsOpen'):
             doc.pop(key, None)
+        doc['staticFilterOptions'] = _static_filter_options(store.data, doc['manifest'], refs)
         doc['snapshot'] = {'datasets': {}}
         doc.pop('computed', None)
         doc.pop('progressive', None)

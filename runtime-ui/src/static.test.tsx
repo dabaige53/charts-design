@@ -18,7 +18,7 @@ it("uses saved filter visibility in a published report", async () => {
   Object.defineProperty(globalThis, "location", { configurable: true, value: new URL("https://charts.example/s/share/") });
   const doc: Document = {
     id: "report", revision: 1,
-    manifest: { title: "筛选配置报告", viewMode: "report", report: { markdown: "" },
+    manifest: { title: "筛选配置报告", viewMode: "filtered-report", report: { markdown: "" },
       components: {}, layout: {}, metrics: {}, datasets: {},
       filters: ["月份", "基地", "机型", "航线", "渠道"].map((label, index) => ({
         id: `choice-${index}`, label, field: "field", op: "contains", values: [],
@@ -26,7 +26,7 @@ it("uses saved filter visibility in a published report", async () => {
       })) },
     snapshot: { datasets: {} },
   };
-  globalThis.fetch = (async () => Response.json(doc)) as typeof fetch;
+  globalThis.fetch = (async () => Response.json(doc)) as unknown as typeof fetch;
   render(<TooltipProvider><StaticSite /></TooltipProvider>);
   await screen.findByRole("heading", { name: "筛选配置报告" });
   expect(screen.getByPlaceholderText("航线").closest("[inert]")).toBeNull();
@@ -45,7 +45,7 @@ it("loads selected pages from the shared site", async () => {
   const documents = Object.fromEntries(pages.map(({ id, path, title }) => {
     const doc: Document = {
       id, revision: 1, staticPages: pages,
-      manifest: { title, viewMode: "report", report: { markdown: "" },
+      manifest: { title, viewMode: "filtered-report", report: { markdown: "" },
         components: {}, filters: [], layout: {}, metrics: {}, datasets: {} },
       snapshot: { datasets: {} },
     };
@@ -78,7 +78,7 @@ it("adds and reloads a report annotation through the share service while content
   const doc: Document = { id: "report", revision: 5, publication: { shareId: "one", revision: 5 },
     annotationAccess: { endpoint: "/s/one/api/annotations", scope: "share:one", canRead: true,
       canAnnotate: false, canManageAnnotations: false, author: { name: "访客", verified: false } },
-    manifest: { title: "固定的 A 版", viewMode: "report", report: { markdown: "原报告中的经营判断。" },
+    manifest: { title: "固定的 A 版", viewMode: "filtered-report", report: { markdown: "原报告中的经营判断。" },
       components: {}, filters: [], layout: {}, metrics: {}, datasets: {}, annotations: [] },
     snapshot: { datasets: {} } };
   const requests: { url: string; body?: any }[] = [];

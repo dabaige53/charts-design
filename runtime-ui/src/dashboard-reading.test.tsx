@@ -6,7 +6,28 @@ import type { Config, Document } from "./types";
 
 afterEach(cleanup);
 
-// @wu-test type=integration | scope=DashboardApp 阅读版本 | protects=筛选候选项与HTML导出遗漏页面版本，刷新后继续请求旧数据版本
+// @wu-test type=integration | scope=独立论文报告页 | protects=报告页携带看板筛选、导航、编辑和批注入口
+it("renders an academic report without dashboard controls", () => {
+  const initial: Document = {
+    id: "paper", revision: 1,
+    manifest: {
+      title: "收入研究", viewMode: "report", report: { markdown: "# 收入研究\n\n研究结论" },
+      components: {}, datasets: {}, metrics: {}, layout: {},
+      filters: [{ id: "region", label: "区域", field: "region", op: "in", values: [], componentIds: [] }],
+    },
+    snapshot: { datasets: {} },
+  };
+  const call = mock(async () => ({}));
+  render(<DashboardApp initial={initial} call={call} />);
+  expect(screen.getByRole("main").classList.contains("analytical-report-page")).toBe(true);
+  expect(screen.getAllByRole("heading", { name: "收入研究" })).toHaveLength(1);
+  expect(screen.getByText("研究结论")).toBeTruthy();
+  expect(screen.queryAllByRole("button")).toHaveLength(0);
+  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(call).not.toHaveBeenCalled();
+});
+
+// @wu-test type=integration | scope=DashboardApp 阅读版本与筛选加载 | protects=首次展开等待搜索防抖、重复发送输入中间词或读取旧页面版本
 it("pins filter loading and HTML export to the displayed revision across refresh", async () => {
   const descriptors = ["ResizeObserver", "NodeFilter", "location", "sessionStorage", "HTMLInputElement"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
   Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class {
@@ -17,7 +38,7 @@ it("pins filter loading and HTML export to the displayed revision across refresh
   try {
     const initial: Document = {
       id: "reading", revision: 2, dataVersion: "data-two",
-      manifest: { title: "读取一致性", viewMode: "report", report: { markdown: "" },
+      manifest: { title: "读取一致性", viewMode: "dashboard",
         components: {}, datasets: { sales: { fields: { region: { type: "string" } } } }, metrics: {}, layout: {},
         filters: [{ id: "region", label: "区域", field: "region", op: "in", values: [], componentIds: [] }] },
       snapshot: { datasets: {} },
@@ -34,7 +55,16 @@ it("pins filter loading and HTML export to the displayed revision across refresh
       .map(([, args]) => [args?.expectedRevision, args?.dataVersion]);
     render(<TooltipProvider><DashboardApp initial={initial} call={call} download={download} readOnly /></TooltipProvider>);
     fireEvent.click(screen.getByRole("combobox", { name: "区域" }));
-    await waitFor(() => expect(filterVersions()).toContainEqual([2, "data-two"]));
+    expect(filterVersions()).toEqual([[2, "data-two"]]);
+    await screen.findByRole("option", { name: "华东" });
+    const search = screen.getByPlaceholderText("搜索选项");
+    const searches = () => call.mock.calls
+      .filter(([name, args]) => name === "dashboard_filter_options" && args?.search)
+      .map(([, args]) => args?.search);
+    fireEvent.change(search, { target: { value: "华" } });
+    fireEvent.change(search, { target: { value: "华东" } });
+    expect(searches()).toEqual([]);
+    await waitFor(() => expect(searches()).toEqual(["华东"]));
     fireEvent.keyDown(screen.getByRole("combobox", { name: "区域" }), { key: "Escape" });
     fireEvent.click(screen.getByRole("button", { name: "导出 HTML" }));
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
