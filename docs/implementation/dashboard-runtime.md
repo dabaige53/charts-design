@@ -15,23 +15,26 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 | `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
 | `runtime-core/`、`columnar.py` | Rust 只读 SQLite→Parquet 导出、不可变编码缓存及与现有 MCP 的桥接 |
 | `file_lock.py` | 镜像同步与导出缓存的跨进程文件锁，不承载业务版本状态 |
-| `server.py`、`http_app.py` | 自托管远程服务与本机网页入口 |
+| `server.py`、`http_server.py` | 自托管远程服务与本机网页入口、独立的网页批注鉴权 |
+| `local_shares.py`、`cloud_shares.py`、`share_annotations.py` | 本机发布引用、固定版本分享副本与分享批注存储 |
 | `runtime-ui/src/` | 展示组件、应用状态、布局和宿主能力适配 |
 
-展示组件接收 props 和事件，不访问数据库或直接调用 MCP；应用适配层管理工具请求、结果合并和宿主能力。画布与应用共享组件，分别构建与打包。业务状态通过 Service 修改，不手工维护 SQLite 的 JSON 镜像。
+展示组件接收 props 和事件，不访问数据库或直接调用 MCP；应用适配层管理工具请求、结果合并和宿主能力。网页批注由 `annotation-client.ts` 调用同源 HTTP 接口，独立于内容工具的传输方式。画布与应用共享组件，分别构建与打包。业务状态通过 Service 和项目存储修改，不手工维护 SQLite 的 JSON 镜像。
 
-Rust 通过受控本机进程接入独立网页、COS 业务行与候选项编码，以及显式迁移前的实际 Parquet 解码校验；MCP/HTTP、版本事务和服务端查询仍由 Python 承担。该边界复用已有工具，不增加常驻服务。网页部署只需要导出的静态包；具体格式、原生程序准备及兼容行为见[静态部署](../operations/static-deployment.md)。
+Rust 通过受控本机进程接入独立网页、COS 业务行与候选项编码，以及显式迁移前的实际 Parquet 解码校验；MCP/HTTP、版本事务和服务端查询仍由 Python 承担。该边界复用已有工具，不增加常驻服务。纯静态部署使用导出的静态包；允许读者提交批注的分享还需要分享服务的持久存储。具体格式、原生程序准备及兼容行为见[静态部署](../operations/static-deployment.md)。
 
 ## 启动与依赖
 
 Python 依赖由 `pyproject.toml` 声明、`uv.lock` 锁定；开发环境使用 uv 创建的 `.venv`。首次使用在仓库根目录执行 `bun run setup`，统一准备 Python 与 Bun 依赖。具体条件见 [开发环境](../operations/testing.md#统一开发环境)。
 
 ```sh
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards init demo
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards serve
+bun bin/python-runtime.js -m dashboard_runtime --project-root /absolute/path/project --runtime-root /absolute/path/runtime-cache init demo
+bun bin/python-runtime.js -m dashboard_runtime --project-root /absolute/path/project --runtime-root /absolute/path/runtime-cache serve --dashboard demo
 ```
 
 普通 `init` 创建空白文档，只有显式 `--demo` 才插入合成数据。业务目录包含数据快照、来源 SQL 与参数，不提交到公共仓库。报告创建和源文约定见 [生成路径](generation-tracks.md)。
+
+打开已有看板时直接运行 `serve --dashboard <id>`。回执中的 `editUrl` 打开 `/edit/<id>`，`viewUrl` 打开 `/view/<id>`；加 `--view` 将预览地址设为主 `url`。服务只监听本机回环地址，带令牌的链接可在普通浏览器打开，无需公网或云端部署。编辑页读取草稿；预览页读取最新已保存版本，未保存的新文档须先保存。预览允许查看、筛选和新增批注，不能修改布局、标题、数据定义或版本；预览令牌也不能调用这些写接口。
 
 仅在需要本地预览或导出且未使用已打包安装时准备共享应用；有效资源会复用：
 
@@ -84,9 +87,11 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 
 所有连接的 `tools/list` 返回同一套 Agent 工具。需要为 COS 数据集分片时，在当前连接调用 `dataset_repartition`。使用 CLI 执行存储盘点、上传暂存清理及存储迁移。直连服务为现有页面和上传程序保留协议回调，参数见 `charts://contract` 的 `clientTools`。
 
-项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。批注独立调用 `dashboard_annotations_update`，不创建设计版本。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
+项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。既有 Agent 工具 `dashboard_annotations`、`dashboard_annotations_update` 保留兼容；网页读取和提交批注直接走 HTTP，不调用 MCP，也不创建设计版本。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
 
 用户要求发布时，调用一次 `dashboard_publish`。服务端检查发布目标，按需保存草稿，设为当前发布版本。显式传 `revision` 可选择历史保存版本，显式传 `share` 可同时生成独立访问链接。响应中的 `shareError` 表示版本已发布，链接生成失败。沿用相同参数和 `share.requestId` 重试分享。编辑器调用同一工具。
+
+本机项目向已配置的分享服务发布时，必须选择已保存版本；“版本与分享”中的“分享此版本”同时选择“仅查看”或“可批注”。`local_shares.py` 上传该版本的独立数据副本并在项目内保留分享引用，服务凭据只留在作者进程。分享收到的批注通过对应分享按需读取，不回写草稿；配置和引用位置见 [项目资产与加载](project-runtime.md#保存发布与恢复)。
 
 `dashboard_get` 读取可编辑草稿，`dashboard_view` 返回实际计算结果。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态。
 
@@ -96,6 +101,8 @@ MCP 中，创建、patch、恢复、数据导入/挂接/查询和数据迁移这
 
 预览工具为 `dashboard_preview`，UI 资源 URI 带运行版本与构建标识。宿主决定显示为对话卡片或面板。分块、资源过期和诊断字段见 [传输与诊断](../operations/mcp-transport-diagnostics.md)。
 
+本地 stdio 预览同时按需启动复用当前项目 Service 的回环网页入口，在回执和文档的 `browserLinks` 返回编辑与预览链接；页面与 MCP 共用空闲生命周期。MCP 宿主中的“在浏览器中批注”打开 `browserLinks.viewUrl`，在普通浏览器使用 HTTP 保存。宿主预览、编辑和查询仍沿用原 MCP 协议，不要求宿主直接访问本机批注接口。网页内容的 `readOnly` 与 `annotationAccess.canAnnotate` 分开判定；具体权限和版本定位见 [批注说明](annotation-composer.md)。
+
 ## 页面元信息与组件声明
 
 页面标题使用 `manifest.title` / `set_title`。`manifest.meta` 提供 `iconKey`、`subtitle`、`org`、`system`、`statusText`；`set_meta` 整体替换，`{}` 清空。文本长度、枚举和兼容读取以当前操作结构与校验器为准；没有 meta 的旧导入仍可读取 `originalWorkspace.meta`。
@@ -103,7 +110,7 @@ MCP 中，创建、patch、恢复、数据导入/挂接/查询和数据迁移这
 组件声明保存稳定 ID、来源、数据集与指标引用、渲染配置和断点布局。预设、完整 ECharts 与自由 HTML/JavaScript 均通过明确声明进入；执行隔离、原生覆盖与绑定限制见 [渲染与覆盖](echarts-options.md)。历史 `kind=chart` 保留兼容读取，新组件遵循当前声明要求。
 
 ```sh
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards import-workspace imported --path ./old-workspace
+bun bin/python-runtime.js -m dashboard_runtime --project-root /absolute/path/project --runtime-root /absolute/path/runtime-cache import-workspace imported --path ./old-workspace
 ```
 
 工作区导入保留原图表、指标卡和表格声明。历史已丢失字段需要从原资产恢复。
@@ -148,10 +155,12 @@ bun bin/python-runtime.js -m dashboard_runtime --root ./boards --sources ./sourc
 | JSON | 保存配置与不可变本地引用 |
 | HTML | 选定读取版本及当前查看条件的只读快照，不连接上游来源；不传版本参数时读取草稿 |
 | CSV | 导出全部匹配记录；筛选、排序和列选择在完整结果上执行 |
-| 静态网页 ZIP | 使用中的完整数据集分片及共享应用；格式与离线能力见 [静态部署包](../operations/static-deployment.md) |
+| 静态网页 ZIP | 使用中的完整数据集分片及共享应用；无批注后端时不显示可提交状态，格式与离线能力见 [静态部署包](../operations/static-deployment.md) |
 | 远程网页与腾讯云副本 | 鉴权、密钥、存储、有效期和 SCF 清理见 [自托管服务器](../operations/self-hosted-server.md) |
 
 导出文件使用受管 ID，通过读取工具或远程下载链接交付。
+
+只读 HTML 和静态 ZIP 移除本机批注及运行权限字段，包括 `browserLinks`、`annotationAccess` 和发布管理入口；导入过的预览文档也不能把编辑链接或令牌带入这些导出。正式分享只在服务端为发布副本设置该分享自己的批注权限和接口。
 
 测试层次与授权边界统一见 [测试与 CI](../operations/testing.md)。普通维护只运行受影响的局部检查。
 

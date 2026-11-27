@@ -295,18 +295,21 @@ class Links:
     def __init__(self, settings: ServerSettings, signer: Signer, state: ShareState):
         self.settings, self.signer, self.state = settings, signer, state
 
-    def share(self, project: str, dashboard: str, access: str = 'view', hours: float | None = None, dashboards=None) -> dict:
+    def share(self, project: str, dashboard: str, access: str = 'view', hours: float | None = None, dashboards=None,
+              annotation_mode='view') -> dict:
         require(access in ('view', 'edit'), 'access must be view or edit')
+        require(annotation_mode in ('view', 'annotate'), 'annotationMode must be view or annotate', 'INVALID_ARGUMENT')
         hours = self.settings.share_hours if hours is None else hours
         require(isinstance(hours, (int, float)) and not isinstance(hours, bool) and 0 < hours <= 24 * 366, 'expiresInHours must be between 1 and 8784')
         expires = int(time.time() + hours * 3600)
         included = [dashboard] + (dashboards or [])
         token = self.signer.sign({'k': 'share', 'p': project, 'd': dashboard, 'a': access, 'exp': expires,
+                                  'annotationMode': annotation_mode,
                                   'g': self.state.generation(project, dashboard),
                                   'pages': {item: self.state.generation(project, item) for item in included},
                                   'n': secrets.token_hex(4)})
         url = f'{self.settings.public_url}/{access}/{quote(project)}/{quote(dashboard)}#token={token}'
-        return {'url': url, 'access': access, 'expiresAt': _iso(expires)}
+        return {'url': url, 'access': access, 'annotationMode': annotation_mode, 'expiresAt': _iso(expires)}
 
     def file(self, project: str, path: str) -> str | None:
         root = (self.settings.workspace / project).resolve()
@@ -334,6 +337,8 @@ class ServerProfile(McpProfile):
                                     'dashboardIds': described({'type': 'array', 'items': BOARD['dashboardId'], 'uniqueItems': True}, 'Additional pages to include in this link.'),
                                     'access': described({'enum': ['view', 'edit'], 'default': 'view'},
                                         'Permission granted by this link; use edit only when the user requested editing access.'),
+                                    'annotationMode': described({'enum': ['view', 'annotate'], 'default': 'view'},
+                                        'Independent annotation permission. Existing view links remain read-only.'),
                                     'expiresInHours': described({'type': 'number', 'minimum': 1, 'maximum': 8784},
                                         'Link lifetime in hours; omit to use the operator-configured server default.')}, ('dashboardId',))),
             'dashboard_share_revoke': ('Revoke every previously issued browser share link for this dashboard/report; all those readers lose access. '
@@ -365,7 +370,8 @@ class ServerProfile(McpProfile):
                     and len(pages) == len(set(pages)), 'Invalid additional pages', 'INVALID_ARGUMENT')
             for page in pages:
                 selected.store.revision(page)
-            link = self.links.share(selected.project_name, board, request.get('access', 'view'), request.get('expiresInHours'), pages)
+            link = self.links.share(selected.project_name, board, request.get('access', 'view'), request.get('expiresInHours'), pages,
+                                    request.get('annotationMode', 'view'))
             return {'dashboardId': board, **link}
         if name == 'dashboard_share_revoke':
             board = request.get('dashboardId')
@@ -392,6 +398,7 @@ class Principal:
     access: str
     dashboard: str | None = None
     dashboards: tuple = ()
+    can_annotate: bool = False
 
 
 class RemoteServer:
@@ -444,9 +451,9 @@ class RemoteServer:
 
     def principal(self, token, project) -> Principal | None:
         if self.settings.insecure_no_auth and not token:
-            return Principal(admin=True, access='edit')
+            return Principal(admin=True, access='edit', can_annotate=True)
         if self.admin(token):
-            return Principal(admin=True, access='edit')
+            return Principal(admin=True, access='edit', can_annotate=True)
         payload = self.signer.verify(token, 'share')
         if payload is None or payload.get('p') != project:
             return None
@@ -456,7 +463,9 @@ class RemoteServer:
             return None
         if not self.state.generations_match(project, pages):
             return None
-        return Principal(admin=False, access=payload.get('a', 'view'), dashboard=dashboard, dashboards=tuple(pages))
+        access = payload.get('a', 'view')
+        return Principal(admin=False, access=access, dashboard=dashboard, dashboards=tuple(pages),
+                         can_annotate=access == 'edit' or payload.get('annotationMode') == 'annotate')
 
     # Viewer API ---------------------------------------------------------
     def call_viewer(self, project: str, name: str, args, principal: Principal):
@@ -639,7 +648,12 @@ def create_app(server: RemoteServer):
                 require(re.fullmatch(ID, dashboard) is not None, 'Invalid dashboard ID')
             boot = {'mode': 'web', 'projectRoot': project, 'dashboardId': dashboard,
                     'apiBase': base + '/api/v1/p/' + quote(project) + '/tools/',
-                    'readOnly': request.url.path.startswith(base + '/view/'), 'idleTimeout': None}
+                    'readOnly': request.url.path.startswith('/view/') or request.url.path.startswith(base + '/view/'),
+                    'idleTimeout': None,
+                    'annotationAccess': {'endpoint': base + '/api/v1/p/' + quote(project) + '/annotations/{dashboardId}',
+                                         'canRead': True, 'canAnnotate': False, 'canManageAnnotations': False,
+                                         'scope': 'workspace:' + project},
+                    'publicationApiBase': base + '/api/v1/p/' + quote(project) + '/publications/'}
             return compressed(request, render_html(boot_state=boot).encode(), 'text/html', {'Cache-Control': 'no-store'})
         except DashboardError as error:
             return failure(error)
@@ -707,6 +721,124 @@ def create_app(server: RemoteServer):
             kind = 'application/gzip' if name.endswith('.gz') else 'application/octet-stream'
             return Response(raw, media_type=kind,
                             headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
+        except Exception as error:  # noqa: BLE001
+            return failure(error)
+
+    async def annotations(request: Request):
+        """Annotations have their own capability and never enter the MCP transport."""
+        from .http_server import annotation_response
+        try:
+            project, board = request.path_params['project'], request.path_params['dashboard']
+            principal = await asyncio.to_thread(server.principal, bearer(request), project)
+            if principal is None:
+                raise DashboardError('UNAUTHORIZED', '访问令牌失效', 401)
+            if principal.dashboard and board not in principal.dashboards:
+                raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
+            payload = None
+            revision = request.query_params.get('revision')
+            if request.method == 'POST':
+                if request.headers.get('content-type', '').split(';')[0].strip() != 'application/json':
+                    raise DashboardError('CONTENT_TYPE', 'Use application/json', 415)
+                payload = json.loads(await read_body(request, MAX_BYTES) or b'{}')
+                require(isinstance(payload, dict), 'Body must be an object', 'INVALID_REQUEST')
+                require(payload.get('dashboardId', board) == board, 'Dashboard does not match this endpoint', 'FORBIDDEN')
+                revision = payload.get('revision', revision)
+            if isinstance(revision, str):
+                require(revision.isdigit(), 'Invalid revision', 'INVALID_ARGUMENT')
+                revision = int(revision)
+            def invoke():
+                if not server.projects.exists(project, allow_loaded=True):
+                    raise DashboardError('NOT_FOUND', 'Project not found', 404)
+                result = annotation_response(server.projects.service(project), board, revision=revision,
+                                             can_annotate=principal.can_annotate,
+                                             can_manage=principal.access == 'edit', payload=payload)
+                return {**result, 'canAnnotate': principal.can_annotate,
+                        'canManageAnnotations': principal.access == 'edit', 'independentSave': True,
+                        'author': {'name': '作者' if principal.access == 'edit' else '访客', 'verified': False}}
+            return JSONResponse(await asyncio.to_thread(invoke), headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
+        except Exception as error:  # noqa: BLE001
+            return failure(error)
+
+    def feedback_result(shares, share_id, board):
+        control = shares.control(share_id)
+        expiry = min(int(time.time()) + 15 * 60, control['expiresAt'] or int(time.time()) + 15 * 60)
+        token = server.signer.sign({'k': 'share-feedback', 'shareId': share_id, 'dashboardId': board, 'exp': expiry})
+        result = shares.annotations(share_id, board)
+        return {**result, 'url': shares.public_url + '/s/' + share_id + '/?dashboardId=' + quote(board) + '#feedback=' + token,
+                'canAnnotate': False, 'expiresAt': expiry}
+
+    async def publication_feedback(request: Request):
+        """Open feedback against its published copy, even if the draft changed."""
+        try:
+            project, share_id = request.path_params['project'], request.path_params['share_id']
+            principal = await asyncio.to_thread(server.principal, bearer(request), project)
+            if principal is None:
+                raise DashboardError('UNAUTHORIZED', '访问令牌失效', 401)
+            if principal.access != 'edit':
+                raise DashboardError('FORBIDDEN', 'Only the author can open share feedback', 403)
+            board = request.query_params.get('dashboardId') or principal.dashboard
+            require(isinstance(board, str), 'dashboardId is required', 'INVALID_ARGUMENT')
+            if principal.dashboard and board not in principal.dashboards:
+                raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
+            def read():
+                shares = server.cloud_shares
+                require(shares is not None, 'Share service is not configured', 'CLOUD_SHARE_NOT_CONFIGURED')
+                service = server.projects.service(project)
+                listed = shares.status(service, board, share_id)['shares']
+                require(any(item['shareId'] == share_id for item in listed), 'Share belongs to another project', 'FORBIDDEN')
+                return feedback_result(shares, share_id, board)
+            return JSONResponse(await asyncio.to_thread(read), headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
+        except Exception as error:  # noqa: BLE001
+            return failure(error)
+
+    def publication_source(project, source):
+        project = server.projects.name(project)
+        require(isinstance(source, str) and re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', source),
+                'A stable local project UUID is required', 'INVALID_ARGUMENT')
+        return hashlib.sha256(('local-publication:' + project + ':' + source).encode()).hexdigest()
+
+    async def publications(request: Request):
+        """Import one saved static copy into the already configured share service.
+
+        The author credential remains in the local process. A local project is
+        identified independently of any remote workspace project or path.
+        """
+        try:
+            if not (settings.insecure_no_auth or server.admin(bearer(request))):
+                raise DashboardError('UNAUTHORIZED', '访问令牌无效', 401)
+            shares = server.cloud_shares
+            require(shares is not None, 'Share service is not configured', 'CLOUD_SHARE_NOT_CONFIGURED')
+            if request.method == 'POST':
+                source_key = publication_source(request.headers.get('x-charts-project'), request.headers.get('x-charts-source'))
+                if request.headers.get('content-type', '').split(';')[0].strip() != 'application/zip':
+                    raise DashboardError('CONTENT_TYPE', 'Use application/zip', 415)
+                limit = 256 * 1024 * 1024
+                declared = request.headers.get('content-length')
+                if declared is not None and (not declared.isdigit() or int(declared) > limit):
+                    raise DashboardError('PAYLOAD_TOO_LARGE', 'Share archive exceeds 256 MiB', 413)
+                with tempfile.TemporaryFile() as archive:
+                    size = 0
+                    async for chunk in request.stream():
+                        size += len(chunk)
+                        if size > limit:
+                            raise DashboardError('PAYLOAD_TOO_LARGE', 'Share archive exceeds 256 MiB', 413)
+                        archive.write(chunk)
+                    archive.seek(0)
+                    result = await asyncio.to_thread(shares.import_site, archive, source_key,
+                        request.headers.get('x-charts-request'),
+                        annotation_mode=request.headers.get('x-charts-annotation-mode', 'view'),
+                        expiration=request.headers.get('x-charts-expiration', '7d'), secret=settings.secret)
+            else:
+                source_key = publication_source(request.query_params.get('project'), request.query_params.get('source'))
+                share_id = request.path_params['share_id']
+                def access():
+                    control = shares.owner_control(share_id, source_key)
+                    if request.method == 'DELETE':
+                        return shares.revoke_owner(share_id, source_key)
+                    board = request.query_params.get('dashboardId') or control['dashboardId']
+                    return feedback_result(shares, share_id, board)
+                result = await asyncio.to_thread(access)
+            return JSONResponse(result, headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
         except Exception as error:  # noqa: BLE001
             return failure(error)
 
@@ -795,7 +927,17 @@ def create_app(server: RemoteServer):
                     ('<a class="retry" href="' + html.escape(path, quote=True) + '">重新打开分享</a>' if status == 403 else '') +
                     '<p class="footer">Charts Design · 私密分享</p></section></main>'
                     '<script nonce="' + nonce + '">' + """
-                const key = new URLSearchParams(location.hash.slice(1)).get('key');
+                const parameters = new URLSearchParams(location.hash.slice(1));
+                const feedback = parameters.get('feedback');
+                const key = parameters.get('key');
+                if (feedback) {
+                    history.replaceState(null, '', location.pathname + location.search);
+                    const form = document.querySelector('form');
+                    const input = document.createElement('input');
+                    input.type = 'hidden'; input.name = 'feedbackToken'; input.value = feedback;
+                    form.appendChild(input); document.getElementById('access-key').disabled = true;
+                    form.submit();
+                }
                 if (key !== null) {
                     history.replaceState(null, '', location.pathname + location.search);
                     if (/^[0-9]{8}$/.test(key)) {
@@ -829,13 +971,26 @@ def create_app(server: RemoteServer):
                 require(origin is None or origin == public.scheme + '://' + public.netloc,
                         'Invalid form origin', 'FORBIDDEN')
                 peer = request.client.host if request.client else 'unknown'
-                server.cloud_key_attempt(share_id, peer)
-                body = await read_body(request, 1024)
+                body = await read_body(request, 4096)
                 values = parse_qs(body.decode('utf-8'), max_num_fields=4)
-                await asyncio.to_thread(shares.authenticate, share_id, values.get('accessKey', [''])[0])
+                feedback_token = values.get('feedbackToken', [''])[0]
+                feedback = server.signer.verify(feedback_token, 'share-feedback') if feedback_token else None
+                if feedback_token:
+                    require(feedback is not None and feedback.get('shareId') == share_id,
+                            '反馈访问链接已失效', 'INVALID_ACCESS_KEY')
+                    require(feedback.get('dashboardId', control['dashboardId']) in
+                            {page['id'] for page in control.get('pages', [])},
+                            '反馈链接不包含该页面', 'FORBIDDEN')
+                else:
+                    server.cloud_key_attempt(share_id, peer)
+                    await asyncio.to_thread(shares.authenticate, share_id, values.get('accessKey', [''])[0])
                 expiry = min(int(time.time()) + 12 * 3600, control['expiresAt'] or int(time.time()) + 12 * 3600)
-                token = server.signer.sign({'k': 'cloud-share', 'shareId': share_id, 'exp': expiry})
-                response = RedirectResponse(path, status_code=303,
+                if feedback:
+                    expiry = min(expiry, feedback['exp'])
+                token = server.signer.sign({'k': 'cloud-share', 'shareId': share_id, 'exp': expiry,
+                                            'feedback': bool(feedback)})
+                redirect = path + '?dashboardId=' + quote(feedback.get('dashboardId', control['dashboardId'])) if feedback else path
+                response = RedirectResponse(redirect, status_code=303,
                                             headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store'})
                 response.set_cookie(cookie, token, max_age=max(0, expiry - int(time.time())),
                                     path=path, secure=True, httponly=True, samesite='strict')
@@ -847,9 +1002,32 @@ def create_app(server: RemoteServer):
                 require(name == 'index.html', '请先输入访问密钥', 'INVALID_ACCESS_KEY')
                 return access_form(path)
             raw = await asyncio.to_thread(shares.content, share_id, name, control=control)
+            if name == 'index.html':
+                # An explicit access fragment must replace an existing session,
+                # too. Otherwise a reader cookie could bypass feedback read-only
+                # mode, or a feedback cookie could mask a fresh visitor key.
+                access_path = json.dumps(path).replace('<', '\\u003c')
+                entry = ('<script id="charts-share-entry">(() => {'
+                    'const params=new URLSearchParams(location.hash.slice(1));'
+                    'const field=params.has("feedback")?"feedbackToken":params.has("key")?"accessKey":null;'
+                    'if(field){const value=params.get(field==="feedbackToken"?"feedback":"key");'
+                    'history.replaceState(null,"",location.pathname+location.search);'
+                    'const form=document.createElement("form");form.method="post";form.action=' + access_path + ';'
+                    'const input=document.createElement("input");input.type="hidden";input.name=field;input.value=value;'
+                    'form.appendChild(input);document.body.appendChild(form);form.submit();return;}'
+                    'const app=document.createElement("script");app.src="app.js";document.body.appendChild(app);'
+                    '})();</script>')
+                raw = raw.replace(b'<script src="app.js"></script>', entry.encode())
+            if session.get('feedback') and name in {page['path'] for page in control.get('pages', [])}:
+                document = json.loads(raw)
+                if 'annotationAccess' in document:
+                    document['annotationAccess']['canAnnotate'] = False
+                document['annotationsOpen'] = True
+                raw = json.dumps(document, ensure_ascii=False, allow_nan=False).encode()
             kind = 'application/gzip' if name.endswith('.gz') else mimetypes.guess_type(name)[0] or 'application/octet-stream'
             return compressed(request, raw, kind, {
                 'Cache-Control': 'private, no-store, max-age=0',
+                'Referrer-Policy': 'same-origin' if name == 'index.html' else 'no-referrer',
                 # Custom HTML retains its existing opaque iframe sandbox and
                 # child CSP, including explicitly supported HTTPS resources.
                 'Content-Security-Policy': "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
@@ -863,6 +1041,50 @@ def create_app(server: RemoteServer):
                 return access_form(base + '/s/' + request.path_params['share_id'] + '/', message, status)
             return JSONResponse(error.as_dict(), status_code=status,
                                 headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store'})
+        except Exception as error:
+            return failure(error)
+
+    async def publication_annotations(request: Request):
+        from .cloud_shares import checked_id
+        try:
+            shares = server.cloud_shares
+            require(shares is not None, '分享服务尚未配置', 'CLOUD_SHARE_NOT_CONFIGURED')
+            share_id = checked_id(request.path_params['share_id'])
+            control = await asyncio.to_thread(shares.control, share_id)
+            session = server.signer.verify(request.cookies.get('charts-share-' + share_id), 'cloud-share')
+            require(session is not None and session.get('shareId') == share_id,
+                    '请先输入访问密钥', 'INVALID_ACCESS_KEY')
+            if request.method == 'GET':
+                result = await asyncio.to_thread(shares.annotations, share_id, request.query_params.get('dashboardId'))
+                requested_revision = request.query_params.get('revision')
+                require(requested_revision is None or requested_revision == str(result['revision']),
+                        '批注读取版本不匹配', 'REVISION_CONFLICT')
+                if session.get('feedback'):
+                    result['canAnnotate'] = False
+            else:
+                require(not session.get('feedback'), '反馈查看链接仅允许读取', 'FORBIDDEN')
+                public = urlparse(settings.public_url)
+                require(request.headers.get('origin') in (None, public.scheme + '://' + public.netloc),
+                        'Invalid request origin', 'FORBIDDEN')
+                require(request.headers.get('content-type', '').split(';')[0].strip() == 'application/json',
+                        'Use application/json', 'INVALID_ARGUMENT')
+                body = json.loads(await read_body(request, 40 * 1024))
+                require(isinstance(body, dict) and not set(body) - {'dashboardId', 'append', 'authorName', 'revision'},
+                        'Invalid annotation request', 'INVALID_ARGUMENT')
+                page = shares.publication_page(share_id, body.get('dashboardId'), control=control)
+                require('revision' not in body or type(body['revision']) is int and body['revision'] == page['revision'],
+                        '批注提交版本不匹配', 'REVISION_CONFLICT')
+                result = await asyncio.to_thread(shares.append_annotation, share_id, body.get('dashboardId'),
+                                                 body.get('append'), body.get('authorName'))
+            return JSONResponse(result, headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
+        except DashboardError as error:
+            status = {'INVALID_ACCESS_KEY': 401, 'FORBIDDEN': 403, 'ANNOTATION_CONFLICT': 409,
+                      'REVISION_CONFLICT': 409, 'SHARE_EXPIRED': 410, 'SHARE_UNAVAILABLE': 410,
+                      'ANNOTATION_LIMIT': 409}.get(error.code, error.status)
+            return JSONResponse(error.as_dict(), status_code=status,
+                                headers={**SECURITY_HEADERS, 'Cache-Control': 'no-store'})
+        except (ValueError, UnicodeError):
+            return failure(DashboardError('INVALID_ARGUMENT', 'Invalid annotation JSON', 400))
         except Exception as error:
             return failure(error)
 
@@ -881,11 +1103,16 @@ def create_app(server: RemoteServer):
         Route('/view/{project}/{dashboard}', viewer, methods=['GET']),
         Route('/edit/{project}/{dashboard}', viewer, methods=['GET']),
         Route('/api/v1/p/{project}/tools/{name}', tool, methods=['POST']),
+        Route('/api/v1/p/{project}/annotations/{dashboard}', annotations, methods=['GET', 'POST']),
+        Route('/api/v1/p/{project}/publications/{share_id}/feedback', publication_feedback, methods=['GET']),
         Route('/api/v1/p/{project}/content/{dashboard}/{revision}/{object}/{name}', content, methods=['GET']),
         Route('/api/v1/catalog', admin_catalog, methods=['POST']),
         Route('/api/v1/share', admin_share, methods=['POST']),
+        Route('/api/v1/publications', publications, methods=['POST']),
+        Route('/api/v1/publications/{share_id}', publications, methods=['GET', 'DELETE']),
         Route('/files/{token}', download, methods=['GET']),
         Route('/s/{share_id}/', cloud_publication, methods=['GET', 'POST']),
+        Route('/s/{share_id}/api/annotations', publication_annotations, methods=['GET', 'POST']),
         Route('/s/{share_id}/{name:path}', cloud_publication, methods=['GET']),
         Route('/mcp', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
         Route('/mcp/{secret}', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),

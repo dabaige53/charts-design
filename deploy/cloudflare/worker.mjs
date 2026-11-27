@@ -55,7 +55,10 @@ export class ChartsWorkspace extends DurableObject {
       url.protocol = "http:";
       const forwarded = new Request(url, request);
       const response = await container.getTcpPort(8000).fetch(new Request(forwarded, { redirect: "manual" }));
-      if (["POST", "DELETE"].includes(request.method) && !path.startsWith("/s/") && response.ok) {
+      const annotationWrite = request.method === "POST" && path.match(/^\/s\/([0-9a-f]{32})\/api\/annotations$/);
+      if (annotationWrite && response.ok) {
+        await this.checkpoint.saveAnnotations(container, annotationWrite[1]);
+      } else if (["POST", "DELETE"].includes(request.method) && !path.startsWith("/s/") && response.ok) {
         await this.checkpoint.save(container);
       }
       return response;

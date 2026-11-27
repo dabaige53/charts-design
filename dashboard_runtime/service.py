@@ -178,6 +178,10 @@ class Service:
         except ValidationError as error:
             raise DashboardError('INVALID_ARGUMENT', error.message) from error
         require(self.project_root is not None, 'Publish requires a project', 'PROJECT_REQUIRED')
+        from .cloud_database import cloud_enabled
+        from .local_shares import LocalShares
+        if args.get('share') is not None and not cloud_enabled() and LocalShares.configured(self):
+            return LocalShares(self).publish_request(args)
         board = args['dashboardId']
         versions = Versions(self.store)
         status = versions.status(board)
@@ -221,7 +225,8 @@ class Service:
         if prepared_share is not None:
             shares, expiration, access_key, share_id, storage_errors = prepared_share
             try:
-                result['share'] = shares.publish(self, board, revision, expiration, access_key, share_id=share_id)
+                result['share'] = shares.publish(self, board, revision, expiration, access_key, share_id=share_id,
+                                                annotation_mode=share_options.get('annotationMode', 'view'))
             except DashboardError as error:
                 result['shareError'] = error.as_dict()['error']
             except storage_errors:
@@ -313,6 +318,18 @@ class Service:
             except (CosClientError, CosServiceError) as error:
                 raise DashboardError('CLOUD_STORAGE_FAILED', 'Transfer storage request failed; check the configured COS permissions.', 503) from error
         if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
+            from .local_shares import LocalShares
+            if LocalShares.configured(self):
+                shares = LocalShares(self)
+                if tool == 'dashboard_share_publish':
+                    return shares.publish(board, args['expectedRevision'], args.get('expiration', '7d'),
+                                          args.get('accessKey'), args.get('pages'),
+                                          annotation_mode=args.get('annotationMode', 'view'), request_id=args.get('requestId'))
+                if tool == 'dashboard_share_replace':
+                    return shares.replace(board, args['shareId'], args['expectedRevision'], args.get('expiration', '7d'))
+                if tool == 'dashboard_share_status':
+                    return shares.status(board, args.get('shareId'))
+                return shares.revoke(board, args.get('shareId'))
             from .cloud_shares import CloudShares
             shares = CloudShares.from_environment()
             storage_errors = (OSError,)
@@ -321,8 +338,24 @@ class Service:
                 storage_errors = (CosClientError, CosServiceError)
             try:
                 if tool == 'dashboard_share_publish':
+                    share_id, access_key = None, args.get('accessKey')
+                    if args.get('requestId'):
+                        from jsonschema import ValidationError, validate as validate_schema
+                        try:
+                            validate_schema(args, TOOLS[tool][1])
+                        except ValidationError as error:
+                            raise DashboardError('INVALID_ARGUMENT', error.message) from error
+                        identity = {**args, 'revision': args['expectedRevision'],
+                                    'share': {'requestId': args['requestId'],
+                                              'annotationMode': args.get('annotationMode', 'view')}}
+                        share_id, generated_key = shares.quick_identity(self, board, identity, args.get('expiration', '7d'))
+                        access_key = access_key or generated_key
+                        previous = shares.quick_result(share_id, access_key, args.get('expiration', '7d'))
+                        if previous is not None:
+                            return previous
                     return shares.publish(self, board, args['expectedRevision'],
-                                          args.get('expiration', '7d'), args.get('accessKey'), args.get('pages'))
+                                          args.get('expiration', '7d'), access_key, args.get('pages'), share_id=share_id,
+                                          annotation_mode=args.get('annotationMode', 'view'))
                 if tool == 'dashboard_share_replace':
                     return shares.replace(self, board, args['shareId'], args['expectedRevision'],
                                           args.get('expiration', '7d'))

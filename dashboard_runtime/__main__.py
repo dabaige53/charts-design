@@ -49,6 +49,8 @@ def parser():
     restore.add_argument("--revision", type=int, required=True)
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--dashboard", help="Open one existing dashboard; prints its local edit and preview URLs")
+    serve.add_argument("--view", action="store_true", help="Use the saved-version preview URL as the primary URL")
     serve.add_argument(
         "--idle-timeout",
         type=float,
@@ -235,14 +237,21 @@ def main(argv=None):
             from .http_server import RuntimeHTTPServer
             from .assets import render_html
 
+            if args.view and not args.dashboard:
+                raise DashboardError('INVALID_ARGUMENT', 'Choose --dashboard when opening a saved-version --view')
+            if args.dashboard:
+                service.store.revision(args.dashboard)
             render_html("web")
             server = RuntimeHTTPServer(
                 service, args.port, idle_timeout=args.idle_timeout
             )
+            links = server.browser_links(args.dashboard) if args.dashboard else {}
             print(
                 json.dumps(
                     {
-                        "url": f"http://127.0.0.1:{server.server_address[1]}/#token={server.token}",
+                        "url": links.get('viewUrl' if args.view else 'editUrl') or
+                               f"http://127.0.0.1:{server.server_address[1]}/#token={server.token}",
+                        **links,
                         "mode": "local-only",
                     }
                 ),

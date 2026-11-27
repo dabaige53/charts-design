@@ -2,11 +2,18 @@ const routes = [
   ["GET", /^\/$/],
   ["GET", /^\/(?:view|edit)\/[^/]+\/[^/]+$/],
   ["POST", /^\/api\/v1\/p\/[^/]+\/tools\/[a-z_0-9]+$/],
+  ["GET", /^\/api\/v1\/p\/[^/]+\/annotations\/[^/]+$/],
+  ["POST", /^\/api\/v1\/p\/[^/]+\/annotations\/[^/]+$/],
+  ["GET", /^\/api\/v1\/p\/[^/]+\/publications\/[0-9a-f]{32}\/feedback$/],
+  ["POST", /^\/api\/v1\/publications$/],
+  ["GET", /^\/api\/v1\/publications\/[0-9a-f]{32}$/],
+  ["DELETE", /^\/api\/v1\/publications\/[0-9a-f]{32}$/],
   ["GET", /^\/api\/v1\/p\/[^/]+\/content\/[^/]+\/[^/]+\/[^/]+\/[^/]+$/],
   ["POST", /^\/api\/v1\/(?:catalog|share)$/],
   ["GET", /^\/files\/[^/]+$/],
   ["GET", /^\/s\/[^/]+\/.*$/],
   ["POST", /^\/s\/[^/]+\/$/],
+  ["POST", /^\/s\/[0-9a-f]{32}\/api\/annotations$/],
   ["GET", /^\/health$/],
 ];
 

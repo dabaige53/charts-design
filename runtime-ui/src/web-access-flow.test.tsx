@@ -6,7 +6,11 @@ const originalFetch = globalThis.fetch;
 const originalBoot = window.__chartsBoot;
 const webGlobals = ["location", "history", "sessionStorage"] as const;
 const originalGlobals = webGlobals.map(key => Object.getOwnPropertyDescriptor(globalThis, key));
+let applicationRoot: { unmount: () => void } | undefined;
 afterEach(() => {
+  act(() => applicationRoot?.unmount());
+  applicationRoot = undefined;
+  document.body.innerHTML = "";
   globalThis.fetch = originalFetch;
   window.__chartsBoot = originalBoot;
   window.sessionStorage.clear();
@@ -17,7 +21,7 @@ afterEach(() => {
   });
 });
 
-// @wu-test type=integration | scope=在线访问令牌恢复 | protects=跳转丢失令牌后无法通过完整链接加载看板
+// @wu-test type=integration | scope=在线访问令牌恢复 | protects=跳转丢失令牌后无法加载看板，页面卸载后监听器和请求污染后续页面
 it("retries dashboard loading with the pasted token after unauthorized", async () => {
   for (const key of webGlobals)
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: window[key] });
@@ -38,7 +42,7 @@ it("retries dashboard loading with the pasted token after unauthorized", async (
       : { document: dashboard, projectRoot: "test" });
   });
   globalThis.fetch = fetchMock as unknown as typeof fetch;
-  await act(async () => { await import("./main"); });
+  await act(async () => { applicationRoot = (await import("./main")).applicationRoot; });
   const input = await screen.findByLabelText("完整在线访问链接");
   fireEvent.change(input, { target: { value: `${window.location.origin}${window.location.pathname}#token=restored-token` } });
   fireEvent.click(screen.getByRole("button", { name: "打开看板" }));

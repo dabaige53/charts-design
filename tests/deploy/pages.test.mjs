@@ -86,3 +86,29 @@ test("share redirects and cookies are returned without following redirects", asy
     assert.match(response.headers.get("set-cookie"), /charts-share-abc=secret/);
   } finally { globalThis.fetch = original; }
 });
+
+// @wu-test type=boundary | scope=Pages publication annotation gateway | protects=批注和本机发布被静态代理拦截或意外开放任意分享写接口
+test("annotation and author publication routes reach the existing origin", async () => {
+  const original = globalThis.fetch;
+  const forwarded = [];
+  globalThis.fetch = async request => { forwarded.push(request); return new Response("ok"); };
+  const share = "a".repeat(32);
+  try {
+    for (const [method, path] of [
+      ["POST", `/s/${share}/api/annotations`],
+      ["GET", `/s/${share}/api/annotations?dashboardId=board`],
+      ["GET", "/api/v1/p/demo/annotations/board"],
+      ["POST", "/api/v1/p/demo/annotations/board"],
+      ["POST", "/api/v1/publications"],
+      ["GET", `/api/v1/publications/${share}`],
+      ["DELETE", `/api/v1/publications/${share}`],
+      ["GET", `/api/v1/p/demo/publications/${share}/feedback`],
+    ]) {
+      const response = await worker.fetch(new Request(`https://pages.example${path}`, { method }), env);
+      assert.equal(response.status, 200, path);
+      assert.equal(forwarded.at(-1).url, `https://backend.example${path}`);
+    }
+    assert.equal((await worker.fetch(new Request(`https://pages.example/s/${share}/api/edit`, { method: "POST" }), env)).status, 404);
+    assert.equal((await worker.fetch(new Request("https://pages.example/api/v1/publications/not-a-share", { method: "DELETE" }), env)).status, 404);
+  } finally { globalThis.fetch = original; }
+});

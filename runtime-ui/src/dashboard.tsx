@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RefreshCw,
   Pencil,
@@ -13,6 +13,7 @@ import {
   RotateCcw,
   MessageSquareText,
   MousePointer2,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFullscreenElement } from "./fullscreen";
@@ -43,9 +44,10 @@ import { FilterParameters } from "./filter-parameters";
 import { browserDownload, deliverExport, type Download } from "./host";
 import { RecoveryAlert } from "./recovery-alert";
 import { PositionComments } from "./position-comments";
+import { createAnnotationClient } from "./annotation-client";
 import { VersionCenter } from "./version-center";
 import { useVisibleVersionCheck } from "./resource-refresh";
-import type { Config, Document, Filter, Position, ToolCall } from "./types";
+import type { AnnotationAccess, Config, Document, Filter, Position, ToolCall } from "./types";
 function VisibleComponent({
   id,
   onVisible,
@@ -87,6 +89,14 @@ export function DashboardApp({
   buildId,
   primaryFilterIds,
   projectRoot,
+  annotationAccess: providedAnnotationAccess,
+  annotationCall,
+  annotationHeaders,
+  browserAnnotationUrl,
+  annotationsInitiallyOpen = false,
+  publicationApiBase,
+  browserWorkspaceUrl,
+  onOpenBrowser,
 }: {
   initial: Document;
   call: ToolCall;
@@ -98,19 +108,43 @@ export function DashboardApp({
   buildId?: string;
   primaryFilterIds?: string[];
   projectRoot?: string | null;
+  annotationAccess?: AnnotationAccess;
+  annotationCall?: ToolCall;
+  annotationHeaders?: () => Record<string, string>;
+  browserAnnotationUrl?: string;
+  annotationsInitiallyOpen?: boolean;
+  publicationApiBase?: string;
+  browserWorkspaceUrl?: string;
+  onOpenBrowser?: (url: string) => Promise<void>;
 }) {
   const runtime = useDashboardRuntime(initial, call),
     doc = runtime.document;
   const fullscreenElement = useFullscreenElement();
   const isPageFullscreen = pageFullscreen || fullscreenElement === document.documentElement;
   const editUnavailable = "此链接为查看预览，请使用编辑预览链接操作";
+  const baseAnnotationAccess = providedAnnotationAccess || doc.annotationAccess;
+  const accessKey = JSON.stringify([baseAnnotationAccess?.scope, baseAnnotationAccess?.endpoint, doc.id]);
+  const [negotiatedAccess, setNegotiatedAccess] = useState<{ key: string; value: Partial<AnnotationAccess> } | null>(null);
+  const annotationAccess = useMemo(() => baseAnnotationAccess ? {
+    ...baseAnnotationAccess, ...(negotiatedAccess?.key === accessKey ? negotiatedAccess.value : {}),
+  } : undefined, [baseAnnotationAccess, negotiatedAccess, accessKey]);
+  const onAnnotationCapabilities = useCallback((value: Partial<AnnotationAccess>) => {
+    setNegotiatedAccess(current => current?.key === accessKey && JSON.stringify(current.value) === JSON.stringify(value)
+      ? current : { key: accessKey, value });
+  }, [accessKey]);
+  const canReadAnnotations = annotationAccess?.canRead ?? !staticMode;
+  const canAnnotate = annotationAccess?.canAnnotate ?? (!readOnly && !staticMode);
+  const canManageAnnotations = annotationAccess?.canManageAnnotations ?? (!readOnly && !staticMode);
+  const notesCall = useMemo(() => annotationCall || (annotationAccess?.endpoint
+    ? createAnnotationClient(annotationAccess, () => doc.revision, annotationHeaders)
+    : call), [annotationCall, annotationAccess, annotationHeaders, doc.revision, call]);
   const [editing, setEditing] = useState(false),
     [title, setTitle] = useState(initial.manifest.title),
     [boards, setBoards] = useState<Config[]>([]),
     [versionsOpen, setVersionsOpen] = useState(false),
     [versionSwitchOpen, setVersionSwitchOpen] = useState(false),
     [switchingId, setSwitchingId] = useState<string | null>(null),
-    [notesOpen, setNotesOpen] = useState(false),
+    [notesOpen, setNotesOpen] = useState(annotationsInitiallyOpen),
     [annotationBusy, setAnnotationBusy] = useState(false),
     [layoutKey, setLayoutKey] = useState(0);
   const annotationRoot = useRef<HTMLDivElement>(null);
@@ -300,6 +334,7 @@ export function DashboardApp({
                 {doc.manifest.meta.subtitle}
               </p>
             )}
+            {doc.publication && <p className="mt-1 text-xs text-muted-foreground">分享版本 {doc.publication.revision}</p>}
           </div>
         </div>
         <div data-annotation-ui role="group" aria-label="看板操作" className="screen-only flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>[data-slot=field]]:basis-full">
@@ -344,18 +379,23 @@ export function DashboardApp({
           <IconAction label={isPageFullscreen ? "退出页面全屏" : "页面全屏"} onClick={onFullscreen} pressed={isPageFullscreen}>
             {isPageFullscreen ? <Minimize2 /> : <Maximize2 />}
           </IconAction>
-          {(
+          {canReadAnnotations && (
             <IconAction
-              label={notesOpen ? "退出位置批注" : readOnly ? "查看批注" : "添加位置批注"}
+              label={notesOpen ? "退出位置批注" : canAnnotate ? "添加位置批注" : "查看批注"}
               pressed={notesOpen}
               variant={notesOpen ? "default" : "ghost"}
-              disabled={staticMode || editing || runtime.saving}
-              unavailable={staticMode ? editUnavailable : "请先完成当前编辑"}
+              disabled={editing || runtime.saving}
+              unavailable="请先完成当前编辑"
               onClick={() => setNotesOpen((value) => !value)}
             >
-              {notesOpen && !readOnly ? <MousePointer2 /> : <MessageSquareText />}
+              {notesOpen && canAnnotate ? <MousePointer2 /> : <MessageSquareText />}
             </IconAction>
           )}
+          {browserAnnotationUrl && !canReadAnnotations && <IconAction label="在浏览器中批注"
+            onClick={() => onOpenBrowser ? guard(() => onOpenBrowser(browserAnnotationUrl))
+              : window.open(browserAnnotationUrl, "_blank", "noopener,noreferrer")}>
+            <ExternalLink />
+          </IconAction>}
           {(
             <IconAction
               label="版本与分享"
@@ -495,16 +535,21 @@ export function DashboardApp({
           </Empty>
         )}
       </main>
-      {!staticMode && !editing && (
+      {canReadAnnotations && !editing && (
         <PositionComments
-          key={JSON.stringify([projectRoot, doc.id])}
+          key={JSON.stringify([annotationAccess?.scope || projectRoot, doc.id])}
           document={doc}
           root={annotationRoot}
           active={notesOpen}
           onActiveChange={setNotesOpen}
           onActivityChange={setAnnotationBusy}
-          call={call}
-          readOnly={readOnly}
+          call={notesCall}
+          readOnly={!canAnnotate}
+          canManage={canManageAnnotations}
+          author={annotationAccess?.author}
+          scope={annotationAccess?.scope}
+          initiallyListOpen={annotationsInitiallyOpen}
+          onCapabilitiesChange={onAnnotationCapabilities}
           filters={runtime.view.filters}
           projectRoot={projectRoot}
           onNotesChange={runtime.setAnnotations}
@@ -515,6 +560,11 @@ export function DashboardApp({
         onOpenChange={setVersionsOpen}
         document={doc}
         call={call}
+        publicationApiBase={publicationApiBase}
+        requestHeaders={annotationHeaders}
+        browserWorkspaceUrl={browserWorkspaceUrl}
+        onOpenBrowser={onOpenBrowser}
+        shareScope={projectRoot}
         onSaved={async () => {
           const result = await call("dashboard_get", { dashboardId: doc.id });
           runtime.accept(result.document);

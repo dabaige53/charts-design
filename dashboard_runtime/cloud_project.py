@@ -147,10 +147,13 @@ class CloudProjectStore(Store):
         saved = self.database.call('commit', self.project, document=stored, **args)
         return {'dashboardId': board, 'revision': saved['revision'], 'annotations': saved['manifest']['annotations']}
 
-    def append_annotation(self, board, note):
+    def append_annotation(self, board, note, *, context_document=None):
         identifier(board)
         validate_annotations([note])
-        if self.database.backend == 'neon':
+        if context_document is not None:
+            require(context_document['id'] == board, 'Annotation context belongs to another dashboard', 'INVALID_ARGUMENT')
+            validate_annotations([note], context_document['manifest'].get('components'))
+        if self.database.backend == 'neon' and context_document is None:
             result = self.database.call('annotation_append', self.project, board=board, note=note, at=utcnow())
             limit = result.pop('limitReached')
             require(result['annotation'] is not None,
@@ -165,8 +168,8 @@ class CloudProjectStore(Store):
             if existing is not None:
                 return {'dashboardId': board, 'revision': doc['revision'], 'annotation': existing}
             notes = [*previous, note]
-            validate_annotations(notes, manifest.get('components'))
-            self._note_context(doc, [note], [])
+            validate_annotations(notes, None if context_document is not None else manifest.get('components'))
+            self._note_context(context_document or doc, [note], [])
             manifest['annotations'] = notes
             try:
                 self.database.call('commit', self.project, board=board, expected=doc['revision'],
@@ -177,7 +180,8 @@ class CloudProjectStore(Store):
                 if attempt == 4:
                     raise DashboardError('ANNOTATION_SAVE_RETRY', '批注暂未保存，请重试。', 503) from None
             else:
-                return {'dashboardId': board, 'revision': doc['revision'], 'annotation': note}
+                return {'dashboardId': board, 'revision': doc['revision'], 'annotation': note,
+                        'independentSave': True}
 
     @staticmethod
     def _note_context(doc, notes, previous, preserve_incoming=False):

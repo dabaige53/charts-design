@@ -8,12 +8,14 @@
 | --- | --- | --- |
 | `/mcp` | Streamable HTTP MCP 端点，供 Claude Code、Claude Desktop、IDE 等客户端连接 | `Authorization: Bearer <服务器令牌>` |
 | `/mcp/<令牌>` | 同上，供无法设置请求头的客户端使用 | 路径中的服务器令牌 |
-| `/view/<项目>/<看板>` | 只读预览：看板网格或学术单栏报告 | URL 片段 `#token=` 中的签名分享令牌 |
+| `/view/<项目>/<看板>` | 内容只读预览；能否新增批注由独立权限决定 | URL 片段 `#token=` 中的签名分享令牌 |
 | `/edit/<项目>/<看板>` | 浏览器编辑：拖动与缩放布局、修改标题、版本历史 | 编辑权限的签名分享令牌 |
 | `/` | 默认项目预览入口；跨项目管理通过 API／CLI | 服务器令牌（只保存在当前标签页） |
 | `/files/<令牌>` | 导出文件下载（JSON、CSV、HTML、静态 ZIP） | 24 小时有效的签名链接 |
 | `/health` | 存活检查，返回版本 | 无 |
 | `/s/<shareId>/` 及其资源 | 所选平台上的独立只读副本 | 8 位数字密钥与受限会话 |
+| `/api/v1/p/<项目>/annotations/<看板>` | 工作区批注读取、追加；管理操作仅限作者 | 同一工作区签名令牌，独立校验批注能力 |
+| `/s/<shareId>/api/annotations` | 对应固定分享版本的位置批注 | 该分享的有效会话及批注权限 |
 
 页面外壳不含业务数据；数据只经由带令牌的接口读取。分享令牌放在 URL 片段中，浏览器不会把片段发送给服务器、代理或 Referer；页面加载后从地址栏移除，只保留在当前标签页的 sessionStorage。
 
@@ -102,9 +104,9 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | 在线编辑链接 | `dashboard_share`，`access=edit` | 同一服务端项目；支持网页提供的编辑、版本管理和恢复 | 同在线只读链接，权限包含网页支持的编辑操作 |
 | 独立分享链接 | 正式发布后调用 `dashboard_share_publish` | 副本保留发布时的网页和数据；保存在腾讯云私有 COS 或 Cloudflare 私有工作区，不跟随原项目更新 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
 
-`dashboard_preview` 在支持 MCP Apps 的宿主中打开已保存检查点；需要浏览器链接时使用 `dashboard_share`。
+`dashboard_preview` 在支持 MCP Apps 的宿主中打开已保存检查点。远程工作区需要浏览器链接时使用 `dashboard_share`；本机 stdio 的预览回执另提供 `browserLinks`，可直接进入同进程提供的普通浏览器编辑和预览页。
 
-- `dashboard_share`：`access` 为 `view`（只读）或 `edit`，`expiresInHours` 为 1–8784 小时。
+- `dashboard_share`：`access` 为 `view`（内容只读）或 `edit`，`expiresInHours` 为 1–8784 小时。`view` 可显式设置 `annotationMode: "annotate"` 允许新增批注；默认 `view` 及没有此字段的旧签名令牌均不能写批注。
 - `dashboard_share_revoke`：使该看板此前签发的全部链接立即失效。
 - 命令行：`bun bin/python-runtime.js -m dashboard_runtime share <项目> <看板> --workspace ... --public-url ... [--access edit] [--hours 24]`，只需能读取签名密钥。
 - 管理入口 `/`：输入服务器令牌后列出项目与看板，点击生成 12 小时有效的预览或编辑链接。
@@ -113,6 +115,9 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | --- | --- |
 | 只读链接 | 阅读看板或报告、筛选、表格分页与搜索、图表切换为表、查看指标定义与来源、导出文件、查看已有批注 |
 | 编辑链接 | 另可拖动布局、修改标题与说明、编辑报告 Markdown、版本历史与恢复、运行诊断、生成网页部署包 |
+| 明确授予批注权限的只读链接 | 另可新增位置批注；不能修改布局、标题、数据定义或版本，也不能修改、删除他人批注 |
+
+浏览器的批注读写直接走 HTTP，不通过 MCP 工具调用。工作区批注写入原项目的独立批注状态，不生成内容版本；批注上下文依据当时实际展示的检查点，不能误用最新草稿的组件与版本。
 
 签名链接默认只包含签发时的看板；调用 `dashboard_share` 时可通过 `dashboardIds` 指定同一项目的其他页面。页面切换只列出获准页面，访问其他页面返回 403。撤销其中任一页面的签名分享会使包含它的链接失效。导入数据、执行查询、新建看板等操作只通过 MCP 完成。报告在浏览器中按学术单栏排版，图表滚动到可见区域时加载。
 
@@ -125,6 +130,51 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 - 查询能力仍只限运维方配置的只读 SQLite 别名；本地查询限制不是加固的多租户沙箱。
 - 本地模式的 SQLite 使用 WAL，应使用同一主机上的持久磁盘，不能通过网络文件系统共享工作区。CloudBase 模式已接入 PostgreSQL 持久状态和 COS 文件存储，并使用无状态 MCP 会话；SQLite 仅保留为可重建的数据查询缓存。配置与查询边界见[项目存储](../implementation/project-runtime.md#存储)。
 - 网页部署包（`dashboard_export_site`）仍是独立的只读静态站点，与本服务器互不依赖，见 [静态部署包](static-deployment.md)。
+
+## 本机通过分享服务发布
+
+本机项目继续保留本机的数据、编辑历史与私人批注。分享目标是已经部署、已授权的 Runtime 服务；每次只上传选定版本所需的独立网页数据，不创建新站点或应用，不将本机项目导入远程工作区。
+
+在启动本机 `serve` 或 stdio MCP 的进程环境中配置：
+
+| 环境变量 | 内容 |
+| --- | --- |
+| `CHARTS_SHARE_SERVICE_URL` | 既有分享服务的 HTTPS 根地址，可含原有路径前缀；仅本机验证允许 loopback HTTP |
+| `CHARTS_SHARE_SERVICE_TOKEN` | 该服务已有的服务器 Bearer 令牌；不是腾讯云或 Cloudflare 管理凭据，只留在本机进程 |
+| `CHARTS_SHARE_SERVICE_PROJECT` | 目标服务中的授权项目名，默认 `default`；用于发布归属，不迁移或同步同名项目 |
+
+使用本机入口打开项目，例如：
+
+```sh
+charts-design-runtime --project-root /absolute/path/project \
+  --runtime-root /absolute/path/runtime-cache serve --dashboard overview
+```
+
+1. 使用启动回执的 `editUrl` 编辑、保存；`viewUrl` 查看最新已保存版本并批注。MCP 宿主的 `dashboard_preview` 也返回这两个入口。
+2. 在编辑页的版本中心选择一个已保存版本，再选择「仅查看」或「可批注」，点击该版本的「分享此版本」。发布通过既有正式发布检查，回执包含独立 `accessUrl`；失败显示实际错误，不能把版本已发布误报为分享成功。
+3. 读者在分享链接查看、筛选、分页，并按授权新增批注。作者电脑可以关机；页面、数据和批注均由分享服务提供。
+4. 作者回到该项目的「版本与分享 → 分享」，在对应记录点击「查看读者批注」。每次打开或重新读取才向服务请求；反馈在原分享版本打开并定位，不合并到当前草稿。即使当前草稿移除组件，原分享中的锚点仍可读取。
+
+本机在 `dashboards/share-references.sqlite3` 保存来源标识、请求状态与分享引用，需随项目备份。没有双向同步、常驻同步进程或自动合并。前端对不确定的发布回执保留请求 ID；本机重试同一请求时复用已生成的 ZIP 与校验值。未完成请求所需的导出文件丢失时明确报错，不静默创建第二份分享。
+
+作者进程通过管理接口 `POST /api/v1/publications` 上传固定版本 ZIP；服务校验文件路径、版本与资源，使用服务器自己的 UI，仅发布包中使用的数据。`GET/DELETE /api/v1/publications/<shareId>` 校验服务令牌和来源归属，分别读取反馈、撤销分享。本机浏览器只访问本机代理 `/api/publications/<shareId>/feedback`；远程作者页面使用 `/api/v1/p/<项目>/publications/<shareId>/feedback`。浏览器不会得到服务 Bearer 或云管理令牌。
+
+反馈页采用 15 分钟的签名反馈链接，并再次检查分享有效性；只允许读取该分享的批注。已有访客会话打开反馈链接会切换为只读反馈会话，再打开原密钥链接会恢复该分享授予的权限。不是用户账户认证：读者显示为访客或未经验证的自填署名。
+
+### 各部署路径的持久化职责
+
+| 路径 | 固定版本、页面与查询数据 | 分享批注的写入与持久化 |
+| --- | --- | --- |
+| CloudBase + 私有 COS | 既有 HTTPS 网关鉴权；COS 保存独立副本及 Parquet 数据 | Runtime HTTP 接口调用 PostgreSQL `charts_share_annotations` RPC；按分享 ID、页面和发布版本独立保存 |
+| Cloudflare Worker + Container | Container 提供页面与数据；既有 Durable Object SQLite 工作区 checkpoint 跨冷启动恢复 | 每个分享独立 SQLite；每次成功批注在返回前只保存该 SQLite 的增量 checkpoint，不重新归档网页或 Parquet |
+| 独立服务器 / Neon + Cloudflare Pages | Pages 提供资源并代理 API；副本在后端私有持久卷 | Runtime HTTP 写入后端私有卷中的分享 SQLite；Pages 静态文件本身没有批注写入能力 |
+| 纯静态 ZIP | 包内页面与使用中的完整数据 | 无后端，不提供可提交状态 |
+
+CloudBase 启用可批注分享或本机发布桥前，需要由部署人员应用 `cloudbase/migrations/20261127010000_share_annotations.sql`，并更新网关；该迁移只新增分享批注存储与服务端 RPC，不迁移现有业务数据。缺少持久化能力会拒绝新请求。旧仅查看分享保持原行为，不会自动获得写权限。Cloudflare 需要同步更新 Worker 与 Container；Pages 路径需要更新代理和后端，不能只上传静态文件。
+
+新本机发布桥当前接受单个已保存看板或报告，使用服务生成的访问密钥；服务器工作区原有多页分享与自定义数字密钥继续保留。所有路径都沿用到期、撤销和清理机制。分享过期或撤销后，页面和批注的新读写均被拒绝；清理同时删除该分享的批注。历史部署状态与本轮实际验证范围见[本机与分享批注验证记录](../records/2026-11-27-local-sharing-annotations.md)。
+
+清理后只保留不含作者、密钥、页面、数据或批注的退役分享 ID，用来拒绝重放旧发布请求，防止原链接复活。发布的暂存占位与激活相互校验，未激活的中断请求可由既有清理任务回收；成功回执只能在固定副本和批注作用域均就绪后返回。
 
 ## 历史验收
 
@@ -185,7 +235,7 @@ Cloudflare 账号须能使用 Workers、Containers 和 SQLite Durable Objects。
 
 本地部署入口是 `bun run deploy:cloudflare`，需要可用的 Docker 构建器、已注入的 Cloudflare 账号和部署凭据，以及 Worker 的 `CHARTS_SERVER_TOKENS` secret。用 `--var "CHARTS_PUBLIC_URL:$CHARTS_PUBLIC_URL"` 指定已绑定的地址。不要删除或更名已投入使用的 Durable Object 命名空间或 `workspace` 实例；新实例不会继承原项目。
 
-此路径面向单工作区。请求按顺序执行；成功的 MCP POST、编辑请求和定时清理在返回前保存整个工作区。恢复或保存失败时请求失败，不以空工作区继续。归档大小会影响每次保存的耗时，暂存新归档时还需要容纳上一份归档；不提供跨实例横向写入。清理移除当前工作区中的副本，平台灾备保留期不等同于在线访问期。
+此路径面向单工作区。请求按顺序执行；成功的 MCP POST、编辑请求、发布和定时清理在返回前保存整个工作区。`/s/<shareId>/api/annotations` 的成功写入只保存该分享批注 SQLite 的增量归档，冷启动先恢复内容，再恢复批注增量；下一次完整 checkpoint 成功后原子清除已包含的增量。恢复或保存失败时请求失败，不以空工作区继续。归档大小会影响完整保存的耗时，暂存新归档时还需要容纳上一份归档；不提供跨实例横向写入。清理移除当前工作区中的副本，平台灾备保留期不等同于在线访问期。
 
 ## 按版本自动发布到 CloudBase
 
@@ -223,7 +273,7 @@ bun run release -- 1.2.1
 
 ## 腾讯云在线分享与云端清理
 
-状态：COS、HTTPS 网关和 SCF 已部署；目标清理周期为每 6 小时，部署前应先更新网关的清理状态检查，再更新云端触发器。候选版本的密钥访问与撤销已通过云端验收。部署与物理删除结果记录在[部署方案](../plans/cloud-hosting-and-version-control.md)。
+既有密钥分享的历史部署包含 COS、HTTPS 网关和 SCF，密钥访问与撤销的历史云端结果记录在[部署方案](../plans/cloud-hosting-and-version-control.md)。目标清理周期为每 6 小时，调整周期前应先更新网关的清理状态检查，再更新云端触发器。本轮新增的分享批注和本机发布桥尚未进行真实云部署验证，不能沿用历史结果宣称已上线，详见[本轮验证记录](../records/2026-11-27-local-sharing-annotations.md)。
 
 腾讯云分享保存一份独立、只读的看板或分析报告副本，也可以将同一项目中选定的多个页面打包到同一链接。网页、运行资源、使用中的完整数据集分片和访问控制记录保存在私有 COS。访客通过 HTTPS 网关访问，输入 8 位数字访问密钥后阅读；浏览器不会获得公开 COS 地址。
 
@@ -243,8 +293,10 @@ bun run release -- 1.2.1
 | `expiration` | `never` 不过期；`7d` 七天后过期，默认值；`30d` 三十天后过期。时间从发布时开始计算 |
 | `accessKey` | 可选，必须是 8 位 ASCII 数字字符串，可包含前导零；省略时随机生成 |
 | `expectedRevision` | 项目模式下必须等于当前正式发布版本，防止误分享未发布草稿 |
+| `annotationMode` | `view` 仅查看，默认值；`annotate` 允许新增批注。内容始终只读，旧分享不自动变更 |
+| `requestId` | 可选 UUID v4；同一次发布遇到不确定回执时沿用，避免重复创建 |
 
-返回 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。分享路径使用随机十六进制标识。
+返回 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`annotationMode`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。分享路径使用不透明十六进制标识。
 
 `url` 不含密钥；`accessUrl` 使用 `url#key=访问密钥`，浏览器读取片段后自动填入并从地址栏移除。片段不发送给服务器；表单仍通过 HTTPS POST 校验密钥。带密钥链接只在新建或替换分享时返回；COS 控制记录和状态接口只保留不含密钥的信息。已有 `url` 可由持有者在本机追加同样的片段使用。
 
@@ -264,6 +316,7 @@ bun run release -- 1.2.1
 | --- | --- |
 | HTTPS 网关 | 将现有自托管服务器部署在云端；提供 `/s/<shareId>/` 密钥表单、会话和逐文件鉴权。每次请求都检查到期时间 |
 | 私有 COS | 保存独立网页与数据；对象不公开，响应设置 `no-store` |
+| PostgreSQL 分享批注 RPC | 仅服务端可调用；校验分享版本、权限、过期、撤销与重复提交，独立保存批注，不生成内容版本 |
 | SCF 云函数 | 每 6 小时扫描清理任务；删除到期、撤销或中断上传的副本；删除失败保留任务并使函数调用失败，后续触发继续重试 |
 
 密钥会话使用 `Secure`、`HttpOnly`、`SameSite=Strict` Cookie。密钥输入有按分享和访客计数的尝试限制。网页资源、Worker 和数据分片均通过网关读取，不能绕过密钥直接访问。

@@ -110,7 +110,7 @@ class ProjectStore(Store):
         self._files(board, draft=False, history=False, checkpoints=())
         return {'dashboardId': board, 'revision': expected, 'annotations': notes}
 
-    def append_annotation(self, board, note):
+    def append_annotation(self, board, note, *, context_document=None):
         identifier(board)
         validate_annotations([note])
         with self.connect() as db:
@@ -120,8 +120,9 @@ class ProjectStore(Store):
             existing = next((item for item in previous if item['id'] == note['id']), None)
             if existing is None:
                 validate_annotations([*previous, note], state['components'])
-                doc = {'id': board, 'revision': state['revision'], 'manifest': {'filters': state['filters']},
-                       'snapshot': {'datasetRefs': state['datasetRefs']}}
+                doc = context_document or {'id': board, 'revision': state['revision'], 'manifest': {'filters': state['filters']},
+                                           'snapshot': {'datasetRefs': state['datasetRefs']}}
+                require(doc['id'] == board, 'Annotation context belongs to another dashboard', 'INVALID_ARGUMENT')
                 self._save_notes(db, doc, [*previous, note], previous)
         self._files(board, draft=False, history=False, checkpoints=())
         return {'dashboardId': board, 'revision': state['revision'], 'annotation': existing or note}

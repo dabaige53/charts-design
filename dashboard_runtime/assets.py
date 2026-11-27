@@ -57,6 +57,8 @@ def export_document(document):
                                        for key, artifact in snapshot.get('statisticalArtifacts', {}).items()}
     for key in ('sources', 'queries', 'annotations'):
         snapshot['manifest'].pop(key, None)
+    for key in ('browserLinks', 'annotationAccess', 'publicationApiBase', 'publication', 'annotationsOpen'):
+        snapshot.pop(key, None)
     return render_html('snapshot', snapshot)
 
 

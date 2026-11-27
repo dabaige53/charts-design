@@ -1,4 +1,12 @@
 export type Config = Record<string, any>;
+export type AnnotationAccess = {
+  endpoint: string;
+  canRead: boolean;
+  canAnnotate: boolean;
+  canManageAnnotations: boolean;
+  scope: string;
+  author?: { name: string; verified: boolean };
+};
 declare global {
   interface Window {
     __chartsBoot: Config;
@@ -33,6 +41,8 @@ export type ComponentSpec = {
   [key: string]: any;
 };
 export type Document = {
+  annotationAccess?: AnnotationAccess;
+  publication?: { shareId: string; revision: number };
   staticPages?: { id: string; title: string; path: string }[];
   id: string;
   revision: number;

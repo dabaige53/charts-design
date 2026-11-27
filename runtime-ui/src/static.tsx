@@ -118,7 +118,9 @@ export function StaticSite() {
           }
           throw Error("独立静态网页不支持此操作。请回到本项目 MCP。");
         };
-        if (live) setState({ doc, call });
+        const selectedId = new URLSearchParams(location.search).get("dashboardId") || doc.id;
+        const selectedDocument = await load(selectedId);
+        if (live) setState({ doc: selectedDocument, call });
       })
       .catch((e) => {
         if (live) setError(String(e));
@@ -146,6 +148,7 @@ export function StaticSite() {
       call={state.call}
       readOnly
       staticMode
+      annotationsInitiallyOpen={state.doc.annotationsOpen === true}
       onFullscreen={
         document.fullscreenEnabled
           ? () => {

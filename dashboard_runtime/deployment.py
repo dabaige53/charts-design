@@ -126,6 +126,10 @@ def export_site(store, board, output_root=None, document=None, data_format='auto
             component['config'].pop('rowsRef', None)
         for key in ('sources', 'queries', 'annotations'):
             doc['manifest'].pop(key, None)
+        # A preview response can be re-imported by an authoring client. Runtime
+        # capabilities must not become portable content or leak editor tokens.
+        for key in ('browserLinks', 'annotationAccess', 'publicationApiBase', 'publication', 'annotationsOpen'):
+            doc.pop(key, None)
         doc['snapshot'] = {'datasets': {}}
         doc.pop('computed', None)
         doc.pop('progressive', None)
