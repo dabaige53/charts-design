@@ -40,6 +40,8 @@
 
 ## CLI 工作区使用 (Workspace Flow)
 
+部署作者 MCP 和 Cloudflare Pages + D1 使用 `bun run deploy:init -- all`。生成测试项目使用 `bun run test:data`，一键验收使用 `bun run test:function`。配置和百万行性能验证见 [部署与 D1](docs/operations/self-hosted-server.md#cloudflare-pages-与-d1-直接分享) 和 [一键验收](docs/operations/testing.md#一键数据功能和性能验收)。
+
 ### 打开已有本机项目
 
 ```sh

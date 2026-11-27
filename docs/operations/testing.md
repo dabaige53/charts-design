@@ -65,6 +65,25 @@ Python 使用项目解释器和 `pyproject.toml` 中的依赖；运行配置见 
 
 ## 测试维护
 
+### 一键数据、功能和性能验收
+
+从源码目录运行。先用 `bun run setup` 安装项目依赖，用 `bun run ui:prepare` 准备网页资源，再用 `bun run native:install` 或 `bun run native:build` 准备 Parquet 程序。查询 Worker 使用 Node.js 24 或更新版本执行。
+
+| 命令 | 覆盖范围 |
+| --- | --- |
+| `bun run test:data` | 生成 48 行航线测试项目，包含四个看板和一份报告 |
+| `bun run test:function` | 验证 MCP 发现、只读预览、草稿保存、正式发布、项目批注、分享包和 D1 的固定版本行为 |
+| `bun run test:performance` | 记录首次候选项、Worker 启动、首批明细、应用筛选和翻页校验 |
+| `bun run test:million` | 用同一套流程验证一百万行，独立校验行数和筛选结果 |
+
+默认创建独立临时目录。加 `--output /tmp/charts-verify` 保存测试项目和 `report.json`，使用同一个目录可以重用已初始化的数据。性能命令支持 `--samples 5`。报告分别列出第一次请求、各次样本、中位数与 P95。样本较少时主要看中位数和原始值。
+
+`test:function`、`test:performance` 和 `test:million` 可加 `--online`。先通过环境提供 `CHARTS_SHARE_SERVICE_URL` 和 `CHARTS_SHARE_SERVICE_TOKEN`。脚本用同一已保存版本创建 Cloudflare 分享，验证读者密钥、批注重试、作者只读反馈及实际下载的 Worker。成功后自动撤销本轮测试链接。加 `--keep-share` 会保留链接七天。中断后用原输出目录与参数重试，会继续使用同一个发布请求 ID。
+
+`test:function` 可同时设置 `CHARTS_TEST_MCP_URL`、`CHARTS_TEST_MCP_TOKEN` 和 `CHARTS_TEST_MCP_PROJECT`，检查已部署作者 MCP 的连接、工具发现和指定项目列表。在线百万行测量覆盖本机作者查询和 Cloudflare 分享。自有服务器 MCP 的连接验证单独记录。
+
+普通验收适合检查主要流程。百万行测试用来定位数据量和分片数的影响。脚本通过 HTTP 和实际打包的查询 Worker 执行，测量范围为数据链路。线上报告将页面定义下载、Worker 下载、首次候选项以及实际明细加载分开。可按需用浏览器补充渲染与交互测试。[本轮实测记录](../records/2026-11-27-one-command-acceptance.md)。
+
 ### 可重复使用的看板与报告
 
 [合成验收项目](../../tests/fixtures/charts_acceptance.py)生成同一批 48 条航线经营记录和五份页面配置。四个看板页覆盖总览、运量与运力、区域与渠道、可筛选明细，使用六种标准指标卡。分析报告使用同一批数据说明月度、区域和渠道变化。

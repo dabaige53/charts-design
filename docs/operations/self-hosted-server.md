@@ -207,13 +207,16 @@ Pages 只转发 `/s/…`、发布管理接口和健康检查。工作区页面�
 
 ### Cloudflare Pages 与 D1 直接分享
 
-在 Cloudflare 创建分享专用 D1，执行 `deploy/pages/schema.sql`，把数据库绑定到 Pages 的 `SHARE_DB`。在 Pages 设置 `CHARTS_SHARE_SERVICE_TOKEN` 和独立的 `CHARTS_SHARE_SIGNING_SECRET`。预览与正式部署分别绑定自己的数据库和密钥。签名密钥用于保护已有访问链接和会话，应随环境长期保留。
+在源码目录用 `bun run deploy:init -- author|pages|all` 初始化。加 `--plan` 查看目标。
 
 ```sh
-bun run ui:prepare
-bun deploy/pages/build.mjs /private/tmp/charts-pages --d1
-wrangler pages deploy /private/tmp/charts-pages --project-name charts-design
+bun run deploy:init -- all --plan
+bun run deploy:init -- all
 ```
+
+- `author` 需要 Docker Compose。复制 `deploy/environment.example` 到 `deploy/charts.env`，设置作者 HTTPS 地址和 MCP 令牌。在启用分享时配置 `CHARTS_SHARE_SERVICE_URL` 及发布令牌。可设置 `CHARTS_AUTHOR_ENV_FILE` 和 `CHARTS_AUTHOR_PORT` 指定配置文件和回环端口。由现有 HTTPS 反向代理暴露 MCP 地址。
+- `pages` 从环境读取 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`CHARTS_SHARE_SERVICE_TOKEN` 和 `CHARTS_SHARE_SIGNING_SECRET`。Cloudflare 部署令牌需要 Pages 和 D1 写权限。脚本创建或复用 Pages 与 D1，执行 `deploy/pages/schema.sql`，设置 `SHARE_DB` 并部署界面。可设置 `CHARTS_PAGES_PROJECT`、`CHARTS_D1_DATABASE`、`CHARTS_PAGES_BRANCH` 和 `CHARTS_PAGES_URL`。
+- `all` 先检查作者配置，再部署 Pages，最后启动作者容器。两个环境使用同一个发布令牌。现有 Pages 密钥在重复运行时保留。签名密钥用于保护已发链接和会话，应随环境长期保存。预览项目可使用独立的数据库和密钥。
 
 `/health` 返回 `role: "sharing"`、`storage: "d1"` 和界面构建号后，把作者环境的 `CHARTS_SHARE_SERVICE_URL` 指向 Pages 域名，设置同一发布令牌。原有发布、读者批注、反馈和撤销接口沿用相同路径。分享 ZIP 上限 16 MiB。Pages 从部署包提供界面资源，从 D1 读取固定版本的数据分片。发布请求的重试使用原请求 ID，撤销立即删除分片与批注并保留分享标识以防重试重新发布。到期立即关闭访问，后续发布时分批清理已到期内容。
 

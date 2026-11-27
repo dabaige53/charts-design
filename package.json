@@ -30,7 +30,12 @@
     "lint:py": "bun bin/python-runtime.js -m ruff check",
     "runtime:test": "bun bin/python-runtime.js -m pytest tests/runtime -q && bun test ./tests/runtime",
     "runtime:serve": "bun bin/dashboard-runtime.js serve",
-    "runtime:mcp": "bun bin/dashboard-runtime.js mcp"
+    "runtime:mcp": "bun bin/dashboard-runtime.js mcp",
+    "deploy:init": "bun deploy/init.mjs",
+    "test:data": "bun bin/python-runtime.js tests/acceptance/run.py seed",
+    "test:function": "bun bin/python-runtime.js tests/acceptance/run.py verify",
+    "test:performance": "bun bin/python-runtime.js tests/acceptance/run.py perf",
+    "test:million": "bun bin/python-runtime.js tests/acceptance/run.py perf --rows 1000000"
   },
   "files": [
     "bin/",
@@ -86,7 +91,9 @@
     "docs/agent/",
     "docs/reference/",
     "docs/implementation/",
-    "docs/operations/"
+    "docs/operations/",
+    "deploy/init.mjs",
+    "deploy/pages/"
   ],
   "keywords": [
     "mckinsey",
