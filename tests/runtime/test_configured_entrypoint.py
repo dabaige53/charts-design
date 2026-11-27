@@ -33,8 +33,9 @@ def test_project_mcp_command_and_reconnect(tmp_path):
                         assert not created.isError
                         edited = await session.call_tool('dashboard_submit', {'dashboardId': 'configured',
                             'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Saved through configured MCP'}]})
-                        assert not edited.isError
-                        assert edited.structuredContent['checkpoint']['revision'] == 2
+                        content = edited.structuredContent
+                        assert not edited.isError and content is not None
+                        assert content['checkpoint']['revision'] == 2
                     result = await session.call_tool('dashboard_get', {'dashboardId': 'configured'})
                     assert not result.isError and result.structuredContent is not None
                     assert result.structuredContent['document']['revision'] == 2
