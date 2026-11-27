@@ -3,7 +3,7 @@ use std::{env, path::PathBuf, process::ExitCode};
 use charts_design_core::{export_parquet_with_options, inspect_parquet, ExportOptions};
 
 const USAGE: &str =
-    "Usage: charts-design-core export-parquet --database PATH --version SHA256 --output DIRECTORY [--partition-field FIELD] [--include-options]\n       charts-design-core inspect-parquet --input FILE";
+    "Usage: charts-design-core export-parquet --database PATH --version SHA256 --output DIRECTORY [--single-file | [--partition-field FIELD] [--include-options]]\n       charts-design-core inspect-parquet --input FILE";
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args_os().skip(1);
@@ -33,7 +33,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (mut database, mut version, mut output) = (None, None, None);
     let mut partition_field = None;
     let mut include_options = false;
+    let mut single_file = false;
     while let Some(flag) = args.next() {
+        if flag == "--single-file" {
+            if single_file {
+                return Err("Duplicate argument: --single-file".into());
+            }
+            single_file = true;
+            continue;
+        }
         if flag == "--include-options" {
             if include_options {
                 return Err("Duplicate argument: --include-options".into());
@@ -69,6 +77,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .transpose()
             .map_err(|_| "Invalid partition field")?,
         include_options,
+        single_file,
     };
     let receipt = export_parquet_with_options(&database, &version, &output, &options)?;
     println!("{}", serde_json::to_string(&receipt)?);

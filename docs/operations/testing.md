@@ -8,15 +8,15 @@
 - uv 版本由 `pyproject.toml` 的 `tool.uv.required-version` 固定，CI 和容器使用同版。`.python-version` 选择开发 Python 3.11；运行库保留 Python 3.10 兼容，CI 覆盖 3.10、3.11、3.13。
 - `uv.lock` 锁定 Python 直接与间接依赖。开发、统计、MCP 和云端依赖安装到 `.venv`，不依赖共享 Conda 环境、系统 site-packages 或旧 `.mcp-test-deps`。
 
-安装对应版本的 Bun 与 uv 后，在仓库根目录执行 `bun run setup`。该入口使用冻结锁文件安装两套 Bun 依赖和 uv 环境，保存本机解释器配置；迁移旧配置前在系统临时目录保留原件。安装不运行应用构建或测试。
+安装指定版本的 Bun 和 uv 后运行 `bun run setup`。只改后端时可用 `bun run setup -- --backend-only`，跳过 UI 依赖下载。需要统计图、云后端或 CloudBase 发布工具时加 `--full`。默认保留已存在的 Python 可选依赖。需要网页资源时另行运行 `bun run ui:prepare`。
 
 原生导出是独立的 Rust Cargo 包，工具链由 `runtime-core/rust-toolchain.toml` 固定，依赖由 `runtime-core/Cargo.lock` 锁定。需要使用已发布的 Parquet 程序时执行 `bun run native:install`；修改原生源码或版本尚未发布时执行 `bun run native:build`，将 release 二进制准备到忽略提交的 `dashboard_runtime/native/<平台>-<架构>/`。普通查询与旧 JSON 导出不因此要求用户安装 Rust。
 
-各工作树在自己的 `.venv` 和 `node_modules` 中安装依赖，并通过 uv 与 Bun 的默认本机缓存复用已下载的包。`UV_CACHE_DIR` 和 `BUN_INSTALL_CACHE_DIR` 可显式指定缓存位置。
+各工作树使用自己的 `.venv` 和 `node_modules`。初始化脚本默认把 Bun 缓存放在工作树的 `.runtime-cache/bun`，避免受限进程写入用户目录失败。可通过 `BUN_INSTALL_CACHE_DIR` 指定可写的共享缓存，uv 缓存可由 `UV_CACHE_DIR` 指定。macOS 安装使用 `/private/tmp`。
 
 Python 命令使用 `bun run python -- <参数>`，它只启动已准备的解释器，不自动安装依赖；uv 负责环境安装与同步。源码无需安装成 Python 包，通过项目入口加载。`PYTHON` 可显式指定其他环境，缺少解释器时直接报错，不自动回退系统 Python。
 
-修改 Python 依赖后执行 `uv lock`，修改 Bun 包依赖后在对应包目录执行 `bun install`，将声明与锁文件一起提交；普通安装使用 `--locked` 或 `--frozen-lockfile`。单独执行 `uv sync` 会按所选依赖组同步环境，完整开发环境统一回到 `bun run setup`。
+修改 Python 依赖后执行 `uv lock`，修改 Bun 包依赖后在对应包目录执行 `bun install`，将声明与锁文件一起提交。普通安装使用 `--locked` 或 `--frozen-lockfile`。安装全部可选依赖使用 `bun run setup -- --full`。
 
 JavaScript 与 TypeScript 测试使用 `bun test`，React 测试通过 `runtime-ui/bunfig.toml` 预加载 jsdom；TypeScript 编译器由 Bun 执行。Bun 使用兼容的 `node:` 标准库接口。
 
@@ -32,18 +32,19 @@ Docker 只在 GitHub 或部署平台构建；开发机不必安装 Docker。容�
 | CI、开发脚本或未知路径 | 脚本语法与相关局部测试 | 完整工作流 |
 | Rust 原生导出或 Parquet 读取 | 对应 Cargo 用例及静态格式兼容用例 | Rust 检查与构建，Python/网页跨语言读取及导出回归 |
 
-本项目的常规 GitHub 工作流按上述范围自动执行，包含 Python、Bun、React 组件及容器检查。手动 `workflow_dispatch` 执行完整工作流。本地全量测试仍需针对当前任务的明确授权，不因提交、PR 或云端 CI 授权而自动执行；浏览器自动化和目标宿主验收另行授权。
+GitHub 工作流按上述范围自动执行。手动运行时可选 `acceptance_only`，只构建必要产物并跑百万行验收。常规 PR 检查保留 Python、Bun、React 组件与容器验证。本地全量测试、浏览器自动化和目标宿主验收均需当前任务明确授权。
 
 `docs/` 不承载生产源码，根目录仅保留 `README.md`。目录规则、本地链接和章节锚点由 `bin/check-doc-links.js` 检查。Skill 的随包说明是运行资源，修改 `skills/` 仍进入完整 CI。
 
 ## CI 作业与产物
 
-- Static checks：Python ruff、语法、文档与 Skill 链接、开发流程及发布脚本的 Bun 检查。
+- Static checks 包含 Ruff、实时查询和验收入口的 Pyright、语法、文档链接、开发流程与发布脚本验证。
 - Native Parquet exporter：锁定 Rust 的格式、Clippy、测试及 release 构建，向 UI 和 Python 作业交付同一二进制。容器仍在独立构建阶段编译，运行阶段不携带 Rust 工具链。
 - Native runtime packages：独立工作流在原生程序或安装器变更的 PR 中验证五个目标平台，使用实际产物检查安装器；发布标签才会创建原生 GitHub Release，不部署服务。
 - Shared UI build：安装锁定依赖、类型检查、构建一次，并上传 `shared-ui-<提交号>`；执行 React 组件与 Runtime 交互测试，上传 JUnit 报告。
-- Unit tests：Python 3.10、3.11、3.13 下载同一 UI 产物并打包到后端，不重复安装前端依赖或构建。检查 Runtime、MCP、Bun 数据模块、工作区合同；Runtime 覆盖率下限保留 84%。
+- Unit tests 覆盖 Python 3.10、3.11、3.13，复用同一 UI 产物。Bun 数据模块套件在 3.11 作业执行一次，另两个版本仅保留依赖 Python 的 JavaScript 计算一致性用例。Runtime 覆盖率下限保留 84%。
 - Container image smoke test：独立从源码构建部署镜像，经 HTTP 验证 MCP、预览、下载、非 root 权限和环境文件隔离。保留该独立构建，检查真实部署路径。
+- Dashboard performance acceptance 复用同次构建的原生程序和 UI。可执行代码 PR 跑 48 行，默认分支和手动触发跑百万行。测量在 GitHub 托管的 Linux 执行器内完成。
 
 前端依赖缓存按锁文件区分。新提交取消同一 PR 的旧 CI；失败时先读取对应作业日志及报告，不在本地重新跑整套。JUnit、覆盖率和 UI 构建产物保留 14 天。构建产物与报告由 Actions 保存，`runtime-ui/dist/`、后端资源副本和本地依赖不提交 Git。
 
@@ -67,7 +68,9 @@ Python 使用项目解释器和 `pyproject.toml` 中的依赖；运行配置见 
 
 ### 一键数据、功能和性能验收
 
-从源码目录运行。先用 `bun run setup` 安装项目依赖，用 `bun run ui:prepare` 准备网页资源，再用 `bun run native:install` 或 `bun run native:build` 准备 Parquet 程序。查询 Worker 使用 Node.js 24 或更新版本执行。
+百万行回归优先用 GitHub Actions 的 [Dashboard runtime](../../.github/workflows/dashboard-runtime.yml)。在 **Run workflow** 选择目标分支并启用 `acceptance_only`，下载作业的 `dashboard-performance` 报告。执行器启动作者服务器和静态分享页，使用合成数据。真实 Cloudflare 及自有服务器的公网耗时通过下面的显式配置测量。
+
+本机排错时，用 `bun run setup` 和 `bun run ui:prepare` 准备依赖和 UI，用 `bun run native:install` 或 `bun run native:build` 准备支持 `--single-file` 的 Parquet 程序。验收在生成数据前检查 Node.js、UI 和原生程序。
 
 | 命令 | 覆盖范围 |
 | --- | --- |
@@ -76,13 +79,13 @@ Python 使用项目解释器和 `pyproject.toml` 中的依赖；运行配置见 
 | `bun run test:performance` | 记录首次候选项、Worker 启动、首批明细、应用筛选和翻页校验 |
 | `bun run test:million` | 用同一套流程验证一百万行，独立校验行数和筛选结果 |
 
-默认创建独立临时目录。加 `--output /tmp/charts-verify` 保存测试项目和 `report.json`，使用同一个目录可以重用已初始化的数据。性能命令支持 `--samples 5`。报告分别列出第一次请求、各次样本、中位数与 P95。样本较少时主要看中位数和原始值。
+使用 `--output /private/tmp/charts-verify` 保存测试项目和 `report.json`，用同一个目录可复用初始化数据。加 `--ci-server` 可在本机复现 GitHub 作业的作者服务器步骤。失败时查看报告的 `phase` 和对应日志。报告记录首次耗时、各次样本、中位数与 P95，样本较少时以原始值为准。
 
-`test:function`、`test:performance` 和 `test:million` 可加 `--online`。先通过环境提供 `CHARTS_SHARE_SERVICE_URL` 和 `CHARTS_SHARE_SERVICE_TOKEN`。脚本用同一已保存版本创建 Cloudflare 分享，验证读者密钥、批注重试、作者只读反馈及实际下载的 Worker。成功后自动撤销本轮测试链接。加 `--keep-share` 会保留链接七天。中断后用原输出目录与参数重试，会继续使用同一个发布请求 ID。
+`test:function`、`test:performance` 和 `test:million` 可加 `--online`。先通过环境提供 `CHARTS_SHARE_SERVICE_URL` 和 `CHARTS_SHARE_SERVICE_TOKEN`。测试 Pages 快照部署时，同时设置 `CHARTS_SHARE_PARQUET_LAYOUT=single`。脚本用同一已保存版本创建 Cloudflare 分享，验证读者密钥、批注重试、作者只读反馈及实际下载的 Worker。成功后自动撤销本轮测试链接。加 `--keep-share` 会保留链接七天。中断后用原输出目录与参数重试，会继续使用同一个发布请求 ID。
 
-`test:function` 可同时设置 `CHARTS_TEST_MCP_URL`、`CHARTS_TEST_MCP_TOKEN` 和 `CHARTS_TEST_MCP_PROJECT`，检查已部署作者 MCP 的连接、工具发现和指定项目列表。在线百万行测量覆盖本机作者查询和 Cloudflare 分享。自有服务器 MCP 的连接验证单独记录。
+`test:function`、`test:performance` 和 `test:million` 均可设置 `CHARTS_TEST_MCP_URL`、`CHARTS_TEST_MCP_TOKEN` 和 `CHARTS_TEST_MCP_PROJECT`，测量自有服务器作者页面。先在指定测试项目初始化同一行数的航线数据。脚本从 MCP 取签名编辑和预览链接，再走网页使用的 HTTP 接口，验证候选值和筛选明细与本机一致。Cloudflare 和作者服务器可独立测量。
 
-普通验收适合检查主要流程。百万行测试用来定位数据量和分片数的影响。脚本通过 HTTP 和实际打包的查询 Worker 执行，测量范围为数据链路。线上报告将页面定义下载、Worker 下载、首次候选项以及实际明细加载分开。可按需用浏览器补充渲染与交互测试。[本轮实测记录](../records/2026-11-27-one-command-acceptance.md)。
+报告按环境记录为 `localAuthor`、`ciAuthorServer`、`serverAuthor`、`localShare` 和 `cloudflareShare`。作者端分别记录编辑和预览的 HTML、首个组件、首批十行明细和首次筛选。分享端记录页面资源和实际查询 Worker 的明细耗时与请求数。新 Pages 分享对单数据集样例只允许一次 Parquet 请求。HTML 和资源时间分别记录收到响应头和读完响应体。[历史实测记录](../records/2026-11-27-one-command-acceptance.md)。
 
 ### 可重复使用的看板与报告
 

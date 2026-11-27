@@ -292,6 +292,62 @@ fn shards_preserve_every_row_in_order() {
     );
 }
 
+// @wu-test type=integration | scope=runtime-core single Parquet | protects=跨行组导出产生多个文件或改变数字和原始行序
+#[test]
+fn single_file_keeps_multiple_row_groups_and_shared_schema() {
+    let mut fixture = Fixture::new(&[("position", "number"), ("id", "number")]);
+    for index in 0..8193_i64 {
+        let position = if index == 8192 {
+            SqlValue::Real(8192.5)
+        } else {
+            SqlValue::Integer(index)
+        };
+        fixture.insert(
+            vec![position, SqlValue::Integer(9007199254740993 + index)],
+            None,
+        );
+    }
+    fixture.seal(true);
+    let output = fixture.root.join("single");
+    let receipt = export_parquet_with_options(
+        &fixture.database,
+        &fixture.version,
+        &output,
+        &ExportOptions {
+            single_file: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(receipt.files.len(), 1);
+    assert_eq!(receipt.files[0].row_count, 8193);
+    let path = output.join(&receipt.files[0].path);
+    assert_eq!(inspect_parquet(&path).unwrap().row_count, 8193);
+    let reader = ParquetRecordBatchReaderBuilder::try_new(fs::File::open(path).unwrap()).unwrap();
+    assert_eq!(reader.metadata().num_row_groups(), 2);
+    let mut batches = reader.with_batch_size(8192).build().unwrap();
+    let first = batches.next().unwrap().unwrap();
+    let last = batches.next().unwrap().unwrap();
+    let first_position = first
+        .column(0)
+        .as_any()
+        .downcast_ref::<Float64Array>()
+        .unwrap();
+    let first_id = first
+        .column(1)
+        .as_any()
+        .downcast_ref::<Int64Array>()
+        .unwrap();
+    let last_position = last
+        .column(0)
+        .as_any()
+        .downcast_ref::<Float64Array>()
+        .unwrap();
+    assert_eq!(first_position.value(8191), 8191.0);
+    assert_eq!(first_id.value(0), 9007199254740993);
+    assert_eq!(last_position.value(0), 8192.5);
+}
+
 // @wu-test type=integration | scope=runtime-core version validation | protects=Unknown or malformed versions cannot read other tables or produce a successful export
 #[test]
 fn rejects_unknown_versions_and_nonempty_destinations() {
@@ -398,7 +454,7 @@ fn partitions_keep_original_ordinals_and_null_missing_masks() {
         .unwrap();
     let options = ExportOptions {
         partition_field: Some("月份".to_owned()),
-        include_options: false,
+        ..Default::default()
     };
     let receipt = export_parquet_with_options(
         &fixture.database,
@@ -479,7 +535,7 @@ fn partitions_keep_original_ordinals_and_null_missing_masks() {
     for field in ["amount", "unknown", "c0; DROP TABLE versions"] {
         let invalid = ExportOptions {
             partition_field: Some(field.to_owned()),
-            include_options: false,
+            ..Default::default()
         };
         assert!(export_parquet_with_options(
             &fixture.database,
@@ -514,6 +570,7 @@ fn options_stream_distinct_values_with_independent_bounds() {
     let options = ExportOptions {
         partition_field: Some("分区".to_owned()),
         include_options: true,
+        ..Default::default()
     };
     let receipt = export_parquet_with_options(
         &fixture.database,

@@ -43,6 +43,9 @@ class LocalShares:
                 'Use a local or self-hosted workspace to publish a new share', 'INVALID_CONFIG')
         self.token = os.environ.get('CHARTS_SHARE_SERVICE_TOKEN', '')
         self.project = os.environ.get('CHARTS_SHARE_SERVICE_PROJECT', 'default')
+        self.parquet_layout = os.environ.get('CHARTS_SHARE_PARQUET_LAYOUT', 'sharded')
+        require(self.parquet_layout in ('sharded', 'single'),
+                'CHARTS_SHARE_PARQUET_LAYOUT must be sharded or single', 'INVALID_CONFIG')
         parsed = urlsplit(self.url)
         require(bool(parsed.netloc) and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment
                 and (parsed.scheme == 'https' or parsed.scheme == 'http' and parsed.hostname in ('127.0.0.1', 'localhost', '::1')),
@@ -172,7 +175,8 @@ class LocalShares:
                             'The pending publication copy is missing or changed; inspect the existing request before creating another share',
                             'SHARE_RETRY_ASSET_MISSING')
                 else:
-                    exported = export_site(self.service.store, board, document=versions.read(board, revision), data_format='parquet')['export']
+                    exported = export_site(self.service.store, board, document=versions.read(board, revision),
+                                           data_format='parquet', single_parquet=self.parquet_layout == 'single')['export']
                     archive = Path(exported['path'])
                     with self.connect() as db:
                         db.execute('UPDATE requests SET archive=?,archive_sha=? WHERE id=?',

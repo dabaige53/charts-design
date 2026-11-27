@@ -79,16 +79,20 @@ function entries(bytes) {
   return result;
 }
 
-async function jsonEntry(bytes, entry) {
-  validZip(entry && entry.size <= MAX_DOCUMENT);
+async function entryBytes(bytes, entry) {
   const input = bytes.subarray(entry.start, entry.start + entry.compressed);
   const body = inflated(new Blob([input]).stream(), entry.method);
   const raw = await boundedBody(new Request("https://archive.invalid/", { method: "POST", body, duplex: "half" }), entry.size);
   validZip(raw.length === entry.size);
-  return JSON.parse(decoder.decode(raw));
+  return raw;
 }
 
-export async function publicationBundle(bytes) {
+async function jsonEntry(bytes, entry) {
+  validZip(entry && entry.size <= MAX_DOCUMENT);
+  return JSON.parse(decoder.decode(await entryBytes(bytes, entry)));
+}
+
+export async function publicationBundle(bytes, { pages = false } = {}) {
   try {
     const all = entries(bytes);
     const document = await jsonEntry(bytes, all.get("document.json"));
@@ -96,11 +100,13 @@ export async function publicationBundle(bytes) {
     const id = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
     validZip(document?.schemaVersion === 2 && typeof document.id === "string" && id.test(document.id) && Number.isSafeInteger(document.revision) &&
       document.revision >= 1 && manifest?.dashboardId === document.id && manifest.revision === document.revision &&
-      document.manifest?.components && document.staticFiles && !document.staticPages &&
+      typeof document.manifest?.title === "string" && document.manifest?.components && document.staticFiles && !document.staticPages &&
       !document.staticOptions && !document.staticPartitionIndexes);
     const names = new Set();
     for (const group of Object.values(document.staticFiles)) {
       validZip(Array.isArray(group));
+      if (pages) check(group.length === 1 && typeof group[0] === "string" && group[0].endsWith(".parquet"),
+        422, "SINGLE_PARQUET_REQUIRED", "Export one Parquet per dataset for Pages snapshots");
       for (const path of group) {
         validZip(typeof path === "string" && /^data\/[a-zA-Z0-9_-]+\.(parquet|json\.gz)$/.test(path) && all.has(path));
         names.add(path);
@@ -109,6 +115,14 @@ export async function publicationBundle(bytes) {
     for (const key of ["sources", "queries", "annotations"]) delete document.manifest[key];
     for (const key of ["browserLinks", "annotationAccess", "publicationApiBase", "publication", "annotationsOpen"]) delete document[key];
     document.snapshot = { datasets: {} };
+
+    if (pages) {
+      const size = Array.from(names, path => all.get(path).size).reduce((total, bytes) => total + bytes, 0);
+      check(size <= 24 * CHUNK_SIZE, 413, "PAYLOAD_TOO_LARGE", "A Pages snapshot can contain up to 24 MiB of Parquet data");
+      return { document, async *assets() {
+        for (const path of names) yield [path, await entryBytes(bytes, all.get(path))];
+      } };
+    }
 
     const files = {};
     let length = 0;

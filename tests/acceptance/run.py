@@ -5,11 +5,15 @@ import argparse
 import asyncio
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from importlib import import_module
 import json
 import math
 import os
 from pathlib import Path
+import shutil
+import socket
 import statistics
 import subprocess
 import sys
@@ -17,7 +21,7 @@ import tempfile
 import threading
 import time
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 from uuid import uuid4
 
 import httpx
@@ -26,7 +30,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / 'tests/fixtures'), str(ROOT / 'tests/runtime')]
 
 from dashboard_runtime.http_server import RuntimeHTTPServer
+from dashboard_runtime.deployment import export_site
+from dashboard_runtime.assets import DIST
+from dashboard_runtime.columnar import export_format
+from dashboard_runtime.model import DashboardError
 from dashboard_runtime.service import Service
+from dashboard_runtime.versions import Versions
 
 large = import_module('benchmark_local')
 small = import_module('charts_acceptance')
@@ -41,6 +50,24 @@ def read(path):
     return json.loads(path.read_text(encoding='utf-8'))
 
 
+def preflight(mode):
+    node = shutil.which('node')
+    if not node:
+        raise ValueError('Install Node.js 24 or later to run the share query Worker')
+    version = subprocess.check_output([node, '-p', 'process.versions.node'], text=True, timeout=10).strip()
+    if int(version.split('.')[0]) < 24:
+        raise ValueError(f'Node.js 24 or later is required, found {version}')
+    if mode == 'verify' and not shutil.which('bun'):
+        raise ValueError('Install the Bun version in .bun-version to run functional acceptance')
+    if any(not (DIST / file).is_file() for file in ('build.json', 'app.js', 'app.css', 'static-worker.js')):
+        raise ValueError('Prepare the UI with bun run ui:prepare, or bun run ui:package with a CI artifact')
+    _, binary = export_format('parquet')
+    assert binary is not None
+    help_text = subprocess.check_output([binary, '--help'], text=True, timeout=10)
+    if '--single-file' not in help_text:
+        raise ValueError('The installed Parquet exporter lacks --single-file. Run bun run native:build or use the matching CI artifact')
+
+
 def measured(action):
     start = time.perf_counter()
     result = action()
@@ -51,6 +78,17 @@ def summarize(samples):
     ordered = sorted(samples)
     return {'medianMs': round(statistics.median(ordered), 3),
             'p95Ms': round(ordered[math.ceil(0.95 * len(ordered)) - 1], 3), 'samplesMs': samples}
+
+
+def timed_download(client, path):
+    start = time.perf_counter()
+    with client.stream('GET', path) as response:
+        response.raise_for_status()
+        headers_ms = (time.perf_counter() - start) * 1000
+        response.read()
+    return response, {'headersMs': round(headers_ms, 3),
+                      'bodyMs': round((time.perf_counter() - start) * 1000, 3),
+                      'wireBytes': response.num_bytes_downloaded, 'decodedBytes': len(response.content)}
 
 
 def result(payload):
@@ -106,7 +144,6 @@ def workspace(service, board):
         with httpx.Client(base_url=f'http://127.0.0.1:{server.server_port}', trust_env=False, timeout=90) as client:
             author = {'Authorization': 'Bearer ' + server.token}
             viewer = {'Authorization': 'Bearer ' + server.preview_token(board)}
-            assert client.get(f'/view/{board}').status_code == 200
 
             def tool(name, args=None, *, edit=False):
                 payload = client.post('/api/tools/' + name, json={'dashboardId': board, **(args or {})},
@@ -119,6 +156,37 @@ def workspace(service, board):
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@contextmanager
+def ci_workspace(root):
+    """Start the production author HTTP application with only synthetic data."""
+    import uvicorn
+    from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
+
+    token = uuid4().hex
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        port = listener.getsockname()[1]
+        origin = f'http://127.0.0.1:{port}'
+        settings = ServerSettings(workspace=root, runtime=root / 'ci-server', default_project='project',
+                                  port=port, public_url=origin, tokens=(token,))
+        app = create_app(RemoteServer(settings))
+        server = uvicorn.Server(uvicorn.Config(app, access_log=False, log_level='warning', timeout_graceful_shutdown=5))
+        thread = threading.Thread(target=server.run, kwargs={'sockets': [listener]}, daemon=True)
+        thread.start()
+        try:
+            deadline = time.monotonic() + 10
+            while not server.started and thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if not server.started:
+                raise RuntimeError('The acceptance author HTTP server did not start within 10 seconds')
+            yield origin, token
+        finally:
+            server.should_exit = True
+            thread.join(timeout=8)
+            if thread.is_alive():
+                raise RuntimeError('The acceptance author HTTP server did not stop')
 
 
 def options_request(doc, field):
@@ -162,11 +230,12 @@ async def check_mcp(root, fixture):
     return {'localMcp': True}
 
 
-# @wu-test type=integration | scope=已部署作者的 MCP HTTP 接口 | protects=远程连接或工具发现成功却无法读取指定测试项目
-def check_remote_mcp(url, token, project):
+@contextmanager
+def remote_mcp(url, token, *, loopback=False):
     parsed = urlsplit(url)
-    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment or parsed.query:
-        raise ValueError('CHARTS_TEST_MCP_URL must be an HTTPS MCP endpoint')
+    expected_origin = parsed.scheme == 'http' and parsed.hostname == '127.0.0.1' if loopback else parsed.scheme == 'https'
+    if not expected_origin or not parsed.hostname or parsed.username or parsed.password or parsed.fragment or parsed.query:
+        raise ValueError('MCP endpoint must be HTTPS, or the isolated loopback server started by this test')
     headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/json, text/event-stream'}
 
     def rpc_result(message: dict[str, Any]) -> dict[str, Any]:
@@ -175,7 +244,7 @@ def check_remote_mcp(url, token, project):
             raise RuntimeError('MCP response has no result object')
         return payload
 
-    with httpx.Client(headers=headers, timeout=30) as client:
+    with httpx.Client(headers=headers, timeout=30, trust_env=not loopback) as client:
         def exchange(method, number=None, params=None) -> dict[str, Any]:
             body = {'jsonrpc': '2.0', 'method': method}
             if number is not None:
@@ -209,14 +278,98 @@ def check_remote_mcp(url, token, project):
             client.headers['MCP-Protocol-Version'] = hello['protocolVersion']
             exchange('notifications/initialized')
             assert REQUIRED_MCP_TOOLS <= {item['name'] for item in exchange('tools/list', 2)['tools']}
-            response = exchange('tools/call', 3, {'name': 'dashboard_list', 'arguments': {'projectRoot': project}})
-            assert not response.get('isError')
-            payload = response.get('structuredContent') or json.loads(response['content'][0]['text'])
-            assert isinstance(payload['dashboards'], list)
-            return {'project': project, 'boards': len(payload['dashboards'])}
+            def call(name, arguments):
+                response = exchange('tools/call', 3, {'name': name, 'arguments': arguments})
+                assert not response.get('isError')
+                return result(response.get('structuredContent') or json.loads(response['content'][0]['text']))
+
+            yield call
         finally:
             if 'MCP-Session-Id' in client.headers:
                 client.delete(url)
+
+
+def server_pages(url, token, project, fixture, samples, expected, *, loopback=False):
+    with remote_mcp(url, token, loopback=loopback) as call:
+        args = {'projectRoot': project}
+        dashboards = call('dashboard_list', args)['dashboards']
+        assert fixture['board'] in {board['id'] for board in dashboards}, 'Initialize the same fixture in the author test project'
+        links = call('dashboard_preview', {**args, 'dashboardId': fixture['board']})['browserLinks']
+    endpoint = urlsplit(url)
+    with httpx.Client(base_url=f'{endpoint.scheme}://{endpoint.netloc}', timeout=90, trust_env=not loopback) as client:
+        pages, _ = author_pages(client, links, fixture, samples, expected)
+    return pages, {'project': project, 'boards': len(dashboards)}
+
+
+# @wu-test type=performance | scope=作者编辑页与开发预览加载 | protects=作者网页可返回外壳却无法读取同样本的首批数据和候选项
+def author_pages(client, links, fixture, samples, expected=None, modes=('edit', 'preview')):
+    pages = {}
+    for name, key, read_only in [('edit', 'editUrl', False), ('preview', 'viewUrl', True)]:
+        if name not in modes:
+            continue
+        url = urlsplit(links[key])
+        assert f'{url.scheme}://{url.netloc}' == str(client.base_url).rstrip('/')
+        token = parse_qs(url.fragment)['token'][0]
+        response, shell = timed_download(client, url.path)
+        boot = json.loads(response.text.split('window.__chartsBoot=', 1)[1].split(';</script>', 1)[0])
+        assert boot['dashboardId'] == fixture['board'] and boot['readOnly'] is read_only
+        api = boot.get('apiBase', '/api/tools/')
+        assert api.startswith('/') and not api.startswith('//') and api.endswith('/')
+
+        def call(tool, args=None, *, edit=False):
+            response = client.post(api + tool, json={'dashboardId': fixture['board'], **(args or {})},
+                                   headers={'Authorization': 'Bearer ' + token})
+            response.raise_for_status()
+            return result(response.json())
+
+        doc, ready_ms = measured(lambda: call('dashboard_preview' if read_only else 'dashboard_get')['document'])
+        assert doc['snapshot']['datasetRefs'][fixture['dataset']]['rowCount'] == fixture['rows']
+        patch, first_component_ms = measured(lambda: call('dashboard_view', {
+            'expectedRevision': doc['revision'], 'dataVersion': doc['dataVersion'],
+            'responseMode': 'patch', 'componentIds': ['details'], 'compactRecords': True,
+            'tableStates': {'details': {'page': 1, 'pageSize': 10}},
+        }))
+        assert patch['id'] == fixture['board'] and patch['revision'] == doc['revision']
+        filters = selected_filters(fixture, doc)
+        data, candidates = measure_local(fixture, call, doc, filters, samples)
+        if expected is None:
+            expected = candidates
+        assert candidates == expected
+        pages[name] = {'html': shell, 'documentMs': ready_ms, 'firstComponentMs': first_component_ms,
+                       'revision': doc['revision'], **data}
+    return pages, expected
+
+
+def selected_filters(fixture, doc):
+    return [{**entry, 'values': [fixture['selection'][entry['id']]]}
+            if entry['id'] in fixture['selection'] else entry for entry in doc['manifest']['filters']]
+
+
+class QuietAssets(SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: Any) -> None:
+        pass
+
+
+@contextmanager
+def static_http(directory):
+    server = ThreadingHTTPServer(('127.0.0.1', 0), partial(QuietAssets, directory=directory))
+    thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.1}, daemon=True)
+    thread.start()
+    try:
+        yield f'http://127.0.0.1:{server.server_port}/'
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def share_downloads(client, path):
+    _, html = timed_download(client, path)
+    assets = {name: timed_download(client, urljoin(path, name)) for name in
+              ('app.js', 'app.css', 'document.json', 'static-worker.js')}
+    return assets['document.json'][0].json(), assets['static-worker.js'][0].content, {
+        'html': html, 'assets': {name: timing for name, (_, timing) in assets.items()},
+    }
 
 
 # @wu-test type=integration | scope=作者预览、保存和批注 | protects=草稿提前出现在预览、只读链接写入内容或批注改变草稿
@@ -249,15 +402,18 @@ def check_versions(fixture, client, tool, author, viewer):
     return {'draftIsolation': True, 'projectAnnotationId': note['id'], 'savedRevision': draft, 'publishedRevision': draft}
 
 
-def worker(fixture, doc, expected, filters, samples, *, base=None, headers=None, directory=None, source=None):
-    base = base or 'https://fixture.invalid/fixture/'
+def worker(fixture, doc, expected, filters, samples, *, base, source, headers=None):
     payload = {'document': doc, 'worker': str(source), 'base': base, 'headers': headers or {},
-               'directory': str(directory.resolve()) if directory else None, 'fields': fixture['filters'],
+               'fields': fixture['filters'],
                'samples': samples, 'expected': expected, 'table': 'details', 'rows': fixture['rows'],
                'filteredRows': fixture['filteredRows'], 'filters': filters}
-    process = subprocess.run(['node', str(ROOT / 'tests/acceptance/share-worker.mjs')], input=json.dumps(payload),
-                             env={**os.environ, 'NODE_USE_ENV_PROXY': '1'},
-                             text=True, capture_output=True, check=False, timeout=240)
+    proxy = '0' if urlsplit(base).hostname == '127.0.0.1' else '1'
+    try:
+        process = subprocess.run(['node', str(ROOT / 'tests/acceptance/share-worker.mjs')], input=json.dumps(payload),
+                                 env={**os.environ, 'NODE_USE_ENV_PROXY': proxy},
+                                 text=True, capture_output=True, check=False, timeout=240)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError('The share Worker did not finish its queries within 240 seconds') from error
     if process.returncode:
         raise RuntimeError(f'Share Worker exited with {process.returncode}: ' + process.stderr.strip()[-1800:])
     measured_worker = json.loads(process.stdout)
@@ -315,19 +471,16 @@ def online(root, fixture, tool, doc, expected, filters, samples, keep_share, wor
     with httpx.Client(base_url=origin, headers={'User-Agent': ua}, timeout=60) as client:
         health = client.get('/health')
         health.raise_for_status()
-        assert health.json()['storage'] == 'd1'
+        assert health.json()['storage'] in ('d1', 'pages+d1')
         assert client.get(path + 'document.json').status_code == 401
-        login = client.post(path, data={'accessKey': share['accessKey']}, headers={'Origin': origin})
+        _, access = timed_download(client, path)
+        login, login_ms = measured(lambda: client.post(path, data={'accessKey': share['accessKey']}, headers={'Origin': origin}))
         assert login.status_code == 303
-        received, load_ms = measured(lambda: client.get(path + 'document.json'))
-        received.raise_for_status()
-        published = received.json()
+        published, worker_bytes, loading = share_downloads(client, path)
         assert published['publication']['revision'] == doc['revision']
         assert all(published['staticFilterOptions'][field] == values for field, values in expected.items())
-        downloaded, worker_ms = measured(lambda: client.get(path + 'static-worker.js'))
-        downloaded.raise_for_status()
         script = root / 'published-worker.js'
-        script.write_bytes(downloaded.content)
+        script.write_bytes(worker_bytes)
         cookie = 'charts-share-' + share['shareId']
         note = mk_note()
         note['id'] = 'note-' + request['requestId']
@@ -346,6 +499,8 @@ def online(root, fixture, tool, doc, expected, filters, samples, keep_share, wor
         read_headers = {'Cookie': cookie + '=' + client.cookies[cookie], 'User-Agent': ua}
         measured_worker = worker(fixture, published, expected, filters, samples, base=share['url'],
                                  headers=read_headers, source=script)
+        if health.json()['storage'] == 'pages+d1':
+            assert measured_worker['firstRows']['dataRequests'] == 1
         feedback = workspace_client.get('/api/publications/' + share['shareId'] + '/feedback',
                                         params={'dashboardId': board}, headers=author)
         feedback.raise_for_status()
@@ -359,7 +514,7 @@ def online(root, fixture, tool, doc, expected, filters, samples, keep_share, wor
         assert tool('dashboard_share_delete', {'shareId': share['shareId']}, edit=True)['revoked']
         pending.unlink()
     return {**measured_worker, 'shareUrl': share['url'], 'retained': keep_share, 'publishMs': publish_ms,
-            'documentMs': load_ms, 'workerDownloadMs': worker_ms, 'annotationId': note['id'], 'health': health.json()}
+            'accessHtml': access, 'loginMs': login_ms, **loading, 'annotationId': note['id'], 'health': health.json()}
 
 
 def main():
@@ -368,6 +523,7 @@ def main():
     parser.add_argument('--rows', type=int, default=48)
     parser.add_argument('--samples', type=int, default=5)
     parser.add_argument('--output', type=Path, help='Directory for the synthetic project and JSON reports')
+    parser.add_argument('--ci-server', action='store_true', help='Also measure the author server on loopback using the synthetic fixture')
     parser.add_argument('--online', action='store_true')
     parser.add_argument('--keep-share', action='store_true', help='Keep the successfully verified synthetic link for 7 days')
     args = parser.parse_args()
@@ -381,15 +537,30 @@ def main():
         parser.error('Remote MCP acceptance requires CHARTS_TEST_MCP_TOKEN and CHARTS_TEST_MCP_PROJECT')
     os.environ['CHARTS_STORAGE_BACKEND'] = 'local'
     root = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix='charts-acceptance-'))
-    fixture, seed_ms = measured(lambda: seed(root, args.rows))
     if args.mode == 'seed':
+        fixture = seed(root, args.rows)
         print(json.dumps({'output': str(root), **fixture}, ensure_ascii=False))
         return
+    root.mkdir(parents=True, exist_ok=True)
+    reports: dict[str, Any] = {}
+
+    def phase(name):
+        reports['phase'] = name
+        save(root / 'report.json', reports)
+        print(f'[{name}] {root}', flush=True)
+
+    phase('preflight')
+    try:
+        preflight(args.mode)
+    except (DashboardError, ValueError, OSError, subprocess.SubprocessError) as error:
+        parser.error(str(error))
+    phase('seed')
+    fixture, seed_ms = measured(lambda: seed(root, args.rows))
     checks: dict[str, object] = {}
+    reports.update(fixture=fixture, checks=checks, seedMs=seed_ms)
     if args.mode == 'verify':
+        phase('functional')
         checks.update(asyncio.run(check_mcp(root, fixture)))
-        if url := os.environ.get('CHARTS_TEST_MCP_URL'):
-            checks['remoteMcp'] = check_remote_mcp(url, os.environ['CHARTS_TEST_MCP_TOKEN'], os.environ['CHARTS_TEST_MCP_PROJECT'])
         subprocess.run(['bun', 'test', 'tests/deploy/pages-d1.test.mjs'], cwd=ROOT, check=True)
     service = Service(root / 'runtime', project_root=root / 'project')
     with workspace(service, fixture['board']) as (client, tool, author, viewer):
@@ -398,25 +569,48 @@ def main():
             if not saved_check.is_file():
                 save(saved_check, check_versions(fixture, client, tool, author, viewer))
             checks.update(read(saved_check))
-        doc, structure = measured(lambda: tool('dashboard_get')['document'])
-        assert doc['snapshot']['datasetRefs'][fixture['dataset']]['rowCount'] == fixture['rows']
-        filters = [{**entry, 'values': [fixture['selection'][entry['id']]]}
-                   if entry['id'] in fixture['selection'] else entry for entry in doc['manifest']['filters']]
-        local, expected = measure_local(fixture, tool, doc, filters, args.samples)
-        export, encode = measured(lambda: tool('dashboard_export_site', {'dataFormat': 'parquet'}, edit=True)['export'])
+        phase('local-author')
+        local_author, expected = {}, None
+        for mode in ('edit', 'preview'):
+            # Separate server processes are unnecessary; each Service owns its query cache.
+            page_service = Service(root / ('measure-' + mode), project_root=root / 'project')
+            with workspace(page_service, fixture['board']) as (page_client, _, page_author, _):
+                links = page_client.get('/api/browser-links/' + fixture['board'], headers=page_author)
+                links.raise_for_status()
+                measurement, expected = author_pages(page_client, links.json(), fixture, args.samples, expected, modes=(mode,))
+                local_author.update(measurement)
+        assert expected is not None
+        reports['localAuthor'] = local_author
+        doc = tool('dashboard_preview')['document']
+        filters = selected_filters(fixture, doc)
+        phase('parquet-export')
+        export, encode = measured(lambda: export_site(service.store, fixture['board'],
+            document=Versions(service.store).read(fixture['board'], doc['revision']),
+            data_format='parquet', single_parquet=True)['export'])
         directory = Path(export['directory'])
-        saved = read(directory / 'document.json')
-        offline = worker(fixture, saved, expected, filters, args.samples, directory=directory,
-                         source=directory / 'static-worker.js')
-        reports = {'fixture': fixture, 'checks': checks, 'seedMs': seed_ms, 'localStructureMs': structure,
-                   'parquetExportMs': encode, 'zipBytes': export['bytes'], 'localAuthor': local, 'localShareWorker': offline}
-        save(root / 'report.json', reports)
-        print('Local author and packaged Worker passed. Report:', root / 'report.json', flush=True)
+        reports.update(parquetExportMs=encode, zipBytes=export['bytes'])
+        phase('local-share')
+        with static_http(directory) as base:
+            with httpx.Client(base_url=base, trust_env=False, timeout=30) as static:
+                saved, _, loading = share_downloads(static, '/')
+            local_share = worker(fixture, saved, expected, filters, args.samples, base=base, source=directory / 'static-worker.js')
+        assert local_share['firstRows']['dataRequests'] == 1
+        reports['localShare'] = {**loading, **local_share}
+        if args.ci_server:
+            phase('ci-author-server')
+            with ci_workspace(root) as (origin, token):
+                reports['ciAuthorServer'], checks['ciMcp'] = server_pages(
+                    origin + '/mcp', token, 'project', fixture, args.samples, expected, loopback=True)
+        if url := os.environ.get('CHARTS_TEST_MCP_URL'):
+            phase('remote-author-server')
+            project = os.environ['CHARTS_TEST_MCP_PROJECT']
+            reports['serverAuthor'], checks['remoteMcp'] = server_pages(
+                url, os.environ['CHARTS_TEST_MCP_TOKEN'], project, fixture, args.samples, expected)
         if args.online:
-            reports['cloudflare'] = online(root, fixture, tool, doc, expected, filters, args.samples, args.keep_share,
+            phase('cloudflare-share')
+            reports['cloudflareShare'] = online(root, fixture, tool, doc, expected, filters, args.samples, args.keep_share,
                                            client, author)
-            save(root / 'report.json', reports)
-            print('Cloudflare D1 and shared annotations passed.', flush=True)
+    phase('complete')
 
 
 if __name__ == '__main__':

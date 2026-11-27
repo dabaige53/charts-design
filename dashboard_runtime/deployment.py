@@ -97,7 +97,7 @@ def _static_filter_options(data, manifest, refs):
     return options
 
 
-def export_site(store, board, output_root=None, document=None, data_format='auto'):
+def export_site(store, board, output_root=None, document=None, data_format='auto', *, single_parquet=False):
     require_preview()
     from .columnar import export_format, write_parquet
     data_format, binary = export_format(data_format)
@@ -129,7 +129,7 @@ def export_site(store, board, output_root=None, document=None, data_format='auto
                 if ref is None:
                     ref = store.data.import_rows(rows, doc['manifest']['datasets'][key]['fields'])
                 cache_root = getattr(store, 'runtime_root', store.root) / 'parquet-cache'
-                files, count, encoding = write_parquet(site, store.data, ref, cache_root, binary)
+                files, count, encoding = write_parquet(site, store.data, ref, cache_root, binary, single_file=single_parquet)
                 encodings[key] = encoding
                 return files, count
             return _write_shards(site, key, store.data.iter_rows(ref) if ref else rows)

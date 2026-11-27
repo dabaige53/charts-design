@@ -21,6 +21,19 @@ CREATE TABLE IF NOT EXISTS publication_chunks (
   PRIMARY KEY (share_id, part)
 );
 
+CREATE TABLE IF NOT EXISTS pages_snapshots (
+  share_id TEXT PRIMARY KEY REFERENCES publications(id),
+  assets TEXT NOT NULL,
+  title TEXT NOT NULL,
+  deployment_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pages_deployment_lock (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  token TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS annotations (
   share_id TEXT NOT NULL REFERENCES publications(id),
   id TEXT NOT NULL,

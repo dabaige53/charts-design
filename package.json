@@ -13,7 +13,7 @@
     "release": "bun bin/release.mjs",
     "deploy:cloudbase": "bun bin/cloudbase-deploy.mjs",
     "deploy:cloudflare": "bunx --package wrangler@4.166.0 wrangler deploy --config deploy/cloudflare/wrangler.json",
-    "ui:install": "bun install --cwd runtime-ui --frozen-lockfile",
+    "ui:install": "bun install --cwd runtime-ui --frozen-lockfile --ignore-scripts",
     "ui:build": "bun run --cwd runtime-ui --bun build",
     "ui:prepare": "bun runtime-ui/scripts/prepare.mjs",
     "ui:typecheck": "bun run --cwd runtime-ui --bun typecheck",
@@ -24,7 +24,7 @@
     "test:unit": "bun bin/python-runtime.js -m pytest tests -q && bun test ./tests/runtime ./tests/development ./tests/deploy",
     "test:components": "bun run --cwd runtime-ui test:components",
     "test:container": "docker build -f deploy/Dockerfile -t charts-design:local . && bun bin/python-runtime.js tests/deploy/container_smoke.py --image charts-design:local",
-    "check": "bun run check:skills && bun run check:docs && bun bin/check-js-syntax.mjs && bun bin/python-runtime.js -m py_compile skills/executive-charts/scripts/*.py skills/executive-charts/scripts/core/*.py tests/deploy/container_smoke.py",
+    "check": "bun run check:skills && bun run check:docs && bun bin/check-js-syntax.mjs && bun bin/python-runtime.js -m py_compile skills/executive-charts/scripts/*.py skills/executive-charts/scripts/core/*.py tests/deploy/container_smoke.py tests/acceptance/run.py",
     "check:skills": "bun bin/check-skill-links.js",
     "check:docs": "bun bin/check-doc-links.js",
     "lint:py": "bun bin/python-runtime.js -m ruff check",
@@ -121,5 +121,8 @@
   },
   "devDependencies": {
     "@cloudbase/cli": "3.9.1"
+  },
+  "dependencies": {
+    "@noble/hashes": "1.8.0"
   }
 }

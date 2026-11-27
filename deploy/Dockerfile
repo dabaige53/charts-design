@@ -22,7 +22,7 @@ RUN if [ -n "$EXTRAS" ]; then \
 FROM oven/bun:1.3.8 AS ui
 WORKDIR /build/runtime-ui
 COPY runtime-ui/package.json runtime-ui/bun.lock ./
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --ignore-scripts
 COPY runtime-ui/ ./
 COPY dashboard_runtime/web/ /build/dashboard_runtime/web/
 RUN bun run build && bun run package:runtime

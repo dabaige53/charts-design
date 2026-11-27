@@ -17,6 +17,7 @@ jobs:
           bun-version-file: .bun-version
       - name: Verify server release version
         run: test "$GITHUB_REF_NAME" = "server-v$(bun -p "require('./package.json').version")"
+      - run: bun install --frozen-lockfile --production --ignore-scripts
       - run: bun test ./tests/deploy/pages.test.mjs
       - name: Package the author server and optional Pages share proxy
         run: |

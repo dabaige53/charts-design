@@ -22,3 +22,5 @@ CHARTS_FORWARDED_ALLOW_IPS=127.0.0.1
 # CHARTS_SHARE_SERVICE_URL=https://share.example.com
 # CHARTS_SHARE_SERVICE_TOKEN=
 # CHARTS_SHARE_SERVICE_PROJECT=default
+# Use single for the Cloudflare Pages snapshot deployment target.
+# CHARTS_SHARE_PARQUET_LAYOUT=single

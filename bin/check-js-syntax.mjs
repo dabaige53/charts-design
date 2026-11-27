@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const parser = new Bun.Transpiler({ loader: 'js' });
-for (const directory of ['bin', 'runtime-ui/scripts']) {
-  for (const file of readdirSync(path.join(root, directory))) {
+for (const directory of ['bin', 'runtime-ui/scripts', 'deploy', 'tests/acceptance']) {
+  for (const file of readdirSync(path.join(root, directory), { recursive: true })) {
     if (!/\.[cm]?js$/.test(file)) continue;
     const name = path.join(directory, file);
     try { parser.transformSync(readFileSync(path.join(root, name), 'utf8')); }

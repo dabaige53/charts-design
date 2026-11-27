@@ -1,5 +1,4 @@
 import { Worker } from "node:worker_threads";
-import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
@@ -7,27 +6,28 @@ const input = JSON.parse(readFileSync(0, "utf8"));
 const script = readFileSync(input.worker, "utf8");
 const bridge = `
 const { parentPort, workerData } = require("node:worker_threads");
-const { resolve, sep } = require("node:path");
-const { readFile } = require("node:fs/promises");
 const fetchAsset = globalThis.fetch;
 const fetched = [];
 globalThis.fetch = async (url, options) => {
   const target = new URL(url);
   const origin = new URL(workerData.base);
   if (target.origin !== origin.origin || !target.pathname.startsWith(origin.pathname)) throw Error("Unexpected data URL");
-  fetched.push(target.pathname);
-  if (!workerData.directory) return fetchAsset(target, options);
-  const path = resolve(workerData.directory, target.pathname.slice(origin.pathname.length));
-  if (!path.startsWith(workerData.directory + sep)) throw Error("Unexpected asset path");
-  return new Response(await readFile(path));
+  const start = performance.now();
+  const response = await fetchAsset(target, options);
+  fetched.push({ headersMs: performance.now() - start, bytes: Number(response.headers.get("content-length")) });
+  return response;
 };
-globalThis.self={postMessage:value=>parentPort.postMessage({...value, dataRequests:fetched.splice(0).length})};
+globalThis.self={postMessage:value=>{
+  const requests = fetched.splice(0);
+  parentPort.postMessage({...value, dataRequests:requests.length, dataBytes:requests.reduce((sum,item)=>sum+item.bytes,0),
+    slowestDataHeadersMs: Math.max(0, ...requests.map(item=>item.headersMs))});
+}};
 parentPort.on("message", data=>self.onmessage({data}));
 `;
 
 function open() {
   const worker = new Worker(bridge + script, { eval: true,
-    workerData: { base: input.base, directory: input.directory ? resolve(input.directory) : null } });
+    workerData: { base: input.base } });
   let sequence = 0;
   const call = (type, args) => new Promise((resolveCall, reject) => {
     const error = reason => { worker.off("message", reply); reject(reason); };
@@ -67,7 +67,8 @@ try {
   const request = { detail: true, componentId: input.table, limit: 10 };
   const start = performance.now();
   const first = await client.call("query", request);
-  result.firstRows = { ms: performance.now() - start, dataRequests: first.dataRequests, rows: first.result.totalRows };
+  result.firstRows = { ms: performance.now() - start, dataRequests: first.dataRequests, dataBytes: first.dataBytes,
+    slowestDataHeadersMs: first.slowestDataHeadersMs, rows: first.result.totalRows };
   assert.equal(first.result.totalRows, input.rows);
   assert.equal(first.result.rows.length, Math.min(input.rows, 10));
   const apply = performance.now();

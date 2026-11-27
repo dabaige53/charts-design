@@ -150,6 +150,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 | `CHARTS_SHARE_SERVICE_URL` | 既有分享服务的 HTTPS 根地址，可含原有路径前缀；仅本机验证允许 loopback HTTP |
 | `CHARTS_SHARE_SERVICE_TOKEN` | 分享服务自己的 Bearer 令牌，仅保存在作者进程。与作者工作区 MCP 令牌分别配置 |
 | `CHARTS_SHARE_SERVICE_PROJECT` | 分享服务侧的发布命名空间，默认 `default`。发布归属还包含每个作者项目的独立来源标识 |
+| `CHARTS_SHARE_PARQUET_LAYOUT` | 目标是 Cloudflare Pages 快照时设为 `single`，每个数据集导出一个 Parquet。默认 `sharded` 适用于其他分享服务 |
 
 使用本机入口打开项目，例如：
 
@@ -175,7 +176,7 @@ charts-design-runtime --project-root /absolute/path/project \
 | --- | --- | --- |
 | CloudBase + 私有 COS | 既有 HTTPS 网关鉴权；COS 保存独立副本及 Parquet 数据 | Runtime HTTP 接口调用 PostgreSQL `charts_share_annotations` RPC；按分享 ID、页面和发布版本独立保存 |
 | Cloudflare Worker + Container | Container 提供页面与数据；既有 Durable Object SQLite 工作区 checkpoint 跨冷启动恢复 | 每个分享独立 SQLite；每次成功批注在返回前只保存该 SQLite 的增量 checkpoint，不重新归档网页或 Parquet |
-| Cloudflare Pages + D1 | Pages 提供界面；D1 保存选定版本的页面定义与私有数据分片 | Pages Functions 校验访问与批注权限，D1 按分享 ID 保存批注 |
+| Cloudflare Pages + D1 | Pages 保存固定页面定义与 Parquet，每个数据集一个文件 | Pages Functions 检查访问密钥和批注权限，D1 保存分享对应关系、期限和批注 |
 | Cloudflare Pages 分享代理（可选） | Pages 转发分享资源，由分享源站提供副本 | 分享源站持久化批注 |
 | 纯静态 ZIP | 包内页面与使用中的完整数据 | 无后端，不提供可提交状态 |
 
@@ -215,10 +216,14 @@ bun run deploy:init -- all
 ```
 
 - `author` 需要 Docker Compose。复制 `deploy/environment.example` 到 `deploy/charts.env`，设置作者 HTTPS 地址和 MCP 令牌。在启用分享时配置 `CHARTS_SHARE_SERVICE_URL` 及发布令牌。可设置 `CHARTS_AUTHOR_ENV_FILE` 和 `CHARTS_AUTHOR_PORT` 指定配置文件和回环端口。由现有 HTTPS 反向代理暴露 MCP 地址。
-- `pages` 从环境读取 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`CHARTS_SHARE_SERVICE_TOKEN` 和 `CHARTS_SHARE_SIGNING_SECRET`。Cloudflare 部署令牌需要 Pages 和 D1 写权限。脚本创建或复用 Pages 与 D1，执行 `deploy/pages/schema.sql`，设置 `SHARE_DB` 并部署界面。可设置 `CHARTS_PAGES_PROJECT`、`CHARTS_D1_DATABASE`、`CHARTS_PAGES_BRANCH` 和 `CHARTS_PAGES_URL`。
+- `pages` 从环境读取 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`CHARTS_PAGES_DEPLOY_TOKEN`、`CHARTS_SHARE_SERVICE_TOKEN` 和 `CHARTS_SHARE_SIGNING_SECRET`。初始化令牌需要 Pages 和 D1 写权限。快照部署令牌单独签发，只授予 Pages 写权限，由 Pages Functions 使用。脚本创建或复用 Pages 与 D1，执行 `deploy/pages/schema.sql`，绑定 `SHARE_DB`，启用 fail-closed 后发布。可设置 `CHARTS_PAGES_PROJECT`、`CHARTS_D1_DATABASE`、`CHARTS_PAGES_BRANCH` 和 `CHARTS_PAGES_URL`。
 - `all` 先检查作者配置，再部署 Pages，最后启动作者容器。两个环境使用同一个发布令牌。现有 Pages 密钥在重复运行时保留。签名密钥用于保护已发链接和会话，应随环境长期保存。预览项目可使用独立的数据库和密钥。
 
-`/health` 返回 `role: "sharing"`、`storage: "d1"` 和界面构建号后，把作者环境的 `CHARTS_SHARE_SERVICE_URL` 指向 Pages 域名，设置同一发布令牌。原有发布、读者批注、反馈和撤销接口沿用相同路径。分享 ZIP 上限 16 MiB。Pages 从部署包提供界面资源，从 D1 读取固定版本的数据分片。发布请求的重试使用原请求 ID，撤销立即删除分片与批注并保留分享标识以防重试重新发布。到期立即关闭访问，后续发布时分批清理已到期内容。
+`/health` 返回 `role: "sharing"`、`storage: "pages+d1"` 和界面构建号后，把作者环境的 `CHARTS_SHARE_SERVICE_URL` 指向 Pages 域名，设置同一发布令牌和 `CHARTS_SHARE_PARQUET_LAYOUT=single`。分享 ZIP 上限 16 MiB，快照中的 Parquet 文件合计上限 24 MiB。
+
+每个新分享生成新的分享 ID 和一次 Pages 生产部署。新部署保留所有有效分享的页面和数据，旧链接继续使用原来的 `/s/<shareId>/` 地址。选择「不过期」的分享不受 Cloudflare 旧部署保留期影响。重复提交同一个请求 ID 会返回原分享。读取时 Pages Functions 先检查会话和分享状态，再返回部署内的静态文件。直接访问快照文件路径会被拒绝。
+
+撤销或到期会立即阻止读取。后续部署从当前部署清单移除失效快照，历史部署仍受同一访问检查。既有的 D1 数据分片继续通过原链接读取，直到对应分享撤销或到期。升级 Pages 应使用 `deploy:init`，它会把有效快照加入部署清单。
 
 ## Cloudflare 独立部署
 

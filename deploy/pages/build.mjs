@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assetManifest, bundlePath, pagesAsset, releasePath, workerBundle } from "./deployment.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -21,7 +22,12 @@ if (withD1) {
   const { id } = JSON.parse(await readFile(resolve(source, "build.json"), "utf8"));
   if (!id) throw Error("Missing UI build version. Run bun run ui:prepare.");
   await mkdir(target, { recursive: true });
-  for (const name of ["app.js", "app.css", "static-worker.js", "build.json"])
+  const names = ["app.js", "app.css", "static-worker.js", "build.json"];
+  for (const name of names)
     await copyFile(resolve(source, name), resolve(target, name));
+  await writeFile(resolve(output, "." + bundlePath), await workerBundle(await readFile(resolve(output, "_worker.js"))));
+  const runtime = await Promise.all([...names.map(name => "/runtime/" + name), bundlePath].map(async name =>
+    pagesAsset(name, await readFile(resolve(output, "." + name)))));
+  await writeFile(resolve(output, "." + releasePath), JSON.stringify(assetManifest(runtime)));
 }
 await writeFile(resolve(output, "_routes.json"), JSON.stringify({ version: 1, include: ["/*"], exclude: [] }));

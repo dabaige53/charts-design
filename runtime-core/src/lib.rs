@@ -52,6 +52,7 @@ pub struct ExportReceipt {
 pub struct ExportOptions {
     pub partition_field: Option<String>,
     pub include_options: bool,
+    pub single_file: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -132,6 +133,9 @@ pub fn export_parquet_with_options(
     output: &Path,
     options: &ExportOptions,
 ) -> Result<ExportReceipt> {
+    if options.single_file && (options.partition_field.is_some() || options.include_options) {
+        return Err("Single-file export cannot include separate partitions or option files".into());
+    }
     if version.len() != 64
         || !version
             .bytes()
@@ -241,14 +245,43 @@ pub fn export_parquet_with_options(
     let order = partition
         .map(|index| format!("c{index},"))
         .unwrap_or_default();
+    let table = format!("d_{version}");
+    let numeric_schema = options
+        .single_file
+        .then(|| floating_columns(&transaction, &table, &kinds))
+        .transpose()?;
     let mut statement = transaction.prepare(&format!(
-        "SELECT {selected}, _missing, rowid FROM d_{version} ORDER BY {order}rowid"
+        "SELECT {selected}, _missing, rowid FROM {table} ORDER BY {order}rowid"
     ))?;
     let mut source = statement.query([])?;
     let mut batch = Vec::new();
     let mut batch_bytes = 0;
     let mut count = 0;
     let mut files = Vec::new();
+    let mut single_writer = None;
+    let single_name = format!("{version}-0.parquet");
+    let single_path = output.join(&single_name);
+    let mut flush = |batch: &mut Vec<ExportRow>,
+                     files: &mut Vec<ExportFile>,
+                     partition_index: &mut Option<PartitionIndex>|
+     -> Result<()> {
+        if let Some(floating) = &numeric_schema {
+            let records = record_batch(&schema, batch, Some(floating))?;
+            if single_writer.is_none() {
+                single_writer = Some(parquet_writer(&single_path, &schema, records.schema())?);
+            }
+            let writer = single_writer.as_mut().unwrap();
+            writer.write(&records)?;
+            writer.flush()?;
+            if writer.bytes_written() as u64 > MAX_FILE_BYTES {
+                return Err("The Parquet file exceeds the 24 MiB static hosting limit".into());
+            }
+            batch.clear();
+            Ok(())
+        } else {
+            flush_main(output, version, &schema, batch, files, partition_index)
+        }
+    };
     while let Some(row) = source.next()? {
         let (value, bytes) = read_row(row, &schema, &positions)?;
         let partition_value = partition.map(|index| match &value.values[index] {
@@ -267,14 +300,7 @@ pub fn export_parquet_with_options(
                 || batch.len() >= MAX_BATCH_ROWS
                 || batch_bytes + bytes > MAX_BATCH_BYTES)
         {
-            flush_main(
-                output,
-                version,
-                &schema,
-                &mut batch,
-                &mut files,
-                &mut partition_index,
-            )?;
+            flush(&mut batch, &mut files, &mut partition_index)?;
             batch_bytes = 0;
         }
         if partition_changed {
@@ -291,20 +317,21 @@ pub fn export_parquet_with_options(
         batch_bytes += bytes;
         count += 1;
     }
-    flush_main(
-        output,
-        version,
-        &schema,
-        &mut batch,
-        &mut files,
-        &mut partition_index,
-    )?;
+    flush(&mut batch, &mut files, &mut partition_index)?;
     if count != metadata.row_count {
         return Err(format!(
             "Dataset row count mismatch: expected {}, read {count}",
             metadata.row_count
         )
         .into());
+    }
+    if let Some(writer) = single_writer {
+        writer.close()?;
+        files.push(file_receipt(
+            &single_path,
+            single_name,
+            usize::try_from(count)?,
+        )?);
     }
     let option_files = options
         .include_options
@@ -321,6 +348,30 @@ pub fn export_parquet_with_options(
         partition_index,
         options: option_files,
     })
+}
+
+fn floating_columns(db: &Connection, table: &str, kinds: &[Kind]) -> Result<Vec<bool>> {
+    let numeric: Vec<_> = kinds
+        .iter()
+        .enumerate()
+        .filter_map(|(index, kind)| matches!(kind, Kind::Number).then_some(index))
+        .collect();
+    let mut result = vec![false; kinds.len()];
+    if !numeric.is_empty() {
+        // All row groups in a Parquet file must use the same physical schema.
+        let selections = numeric
+            .iter()
+            .map(|index| format!("MAX(typeof(c{index})='real')"))
+            .collect::<Vec<_>>()
+            .join(",");
+        db.query_row(&format!("SELECT {selections} FROM {table}"), [], |row| {
+            for (offset, index) in numeric.into_iter().enumerate() {
+                result[index] = row.get::<_, Option<bool>>(offset)?.unwrap_or(false);
+            }
+            Ok(())
+        })?;
+    }
+    Ok(result)
 }
 
 fn flush_main(
@@ -469,6 +520,20 @@ fn write_batch(
     columns: &Columns<'_>,
     rows: &[ExportRow],
 ) -> Result<ExportFile> {
+    let batch = record_batch(columns, rows, None)?;
+    let name = format!("{prefix}-{index}.parquet");
+    let path = output.join(&name);
+    let mut writer = parquet_writer(&path, columns, batch.schema())?;
+    writer.write(&batch)?;
+    writer.close()?;
+    file_receipt(&path, name, rows.len())
+}
+
+fn record_batch(
+    columns: &Columns<'_>,
+    rows: &[ExportRow],
+    floating: Option<&[bool]>,
+) -> Result<RecordBatch> {
     let fields = columns.fields;
     let mut arrays: Vec<ArrayRef> = Vec::with_capacity(fields.len() + 1);
     let mut schema = Vec::with_capacity(fields.len() + 1);
@@ -493,9 +558,13 @@ fn write_batch(
                 ))),
             ),
             Kind::Number
-                if rows
-                    .iter()
-                    .any(|row| matches!(row.values[index], Cell::Real(_))) =>
+                if floating.map_or_else(
+                    || {
+                        rows.iter()
+                            .any(|row| matches!(row.values[index], Cell::Real(_)))
+                    },
+                    |fields| fields[index],
+                ) =>
             {
                 let values = rows.iter().map(|row| match row.values[index] {
                     Cell::Null => Ok(None),
@@ -529,13 +598,19 @@ fn write_batch(
             rows.iter().map(|row| row.ordinal),
         )));
     }
-    let schema = Arc::new(Schema::new(schema));
-    let batch = RecordBatch::try_new(schema.clone(), arrays)?;
+    Ok(RecordBatch::try_new(Arc::new(Schema::new(schema)), arrays)?)
+}
+
+fn parquet_writer(
+    path: &Path,
+    columns: &Columns<'_>,
+    schema: Arc<Schema>,
+) -> Result<ArrowWriter<File>> {
     let mut metadata = vec![
         KeyValue::new("charts.format".to_owned(), "parquet-v1".to_owned()),
         KeyValue::new(
             "charts.fieldOrder".to_owned(),
-            serde_json::to_string(fields)?,
+            serde_json::to_string(columns.fields)?,
         ),
         KeyValue::new(
             "charts.missingColumn".to_owned(),
@@ -567,21 +642,17 @@ fn write_batch(
             .set_column_encoding(path, encoding);
     }
     let props = properties.build();
-    let name = format!("{prefix}-{index}.parquet");
-    let path = output.join(&name);
-    let file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)?;
-    let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
-    writer.write(&batch)?;
-    writer.close()?;
+    let file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    Ok(ArrowWriter::try_new(file, schema, Some(props))?)
+}
+
+fn file_receipt(path: &Path, name: String, count: usize) -> Result<ExportFile> {
     let bytes = path.metadata()?.len();
     if bytes > MAX_FILE_BYTES {
-        fs::remove_file(&path)?;
+        fs::remove_file(path)?;
         return Err("A Parquet shard exceeds the 24 MiB static hosting limit; reduce the number or width of fields".into());
     }
-    let mut file = BufReader::new(File::open(&path)?);
+    let mut file = BufReader::new(File::open(path)?);
     let mut hash = Sha256::new();
     let mut buffer = [0; 64 * 1024];
     loop {
@@ -593,7 +664,7 @@ fn write_batch(
     }
     Ok(ExportFile {
         path: name,
-        row_count: rows.len(),
+        row_count: count,
         bytes,
         sha256: format!("{:x}", hash.finalize()),
     })
@@ -677,8 +748,14 @@ pub fn inspect_parquet(input: &Path) -> Result<InspectionReceipt> {
     }
     let has_ordinal = ordinal.is_some();
     let expected = builder.metadata().file_metadata().num_rows();
-    if !(0..=MAX_BATCH_ROWS as i64).contains(&expected) {
-        return Err("Parquet shard row count exceeds the Charts format limit".into());
+    if expected < 0
+        || builder
+            .metadata()
+            .row_groups()
+            .iter()
+            .any(|group| !(0..=MAX_BATCH_ROWS as i64).contains(&group.num_rows()))
+    {
+        return Err("Parquet row group exceeds the Charts format limit".into());
     }
     let mut row_count = 0;
     for result in builder.with_batch_size(MAX_BATCH_ROWS).build()? {

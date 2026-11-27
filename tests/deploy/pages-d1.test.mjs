@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import worker from "../../deploy/pages/worker.mjs";
+import { assetManifest, bundlePath, pagesAsset, releasePath } from "../../deploy/pages/deployment.mjs";
 
 const origin = "https://shares.example";
 const owner = "3eafce6c-040a-4609-b51f-416c882a97c1";
@@ -102,4 +103,101 @@ test("publishes a fixed copy, serves trusted assets, and persists authorized ann
   assert.equal((await publish()).status, 410);
   assert.equal(sqlite.query("SELECT count(*) AS n FROM publication_chunks").get().n, 0);
   sqlite.close();
+});
+
+// @wu-test type=integration | scope=Pages生产快照发布与访问 | protects=发布回执丢失后重试重复部署，新快照去掉有效旧分享，匿名绕过或Parquet仍写入D1
+test("deploys a new snapshot without losing earlier links or writing their data to D1", async () => {
+  const { sqlite, db } = d1();
+  const encode = new TextEncoder();
+  const script = pagesAsset(bundlePath, encode.encode("Worker bundle"));
+  const release = JSON.stringify(assetManifest([script]));
+  const currentRelease = pagesAsset(releasePath, encode.encode(release));
+  let current = { id: "runtime", latest_stage: { status: "success" },
+    deployment_trigger: { metadata: { commit_message: "charts-runtime-" + currentRelease.key } } };
+  let deployed = {};
+  let deployCount = 0;
+  const uploaded = new Map([[script.key, script.value]]);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (location, options) => {
+    const { pathname } = new URL(location);
+    let value;
+    if (pathname.endsWith("/upload-token")) value = { jwt: "asset-token" };
+    else if (pathname.endsWith("/check-missing")) {
+      value = JSON.parse(options.body).hashes.filter(hash => !uploaded.has(hash));
+    } else if (pathname.endsWith("/assets/upload")) {
+      for (const entry of JSON.parse(options.body)) uploaded.set(entry.key, entry.value);
+    } else if (pathname.endsWith("/upsert-hashes")) value = null;
+    else if (pathname.endsWith("/deployments") && options.method === "POST") {
+      const form = options.body;
+      deployed = JSON.parse(form.get("manifest"));
+      assert.ok(Object.values(deployed).every(hash => uploaded.has(hash)));
+      assert.deepEqual(JSON.parse(await form.get("_routes.json").text()).include, ["/*"]);
+      current = { id: "deployment-" + ++deployCount, latest_stage: { status: "success" },
+        deployment_trigger: { metadata: { commit_message: form.get("commit_message") } } };
+      if (deployCount === 1) throw new TypeError("Simulated missing response after activation");
+      value = current;
+    } else if (pathname.endsWith("/deployments")) value = current ? [current] : [];
+    else if (pathname.endsWith("/projects/charts-design")) {
+      value = { production_branch: "main", deployment_configs: { production: { fail_open: false } },
+        canonical_deployment: current, latest_deployment: current };
+    } else throw Error("Unexpected Cloudflare API path");
+    return Response.json({ success: true, result: value });
+  };
+  try {
+    const env = { SHARE_DB: db, CHARTS_SHARE_SERVICE_TOKEN: token,
+      CHARTS_SHARE_SIGNING_SECRET: "test-cookie-signing-secret-at-least-32-characters",
+      CHARTS_PAGES_ACCOUNT: "a".repeat(32), CHARTS_PAGES_PROJECT: "charts-design", CHARTS_PAGES_BRANCH: "main",
+      CHARTS_PAGES_DEPLOY_TOKEN: "pages-write-token",
+      ASSETS: { fetch: request => {
+        const path = new URL(request.url).pathname;
+        if (path === releasePath) return new Response(release);
+        if (path === bundlePath) return new Response("Worker bundle");
+        const asset = uploaded.get(deployed[path]);
+        return asset ? new Response(Uint8Array.from(atob(asset), c => c.charCodeAt(0))) : new Response(null, { status: 404 });
+      } } };
+    const send = (path, args) => worker.fetch(new Request(origin + path, args), env);
+    const body = bundle();
+    const publish = (id, expiration) => send("/api/v1/publications", { method: "POST", body, headers: {
+      Authorization: "Bearer " + token, "Content-Type": "application/zip", "X-Charts-Source": owner,
+      "X-Charts-Project": "project", "X-Charts-Request": id, "X-Charts-Expiration": expiration, "X-Charts-Annotation-Mode": "annotate",
+    } });
+    assert.equal((await publish(requestId, "never")).status, 503);
+    const confirmed = await publish(requestId, "never");
+    assert.equal(confirmed.status, 200, await confirmed.clone().text());
+    const first = await confirmed.json();
+    assert.equal(first.expiresAt, null);
+    assert.equal(deployCount, 1);
+    const next = await publish(crypto.randomUUID(), "7d");
+    assert.equal(next.status, 200, await next.clone().text());
+    assert.notEqual((await next.json()).shareId, first.shareId);
+    assert.equal(deployCount, 2);
+    const base = "/s/" + first.shareId + "/";
+    const rawPath = "/snapshots/" + first.shareId + "/data/sales-0.parquet";
+    assert.ok(deployed[rawPath]);
+    assert.equal((await send(rawPath)).status, 404);
+    assert.equal((await send(base + "data/sales-0.parquet")).status, 401);
+    const session = await send(base, { method: "POST", headers: { Origin: origin },
+      body: new URLSearchParams({ accessKey: first.accessKey }) });
+    assert.equal(session.status, 303);
+    const Cookie = session.headers.get("set-cookie").split(";")[0];
+    const page = await send(base + "document.json", { headers: { Cookie } });
+    assert.equal((await page.json()).publication.shareId, first.shareId);
+    assert.equal(await (await send(base + "data/sales-0.parquet", { headers: { Cookie } })).text(), "PAR1 fixture bytes");
+    const annotation = await send(base + "api/annotations", { method: "POST",
+      headers: { Cookie, Origin: origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ revision: 2, append: { id: "snapshot-note", text: "Saved", createdAt: "2026-11-27",
+        componentId: "total", anchor: { scope: "component", kind: "element" } } }) });
+    assert.equal(annotation.status, 200, await annotation.clone().text());
+    assert.equal(sqlite.query("SELECT count(*) AS n FROM annotations").get().n, 1);
+    assert.equal(sqlite.query("SELECT count(*) AS n FROM publication_chunks").get().n, 0);
+    assert.equal(sqlite.query("SELECT count(*) AS n FROM publications WHERE document IS NOT NULL").get().n, 0);
+    const managed = "/api/v1/publications/" + first.shareId + "?source=" + owner + "&project=project";
+    const revoked = await send(managed, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
+    assert.equal(revoked.status, 200);
+    assert.equal((await send(base + "data/sales-0.parquet", { headers: { Cookie } })).status, 410);
+    assert.equal((await publish(requestId, "never")).status, 410);
+  } finally {
+    globalThis.fetch = realFetch;
+    sqlite.close();
+  }
 });

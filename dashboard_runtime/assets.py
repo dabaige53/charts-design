@@ -26,7 +26,7 @@ def ui_resource_uri():
 
 def require_preview():
     if ui_build_id() == 'unavailable':
-        raise DashboardError('UI_UNAVAILABLE', 'UI 尚未打包；请运行 npm run ui:build 和 npm run ui:package。', 503)
+        raise DashboardError('UI_UNAVAILABLE', 'UI 尚未打包；请运行 bun run ui:prepare。', 503)
 
 
 def render_html(mode='web', document=None, legacy=None, idle_timeout: float = 60, boot_state=None):

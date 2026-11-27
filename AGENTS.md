@@ -45,7 +45,7 @@
 - 修改静态网页导出时读 [静态部署包](docs/operations/static-deployment.md)：资源、数据分片、下载和离线能力。
 - 部署远程 MCP、网页分享或腾讯云到期清理时读 [自托管服务器](docs/operations/self-hosted-server.md)：鉴权、8 位数字密钥、COS 私有副本及云端 SCF 删除。
 - 处理 CloudBase（腾讯云开发）相关问题，包括能力咨询、方案设计、部署、鉴权、存储与排错时，先阅读官方 [CloudBase SKILL.md](https://github.com/TencentCloudBase/cloudbase-skills/blob/main/skills/cloudbase/SKILL.md)，再按任务读取其中对应的参考文档。
-- 修改测试、CI 或选择验证范围时读 [测试与 CI](docs/operations/testing.md)：检查层次、环境、测试标记和全量授权要求。
+- 选择本机检查、排查依赖失败或跑百万行验收时读 [测试与 CI](docs/operations/testing.md)。修改测试前查标记与全量授权要求。
 - 修改设计画布或追溯原图形时读 [图表参考](docs/design-system/project/chart-ui.md)：几何、标签、Tooltip 和原始资料。
 - 修改设计组件导出或画布安装资源时读 [产品 React 组件](docs/design-system/project/react-ui.md)：组件映射与独立构建、打包入口。
 - 选择指标卡时读 [指标卡选型](skills/executive-charts/references/kpi-cards.md)：按问题选择形态，保留真实比较基准。

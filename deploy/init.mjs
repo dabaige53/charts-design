@@ -2,6 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { activeSnapshotAssets, assetManifest, bundlePath, pagesAsset, pagesClient, releasePath,
+  withPagesDeployment } from "./pages/deployment.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mode = process.argv[2];
@@ -26,7 +28,7 @@ async function health(origin, role, build) {
         headers: { "User-Agent": "Charts-Design-Deployment/1" }, signal: AbortSignal.timeout(5000),
       });
       const result = await response.json();
-      if (response.ok && result.ok && result.role === role && (!build || result.storage === "d1" && result.uiBuildId === build)) {
+      if (response.ok && result.ok && result.role === role && (!build || result.storage === "pages+d1" && result.uiBuildId === build)) {
         console.log(JSON.stringify({ origin, ...result }));
         return;
       }
@@ -75,6 +77,8 @@ async function pages() {
   const account = setting("CLOUDFLARE_ACCOUNT_ID");
   if (!/^[0-9a-f]{32}$/.test(account)) throw Error("Invalid CLOUDFLARE_ACCOUNT_ID");
   const apiToken = setting("CLOUDFLARE_API_TOKEN");
+  const snapshotToken = setting("CHARTS_PAGES_DEPLOY_TOKEN");
+  if (snapshotToken === apiToken) throw Error("Use a separate Pages-only snapshot deployment token");
   const serviceToken = setting("CHARTS_SHARE_SERVICE_TOKEN", { min: 32 });
   const signingSecret = setting("CHARTS_SHARE_SIGNING_SECRET", { min: 32 });
   if (serviceToken === signingSecret) throw Error("Use distinct publication and signing secrets");
@@ -100,26 +104,39 @@ async function pages() {
     throw Error("Existing SHARE_DB belongs to a different database");
   const db = existing || await request("POST", "/d1/database", { name: databaseName });
   const schema = await Bun.file(join(root, "deploy/pages/schema.sql")).text();
-  await request("POST", "/d1/database/" + db.uuid + "/query", { sql: schema });
+  const dbPath = "/d1/database/" + db.uuid + "/query";
+  await request("POST", dbPath, { sql: schema });
+  const database = {
+    prepare: sql => ({ bind: (...params) => {
+      const execute = async () => (await request("POST", dbPath, { sql, params }))[0];
+      return { run: execute, all: execute, first: async () => (await execute()).results[0] };
+    } }),
+  };
   const secrets = Object.fromEntries(Object.entries({
-    CHARTS_SHARE_SERVICE_TOKEN: serviceToken, CHARTS_SHARE_SIGNING_SECRET: signingSecret,
+    CHARTS_SHARE_SERVICE_TOKEN: serviceToken, CHARTS_SHARE_SIGNING_SECRET: signingSecret, CHARTS_PAGES_DEPLOY_TOKEN: snapshotToken,
   }).filter(([key]) => !current.env_vars?.[key]).map(([key, value]) => [key, { type: "secret_text", value }]));
-  if (!current.d1_databases?.SHARE_DB || Object.keys(secrets).length) {
-    await request("PATCH", projectPath, { deployment_configs: { production: {
-      d1_databases: { SHARE_DB: { id: db.uuid } }, env_vars: secrets,
-    } } });
-  }
+  const config = Object.fromEntries(Object.entries({
+    CHARTS_PAGES_ACCOUNT: account, CHARTS_PAGES_PROJECT: name, CHARTS_PAGES_BRANCH: branch,
+  }).map(([key, value]) => [key, { type: "plain_text", value }]));
   const temporary = await mkdtemp(join(tmpdir(), "charts-pages-init-"));
   try {
     command(["bun", "run", "ui:install"]);
     command(["bun", "run", "ui:prepare"]);
     const output = join(temporary, "dist");
     command(["bun", "deploy/pages/build.mjs", output, "--d1"]);
-    const uploaderEnv = { ...env, CI: "1", WRANGLER_SEND_METRICS: "false" };
-    delete uploaderEnv.CHARTS_SHARE_SERVICE_TOKEN;
-    delete uploaderEnv.CHARTS_SHARE_SIGNING_SECRET;
-    command(["bunx", "--package", "wrangler@4.166.0", "wrangler", "pages", "deploy", output,
-      "--project-name", name, "--branch", branch], { cwd: temporary, env: uploaderEnv });
+    await withPagesDeployment(database, async assertLock => {
+      await request("PATCH", projectPath, { deployment_configs: { production: {
+        fail_open: false, d1_databases: { SHARE_DB: { id: db.uuid } }, env_vars: { ...config, ...secrets },
+      } } });
+      const names = ["/runtime/app.js", "/runtime/app.css", "/runtime/static-worker.js", "/runtime/build.json", bundlePath, releasePath];
+      const assets = await Promise.all(names.map(async path => pagesAsset(path, new Uint8Array(await Bun.file(output + path).arrayBuffer()))));
+      const runtime = assetManifest(assets);
+      await pagesClient({ account, project: name, branch, token: snapshotToken }).deploy({
+        assets, manifest: { ...runtime, ...await activeSnapshotAssets(database, Math.floor(Date.now() / 1000)) },
+        worker: new Uint8Array(await Bun.file(output + bundlePath).arrayBuffer()),
+        marker: "charts-runtime-" + runtime[releasePath], assertLock,
+      });
+    });
     const build = (await Bun.file(join(output, "runtime/build.json")).json()).id;
     if (!project.subdomain) project = await request("GET", projectPath);
     const origin = new URL(env.CHARTS_PAGES_URL || "https://" + project.subdomain);
