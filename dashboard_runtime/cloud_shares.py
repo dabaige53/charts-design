@@ -42,14 +42,6 @@ def retire_id(storage, share_id):
     storage.put('retired/' + checked_id(share_id), b'')
 
 
-def share_storage_errors():
-    try:
-        from qcloud_cos.cos_exception import CosClientError, CosServiceError
-    except ImportError:
-        return (DashboardError, OSError)
-    return (DashboardError, OSError, CosClientError, CosServiceError)
-
-
 class CloudShares:
     def __init__(self, storage, public_url):
         self.storage = storage
@@ -61,12 +53,13 @@ class CloudShares:
         self.public_url = public_url.rstrip('/')
 
     @classmethod
-    def from_environment(cls):
+    def from_environment(cls, public_url=None):
+        public_url = public_url or os.environ.get('CHARTS_PUBLIC_URL', '')
         if os.environ.get('CHARTS_STORAGE_BACKEND') in ('cloudflare', 'neon'):
             from .cloudflare_shares import storage
-            return cls(storage(), os.environ.get('CHARTS_PUBLIC_URL', ''))
+            return cls(storage(), public_url)
         from .cloud_storage import CosShareStorage
-        return cls(CosShareStorage.from_environment(), os.environ.get('CHARTS_PUBLIC_URL', ''))
+        return cls(CosShareStorage.from_environment(), public_url)
 
     def _put_json(self, key, value):
         self.storage.put(key, json.dumps(value, ensure_ascii=False, allow_nan=False).encode(), 'application/json')
@@ -146,19 +139,6 @@ class CloudShares:
                 '分享已过期或已撤销', 'SHARE_EXPIRED')
         return control
 
-    def quick_identity(self, service, board, args, expiration):
-        from .server import load_secret
-
-        project = getattr(service.store, 'project', None) or str(Path(service.project_root).resolve())
-        request = json_bytes([project, board, args.get('expectedRevision'), args.get('revision'),
-                              expiration, args['share']['requestId'], args['share'].get('annotationMode', 'view'),
-                              args.get('pages'), args.get('accessKey')])
-        configured = os.environ.get('CHARTS_SERVER_SECRET')
-        secret = configured.encode() if configured else load_secret(service.transport.path.parent / 'quick-share-secret')
-        share_id = hmac.new(secret, b'quick-share-id:' + request, hashlib.sha256).hexdigest()[:32]
-        key = hmac.new(secret, b'quick-share-key:' + request, hashlib.sha256).digest()
-        return share_id, f'{int.from_bytes(key, "big") % 100000000:08d}'
-
     def quick_result(self, share_id, access_key, expiration):
         # A response may have been lost after the share became active. Return
         # the same link and key without storing the plaintext visitor key.
@@ -212,24 +192,6 @@ class CloudShares:
                     'cleanupAfter': previous['cleanupAfter']}
         self._put_json(key, job)
         return job
-
-    def quick_target(self, share_id, board, expected, revision, draft_revision, expiration):
-        self._not_retired(share_id)
-        path = f'jobs/{share_id}.json'
-        raw = self.storage.get(path)
-        if raw is not None:
-            job = json.loads(raw)
-            require(job['state'] in ('uploading', 'active'), 'Share is unavailable', 'SHARE_UNAVAILABLE')
-            return job['expectedDraftRevision'], job['revision'], True
-        require(expected == draft_revision, 'Reload before publishing', 'REVISION_CONFLICT')
-        self.storage.check_private()
-        now = int(time.time())
-        lifetime = EXPIRATIONS[expiration]
-        self._put_json(path, {'shareId': share_id, 'state': 'uploading', 'dashboardId': board,
-                              'expectedDraftRevision': expected, 'revision': revision,
-                              'expiresAt': now + lifetime if lifetime is not None else None,
-                              'stagingUntil': now + 3600, 'cleanupAfter': now + 3600, 'pages': []})
-        return expected, revision, False
 
     def publish(self, service, board, expected_revision, expiration='7d', access_key=None, pages=None, *, share_id=None,
                 annotation_mode='view'):
@@ -414,7 +376,8 @@ class CloudShares:
             if version in datasets:
                 return datasets[version]
             obj = assets.call('object_get', version=version)
-            require(obj is not None, 'Dataset files unavailable', 'ASSET_UNAVAILABLE')
+            if obj is None:
+                raise DashboardError('ASSET_UNAVAILABLE', 'Dataset files unavailable')
             descriptor = obj['descriptor']
             require(descriptor['metadata'] == ref, 'Remote data metadata differs', 'DATA_CONFLICT')
             if descriptor.get('dataFormat') != FORMAT:
@@ -426,10 +389,12 @@ class CloudShares:
                         directory, service.store.data, ref, service.store.runtime_root / 'parquet-cache', binary,
                         partition_field=descriptor.get('partitionIndex', {}).get('field'), include_options=True,
                     )
-                    for item in [*receipt['files'], *(entry for group in receipt['options'].values() for entry in group)]:
-                        put(f"data/{obj['id']}/{item['path']}", (directory / item['path']).read_bytes(),
-                            'application/octet-stream')
-                obj = {**obj, 'descriptor': {**descriptor, **parquet_resources(receipt)}}
+                    resources = parquet_resources(receipt)
+                    filenames = [*resources['shards'],
+                                 *(name for group in resources['options'].values() for name in group['files'])]
+                    for name in filenames:
+                        put(f"data/{obj['id']}/{name}", (directory / name).read_bytes(), 'application/octet-stream')
+                obj = {**obj, 'descriptor': {**descriptor, **resources}}
                 converted.add(obj['id'])
             datasets[version] = obj
             return obj
@@ -592,11 +557,12 @@ class CloudShares:
                 '访问密钥错误', 'INVALID_ACCESS_KEY')
         return control
 
-    def publication_page(self, share_id, board=None, *, control=None):
+    def publication_page(self, share_id, board=None, *, control=None) -> dict:
         control = control or self.control(share_id)
         board = identifier(board or control['dashboardId'])
         page = next((page for page in control['pages'] if page['id'] == board), None)
-        require(page is not None, '此分享不包含该页面', 'FORBIDDEN')
+        if page is None:
+            raise DashboardError('FORBIDDEN', '此分享不包含该页面')
         return page
 
     def annotations(self, share_id, board=None):

@@ -40,7 +40,9 @@ def note(note_id='note-a', component=None, quote='报告段落'):
 
 
 def entry_action(html, fragment):
-    script = re.search(r'<script id="charts-share-entry">([\s\S]*?)</script>', html).group(1)
+    match = re.search(r'<script id="charts-share-entry">([\s\S]*?)</script>', html)
+    assert match is not None
+    script = match.group(1)
     program = """
         import vm from 'node:vm';
         let input=''; for await (const part of process.stdin) input+=part;
@@ -115,7 +117,7 @@ def test_annotation_storage_merges_parallel_appends_and_rejects_revoked_scope(tm
     assert error.value.code == 'SHARE_EXPIRED'
 
 
-# @wu-test type=integration | scope=publication reader and feedback HTTP permissions | protects=越权写批注或内容、失效分享继续读写、反馈权限升级与回执丢失后重复新增
+# @wu-test type=integration | scope=publication reader and feedback HTTP permissions | protects=分享服务开放作者路由、失效分享继续读写或回执丢失后重复新增
 def test_reader_http_enforces_scope_permission_expiry_and_feedback(tmp_path, monkeypatch):
     from starlette.testclient import TestClient
     from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
@@ -123,9 +125,9 @@ def test_reader_http_enforces_scope_permission_expiry_and_feedback(tmp_path, mon
     author, storage, shares, receipt = publication(tmp_path)
     readonly = shares.publish(author, 'board', 1, access_key='98765432')
     settings = ServerSettings(workspace=tmp_path / 'server', runtime=tmp_path / 'server-runtime',
-                              public_url='https://charts.example', tokens=('server-secret-token-test',))
+                              public_url='https://charts.example', tokens=('server-secret-token-test',), role='sharing')
+    monkeypatch.setattr(CloudShares, 'from_environment', lambda public_url: shares)
     server = RemoteServer(settings)
-    server.cloud_shares = shares
     sid, rid = receipt['shareId'], readonly['shareId']
     root = '/s/' + sid + '/'
     endpoint = root + 'api/annotations'
@@ -163,7 +165,7 @@ def test_reader_http_enforces_scope_permission_expiry_and_feedback(tmp_path, mon
         assert client.get('/s/' + rid + '/api/annotations').status_code == 401
         assert client.post('/s/' + rid + '/', data={'accessKey': '98765432'}, follow_redirects=False).status_code == 303
         assert client.post('/s/' + rid + '/api/annotations', json={'append': note()}).status_code == 403
-        assert client.post('/api/v1/p/default/tools/dashboard_patch', json={'dashboardId': 'board', 'operations': []}).status_code == 401
+        assert client.post('/api/v1/p/default/tools/dashboard_patch', json={'dashboardId': 'board', 'operations': []}).status_code == 404
         feedback = server.signer.sign({'k': 'share-feedback', 'shareId': sid, 'exp': int(time.time()) + 60})
         assert client.post(root, data={'feedbackToken': feedback}, follow_redirects=False).status_code == 303
         assert client.get(endpoint).json()['canAnnotate'] is False
@@ -195,6 +197,7 @@ def test_imported_share_survives_author_removal_and_retry(tmp_path, monkeypatch)
     assert error.value.code == 'REVISION_CONFLICT'
     with pytest.raises(DashboardError):
         shares.owner_control(result['shareId'], 'c' * 64)
+    assert author.project_root is not None
     shutil.rmtree(author.project_root)
     shutil.rmtree(tmp_path / 'author-runtime')
     restarted = CloudShares(PrivateShares(tmp_path / 'cloud'), 'https://charts.example')
@@ -281,7 +284,9 @@ def test_publication_claim_crash_is_cleanable_without_retiring_active_copy(tmp_p
         with pytest.raises(OSError, match='simulated crash'):
             shares.import_site(io.BytesIO(raw), **args)
     [intent_key] = list(storage.list('publication-intents/'))
-    intent = json.loads(storage.get(intent_key))
+    saved_intent = storage.get(intent_key)
+    assert saved_intent is not None
+    intent = json.loads(saved_intent)
     share_id = intent['shareId']
     if crash == 'before_job':
         with monkeypatch.context() as patch:
@@ -289,7 +294,8 @@ def test_publication_claim_crash_is_cleanable_without_retiring_active_copy(tmp_p
             with pytest.raises(DashboardError) as error:
                 shares.import_site(io.BytesIO(raw), **args)
             assert error.value.code == 'SHARE_EXPIRED'
-        assert json.loads(storage.get(intent_key)) == intent
+        pending_intent = storage.get(intent_key)
+        assert pending_intent is not None and json.loads(pending_intent) == intent
     if crash == 'before_activation':
         # A changed request must not replace the legitimate, incomplete claim.
         with pytest.raises(DashboardError) as error:
@@ -324,6 +330,7 @@ def test_publication_claim_crash_is_cleanable_without_retiring_active_copy(tmp_p
             shares._activate({**interrupted_job, 'state': 'active'},
                              {**interrupted_job, 'state': 'active', 'cleanupAfter': None})
         assert error.value.code == 'SHARE_EXPIRED'
-        assert json.loads(storage.get('jobs/' + share_id + '.json'))['state'] == 'revoked'
+        retired_job = storage.get('jobs/' + share_id + '.json')
+        assert retired_job is not None and json.loads(retired_job)['state'] == 'revoked'
         assert not cleanup_due(storage, now=intent['cleanupAfter'] + 1)['failed']
         assert not list(storage.list('shares/' + share_id + '/'))

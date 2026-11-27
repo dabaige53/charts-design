@@ -25,7 +25,8 @@ export function includeSource(path) {
 }
 
 export function matchesRelease(health, version, commit) {
-  return health?.ok === true && health.release?.version === version && health.release?.commit === commit;
+  return health?.ok === true && health.role === 'sharing'
+    && health.release?.version === version && health.release?.commit === commit;
 }
 
 export function runtimeConfig(detail, version, commit) {
@@ -35,7 +36,7 @@ export function runtimeConfig(detail, version, commit) {
   try { existing = typeof config.EnvParams === 'string' ? JSON.parse(config.EnvParams) : config.EnvParams; }
   catch { throw new Error('线上环境变量格式无效；请检查服务配置。'); }
   if (existing.CHARTS_STORAGE_BACKEND !== 'cloudbase') throw new Error('线上服务未使用 CloudBase 持久存储，停止更新。');
-  return { ...existing, CHARTS_RELEASE_VERSION: version, CHARTS_RELEASE_COMMIT: commit };
+  return { ...existing, CHARTS_SERVER_ROLE: 'sharing', CHARTS_RELEASE_VERSION: version, CHARTS_RELEASE_COMMIT: commit };
 }
 
 export function completedGrayRelease(order, online) {

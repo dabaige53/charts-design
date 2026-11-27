@@ -203,95 +203,26 @@ def free_port():
         return probe.getsockname()[1]
 
 
-# @wu-test type=integration | scope=统一 MCP 路由和首次提交 | protects=同名项目写错后端、首次提交重试覆盖看板或旧令牌取得双端权限
-def test_unified_mcp_pins_backend(tmp_path, monkeypatch):
-    from pydantic import AnyUrl
-    from dashboard_runtime.backend_routing import BackendRoutes
-    from dashboard_runtime.remote_client import connect
-
-    cloud_port = free_port()
-    cloud = start(tmp_path / 'cloud', cloud_port)
-    cloud_base = f'http://127.0.0.1:{cloud_port}'
-    cloud_app = create_app(cloud)
-    entry_token = 'unified-test-token-distinct-from-both-backends'
-    monkeypatch.setenv('CHARTS_UNIFIED_TOKEN', entry_token)
-    monkeypatch.setenv('CHARTS_CLOUDBASE_URL', 'https://upstream.example')
-    monkeypatch.setenv('CHARTS_CLOUDBASE_MCP_TOKEN', TOKEN)
-    port = free_port()
-    local = start(tmp_path / 'server', port)
-    base = f'http://127.0.0.1:{port}'
-    import dashboard_runtime.backend_routing as routing
-    configure = routing.configured_routes
-
-    def loopback(server):
-        routes = configure(server)
-        assert isinstance(routes, BackendRoutes)
-        routes.base_url = cloud_base
-        return routes
-
-    monkeypatch.setattr(routing, 'configured_routes', loopback)
-
-    async def check():
-        async with connect(base + '/unified/mcp', entry_token) as client:
-            async def call(tool, project, **args):
-                result = await client.call_tool(tool, {'projectRoot': project, **args})
-                assert result.structuredContent is not None
-                return result.structuredContent
-
-            assert (await call('dashboard_list', 'sales'))['error']['code'] == 'BACKEND_REQUIRED'
-            assert (await call('dashboard_list', 'sales', backend='cloudbase'))['dashboards']
-            assert (await call('dashboard_list', 'sales', backend='server'))['error']['code'] == 'BACKEND_CONFLICT'
-            assert (await call('dashboard_create', 'fresh', dashboardId='board', title='New'))['error']['code'] == 'BACKEND_REQUIRED'
-            assert (await call('dashboard_create', 'fresh', backend='cloudbase', dashboardId='board', title='New'))['revision'] == 1
-            assert (await call('dashboard_list', 'fresh'))['dashboards'][0]['id'] == 'board'
-            report = '# Quarterly report\n' + 'Quarterly results.\n' * 4000
-            saved = await call('dashboard_submit', 'fresh', dashboardId='board', expectedRevision=1,
-                                operations=[{'op': 'set_report_markdown', 'value': report}])
-            assert saved['ok']
-            packed = await call('dashboard_get', 'fresh', dashboardId='board')
-            from mcp.types import TextResourceContents
-            resource = (await client.read_resource(AnyUrl(packed['transport']['resourceUri']))).contents[0]
-            assert isinstance(resource, TextResourceContents)
-            assert json.loads(resource.text)['document']['manifest']['report']['markdown'] == report
-            assert not local.projects.exists('fresh')
-            initial = {'dashboardId': 'new', 'createTitle': 'Initial', 'operations': [
-                {'op': 'set_title', 'value': 'Submitted'}]}
-            assert (await call('dashboard_submit', 'first-submit', backend='server', **initial))['ok']
-            duplicate = await call('dashboard_submit', 'first-submit', **initial)
-            assert duplicate['error']['code'] == 'ALREADY_EXISTS'
-            assert (await call('dashboard_get', 'first-submit', dashboardId='new'))['document']['revision'] == 2
-            assert (await call('dashboard_create', 'local-new', backend='server', dashboardId='board', title='Local'))['revision'] == 1
-            assert not cloud.projects.exists('local-new')
-
-    with Running(cloud_app, cloud_port), Running(create_app(local), port):
-        assert post(base + '/unified/mcp', {}, TOKEN)[0] == 401
-        assert post(base + '/mcp', {}, entry_token)[0] == 401
-        asyncio.run(check())
-
-    async def after_restart():
-        async with connect(base + '/unified/mcp', entry_token) as client:
-            async def read(project):
-                result = await client.call_tool('dashboard_list', {'projectRoot': project})
-                assert result.structuredContent is not None
-                return result.structuredContent
-            assert (await read('fresh'))['error']['code'] == 'BACKEND_UNAVAILABLE'
-            assert (await read('unbound'))['error']['code'] == 'CATALOG_UNAVAILABLE'
-            assert (await read('local-new'))['dashboards'][0]['id'] == 'board'
-            assert not local.projects.exists('fresh')
-    with Running(create_app(local), port):
-        asyncio.run(after_restart())
-
-
-# @wu-test type=integration | scope=远程MCP与分享链接 | protects=远程发现清单不一致或分享链接越权与撤销后仍可用
+# @wu-test type=integration | scope=远程MCP与分享链接 | protects=服务器预览签发至错误域名、网页读者获取编辑权限或旧路由继续转发至云端
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
-def test_remote_mcp_and_scoped_viewer_api(tmp_path):
+def test_remote_mcp_and_scoped_viewer_api(tmp_path, monkeypatch):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
     from pydantic import AnyUrl
     port = free_port()
     server = start(tmp_path, port)
+    monkeypatch.delenv('CHARTS_SHARE_SERVICE_URL', raising=False)
+    monkeypatch.setenv('CHARTS_UNIFIED_TOKEN', TOKEN)
+    monkeypatch.setenv('CHARTS_CLOUDBASE_URL', 'https://legacy-cloud.example')
+    monkeypatch.setenv('CHARTS_CLOUDBASE_MCP_TOKEN', TOKEN)
     with Running(create_app(server), port):
         base = f'http://127.0.0.1:{port}'
+
+        for path in ('/unified/mcp', '/mcp/' + TOKEN):
+            legacy = urllib.request.Request(base + path, data=b'{}', headers={'Authorization': 'Bearer ' + TOKEN})
+            with pytest.raises(urllib.error.HTTPError) as retired:
+                urllib.request.urlopen(legacy)
+            assert retired.value.code == 404
 
         async def session():
             async with streamablehttp_client(base + '/mcp', headers={'Authorization': 'Bearer ' + TOKEN}) as (read, write, _):
@@ -322,6 +253,16 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
                     preview = await client.call_tool('dashboard_preview', {'projectRoot': 'sales', 'dashboardId': 'exec'})
                     assert not preview.isError and preview.structuredContent is not None
                     assert preview.structuredContent['document']['id'] == 'exec'
+                    links = preview.structuredContent['browserLinks']
+                    assert links == preview.structuredContent['document']['browserLinks']
+                    for access in ('edit', 'view'):
+                        url, token = links[access + 'Url'].split('#token=')
+                        assert url == base + f'/{access}/sales/exec'
+                        with urllib.request.urlopen(url) as response:
+                            assert response.status == 200
+                        principal = server.principal(token, 'sales')
+                        assert principal is not None
+                        assert principal.access == access and principal.dashboards == ('exec',) and principal.can_annotate
                     shared = await client.call_tool('dashboard_share', {
                         'projectRoot': 'sales', 'dashboardId': 'exec', 'access': 'view',
                     })
@@ -336,6 +277,11 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path):
         api = base + '/api/v1/p/sales/tools/'
         status, value = post(api + 'dashboard_get', {'dashboardId': 'exec'}, token)
         assert status == 200 and value['document']['id'] == 'exec'
+        opened = post(api + 'dashboard_preview', {'dashboardId': 'exec'}, token)[1]
+        assert 'browserLinks' not in opened and 'browserLinks' not in opened['document']
+        status, error = post(api + 'dashboard_share_publish', {'dashboardId': 'exec', 'expectedRevision': 1}, TOKEN)
+        assert status >= 400 and error['error']['code'] == 'CLOUD_SHARE_NOT_CONFIGURED'
+        assert server.projects.service('sales').store.revision('exec') == 1
         assert post(api + 'dashboard_get', {'dashboardId': 'other'}, token)[0] == 403
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'x'}]}, token)[0] == 403
         assert post(api + 'dashboard_submit', {'dashboardId': 'exec', 'expectedRevision': 1}, token)[0] == 403
@@ -421,12 +367,6 @@ def test_multi_page_share_scope_and_revocation(tmp_path):
     assert document['id'] == 'second'
     with pytest.raises(DashboardError) as error:
         server.call_viewer('sales', 'dashboard_get', {'dashboardId': 'private'}, principal)
-    assert error.value.code == 'FORBIDDEN'
-    edit_principal = server.principal(server.links.share('sales', 'first', 'edit', dashboards=['second'])['url'].split('#token=')[1], 'sales')
-    assert edit_principal is not None
-    with pytest.raises(DashboardError) as error:
-        server.call_viewer('sales', 'dashboard_share_publish', {'dashboardId': 'first', 'pages': [{'dashboardId': 'private'}]},
-                           edit_principal)
     assert error.value.code == 'FORBIDDEN'
     server.state.revoke('sales', 'second')
     assert server.principal(token, 'sales') is None

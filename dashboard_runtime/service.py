@@ -168,9 +168,8 @@ class Service:
             require(args['dataVersion'] == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
         return doc
 
-    def _publish(self, args):
+    def _publish(self, args: dict) -> dict:
         from jsonschema import ValidationError, validate as validate_schema
-        from .cloud_shares import CloudShares, share_storage_errors
         from .versions import Versions
 
         try:
@@ -178,60 +177,26 @@ class Service:
         except ValidationError as error:
             raise DashboardError('INVALID_ARGUMENT', error.message) from error
         require(self.project_root is not None, 'Publish requires a project', 'PROJECT_REQUIRED')
-        from .cloud_database import cloud_enabled
-        from .local_shares import LocalShares
-        if args.get('share') is not None and not cloud_enabled() and LocalShares.configured(self):
+        if args.get('share') is not None:
+            from .local_shares import LocalShares
             return LocalShares(self).publish_request(args)
         board = args['dashboardId']
         versions = Versions(self.store)
         status = versions.status(board)
-        share_options = args.get('share')
         expected = int(args.get('expectedRevision', status['draftRevision']))
         revision = int(args.get('revision', expected))
-        already_published = False
-        prepared_share = None
-        if share_options is not None:
-            storage_errors = share_storage_errors()
-            expiration = share_options.get('expiration', '7d')
-            try:
-                shares = CloudShares.from_environment()
-                share_id, access_key = shares.quick_identity(self, board, args, expiration)
-                previous = shares.quick_result(share_id, access_key, expiration)
-                if previous is not None:
-                    return {'ok': True, 'dashboardId': board, 'publishedRevision': previous['revision'],
-                            'versionStatus': status, 'share': previous}
-                expected, revision, resuming = shares.quick_target(share_id, board, expected, revision,
-                                                                   status['draftRevision'], expiration)
-            except DashboardError:
-                raise
-            except storage_errors as error:
-                raise DashboardError('CLOUD_STORAGE_FAILED', 'Could not prepare the share request.', 503) from error
-            prepared_share = shares, expiration, access_key, share_id, storage_errors
-            already_published = resuming and status['publishedRevision'] == revision
-
-        if not already_published:
-            require(expected == status['draftRevision'], 'Reload before publishing', 'REVISION_CONFLICT')
-            if 'revision' not in args and status['savedRevision'] != revision:
-                saved = self._call('dashboard_checkpoint', {'dashboardId': board, 'expectedRevision': expected})
-                if not saved['ok']:
-                    return saved
-            else:
-                report = self._doctor(versions.read(board, revision), 'full', reuse=True)
-                if not report['passed']:
-                    return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
-                            'message': 'Version checks failed; the published version was not changed.'}, 'doctor': report}
-            status = versions.publish(board, expected, revision)
-        result = {'ok': True, 'dashboardId': board, 'publishedRevision': revision, 'versionStatus': status}
-        if prepared_share is not None:
-            shares, expiration, access_key, share_id, storage_errors = prepared_share
-            try:
-                result['share'] = shares.publish(self, board, revision, expiration, access_key, share_id=share_id,
-                                                annotation_mode=share_options.get('annotationMode', 'view'))
-            except DashboardError as error:
-                result['shareError'] = error.as_dict()['error']
-            except storage_errors:
-                result['shareError'] = {'code': 'CLOUD_STORAGE_FAILED', 'message': 'Share storage request failed.'}
-        return result
+        require(expected == status['draftRevision'], 'Reload before publishing', 'REVISION_CONFLICT')
+        if 'revision' not in args and status['savedRevision'] != revision:
+            saved = self._call('dashboard_checkpoint', {'dashboardId': board, 'expectedRevision': expected})
+            if not saved['ok']:
+                return saved
+        else:
+            report = self._doctor(versions.read(board, revision), 'full', reuse=True)
+            if not report['passed']:
+                return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
+                        'message': 'Version checks failed; the published version was not changed.'}, 'doctor': report}
+        status = versions.publish(board, expected, revision)
+        return {'ok': True, 'dashboardId': board, 'publishedRevision': revision, 'versionStatus': status}
 
     def _call(self, tool, args):
         require(isinstance(args, dict), 'Tool arguments must be an object')
@@ -319,53 +284,16 @@ class Service:
                 raise DashboardError('CLOUD_STORAGE_FAILED', 'Transfer storage request failed; check the configured COS permissions.', 503) from error
         if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
             from .local_shares import LocalShares
-            if LocalShares.configured(self):
-                shares = LocalShares(self)
-                if tool == 'dashboard_share_publish':
-                    return shares.publish(board, args['expectedRevision'], args.get('expiration', '7d'),
-                                          args.get('accessKey'), args.get('pages'),
-                                          annotation_mode=args.get('annotationMode', 'view'), request_id=args.get('requestId'))
-                if tool == 'dashboard_share_replace':
-                    return shares.replace(board, args['shareId'], args['expectedRevision'], args.get('expiration', '7d'))
-                if tool == 'dashboard_share_status':
-                    return shares.status(board, args.get('shareId'))
-                return shares.revoke(board, args.get('shareId'))
-            from .cloud_shares import CloudShares
-            shares = CloudShares.from_environment()
-            storage_errors = (OSError,)
-            if shares.executor == 'tencent-scf':
-                from qcloud_cos.cos_exception import CosClientError, CosServiceError
-                storage_errors = (CosClientError, CosServiceError)
-            try:
-                if tool == 'dashboard_share_publish':
-                    share_id, access_key = None, args.get('accessKey')
-                    if args.get('requestId'):
-                        from jsonschema import ValidationError, validate as validate_schema
-                        try:
-                            validate_schema(args, TOOLS[tool][1])
-                        except ValidationError as error:
-                            raise DashboardError('INVALID_ARGUMENT', error.message) from error
-                        identity = {**args, 'revision': args['expectedRevision'],
-                                    'share': {'requestId': args['requestId'],
-                                              'annotationMode': args.get('annotationMode', 'view')}}
-                        share_id, generated_key = shares.quick_identity(self, board, identity, args.get('expiration', '7d'))
-                        access_key = access_key or generated_key
-                        previous = shares.quick_result(share_id, access_key, args.get('expiration', '7d'))
-                        if previous is not None:
-                            return previous
-                    return shares.publish(self, board, args['expectedRevision'],
-                                          args.get('expiration', '7d'), access_key, args.get('pages'), share_id=share_id,
-                                          annotation_mode=args.get('annotationMode', 'view'))
-                if tool == 'dashboard_share_replace':
-                    return shares.replace(self, board, args['shareId'], args['expectedRevision'],
-                                          args.get('expiration', '7d'))
-                if tool == 'dashboard_share_status':
-                    return shares.status(self, board, args.get('shareId'))
-                return shares.revoke(self, board, args.get('shareId'))
-            except storage_errors as error:
-                raise DashboardError('CLOUD_STORAGE_FAILED',
-                    'Share storage failed. Check storage and dashboard_share_status before retrying a publish.',
-                    503) from error
+            shares = LocalShares(self)
+            if tool == 'dashboard_share_publish':
+                return shares.publish(board, args['expectedRevision'], args.get('expiration', '7d'),
+                                      args.get('accessKey'), args.get('pages'),
+                                      annotation_mode=args.get('annotationMode', 'view'), request_id=args.get('requestId'))
+            if tool == 'dashboard_share_replace':
+                return shares.replace(board, args['shareId'], args['expectedRevision'], args.get('expiration', '7d'))
+            if tool == 'dashboard_share_status':
+                return shares.status(board, args.get('shareId'))
+            return shares.revoke(board, args.get('shareId'))
         if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish',
                     'dashboard_version_delete', 'dashboard_version_delete_preview',
                     'dashboard_version_delete_status', 'dashboard_version_delete_retry', 'dashboard_version_query'):

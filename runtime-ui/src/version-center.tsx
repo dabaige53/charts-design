@@ -30,8 +30,6 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   const [deleteResult, setDeleteResult] = useState<Config | null>(null);
   const previewSequence = useRef(0);
   const [tab, setTab] = useState<"versions" | "shares">("versions");
-  const [availablePages, setAvailablePages] = useState<Config[]>([]);
-  const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [shares, setShares] = useState<Config[]>([]);
   const [expiration, setExpiration] = useState("7d");
   const [annotationMode, setAnnotationMode] = useState<"view" | "annotate">("view");
@@ -96,8 +94,6 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
   const loadShares = async () => {
     const result = await call("dashboard_share_status", { dashboardId: document.id });
     setShares(result.shares);
-    const list = await call("dashboard_list");
-    setAvailablePages(list.dashboards.filter((page: Config) => page.id !== document.id));
   };
   const quickPublish = async (revision?: number, withShare = false) => {
     const args: Config = { dashboardId: document.id, expectedRevision: status?.draftRevision };
@@ -259,25 +255,12 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
           </section>}
         </> : <>
           <p className="text-sm text-muted-foreground">每个分享固定使用所选发布版本，批注分别保存。替换分享会生成新链接和新密钥，旧链接与旧会话失效；其他分享保持原样。</p>
-          {availablePages.length > 0 && <fieldset className="space-y-2">
-            <legend className="font-medium">分享页面</legend>
-            <p className="text-sm text-muted-foreground">当前页面已包含；其他页面需先发布。</p>
-            {availablePages.map((page) => <label key={page.id} className="flex items-center gap-2">
-              <input type="checkbox" checked={selectedPages.includes(page.id)} onChange={(event) => setSelectedPages(event.target.checked ? [...selectedPages, page.id] : selectedPages.filter((id) => id !== page.id))} />
-              {page.title || page.id}
-            </label>)}
-          </fieldset>}
           <div className="flex gap-2">
             <Button disabled={busy || !status?.publishedRevision} onClick={() => void run(async () => {
-              const pages = await Promise.all(selectedPages.map(async (dashboardId) => {
-                const pageStatus = await call("dashboard_version_status", { dashboardId });
-                if (!pageStatus.publishedRevision) throw new Error(`请先发布页面：${availablePages.find((page) => page.id === dashboardId)?.title || dashboardId}`);
-                return { dashboardId, expectedRevision: pageStatus.publishedRevision };
-              }));
-              const target = JSON.stringify([document.id, status?.publishedRevision, expiration, annotationMode, pages]);
+              const target = JSON.stringify([document.id, status?.publishedRevision, expiration, annotationMode]);
               if (target !== pendingShare.current?.target) rememberPendingShare({ target, requestId: crypto.randomUUID(), expectedRevision: status?.publishedRevision });
               const result = await call("dashboard_share_publish", { dashboardId: document.id,
-                expectedRevision: pendingShare.current!.expectedRevision, expiration, annotationMode, pages, requestId: pendingShare.current!.requestId });
+                expectedRevision: pendingShare.current!.expectedRevision, expiration, annotationMode, requestId: pendingShare.current!.requestId });
               if (result.ok === false || !(result.accessUrl || result.url)) throw Error(result.error?.message || "分享链接生成失败");
               setNewShare(result); rememberPendingShare(null);
               await loadShares();

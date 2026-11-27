@@ -85,13 +85,11 @@ class McpProfile:
         return result
 
 
-def create_server(service, lifetime=None, profile=None, routes=None):
+def create_server(service, lifetime=None, profile=None):
     lifetime = lifetime or IdleLifetime()
     profile = profile or McpProfile(lifetime)
     projects = profile.projects(service)
     hidden = profile.hidden_tools | MAINTENANCE_TOOLS
-    if routes is not None:
-        hidden = hidden | ((TOOLS.keys() | profile.extra_tools.keys()) - AUTHOR_TOOLS)
     try:
         import mcp.types as types
         from mcp.server.lowlevel import Server
@@ -110,11 +108,6 @@ def create_server(service, lifetime=None, profile=None, routes=None):
                 continue
             description = profile.describe(name, description)
             schema = profile.schema(name, schema)
-            if routes is not None:
-                schema = {**schema, 'required': sorted(set(schema.get('required', [])) | {'projectRoot'}),
-                          'properties': {**schema['properties'],
-                              'projectRoot': {'type': 'string', 'description': 'Persistent project name; required on every unified call.'},
-                              'backend': {'enum': ['server', 'cloudbase'], 'description': 'Choose once when creating a project or resolving a name present on both backends. Never changes an existing binding.'}}}
             if name in DOCUMENT_WRITES:
                 description += WRITE_RESPONSE_HELP
                 schema = write_response_schema(name, schema)
@@ -151,11 +144,6 @@ def create_server(service, lifetime=None, profile=None, routes=None):
                     validate(request, definitions[name].inputSchema)
                 except ValidationError as exc:
                     raise DashboardError('INVALID_ARGUMENT', exc.message) from exc
-            if routes is not None:
-                routing_action = 'dashboard_create' if name == 'dashboard_submit' and 'createTitle' in request else name
-                owner = await routes.select(request.get('projectRoot'), request.pop('backend', None), routing_action)
-                if owner == 'cloudbase':
-                    return await routes.forward(name, request)
             response_mode = 'full'
             if name in DOCUMENT_WRITES:
                 response_mode = request.pop('responseMode', 'summary')
@@ -219,13 +207,6 @@ def create_server(service, lifetime=None, profile=None, routes=None):
             if query and (set(query) != {'projectRoot'} or len(query['projectRoot']) != 1):
                 raise ValueError('Invalid result project')
             arguments = {'projectRoot': query['projectRoot'][0]} if query else {}
-            if routes is not None and await routes.select(arguments.get('projectRoot'), None, 'runtime_result_chunk') == 'cloudbase':
-                from .remote_client import connect
-                async with connect(routes.base_url + '/mcp', routes.token) as session:
-                    upstream = await session.read_resource(uri)
-                if len(upstream.contents) != 1 or not isinstance(upstream.contents[0], types.TextResourceContents):
-                    raise ValueError('Expected a complete JSON response from upstream')
-                return [ReadResourceContents(content=upstream.contents[0].text, mime_type='application/json')]
             selected, _ = await asyncio.to_thread(projects.resolve, arguments)
             content = await asyncio.to_thread(selected.transport.result_text, parts.path[1:])
             return [ReadResourceContents(content=content, mime_type='application/json')]
@@ -243,7 +224,7 @@ def create_server(service, lifetime=None, profile=None, routes=None):
                 if name not in AUTHOR_TOOLS}, 'projectRouting': {
                     'selector': 'projectRoot', 'scope': 'request',
                     'description': profile.schema('dashboard_get', {})['properties']['projectRoot']['description'],
-                    'omitted': 'not permitted on the unified endpoint' if routes is not None else 'startup project default or legacy store; never the last selected project',
+                    'omitted': 'startup project default or legacy store; never the last selected project',
                     'preview': 'bind once from result.projectRoot; include it in all subsequent calls, including chunks'}}
             return [ReadResourceContents(content=json.dumps(contract, ensure_ascii=False), mime_type='application/json')]
         if str(uri) == 'charts://layouts':

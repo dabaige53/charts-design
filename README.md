@@ -28,9 +28,9 @@
 
 4. **MCP 协议服务**：
    - 本地 stdio MCP 与自托管 HTTP 远程 MCP（Streamable HTTP + Bearer 令牌）。
-   - 有自己的服务器时，可选 [服务器 MCP/API、Neon 数据库和 Cloudflare Pages 网页](docs/operations/self-hosted-server.md#独立服务器neon-与-cloudflare-pages)，不需要腾讯云账号或 Cloudflare Containers。另有 [Cloudflare Containers 方案](docs/operations/self-hosted-server.md#cloudflare-独立部署)；原 CloudBase 发布流程仍可单独使用。
+   - 自有服务器提供唯一远程 `/mcp`，并在同域运行编辑、开发预览与项目批注。CloudBase 或 Cloudflare 提供独立分享页和读者批注。部署见 [自有服务器与分享服务](docs/operations/self-hosted-server.md)。
    - 腾讯云独立分享副本支持 8 位数字访问密钥、不过期/7 天/30 天；到期由云端 SCF 删除 COS 数据和访问记录。需要部署私有 COS、HTTPS 网关和 SCF 定时任务，见 [腾讯云分享](docs/operations/self-hosted-server.md#腾讯云在线分享与云端清理)。
-   - 版本中心可对明确的已保存版本选择「分享此版本」，权限为「仅查看」或「可批注」。本机项目通过已配置的分享服务发布固定副本，读者页面、数据和批注不依赖作者电脑在线；作者从同一分享记录按需打开原版本反馈。配置见[本机发布与反馈](docs/operations/self-hosted-server.md#本机通过分享服务发布)。
+   - 版本中心可对明确的已保存版本选择「分享此版本」，权限为「仅查看」或「可批注」。本机和服务器项目通过已配置的分享服务发布固定副本，读者页面、数据和批注不依赖作者电脑在线；作者从同一分享记录按需打开原版本反馈。配置见[本机发布与反馈](docs/operations/self-hosted-server.md#本机通过分享服务发布)。
    - 项目编辑使用 `dashboard_get` 读草稿，再用 `dashboard_submit` 一次提交修改、检查全部组件并保存。通过后按 `nextAction=dashboard_preview` 打开已保存版本；检查失败返回 `DOCTOR_FAILED`，保留草稿，不生成检查点。保存不会发布或分享。
    - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/operations/self-hosted-server.md)。
 

@@ -1,7 +1,7 @@
-"""Publish fixed local versions through an already configured share service.
+"""Publish fixed workspace versions through an already configured share service.
 
-Only immutable export bytes leave the author's machine. Service credentials
-stay in this process; local share references live beside the project database
+Only immutable export bytes leave the author's workspace. Service credentials
+stay in this process; share references live beside the project files
 and survive disposal of the runtime cache. Feedback is fetched on demand.
 """
 from __future__ import annotations
@@ -33,16 +33,13 @@ class _NoRedirect(HTTPRedirectHandler):
 
 
 class LocalShares:
-    @staticmethod
-    def configured(service=None):
-        return bool(os.environ.get('CHARTS_SHARE_SERVICE_URL')) and (
-            service is None or service.project_root is not None and not getattr(service.store, 'database', None))
-
     def __init__(self, service):
-        require(service.project_root is not None, 'A local project is required', 'PROJECT_REQUIRED')
-        require(not getattr(service.store, 'database', None), 'Local publication is only for local projects', 'INVALID_CONFIG')
+        require(service.project_root is not None, 'A workspace project is required', 'PROJECT_REQUIRED')
         self.service = service
         self.url = os.environ.get('CHARTS_SHARE_SERVICE_URL', '').rstrip('/')
+        require(bool(self.url), 'Configure CHARTS_SHARE_SERVICE_URL on the author workspace', 'CLOUD_SHARE_NOT_CONFIGURED')
+        require(getattr(getattr(service.store, 'database', None), 'backend', None) != 'cloudbase',
+                'Use a local or self-hosted workspace to publish a new share', 'INVALID_CONFIG')
         self.token = os.environ.get('CHARTS_SHARE_SERVICE_TOKEN', '')
         self.project = os.environ.get('CHARTS_SHARE_SERVICE_PROJECT', 'default')
         parsed = urlsplit(self.url)
@@ -203,7 +200,7 @@ class LocalShares:
             return result
 
     def publish(self, board, revision, expiration='7d', access_key=None, pages=None, *, annotation_mode='view', request_id=None):
-        require(not pages, 'Local publication currently accepts one saved page per share', 'INVALID_ARGUMENT')
+        require(not pages, 'Sharing accepts one saved page per publication', 'INVALID_ARGUMENT')
         require(access_key is None, 'The configured share service generates the visitor key', 'INVALID_ARGUMENT')
         result = self.publish_request({'dashboardId': board, 'revision': revision,
             'share': {'requestId': request_id or str(uuid.uuid4()), 'expiration': expiration, 'annotationMode': annotation_mode}})

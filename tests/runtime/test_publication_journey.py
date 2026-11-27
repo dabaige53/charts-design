@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import socket
+import ssl
 import subprocess
 import sys
 import time
@@ -20,6 +21,7 @@ from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
 from dashboard_runtime.service import Service
 
 TOKEN = 'author-publication-test-token-123456'
+SHARE_TOKEN = 'independent-share-test-token-654321'
 
 
 def note(note_id='position-a', component='trend', text='请核对这张图的口径'):
@@ -44,6 +46,7 @@ def test_server_workspace_annotation_capability_and_original_revision(tmp_path):
     view = urlsplit(server.links.share('default', 'board')['url']).fragment.removeprefix('token=')
     annotator = urlsplit(server.links.share('default', 'board', annotation_mode='annotate')['url']).fragment.removeprefix('token=')
     old_payload = server.signer.verify(view, 'share')
+    assert old_payload is not None
     old_payload.pop('annotationMode')
     legacy = server.signer.sign(old_payload)
     endpoint = '/api/v1/p/default/annotations/board'
@@ -118,34 +121,46 @@ server=RuntimeHTTPServer(Service(Path(sys.argv[1])/'runtime',project_root=Path(s
 server.serve_forever()
 '''
 
+WORKSPACE_PROCESS = '''
+import sys
+from pathlib import Path
+import uvicorn
+from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
+root=Path(sys.argv[1]);port=int(sys.argv[2])
+settings=ServerSettings(workspace=root, runtime=root/'runtime', tokens=(sys.argv[3],),
+                        port=port, default_project='project')
+uvicorn.run(create_app(RemoteServer(settings)), host='127.0.0.1', port=port, log_level='error', access_log=False)
+'''
+
 SHARE_PROCESS = '''
-import json,sys,time
+import json,os,sys,time
 from pathlib import Path
 import uvicorn
 from dashboard_runtime.server import RemoteServer,ServerSettings,create_app
-from dashboard_runtime.cloud_shares import CloudShares
-from dashboard_runtime.cloudflare_shares import PrivateShares
+from dashboard_runtime.cloudflare_shares import storage
 root=Path(sys.argv[1]);port=int(sys.argv[2])
+os.environ.update(CHARTS_STORAGE_BACKEND='cloudflare', CHARTS_RUNTIME_ROOT=str(root/'runtime'),
+                  CHARTS_PUBLIC_URL='https://127.0.0.1:'+str(port))
+storage().put('cleaner-status.json',json.dumps({'completedAt':int(time.time())}).encode())
 server=RemoteServer(ServerSettings(workspace=root/'workspace',runtime=root/'runtime',tokens=(sys.argv[3],),
-                                  public_url='https://127.0.0.1:'+str(port)))
-storage=PrivateShares(root/'private-shares')
-storage.put('cleaner-status.json',json.dumps({'completedAt':int(time.time())}).encode())
-server.cloud_shares=CloudShares(storage,server.settings.public_url)
+                                  public_url=os.environ['CHARTS_PUBLIC_URL'], role='sharing'))
 uvicorn.run(create_app(server),host='127.0.0.1',port=port,log_level='error',access_log=False,
             ssl_certfile=sys.argv[4],ssl_keyfile=sys.argv[5])
 '''
 
 
 @contextmanager
-def _process(script, args, url, env, *, verify=True):
+def _process(script, args, url, env, *, verify: bool | ssl.SSLContext = True):
     process = subprocess.Popen([sys.executable, '-c', script, *map(str, args)],
                                cwd=Path(__file__).resolve().parents[2], env=env,
                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    stderr = process.stderr
+    assert stderr is not None
     try:
         with httpx.Client(verify=verify, trust_env=False, timeout=1) as client:
             for _ in range(150):
                 if process.poll() is not None:
-                    raise AssertionError(process.stderr.read())
+                    raise AssertionError(stderr.read())
                 try:
                     response = client.get(url)
                     if response.status_code < 500:
@@ -166,39 +181,56 @@ def _process(script, args, url, env, *, verify=True):
                 # publication state. Never leave the fixture process behind.
                 process.kill()
                 process.wait(timeout=5)
-        process.stderr.close()
+        stderr.close()
 
 
-# @wu-test type=integration | scope=local author to independent publication HTTP and Worker journey | protects=shares depending on the author process, broken offline filtering or pagination, missing durable reader feedback, leaked private annotations or silently following a newer draft
-def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path):
+# @wu-test type=integration | scope=local and server workspaces to independent sharing HTTP and Worker journey | protects=shares depending on the author process, author routes leaking onto the share domain, missing durable feedback or shares silently following a newer draft
+@pytest.mark.parametrize('author_mode', ['local', 'server'])
+def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path, author_mode):
     from dashboard_runtime.columnar import native_binary
-    if native_binary() is None:
+    binary = native_binary()
+    if binary is None:
         pytest.skip('The PR native artifact is required for real Parquet publication')
     author_root, cloud_root = tmp_path / 'author', tmp_path / 'share-service'
     author_root.mkdir()
     cloud_root.mkdir()
     certificate, private_key = _certificate(tmp_path)
+    verify = ssl.create_default_context(cafile=str(certificate))
     local_port, cloud_port = _port(), _port()
     cloud_url, local_url = f'https://127.0.0.1:{cloud_port}', f'http://127.0.0.1:{local_port}'
     environment = {key: value for key, value in os.environ.items() if not key.startswith(('CHARTS_', 'CLOUDBASE_'))}
-    environment['CHARTS_CORE_BIN'] = native_binary()
+    environment['CHARTS_CORE_BIN'] = binary
     local_environment = {**environment, 'CHARTS_SHARE_SERVICE_URL': cloud_url,
-                         'CHARTS_SHARE_SERVICE_TOKEN': TOKEN, 'SSL_CERT_FILE': str(certificate)}
+                         'CHARTS_SHARE_SERVICE_TOKEN': SHARE_TOKEN, 'SSL_CERT_FILE': str(certificate)}
     source = Service(author_root / 'runtime', project_root=author_root / 'project')
     source.store.create('board', 'A', document('board'))
     source.store.append_annotation('board', note('private-note', text='本机私人批注'))
-    cloud_args = [cloud_root, cloud_port, TOKEN, certificate, private_key]
-    with httpx.Client(base_url=cloud_url, verify=str(certificate), trust_env=False, timeout=30) as reader:
-        with _process(SHARE_PROCESS, cloud_args, cloud_url + '/health', environment, verify=str(certificate)):
-            with _process(AUTHOR_PROCESS, [author_root, local_port, TOKEN], local_url + '/', local_environment) as author:
+    cloud_args = [cloud_root, cloud_port, SHARE_TOKEN, certificate, private_key]
+    local = author_mode == 'local'
+    author_script = AUTHOR_PROCESS if local else WORKSPACE_PROCESS
+    tools = '/api/tools/' if local else '/api/v1/p/project/tools/'
+    feedback_base = '/api/publications/' if local else '/api/v1/p/project/publications/'
+    with httpx.Client(base_url=cloud_url, verify=verify, trust_env=False, timeout=30) as reader:
+        with _process(SHARE_PROCESS, cloud_args, cloud_url + '/health', environment, verify=verify):
+            assert reader.get('/health').json()['role'] == 'sharing'
+            for path in ('/mcp', '/mcp/' + SHARE_TOKEN, '/unified/mcp', '/api/v1/p/project/tools/dashboard_get'):
+                assert reader.post(path, headers=auth(SHARE_TOKEN), json={}).status_code == 404
+            for path in ('/', '/edit/project/board', '/view/project/board'):
+                assert reader.get(path, headers=auth(SHARE_TOKEN)).status_code == 404
+            assert reader.post('/api/v1/publications', headers=auth(TOKEN), content=b'').status_code == 401
+            with _process(author_script, [author_root, local_port, TOKEN], local_url + '/', local_environment) as author:
                 with httpx.Client(base_url=local_url, headers=auth(TOKEN), trust_env=False, timeout=60) as client:
                     request = {'dashboardId': 'board', 'expectedRevision': 1, 'revision': 1,
                                'share': {'requestId': str(uuid.uuid4()), 'annotationMode': 'annotate', 'expiration': '7d'}}
-                    result = client.post('/api/tools/dashboard_publish', json=request).json()
+                    result = client.post(tools + 'dashboard_publish', json=request).json()
                     assert result.get('share'), result
                     receipt = result['share']
-                    assert client.post('/api/tools/dashboard_publish', json=request).json()['share']['shareId'] == receipt['shareId']
+                    assert client.post(tools + 'dashboard_publish', json=request).json()['share']['shareId'] == receipt['shareId']
                     page = f"/s/{receipt['shareId']}/"
+                    if not local:
+                        assert client.post('/api/v1/publications', content=b'').status_code == 404
+                        assert client.get(page).status_code == 404
+                    assert reader.get(page, follow_redirects=False).status_code == 200
                     opened = reader.post(page, data={'accessKey': receipt['accessKey']}, headers={'Origin': cloud_url})
                     assert opened.status_code == 303
                     frozen = reader.get(page + 'document.json').json()
@@ -208,10 +240,10 @@ def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path
                     assert files and all(name.endswith('.parquet') for name in files)
                     before = {name: reader.get(page + name).content for name in files}
                     assert all(raw[:4] == b'PAR1' for raw in before.values())
-                    changed = client.post('/api/tools/dashboard_submit', json={'dashboardId': 'board', 'expectedRevision': 1,
+                    changed = client.post(tools + 'dashboard_submit', json={'dashboardId': 'board', 'expectedRevision': 1,
                         'operations': [{'op': 'set_title', 'value': 'B saved'}]}).json()
                     assert changed.get('ok') is True, changed
-                    preview = client.post('/api/tools/dashboard_preview', json={'dashboardId': 'board'}).json()
+                    preview = client.post(tools + 'dashboard_preview', json={'dashboardId': 'board'}).json()
                     assert preview['document']['revision'] == 2
                     assert reader.get(page + 'document.json').json()['revision'] == 1
                 author.terminate()
@@ -242,16 +274,17 @@ def test_independent_share_survives_author_shutdown_and_service_restart(tmp_path
                 assert reader.get(page + 'document.json').json() == frozen
         # Restart the independent server against the same private volume. Its
         # signing key and annotation DB must survive; no author is running.
-        with _process(SHARE_PROCESS, cloud_args, cloud_url + '/health', environment, verify=str(certificate)):
+        with _process(SHARE_PROCESS, cloud_args, cloud_url + '/health', environment, verify=verify):
             assert reader.get(page + 'api/annotations').json()['annotations'] == notes
-            with _process(AUTHOR_PROCESS, [author_root, local_port, TOKEN], local_url + '/', local_environment):
+            with _process(author_script, [author_root, local_port, TOKEN], local_url + '/', local_environment):
                 with httpx.Client(base_url=local_url, headers=auth(TOKEN), trust_env=False, timeout=30) as client:
-                    result = client.get('/api/publications/' + receipt['shareId'] + '/feedback?dashboardId=board')
+                    result = client.get(feedback_base + receipt['shareId'] + '/feedback?dashboardId=board')
                     assert result.status_code == 200, result.text
                     feedback = result.json()
                     assert feedback['revision'] == 1 and feedback['annotations'] == notes
-                    assert '#feedback=' in feedback['url'] and TOKEN not in feedback['url']
-                    assert client.post('/api/tools/dashboard_get', json={'dashboardId': 'board'}).json()['document']['revision'] == 2
+                    assert '#feedback=' in feedback['url'] and SHARE_TOKEN not in feedback['url']
+                    assert client.post(tools + ('dashboard_get' if local else 'dashboard_preview'),
+                                       json={'dashboardId': 'board'}).json()['document']['revision'] == 2
                     assert all(item['id'] != 'reader-note' for item in source.store.annotation_state('board')['annotations'])
 
 
@@ -268,6 +301,9 @@ def test_cloud_annotation_uses_displayed_checkpoint_without_rewriting_content(ba
     calls = []
 
     class Database:
+        def __init__(self, backend):
+            self.backend = backend
+
         def call(self, action, project, **payload):
             calls.append(action)
             if action == 'get':
@@ -280,8 +316,8 @@ def test_cloud_annotation_uses_displayed_checkpoint_without_rewriting_content(ba
             return payload['document']
 
     store = CloudProjectStore.__new__(CloudProjectStore)
-    store.project, store.database = 'fixture', Database()
-    store.database.backend = backend
+    store.project, store.database = 'fixture', Database(backend)
     saved = store.append_annotation('board', note(), context_document=original)
+    assert saved is not None
     assert saved['annotation']['context']['designRevision'] == 1
     assert calls == ['get', 'commit']

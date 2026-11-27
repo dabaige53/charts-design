@@ -458,6 +458,7 @@ def validate(doc):
         require(f.get('op') in ('in', 'range', 'contains'), 'Unknown filter operation')
         require(isinstance(f.get('values'), list), 'Filter values must be an array')
         require(f.get('selectionMode', 'multiple') in ('single', 'multiple'), 'Unknown filter selection mode')
+        require('alwaysVisible' not in f or type(f['alwaysVisible']) is bool, 'alwaysVisible must be a boolean')
         if f.get('selectionMode') == 'single':
             require(f['op'] == 'in' and len(f['values']) <= 1, 'Single-select filter allows at most one value')
         require(all(type(v) in (str, int, float, bool) or v is None for v in f['values']), 'Filter values must be scalar')

@@ -62,7 +62,7 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 ### 自托管服务器中的项目
 
-`server` 命令以一个工作区目录承载全部项目。远程调用的 `projectRoot` 是项目名（字母、数字、`-`、`_`），对应 `<workspace>/<项目名>/`，目录结构与本地项目相同；运行缓存在 `<workspace>/.runtime/projects/<项目名>/`。工作区直接子目录的绝对路径也被接受，其他路径以 `PROJECT_OUTSIDE_WORKSPACE` 拒绝。结果中的 `projectRoot` 返回项目名。部署、令牌与分享链接见 [自托管服务器](../operations/self-hosted-server.md)。
+`server` 命令以一个工作区目录承载全部项目。远程调用的 `projectRoot` 是项目名（字母、数字、`-`、`_`），对应 `<workspace>/<项目名>/`，目录结构与本地项目相同；运行缓存在 `<workspace>/.runtime/projects/<项目名>/`。工作区直接子目录的绝对路径也被接受，其他路径以 `PROJECT_OUTSIDE_WORKSPACE` 拒绝。结果中的 `projectRoot` 返回项目名。 远程 `dashboard_preview` 返回作者服务器同域的编辑和预览链接。保存、查询和预览直接使用工作区数据。显式分享才向独立分享服务上传固定版本。部署、令牌与分享链接见 [自托管服务器](../operations/self-hosted-server.md)。
 
 ### 兼容与 Router
 

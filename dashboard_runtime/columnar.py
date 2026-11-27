@@ -132,7 +132,8 @@ def _encode_cache(data, ref, cache_root, directory, binary, partition_field=None
         result = _native_json(arguments)
         (staged / 'receipt.json').write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
         receipt = _receipt(staged, ref, partition_field, include_options)
-        require(receipt is not None, 'Incomplete native export', 'PARQUET_EXPORT_FAILED')
+        if receipt is None:
+            raise DashboardError('PARQUET_EXPORT_FAILED', 'Incomplete native export')
         if directory.exists():
             shutil.rmtree(directory)  # Only this locked, disposable cache; never source data.
         staged.rename(directory)
@@ -151,7 +152,7 @@ def _copy_verified(source, destination, digest):
     return True
 
 
-def copy_package(target_dir, data, ref, cache_root, binary, *, partition_field=None, include_options=False):
+def copy_package(target_dir, data, ref, cache_root, binary, *, partition_field=None, include_options=False) -> dict:
     """Copy a verified immutable representation into a caller-owned directory."""
     version = ref['version']
     require(isinstance(version, str) and len(version) == 64
@@ -171,16 +172,16 @@ def copy_package(target_dir, data, ref, cache_root, binary, *, partition_field=N
     with exclusive_file_lock(cache_root / (key + '.lock')):
         receipt = _receipt(directory, ref, partition_field, include_options)
         reused = receipt is not None
-        for attempt in range(2):
+        for _ in range(2):
             if receipt is None:
                 receipt = _encode_cache(data, ref, cache_root, directory, binary, partition_field, include_options)
             for item in _package_files(receipt):
                 if not _copy_verified(directory / item['path'], target_dir / item['path'], item['sha256']):
-                    require(attempt == 0, 'Native export checksum mismatch', 'PARQUET_EXPORT_FAILED')
                     receipt, reused = None, False
                     break
             else:
                 return {**receipt, 'cacheHit': reused}
+        raise DashboardError('PARQUET_EXPORT_FAILED', 'Native export checksum mismatch')
 
 
 def write_parquet(site, data, ref, cache_root, binary):

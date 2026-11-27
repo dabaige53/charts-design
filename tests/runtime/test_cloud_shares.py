@@ -472,10 +472,10 @@ def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeyp
     from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
 
     _, storage, shares, published = publication(tmp_path)
+    monkeypatch.setattr(CloudShares, 'from_environment', lambda public_url: shares)
     server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'gateway-cache',
                                         tokens=('gateway-admin-token-0123456789',),
-                                        public_url='https://charts.example.com'))
-    server.cloud_shares = shares
+                                        public_url='https://charts.example.com', role='sharing'))
     root = '/s/' + published['shareId'] + '/'
     with TestClient(create_app(server), base_url='https://charts.example.com') as client:
         form = client.get(root)
@@ -508,16 +508,16 @@ def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeyp
     ('null', 403),
     ('https://other.example.com', 403),
 ])
-def test_share_form_preserves_browser_origin_and_rejects_foreign_origins(tmp_path, origin, expected_status):
+def test_share_form_preserves_browser_origin_and_rejects_foreign_origins(tmp_path, origin, expected_status, monkeypatch):
     pytest.importorskip('mcp')
     from starlette.testclient import TestClient
     from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
 
     _, _, shares, published = publication(tmp_path)
+    monkeypatch.setattr(CloudShares, 'from_environment', lambda public_url: shares)
     server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'gateway-cache',
                                         tokens=('gateway-admin-token-0123456789',),
-                                        public_url='https://charts.example.com'))
-    server.cloud_shares = shares
+                                        public_url='https://charts.example.com', role='sharing'))
     root = '/s/' + published['shareId'] + '/'
     with TestClient(create_app(server), base_url='https://charts.example.com') as client:
         form = client.get(root)
@@ -538,16 +538,16 @@ def test_share_form_preserves_browser_origin_and_rejects_foreign_origins(tmp_pat
 
 
 # @wu-test type=boundary | scope=8位密钥在线尝试限制 | protects=短数字密钥可被无限在线枚举
-def test_gateway_limits_key_guesses(tmp_path):
+def test_gateway_limits_key_guesses(tmp_path, monkeypatch):
     pytest.importorskip('mcp')
     from starlette.testclient import TestClient
     from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
 
     _, _, shares, published = publication(tmp_path)
+    monkeypatch.setattr(CloudShares, 'from_environment', lambda public_url: shares)
     server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'gateway-cache',
                                         tokens=('gateway-admin-token-0123456789',),
-                                        public_url='https://charts.example.com'))
-    server.cloud_shares = shares
+                                        public_url='https://charts.example.com', role='sharing'))
     root = '/s/' + published['shareId'] + '/'
     with TestClient(create_app(server), base_url='https://charts.example.com') as client:
         for _ in range(5):

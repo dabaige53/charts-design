@@ -1,17 +1,17 @@
 """Self-hosted server: Streamable HTTP MCP, browser previews and signed downloads.
 
-One long-running process serves four audiences from the same project storage
-and the same transport-independent ``Service``:
+The workspace role serves the same projects through these author interfaces:
 
 * MCP clients (Claude Code, Claude Desktop, Codex, IDEs) on ``/mcp`` with a
-  bearer token, or ``/mcp/<token>`` for clients that cannot send headers.
+  bearer token in the Authorization header.
 * Browser readers on ``/view/<project>/<dashboard>`` (read-only) and
   ``/edit/<project>/<dashboard>`` (layout/title editing). Pages load the shared
   UI bundle and read data through a scoped API using an expiring signed token
   carried in the URL fragment, which browsers never send to servers or proxies.
 * Downloads of exports through signed, expiring ``/files/<token>`` links.
-* Separate Tencent COS publications on ``/s/<shareId>/``, gated by an
-  eight-digit visitor key. Expired copies are removed by cloud SCF, not this process.
+
+The sharing role serves published copies and their reader annotations through
+``/s/<shareId>/``. It accepts publication uploads without opening a project store.
 
 Remote callers name a project; they never choose arbitrary server paths. Each
 project is a directory in one workspace with the same layout as local projects.
@@ -103,12 +103,17 @@ class ServerSettings:
     allowed_hosts: tuple = ()
     forwarded_allow_ips: str = '127.0.0.1'
     insecure_no_auth: bool = False
+    role: str = 'workspace'
     base_path: str = field(init=False, default='')
     explicit_public_url: bool = field(init=False, default=False)
 
     def __post_init__(self):
         self.workspace = Path(self.workspace).expanduser().resolve()
         self.runtime = Path(self.runtime).expanduser().resolve()
+        require(self.role in ('workspace', 'sharing'), 'CHARTS_SERVER_ROLE must be workspace or sharing', 'INVALID_CONFIG')
+        if self.role == 'workspace':
+            require(os.environ.get('CHARTS_STORAGE_BACKEND') not in ('cloudbase', 'cloudflare'),
+                    'CloudBase and Cloudflare run in the sharing role', 'INVALID_CONFIG')
         self.explicit_public_url = bool(self.public_url)
         if not self.public_url:
             shown = '127.0.0.1' if self.host in ('0.0.0.0', '::', '') else self.host
@@ -352,6 +357,8 @@ class ServerProfile(McpProfile):
         return self.workspace
 
     def describe(self, name, description):
+        if name == 'dashboard_preview':
+            return description + ' Returns browserLinks for the edit page and saved preview on this server.'
         if name in ('dashboard_export', 'dataset_export'):
             return description + '. On this server the export also contains downloadUrl, an expiring signed link.'
         return description
@@ -379,9 +386,15 @@ class ServerProfile(McpProfile):
             return {'dashboardId': board, 'revoked': True, 'generation': self.links.state.revoke(selected.project_name, board)}
         return None
 
-    def decorate(self, name, request, result, selected):
+    def decorate(self, name, request, result, selected, *, browser_links=True):
         project = selected.project_name
         result = {**result, 'projectRoot': project}
+        if browser_links and name == 'dashboard_preview' and isinstance(result.get('document'), dict):
+            board = result['document']['id']
+            links = {'editUrl': self.links.share(project, board, 'edit')['url'],
+                     'viewUrl': self.links.share(project, board, annotation_mode='annotate')['url']}
+            result['browserLinks'] = links
+            result['document'] = {**result['document'], 'browserLinks': links}
         export = result.get('export')
         if isinstance(export, dict) and isinstance(export.get('path'), str):
             export = dict(export)
@@ -407,24 +420,24 @@ class RemoteServer:
     def __init__(self, settings: ServerSettings):
         if not settings.tokens and not settings.insecure_no_auth:
             raise DashboardError('INVALID_CONFIG', 'Configure at least one bearer token (--token, --token-file or CHARTS_SERVER_TOKENS)')
-        from .query import QueryRunner
-        from .mcp_server import create_server
-        from .lifecycle import IdleLifetime
         self.settings = settings
         settings.runtime.mkdir(parents=True, exist_ok=True)
-        self.queries = QueryRunner(settings.sources)
-        self.projects = WorkspaceProjects(settings, self.queries)
         self.signer = Signer(settings.secret)
-        self.state = ShareState(settings.runtime / 'server-state.sqlite3')
-        self.links = Links(settings, self.signer, self.state)
-        self.profile = ServerProfile(self.projects, self.links)
-        # A long-running service has no idle shutdown.
-        self.mcp = create_server(self.projects.service(settings.default_project), IdleLifetime(10 ** 9), self.profile)
         self._gzip: dict[tuple, bytes] = {}
         self.cloud_shares = None
-        if os.environ.get('CHARTS_COS_BUCKET') or os.environ.get('CHARTS_STORAGE_BACKEND') in ('cloudflare', 'neon'):
+        if settings.role == 'sharing':
             from .cloud_shares import CloudShares
-            self.cloud_shares = CloudShares.from_environment()
+            self.cloud_shares = CloudShares.from_environment(settings.public_url)
+        else:
+            from .query import QueryRunner
+            from .mcp_server import create_server
+            from .lifecycle import IdleLifetime
+            self.queries = QueryRunner(settings.sources)
+            self.projects = WorkspaceProjects(settings, self.queries)
+            self.state = ShareState(settings.runtime / 'server-state.sqlite3')
+            self.links = Links(settings, self.signer, self.state)
+            self.profile = ServerProfile(self.projects, self.links)
+            self.mcp = create_server(self.projects.service(settings.default_project), IdleLifetime(10 ** 9), self.profile)
         self._cloud_attempts = {}
         self._cloud_attempts_lock = threading.Lock()
 
@@ -476,15 +489,6 @@ class RemoteServer:
         args = {key: value for key, value in args.items() if key != 'projectRoot'}
         service = self.projects.service(project)
         if principal.dashboard:
-            if name == 'dashboard_share_publish':
-                pages = args.get('pages', [])
-                require(isinstance(pages, list) and all(isinstance(page, dict) and page.get('dashboardId') in principal.dashboards for page in pages),
-                        'This link cannot share pages outside its scope', 'FORBIDDEN')
-            if name == 'dashboard_share_replace':
-                from .cloud_shares import CloudShares
-                control = CloudShares.from_environment().control(args.get('shareId'))
-                require(all(page['id'] in principal.dashboards for page in control.get('pages', [])),
-                        'This link cannot replace a share containing other pages', 'FORBIDDEN')
             if name == 'dashboard_list':
                 return {'dashboards': [item for item in service.call('dashboard_list', {})['dashboards'] if item['id'] in principal.dashboards], 'projectRoot': project}
             properties = TOOLS.get(name, ('', {}))[1].get('properties', {})
@@ -494,7 +498,8 @@ class RemoteServer:
                     raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
                 args['dashboardId'] = requested
         actual_name = 'dashboard_preview' if name == 'dashboard_get' and principal.access != 'edit' else name
-        result = self.profile.decorate(name, args, service.call(actual_name, args), service)
+        # The HTTP viewer may hold a read-only link, so never issue fresh author links here.
+        result = self.profile.decorate(name, args, service.call(actual_name, args), service, browser_links=False)
         if getattr(service.store, 'cos_enabled', False):
             from .cos_view import web_document
             for field in ('document', 'version'):
@@ -555,28 +560,19 @@ def create_app(server: RemoteServer):
     from starlette.requests import Request
     from starlette.responses import FileResponse, JSONResponse, Response
     from starlette.routing import Route
-    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
     settings = server.settings
     base = settings.base_path
-    import inspect
-    options = {}
-    if os.environ.get('CHARTS_STORAGE_BACKEND') == 'cloudflare':
-        options['json_response'] = True
-    if 'max_request_body_size' in inspect.signature(StreamableHTTPSessionManager).parameters:
-        # dataset_import and patches accept up to 16 MiB, like the local transports.
-        options['max_request_body_size'] = MAX_BYTES + 1024 * 1024
-    manager = StreamableHTTPSessionManager(app=server.mcp, stateless=settings.stateless, security_settings=settings.security(), **options)
-    from .backend_routing import configured_routes
-    backend_routes = configured_routes(server)
-    unified = None
-    if backend_routes is not None:
-        from .mcp_server import create_server
-        from .lifecycle import IdleLifetime
-        unified = StreamableHTTPSessionManager(
-            app=create_server(server.projects.service(settings.default_project), IdleLifetime(10 ** 9), server.profile,
-                              backend_routes),
-            stateless=True, security_settings=settings.security(), **options)
+    manager = None
+    if settings.role == 'workspace':
+        import inspect
+        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+        options = {}
+        if 'max_request_body_size' in inspect.signature(StreamableHTTPSessionManager).parameters:
+            # dataset_import and patches accept up to 16 MiB, like the local transports.
+            options['max_request_body_size'] = MAX_BYTES + 1024 * 1024
+        manager = StreamableHTTPSessionManager(app=server.mcp, stateless=settings.stateless,
+                                               security_settings=settings.security(), **options)
 
     async def read_body(request: Request, limit: int) -> bytes:
         """Refuse oversized bodies before buffering them, with or without Content-Length."""
@@ -611,26 +607,21 @@ def create_app(server: RemoteServer):
         return Response(raw, media_type=media_type, headers=headers)
 
     class McpEndpoint:
-        """Bearer-authenticated Streamable HTTP MCP; the token may also be a path segment."""
+        """Bearer-authenticated Streamable HTTP MCP."""
 
         async def __call__(self, scope, receive, send):
             request = Request(scope, receive)
-            if scope['path'] == '/unified/mcp' and unified is not None:
-                if hmac.compare_digest(bearer(request).encode(), os.environ['CHARTS_UNIFIED_TOKEN'].encode()):
-                    await unified.handle_request(scope, receive, send)
-                else:
-                    await JSONResponse({'error': 'unauthorized'}, status_code=401)(scope, receive, send)
-                return
-            token = scope.get('path_params', {}).get('secret') or bearer(request)
+            token = bearer(request)
             if not (settings.insecure_no_auth or server.admin(token)):
                 response = JSONResponse({'error': 'unauthorized', 'message': 'Send Authorization: Bearer <server token>'},
                                         status_code=401, headers={'WWW-Authenticate': 'Bearer realm="charts-design"'})
                 await response(scope, receive, send)
                 return
+            assert manager is not None  # This route is registered only for the workspace role.
             await manager.handle_request(scope, receive, send)
 
     async def health(request: Request):
-        payload: dict[str, object] = {'ok': True, 'version': __version__}
+        payload: dict[str, object] = {'ok': True, 'version': __version__, 'role': settings.role}
         if os.environ.get('CHARTS_RELEASE_VERSION'):
             payload['release'] = {
                 'version': os.environ['CHARTS_RELEASE_VERSION'],
@@ -781,18 +772,15 @@ def create_app(server: RemoteServer):
             if principal.dashboard and board not in principal.dashboards:
                 raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
             def read():
-                shares = server.cloud_shares
-                require(shares is not None, 'Share service is not configured', 'CLOUD_SHARE_NOT_CONFIGURED')
-                service = server.projects.service(project)
-                listed = shares.status(service, board, share_id)['shares']
-                require(any(item['shareId'] == share_id for item in listed), 'Share belongs to another project', 'FORBIDDEN')
-                return feedback_result(shares, share_id, board)
+                from .local_shares import LocalShares
+                return LocalShares(server.projects.service(project)).feedback(board, share_id)
             return JSONResponse(await asyncio.to_thread(read), headers={**SECURITY_HEADERS, 'Cache-Control': 'private, no-store'})
         except Exception as error:  # noqa: BLE001
             return failure(error)
 
     def publication_source(project, source):
-        project = server.projects.name(project)
+        require(isinstance(project, str) and PROJECT_NAME.fullmatch(project) is not None,
+                'A valid publication project name is required', 'INVALID_PROJECT')
         require(isinstance(source, str) and re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', source),
                 'A stable local project UUID is required', 'INVALID_ARGUMENT')
         return hashlib.sha256(('local-publication:' + project + ':' + source).encode()).hexdigest()
@@ -807,7 +795,8 @@ def create_app(server: RemoteServer):
             if not (settings.insecure_no_auth or server.admin(bearer(request))):
                 raise DashboardError('UNAUTHORIZED', '访问令牌无效', 401)
             shares = server.cloud_shares
-            require(shares is not None, 'Share service is not configured', 'CLOUD_SHARE_NOT_CONFIGURED')
+            if shares is None:
+                raise DashboardError('CLOUD_SHARE_NOT_CONFIGURED', 'Share service is not configured')
             if request.method == 'POST':
                 source_key = publication_source(request.headers.get('x-charts-project'), request.headers.get('x-charts-source'))
                 if request.headers.get('content-type', '').split(';')[0].strip() != 'application/zip':
@@ -976,8 +965,8 @@ def create_app(server: RemoteServer):
                 feedback_token = values.get('feedbackToken', [''])[0]
                 feedback = server.signer.verify(feedback_token, 'share-feedback') if feedback_token else None
                 if feedback_token:
-                    require(feedback is not None and feedback.get('shareId') == share_id,
-                            '反馈访问链接已失效', 'INVALID_ACCESS_KEY')
+                    if feedback is None or feedback.get('shareId') != share_id:
+                        raise DashboardError('INVALID_ACCESS_KEY', '反馈访问链接已失效')
                     require(feedback.get('dashboardId', control['dashboardId']) in
                             {page['id'] for page in control.get('pages', [])},
                             '反馈链接不包含该页面', 'FORBIDDEN')
@@ -996,9 +985,8 @@ def create_app(server: RemoteServer):
                                     path=path, secure=True, httponly=True, samesite='strict')
                 return response
             session = server.signer.verify(request.cookies.get(cookie), 'cloud-share')
-            authorized = session is not None and session.get('shareId') == share_id
             name = request.path_params.get('name') or 'index.html'
-            if not authorized:
+            if session is None or session.get('shareId') != share_id:
                 require(name == 'index.html', '请先输入访问密钥', 'INVALID_ACCESS_KEY')
                 return access_form(path)
             raw = await asyncio.to_thread(shares.content, share_id, name, control=control)
@@ -1048,12 +1036,13 @@ def create_app(server: RemoteServer):
         from .cloud_shares import checked_id
         try:
             shares = server.cloud_shares
-            require(shares is not None, '分享服务尚未配置', 'CLOUD_SHARE_NOT_CONFIGURED')
+            if shares is None:
+                raise DashboardError('CLOUD_SHARE_NOT_CONFIGURED', '分享服务尚未配置')
             share_id = checked_id(request.path_params['share_id'])
             control = await asyncio.to_thread(shares.control, share_id)
             session = server.signer.verify(request.cookies.get('charts-share-' + share_id), 'cloud-share')
-            require(session is not None and session.get('shareId') == share_id,
-                    '请先输入访问密钥', 'INVALID_ACCESS_KEY')
+            if session is None or session.get('shareId') != share_id:
+                raise DashboardError('INVALID_ACCESS_KEY', '请先输入访问密钥')
             if request.method == 'GET':
                 result = await asyncio.to_thread(shares.annotations, share_id, request.query_params.get('dashboardId'))
                 requested_revision = request.query_params.get('revision')
@@ -1090,38 +1079,40 @@ def create_app(server: RemoteServer):
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
-        async with contextlib.AsyncExitStack() as stack:
-            await stack.enter_async_context(manager.run())
-            if unified is not None:
-                await stack.enter_async_context(unified.run())
+        if manager is None:
             yield
+        else:
+            async with manager.run():
+                yield
 
-    routes = [
-        Route('/health', health, methods=['GET', 'HEAD']),
-        Route('/', viewer, methods=['GET']),
-        Route('/assets/{name}', asset, methods=['GET']),
-        Route('/view/{project}/{dashboard}', viewer, methods=['GET']),
-        Route('/edit/{project}/{dashboard}', viewer, methods=['GET']),
-        Route('/api/v1/p/{project}/tools/{name}', tool, methods=['POST']),
-        Route('/api/v1/p/{project}/annotations/{dashboard}', annotations, methods=['GET', 'POST']),
-        Route('/api/v1/p/{project}/publications/{share_id}/feedback', publication_feedback, methods=['GET']),
-        Route('/api/v1/p/{project}/content/{dashboard}/{revision}/{object}/{name}', content, methods=['GET']),
-        Route('/api/v1/catalog', admin_catalog, methods=['POST']),
-        Route('/api/v1/share', admin_share, methods=['POST']),
-        Route('/api/v1/publications', publications, methods=['POST']),
-        Route('/api/v1/publications/{share_id}', publications, methods=['GET', 'DELETE']),
-        Route('/files/{token}', download, methods=['GET']),
-        Route('/s/{share_id}/', cloud_publication, methods=['GET', 'POST']),
-        Route('/s/{share_id}/api/annotations', publication_annotations, methods=['GET', 'POST']),
-        Route('/s/{share_id}/{name:path}', cloud_publication, methods=['GET']),
-        Route('/mcp', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
-        Route('/mcp/{secret}', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
-    ]
-    if unified is not None:
-        routes.append(Route('/unified/mcp', McpEndpoint(), methods=['GET', 'POST', 'DELETE']))
+    routes = [Route('/health', health, methods=['GET', 'HEAD'])]
+    if settings.role == 'workspace':
+        routes += [
+            Route('/', viewer, methods=['GET']),
+            Route('/assets/{name}', asset, methods=['GET']),
+            Route('/view/{project}/{dashboard}', viewer, methods=['GET']),
+            Route('/edit/{project}/{dashboard}', viewer, methods=['GET']),
+            Route('/api/v1/p/{project}/tools/{name}', tool, methods=['POST']),
+            Route('/api/v1/p/{project}/annotations/{dashboard}', annotations, methods=['GET', 'POST']),
+            Route('/api/v1/p/{project}/publications/{share_id}/feedback', publication_feedback, methods=['GET']),
+            Route('/api/v1/p/{project}/content/{dashboard}/{revision}/{object}/{name}', content, methods=['GET']),
+            Route('/api/v1/catalog', admin_catalog, methods=['POST']),
+            Route('/api/v1/share', admin_share, methods=['POST']),
+            Route('/files/{token}', download, methods=['GET']),
+            Route('/mcp', McpEndpoint(), methods=['GET', 'POST', 'DELETE']),
+        ]
+    else:
+        routes += [
+            Route('/api/v1/publications', publications, methods=['POST']),
+            Route('/api/v1/publications/{share_id}', publications, methods=['GET', 'DELETE']),
+            Route('/s/{share_id}/', cloud_publication, methods=['GET', 'POST']),
+            Route('/s/{share_id}/api/annotations', publication_annotations, methods=['GET', 'POST']),
+            Route('/s/{share_id}/{name:path}', cloud_publication, methods=['GET']),
+        ]
     app = Starlette(routes=routes, lifespan=lifespan)
     app.state.server = server
-    return RequestLog(app)
+    origin_token = os.environ.get('CHARTS_ORIGIN_TOKEN', '') if settings.role == 'sharing' else ''
+    return RequestLog(app, origin_token)
 
 
 class RequestLog:
@@ -1135,18 +1126,18 @@ class RequestLog:
         (re.compile(r'^/s/[^/]+/.*$'), '/s/<share>/<file>'),
     )
 
-    def __init__(self, app):
+    def __init__(self, app, origin_token=''):
         self.app = app
+        self.origin_token = origin_token.encode()
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             await self.app(scope, receive, send)
             return
         path = scope['path']
-        if os.environ.get('CHARTS_STORAGE_BACKEND') == 'neon' and path not in ('/health', '/mcp', '/unified/mcp') and not path.startswith('/mcp/'):
-            expected = os.environ.get('CHARTS_ORIGIN_TOKEN', '').encode()
+        if self.origin_token and path != '/health':
             supplied = dict(scope['headers']).get(b'x-origin-token', b'')
-            if not expected or not hmac.compare_digest(expected, supplied):
+            if not hmac.compare_digest(self.origin_token, supplied):
                 from starlette.responses import Response
                 await Response(status_code=403, headers={'Cache-Control': 'no-store'})(scope, receive, send)
                 return
@@ -1195,7 +1186,8 @@ def settings_from_args(args) -> ServerSettings:
         sources=args.sources or env('CHARTS_SOURCES'), stateless=bool(args.stateless or env('CHARTS_STATELESS')),
         allowed_hosts=tuple(args.allowed_host or [item.strip() for item in (env('CHARTS_ALLOWED_HOSTS', '') or '').split(',') if item.strip()]),
         forwarded_allow_ips=args.forwarded_allow_ips or env('CHARTS_FORWARDED_ALLOW_IPS', '127.0.0.1'),
-        insecure_no_auth=bool(getattr(args, 'insecure_no_auth', False)))
+        insecure_no_auth=bool(getattr(args, 'insecure_no_auth', False)),
+        role=env('CHARTS_SERVER_ROLE', 'sharing' if env('CHARTS_STORAGE_BACKEND') in ('cloudbase', 'cloudflare') else 'workspace'))
 
 
 class _ClosedStreamFilter:
@@ -1216,10 +1208,15 @@ def serve(settings: ServerSettings):
         raise DashboardError('MCP_NOT_INSTALLED', 'Install the server dependencies: python3 -m pip install "mcp>=1.28,<2"') from exc
     server = RemoteServer(settings)
     app = create_app(server)
-    print(json.dumps({'mcp': settings.public_url + '/mcp', 'uiStatus': 'unavailable', 'workspace': str(settings.workspace),
-                      'auth': 'disabled (loopback trial)' if settings.insecure_no_auth else 'bearer', 'version': __version__}, ensure_ascii=False), flush=True)
+    public = {'role': settings.role, 'version': __version__}
+    if settings.role == 'workspace':
+        public.update(mcp=settings.public_url + '/mcp', workspace=str(settings.workspace))
+    else:
+        public.update(publications=settings.public_url + '/api/v1/publications')
+    public['auth'] = 'disabled (loopback trial)' if settings.insecure_no_auth else 'bearer'
+    print(json.dumps(public, ensure_ascii=False), flush=True)
     if settings.public_url.startswith('http://') and settings.host not in ('127.0.0.1', 'localhost', '::1'):
         print('Warning: publish this server through HTTPS (reverse proxy) before sharing links; tokens travel in requests.', file=sys.stderr)
-    with neon_view_connections():
+    with (neon_view_connections() if settings.role == 'workspace' else contextlib.nullcontext()):
         uvicorn.run(app, host=settings.host, port=settings.port, access_log=False, log_level='warning',
                     proxy_headers=True, forwarded_allow_ips=settings.forwarded_allow_ips, server_header=False)

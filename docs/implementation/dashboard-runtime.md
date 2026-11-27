@@ -15,8 +15,8 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 | `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
 | `runtime-core/`、`columnar.py` | Rust 只读 SQLite→Parquet 导出、不可变编码缓存及与现有 MCP 的桥接 |
 | `file_lock.py` | 镜像同步与导出缓存的跨进程文件锁，不承载业务版本状态 |
-| `server.py`、`http_server.py` | 自托管远程服务与本机网页入口、独立的网页批注鉴权 |
-| `local_shares.py`、`cloud_shares.py`、`share_annotations.py` | 本机发布引用、固定版本分享副本与分享批注存储 |
+| `server.py`、`http_server.py` | 自有服务器创作、分享服务请求、本机网页与批注鉴权 |
+| `local_shares.py`、`cloud_shares.py`、`share_annotations.py` | 作者工作区的发布引用、固定版本副本、读者批注存储 |
 | `runtime-ui/src/` | 展示组件、应用状态、布局和宿主能力适配 |
 
 展示组件接收 props 和事件，不访问数据库或直接调用 MCP；应用适配层管理工具请求、结果合并和宿主能力。网页批注由 `annotation-client.ts` 调用同源 HTTP 接口，独立于内容工具的传输方式。画布与应用共享组件，分别构建与打包。业务状态通过 Service 和项目存储修改，不手工维护 SQLite 的 JSON 镜像。

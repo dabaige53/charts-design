@@ -1,7 +1,8 @@
 # Copy to deploy/charts.env (Docker) or /etc/charts-design/charts.env (systemd).
 # Generate access values with:  python3 -c "import secrets;print(secrets.token_urlsafe(32))"
 
-# Public HTTPS address used in preview and download links.
+# Author workspace. Use its public HTTPS address for MCP, edit and preview.
+CHARTS_SERVER_ROLE=workspace
 CHARTS_PUBLIC_URL=https://charts.example.com
 # Bearer tokens accepted on /mcp, comma separated (rotate by listing old and new).
 CHARTS_SERVER_TOKENS=replace-with-a-long-random-value
@@ -16,19 +17,8 @@ CHARTS_DEFAULT_PROJECT=default
 CHARTS_FORWARDED_ALLOW_IPS=127.0.0.1
 # Operator-owned read-only SQLite source aliases (JSON file), optional.
 # CHARTS_SOURCES=/data/sources.json
-# Storage mode: local (default) or cloudbase (PostgreSQL HTTP RPC + private COS).
-# Apply cloudbase/migrations with CloudBase CLI before enabling cloudbase mode.
-# Cloud mode also requires a stable CHARTS_SERVER_SECRET.
-# CHARTS_STORAGE_BACKEND=cloudbase
-# CLOUDBASE_ENV_ID=
-# CLOUDBASE_API_KEY=
-# CHARTS_COS_ASSET_PREFIX=charts-assets/
-# CHARTS_COS_AUTH=cloudbase
-# Tencent cloud publications: private COS bucket and HTTPS gateway.
-# Set these through the deployment environment when cloud sharing is enabled.
-# CHARTS_COS_REGION=
-# CHARTS_COS_BUCKET=
-# CHARTS_COS_SHARE_PREFIX=charts-shares/
-# TENCENTCLOUD_SECRETID=
-# TENCENTCLOUD_SECRETKEY=
-# TENCENTCLOUD_SESSIONTOKEN=
+# Author storage defaults to local SQLite. The Neon image sets its own backend.
+# Optional independent share service. Use its token, separate from the author token.
+# CHARTS_SHARE_SERVICE_URL=https://share.example.com
+# CHARTS_SHARE_SERVICE_TOKEN=
+# CHARTS_SHARE_SERVICE_PROJECT=default

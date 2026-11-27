@@ -1,18 +1,25 @@
-# 自托管服务器：远程 MCP 与网页预览
+# 自有服务器与独立分享服务
 
-`bun bin/python-runtime.js -m dashboard_runtime server` 在一台服务器上同时提供远程 MCP（Streamable HTTP）和看板、分析报告的网页预览。它复用本地 Runtime 的同一套 `Service`、项目存储、Doctor 与前端构建；区别在于长期运行、按项目名隔离存储、用令牌和签名链接控制访问。本地 stdio MCP（`mcp` 命令）和本机编辑器（`serve` 命令）保持不变。
+作者在本机或自有服务器制作看板和分析报告。自有服务器以 `workspace` 角色运行，提供唯一的远程 MCP 地址和同域编辑、预览。CloudBase 或 Cloudflare 以 `sharing` 角色运行，接收选定版本的发布包，提供读者页面和批注接口。本地 stdio MCP 与本机编辑器直接使用本机项目。
+
+| 角色 | 公开地址 | 保存内容 |
+| --- | --- | --- |
+| 自有服务器 `workspace` | `https://<作者域名>/mcp`、`/edit/…`、`/view/…` | 项目数据、草稿、版本、项目批注和分享引用 |
+| CloudBase 或 Cloudflare `sharing` | `https://<分享域名>/s/<shareId>/`、发布管理接口 | 固定版本页面、Parquet 数据、访问状态和读者批注 |
+| 本机 | stdio MCP、`serve` 返回的 loopback 链接 | 本机项目与分享引用 |
+
+作者操作、开发预览和编辑调用工作区。只有显式创建独立分享时，工作区才向分享服务提交所选已保存版本的副本。读者打开页面、筛选、翻页和提交批注均由浏览器和分享服务完成。作者按需通过工作区读取原版反馈。
 
 ## 提供的入口
 
 | 路径 | 用途 | 鉴权 |
 | --- | --- | --- |
 | `/mcp` | Streamable HTTP MCP 端点，供 Claude Code、Claude Desktop、IDE 等客户端连接 | `Authorization: Bearer <服务器令牌>` |
-| `/mcp/<令牌>` | 同上，供无法设置请求头的客户端使用 | 路径中的服务器令牌 |
 | `/view/<项目>/<看板>` | 内容只读预览；能否新增批注由独立权限决定 | URL 片段 `#token=` 中的签名分享令牌 |
 | `/edit/<项目>/<看板>` | 浏览器编辑：拖动与缩放布局、修改标题、版本历史 | 编辑权限的签名分享令牌 |
 | `/` | 默认项目预览入口；跨项目管理通过 API／CLI | 服务器令牌（只保存在当前标签页） |
 | `/files/<令牌>` | 导出文件下载（JSON、CSV、HTML、静态 ZIP） | 24 小时有效的签名链接 |
-| `/health` | 存活检查，返回版本 | 无 |
+| `/health` | 两种角色的存活检查，返回角色、版本和发布信息 | 无 |
 | `/s/<shareId>/` 及其资源 | 所选平台上的独立只读副本 | 8 位数字密钥与受限会话 |
 | `/api/v1/p/<项目>/annotations/<看板>` | 工作区批注读取、追加；管理操作仅限作者 | 同一工作区签名令牌，独立校验批注能力 |
 | `/s/<shareId>/api/annotations` | 对应固定分享版本的位置批注 | 该分享的有效会话及批注权限 |
@@ -54,6 +61,7 @@ bun bin/python-runtime.js -m dashboard_runtime server --workspace /data/projects
 
 | 参数 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- | --- |
+| — | `CHARTS_SERVER_ROLE` | 本机存储与 Neon 为 `workspace`，CloudBase 与 Cloudflare 为 `sharing` | 运行角色 |
 | `--workspace` | `CHARTS_WORKSPACE` | 必填 | 项目根目录；每个项目一个子目录 |
 | `--runtime-root` | `CHARTS_RUNTIME_ROOT` | `<workspace>/.runtime` | 缓存、诊断、签名密钥与链接状态 |
 | `--host` / `--port` | `CHARTS_HOST` / `CHARTS_PORT` | `127.0.0.1` / `8000` | 容器内使用 `0.0.0.0` |
@@ -86,7 +94,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
   "headers": {"Authorization": "Bearer ${CHARTS_TOKEN}"}}}}
 ```
 
-只能填写 URL 的客户端使用 `https://charts.example.com/mcp/<服务器令牌>`。该 URL 本身就是凭据，只在 HTTPS 下使用，并确认代理不记录路径。服务器不提供 OAuth 授权流程。
+远程客户端需要能设置 `Authorization` 请求头，使用 HTTPS 传送 Bearer 令牌。
 
 ## 项目与存储
 
@@ -96,11 +104,11 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 ## 网页预览与分享
 
-访问方式的名称见[看板交付术语](../agent/GLOSSARY.md)。在线链接连接服务端项目；腾讯云独立分享链接访问发布时生成的 COS 副本。
+访问方式的名称见[看板交付术语](../agent/GLOSSARY.md)。在线链接连接自有服务器项目；独立分享链接访问分享服务保存的发布副本。
 
 | 访问方式 | 创建方式 | 数据来源及更新 | 凭据与有效期 |
 | --- | --- | --- | --- |
-| 在线只读链接 | `dashboard_share`，`access=view` | 服务端项目的已保存检查点及其数据；CloudBase 存储在 PG，通过服务端 SQLite 缓存计算 | 链接包含访问令牌；按 `expiresInHours` 或服务器默认值过期，可撤销 |
+| 在线只读链接 | `dashboard_share`，`access=view` | 自有服务器项目的已保存检查点及其数据 | 链接包含访问令牌；按 `expiresInHours` 或服务器默认值过期，可撤销 |
 | 在线编辑链接 | `dashboard_share`，`access=edit` | 同一服务端项目；支持网页提供的编辑、版本管理和恢复 | 同在线只读链接，权限包含网页支持的编辑操作 |
 | 独立分享链接 | 正式发布后调用 `dashboard_share_publish` | 副本保留发布时的网页和数据；保存在腾讯云私有 COS 或 Cloudflare 私有工作区，不跟随原项目更新 | 8 位数字密钥；可选 7 天、30 天或不过期，可单独撤销 |
 
@@ -128,20 +136,20 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 - 签名预览使用服务器令牌与签名链接；云端独立副本另用下节的数字密钥。没有用户账号、角色权限、行级权限或 OAuth。持有服务器令牌即可读写全部项目。
 - 分享链接是持有即可用的凭据：转发链接等于转发权限。需要撤销时使用 `dashboard_share_revoke`，或更换签名密钥使全部链接失效。
 - 查询能力仍只限运维方配置的只读 SQLite 别名；本地查询限制不是加固的多租户沙箱。
-- 本地模式的 SQLite 使用 WAL，应使用同一主机上的持久磁盘，不能通过网络文件系统共享工作区。CloudBase 模式已接入 PostgreSQL 持久状态和 COS 文件存储，并使用无状态 MCP 会话；SQLite 仅保留为可重建的数据查询缓存。配置与查询边界见[项目存储](../implementation/project-runtime.md#存储)。
+- 作者工作区使用主机持久磁盘上的 SQLite，或 Neon PostgreSQL 与自有服务器的持久卷。配置与查询边界见[项目存储](../implementation/project-runtime.md#存储)。
 - 网页部署包（`dashboard_export_site`）仍是独立的只读静态站点，与本服务器互不依赖，见 [静态部署包](static-deployment.md)。
 
 ## 本机通过分享服务发布
 
-本机项目继续保留本机的数据、编辑历史与私人批注。分享目标是已经部署、已授权的 Runtime 服务；每次只上传选定版本所需的独立网页数据，不创建新站点或应用，不将本机项目导入远程工作区。
+本机和自有服务器都使用同一个分享协议。工作区保存项目数据、编辑历史与私人批注，发布时只向已部署的分享服务发送选定版本的副本。每次发布复用服务和分享域名。
 
-在启动本机 `serve` 或 stdio MCP 的进程环境中配置：
+在作者进程的环境中配置以下变量，适用于本机 `serve`、本机 stdio MCP 和自有服务器：
 
 | 环境变量 | 内容 |
 | --- | --- |
 | `CHARTS_SHARE_SERVICE_URL` | 既有分享服务的 HTTPS 根地址，可含原有路径前缀；仅本机验证允许 loopback HTTP |
-| `CHARTS_SHARE_SERVICE_TOKEN` | 该服务已有的服务器 Bearer 令牌；不是腾讯云或 Cloudflare 管理凭据，只留在本机进程 |
-| `CHARTS_SHARE_SERVICE_PROJECT` | 目标服务中的授权项目名，默认 `default`；用于发布归属，不迁移或同步同名项目 |
+| `CHARTS_SHARE_SERVICE_TOKEN` | 分享服务自己的 Bearer 令牌，仅保存在作者进程。与作者工作区 MCP 令牌分别配置 |
+| `CHARTS_SHARE_SERVICE_PROJECT` | 分享服务侧的发布命名空间，默认 `default`。发布归属还包含每个作者项目的独立来源标识 |
 
 使用本机入口打开项目，例如：
 
@@ -150,12 +158,12 @@ charts-design-runtime --project-root /absolute/path/project \
   --runtime-root /absolute/path/runtime-cache serve --dashboard overview
 ```
 
-1. 使用启动回执的 `editUrl` 编辑、保存；`viewUrl` 查看最新已保存版本并批注。MCP 宿主的 `dashboard_preview` 也返回这两个入口。
+1. 使用启动回执的 `editUrl` 编辑、保存；`viewUrl` 查看最新已保存版本并批注。本地和远程 MCP 的 `dashboard_preview` 都返回 `browserLinks.editUrl` 和 `browserLinks.viewUrl`。远程链接使用作者服务器的公开地址。
 2. 在编辑页的版本中心选择一个已保存版本，再选择「仅查看」或「可批注」，点击该版本的「分享此版本」。发布通过既有正式发布检查，回执包含独立 `accessUrl`；失败显示实际错误，不能把版本已发布误报为分享成功。
 3. 读者在分享链接查看、筛选、分页，并按授权新增批注。作者电脑可以关机；页面、数据和批注均由分享服务提供。
 4. 作者回到该项目的「版本与分享 → 分享」，在对应记录点击「查看读者批注」。每次打开或重新读取才向服务请求；反馈在原分享版本打开并定位，不合并到当前草稿。即使当前草稿移除组件，原分享中的锚点仍可读取。
 
-本机在 `dashboards/share-references.sqlite3` 保存来源标识、请求状态与分享引用，需随项目备份。没有双向同步、常驻同步进程或自动合并。前端对不确定的发布回执保留请求 ID；本机重试同一请求时复用已生成的 ZIP 与校验值。未完成请求所需的导出文件丢失时明确报错，不静默创建第二份分享。
+作者工作区在 `dashboards/share-references.sqlite3` 保存来源标识、请求状态与分享引用，需随项目备份。没有双向同步、常驻同步进程或自动合并。前端对不确定的发布回执保留请求 ID；本机重试同一请求时复用已生成的 ZIP 与校验值。未完成请求所需的导出文件丢失时明确报错，不静默创建第二份分享。
 
 作者进程通过管理接口 `POST /api/v1/publications` 上传固定版本 ZIP；服务校验文件路径、版本与资源，使用服务器自己的 UI，仅发布包中使用的数据。`GET/DELETE /api/v1/publications/<shareId>` 校验服务令牌和来源归属，分别读取反馈、撤销分享。本机浏览器只访问本机代理 `/api/publications/<shareId>/feedback`；远程作者页面使用 `/api/v1/p/<项目>/publications/<shareId>/feedback`。浏览器不会得到服务 Bearer 或云管理令牌。
 
@@ -167,12 +175,12 @@ charts-design-runtime --project-root /absolute/path/project \
 | --- | --- | --- |
 | CloudBase + 私有 COS | 既有 HTTPS 网关鉴权；COS 保存独立副本及 Parquet 数据 | Runtime HTTP 接口调用 PostgreSQL `charts_share_annotations` RPC；按分享 ID、页面和发布版本独立保存 |
 | Cloudflare Worker + Container | Container 提供页面与数据；既有 Durable Object SQLite 工作区 checkpoint 跨冷启动恢复 | 每个分享独立 SQLite；每次成功批注在返回前只保存该 SQLite 的增量 checkpoint，不重新归档网页或 Parquet |
-| 独立服务器 / Neon + Cloudflare Pages | Pages 提供资源并代理 API；副本在后端私有持久卷 | Runtime HTTP 写入后端私有卷中的分享 SQLite；Pages 静态文件本身没有批注写入能力 |
+| Cloudflare Pages 分享代理（可选） | Pages 转发分享资源，由分享源站提供副本 | 分享源站持久化批注 |
 | 纯静态 ZIP | 包内页面与使用中的完整数据 | 无后端，不提供可提交状态 |
 
 CloudBase 启用可批注分享或本机发布桥前，需要由部署人员应用 `cloudbase/migrations/20261127010000_share_annotations.sql`，并更新网关；该迁移只新增分享批注存储与服务端 RPC，不迁移现有业务数据。缺少持久化能力会拒绝新请求。旧仅查看分享保持原行为，不会自动获得写权限。Cloudflare 需要同步更新 Worker 与 Container；Pages 路径需要更新代理和后端，不能只上传静态文件。
 
-新本机发布桥当前接受单个已保存看板或报告，使用服务生成的访问密钥；服务器工作区原有多页分享与自定义数字密钥继续保留。所有路径都沿用到期、撤销和清理机制。分享过期或撤销后，页面和批注的新读写均被拒绝；清理同时删除该分享的批注。历史部署状态与本轮实际验证范围见[本机与分享批注验证记录](../records/2026-11-27-local-sharing-annotations.md)。
+本机和自有服务器的发布入口均接受单个已保存看板或报告，使用分享服务生成的访问密钥。所有路径都沿用到期、撤销和清理机制。分享过期或撤销后，页面和批注的新读写均被拒绝；清理同时删除该分享的批注。历史部署状态与本轮实际验证范围见[本机与分享批注验证记录](../records/2026-11-27-local-sharing-annotations.md)。
 
 清理后只保留不含作者、密钥、页面、数据或批注的退役分享 ID，用来拒绝重放旧发布请求，防止原链接复活。发布的暂存占位与激活相互校验，未激活的中断请求可由既有清理任务回收；成功回执只能在固定副本和批注作用域均就绪后返回。
 
@@ -182,45 +190,23 @@ CloudBase 启用可批注分享或本机发布桥前，需要由部署人员应�
 
 2026-11-08，`main` 提交 `ae77261` 的 GitHub Actions 运行 40 六个作业全部通过，包含完整 Docker 多阶段构建、以非 root 用户运行镜像、远程 MCP、预览与下载冒烟检查。详细历史见[验收记录](../records/2026-11-07-server-layout-kpi.md)。
 
-## 独立服务器、Neon 与 Cloudflare Pages
+## 自有服务器与 Neon
 
-### 一个 MCP 入口访问两个后端
+自有服务器设置 `CHARTS_SERVER_ROLE=workspace`，`CHARTS_PUBLIC_URL` 使用作者域名。客户端配置 `https://<作者域名>/mcp` 与作者服务器的 Bearer 令牌。可以参考 [MCP 客户端配置](../../deploy/neon/mcp.example.json)。
 
-在自有服务器的 API 容器中开启可选的 `/unified/mcp`，即可用同一套工具访问本机项目和既有 CloudBase 服务；不要求更新 CloudBase。它不是双写、复制或故障切换。两端原有 `/mcp` 和网页分享地址不变。
+SQLite 方案使用 `deploy/docker-compose.yml`。使用 Neon 时，`deploy/neon/compose.yml` 只向主机回环地址发布 `18160`，数据库、工作区卷和应用独立维护。以数据库所有者的直连 `DATABASE_URL` 和 `CHARTS_NEON_RUNTIME_ROLE` 运行 `python deploy/neon/migrate.py`，应用容器使用权限限定的数据库账号。备份覆盖数据库与持久卷。
 
-只在网关容器中配置以下三个环境变量，配置后重建该容器：
+需要发布时，在作者服务器设置 `CHARTS_SHARE_SERVICE_URL` 和该分享服务的凭据。作者域名直接提供页面、资源、编辑和预览 API。
 
-| 变量 | 用途 |
-| --- | --- |
-| `CHARTS_UNIFIED_TOKEN` | 新生成、至少 32 字符的独立 Bearer 令牌；持有者可管理两端项目，不得复用任一后端令牌 |
-| `CHARTS_CLOUDBASE_URL` | 原 CloudBase MCP 服务的 HTTPS 根地址，只填写协议和主机名 |
-| `CHARTS_CLOUDBASE_MCP_TOKEN` | 原服务的 MCP 访问令牌，不是腾讯云管理 API Key |
+### 可选的 Cloudflare Pages 分享域名
 
-三项全部未设置时不注册新入口。配置前须确认自有服务器可以保管 CloudBase 的 MCP 权限。将客户端原 MCP JSON 的 URL 改为自有服务器的 `https://<后端域名>/unified/mcp`，请求头使用 `Authorization: Bearer <统一入口令牌>`。不要使用 Pages 地址。
+如需以 Pages 域名公开读者链接，运行 `bun deploy/pages/build.mjs <输出目录>`，把生成的分享代理部署到 Pages。绑定 `ORIGIN_URL` 到运行 `sharing` 角色的 HTTPS 源站。Pages 的 `ORIGIN_TOKEN` 与源站的 `CHARTS_ORIGIN_TOKEN` 配对。源站 `CHARTS_PUBLIC_URL` 使用 Pages 公开地址，使读者链接和表单来源对应。
 
-本地、直连和统一入口使用同一份 Agent 工具清单。通过已有连接调用 `dataset_repartition` 为 COS 数据集生成分片版本。更新后在 Agent 使用的地址重新初始化会话，读取 `tools/list` 的全部页，逐项比对 `AUTHOR_TOOLS`。通过 Magpie 时按服务名前缀提取工具。`/health` 提供部署版本和提交号。
-
-每次工具调用都传 `projectRoot`。首次处理一个名字时，网关读取两端项目目录：只存在一处则自动固定归属；同名则须显式传 `backend: "server"` 或 `"cloudbase"`；新名字须在 `dashboard_create` 中指定 `backend`。例如 `{"projectRoot":"sales","dashboardId":"overview","title":"销售概览","backend":"server"}`。固定后无需再传 `backend`，传入冲突值会拒绝，另一端的同名项目仍可通过其直连入口使用。首次目录查询失败不转发；已绑定的项目只访问所属后端。写入响应中断后先检查原项目状态，不会自动重试或切到另一边。
-
-归属表 `backend-routes.sqlite3` 位于网关的 `CHARTS_RUNTIME_ROOT`，应随私有数据卷备份。它只存项目名和后端名，不保存看板、数据或上游令牌。
-
-支持在 JSON 请求头中替换环境变量的客户端，可使用[统一 MCP 配置示例](../../deploy/neon/unified-mcp.example.json)。不支持变量替换的客户端，应在其私有凭据设置中配置 Bearer 令牌，不要将真实值提交到项目。
-
-### 单后端部署
-
-此组合不使用 Cloudflare Containers。MCP 与 API 在独立的 `charts-design` Compose 项目中运行。`deploy/neon/compose.yml` 只向主机回环地址发布 `18160` 端口，使用独立的网络和数据卷；不连接同机其他应用的数据库。数据库结构、看板、版本及引用登记在 Neon PostgreSQL，下载文件、资源及分享副本保存在此项目的私有卷。备份须同时覆盖数据库和卷。
-
-从源码重建时，先运行 `bun run ui:prepare`，确认 `dashboard_runtime/web/dist/` 含 `build.json`、`app.js`、`app.css` 和 `static-worker.js`。从同一份构建结果运行 `bun deploy/pages/build.mjs dashboard_runtime/web/dist <Pages输出目录>`。在仅含发布源码和构建产物的项目根目录运行 `docker build -f deploy/neon/Dockerfile -t charts-design-api:neon .`。环境文件、数据库连接串和私钥均存放在构建目录外。
-
-在专用 Neon 数据库创建不具备建库、建角色权限的运行账号。以数据库所有者的直连 `DATABASE_URL` 和 `CHARTS_NEON_RUNTIME_ROLE` 运行 `python deploy/neon/migrate.py`；运行容器只接收普通运行账号的 `DATABASE_URL`。保留 `CHARTS_SERVER_SECRET`、`CHARTS_SERVER_TOKENS` 与单独的 `CHARTS_ORIGIN_TOKEN`；`CHARTS_PUBLIC_URL` 指向 Pages 的 HTTPS 根地址，`CHARTS_ALLOWED_HOSTS` 包含对外 MCP 主机名。
-
-`deploy/pages/build.mjs` 从与后端相同的 UI 构建产物生成 Pages 部署包。Pages 绑定 `ORIGIN_URL` 指向后端的独立 HTTPS 入口，`ORIGIN_TOKEN` 与后端 `CHARTS_ORIGIN_TOKEN` 配对，用于验证源站请求。浏览器从 Pages 加载资源，并在同一域名访问网页 API；MCP 客户端携带用户令牌直接连接后端域名的 `/mcp`。部署后通过 Pages 的网页 API 验证源站连接。
-
-后端就绪后单独安装 `deploy/neon/charts-design-cleanup.service` 与 `.timer`，先执行一次清理生成心跳，再启用每六小时清理。现有主机的容器、定时器及备份策略不复用。
+Pages 只转发 `/s/…`、发布管理接口和健康检查。工作区页面和 MCP 地址使用自有服务器域名。该代理独立打包，分享页资源由发布副本提供。
 
 ## Cloudflare 独立部署
 
-Cloudflare 运行同一套 Python MCP、网页编辑器、版本历史和下载服务。Worker 将请求送入同一个 Container。项目、历史、签名密钥和私密分享保存在同一工作区；Durable Object 的 SQLite 存储保留压缩归档，不依赖容器临时磁盘、COS 或腾讯云账号。更换云平台不会迁移原有项目或分享链接。
+Cloudflare Worker 将发布、读者访问和批注请求送入 `sharing` 角色的 Container。Durable Object SQLite 保存副本、签名状态与批注的恢复数据。作者使用自有服务器或本机工作区。
 
 在 GitHub 仓库的 Actions 配置中选择部署平台：
 
@@ -229,13 +215,13 @@ Cloudflare 运行同一套 Python MCP、网页编辑器、版本历史和下载�
 | 不设置或 `cloudbase` | 原有 CloudBase 任务 |
 | `cloudflare` | 仅 Cloudflare 任务 |
 
-Cloudflare 账号须能使用 Workers、Containers 和 SQLite Durable Objects。配置仓库变量 `CLOUDFLARE_ACCOUNT_ID`、`CHARTS_PUBLIC_URL`（此 Worker 的 HTTPS 根地址，不带路径或末尾斜杠）。设置两个独立的 Actions Secret：`CLOUDFLARE_API_TOKEN` 用于部署，`CHARTS_SERVER_TOKENS` 用于 MCP 访问，不能复用。默认 Worker 名为 `charts-design`，可使用其 `workers.dev` 地址；自定义域名需先绑定。
+Cloudflare 账号须能使用 Workers、Containers 和 SQLite Durable Objects。配置仓库变量 `CLOUDFLARE_ACCOUNT_ID`、`CHARTS_PUBLIC_URL`（此 Worker 的 HTTPS 根地址，不带路径或末尾斜杠）。设置两个独立的 Actions Secret：`CLOUDFLARE_API_TOKEN` 用于部署，`CHARTS_SERVER_TOKENS` 用于发布管理，不能复用。默认 Worker 名为 `charts-design`，可使用其 `workers.dev` 地址；自定义域名需先绑定。
 
-按下节的版本标签流程发布，或在 **Cloudflare release** 中选择已有版本标签。工作流构建镜像，配置 Worker 与每六小时一次的 Cron，并以 `/health` 返回的 Git 提交号检查发布结果。首次成功清理前不允许创建独立分享。访问密钥、有效期、撤销和编辑链接权限沿用原有接口。
+按下节的版本标签流程发布，或在 **Cloudflare release** 中选择已有版本标签。工作流构建镜像，配置 Worker 与每六小时一次的 Cron，并以 `/health` 返回的 Git 提交号检查发布结果。首次成功清理前不允许创建独立分享。发布、访问密钥、有效期和撤销使用分享服务接口。
 
-本地部署入口是 `bun run deploy:cloudflare`，需要可用的 Docker 构建器、已注入的 Cloudflare 账号和部署凭据，以及 Worker 的 `CHARTS_SERVER_TOKENS` secret。用 `--var "CHARTS_PUBLIC_URL:$CHARTS_PUBLIC_URL"` 指定已绑定的地址。不要删除或更名已投入使用的 Durable Object 命名空间或 `workspace` 实例；新实例不会继承原项目。
+本地部署入口是 `bun run deploy:cloudflare`，需要可用的 Docker 构建器、已注入的 Cloudflare 账号和部署凭据，以及 Worker 的 `CHARTS_SERVER_TOKENS` secret。用 `--var "CHARTS_PUBLIC_URL:$CHARTS_PUBLIC_URL"` 指定已绑定的地址。不要删除或更名已投入使用的 Durable Object 命名空间或 `workspace` 实例；新实例使用独立的分享存储。
 
-此路径面向单工作区。请求按顺序执行；成功的 MCP POST、编辑请求、发布和定时清理在返回前保存整个工作区。`/s/<shareId>/api/annotations` 的成功写入只保存该分享批注 SQLite 的增量归档，冷启动先恢复内容，再恢复批注增量；下一次完整 checkpoint 成功后原子清除已包含的增量。恢复或保存失败时请求失败，不以空工作区继续。归档大小会影响完整保存的耗时，暂存新归档时还需要容纳上一份归档；不提供跨实例横向写入。清理移除当前工作区中的副本，平台灾备保留期不等同于在线访问期。
+此路径使用一个分享存储实例。请求按顺序执行。创建、撤销分享和定时清理在返回前保存分享存储的完整归档。`/s/<shareId>/api/annotations` 的成功写入只保存该分享批注 SQLite 的增量归档，冷启动先恢复内容，再恢复批注增量；下一次完整 checkpoint 成功后原子清除已包含的增量。恢复或保存失败时请求失败，不以空工作区继续。归档大小会影响完整保存的耗时，暂存新归档时还需要容纳上一份归档；不提供跨实例横向写入。清理移除当前工作区中的副本，平台灾备保留期不等同于在线访问期。
 
 ## 按版本自动发布到 CloudBase
 
@@ -269,34 +255,21 @@ bun run release -- 1.2.1
 
 ## 部署确认
 
-真实客户端需提供可访问上述 HTTPS 地址的目标环境，以及对应客户端的远程 MCP 配置入口。按每个目标客户端实际支持的请求头令牌或 URL 令牌方式连接，完成初始化、工具发现、在隔离项目中创建和修改合成看板、打开预览、下载导出、撤销链接与重新连接。Codex、Claude Desktop、Claude Code、claude.ai 的兼容性分别记录，不用官方 Python SDK 的通过结果代替。未实现 OAuth，必须先确认目标客户端支持当前令牌接入方式；只支持 OAuth 的入口不在现有能力内。
+对每个目标客户端，用作者域名的 HTTPS MCP 地址和 Bearer 请求头完成初始化、工具发现、在隔离项目中创建和修改合成看板、打开预览、下载导出与撤销链接。客户端验收分别记录。分享服务的 `/health` 应显示 `role: sharing`，然后用一个固定版本核对读者访问、批注和作者反馈。
 
 ## 腾讯云在线分享与云端清理
 
 既有密钥分享的历史部署包含 COS、HTTPS 网关和 SCF，密钥访问与撤销的历史云端结果记录在[部署方案](../plans/cloud-hosting-and-version-control.md)。目标清理周期为每 6 小时，调整周期前应先更新网关的清理状态检查，再更新云端触发器。本轮新增的分享批注和本机发布桥尚未进行真实云部署验证，不能沿用历史结果宣称已上线，详见[本轮验证记录](../records/2026-11-27-local-sharing-annotations.md)。
 
-腾讯云分享保存一份独立、只读的看板或分析报告副本，也可以将同一项目中选定的多个页面打包到同一链接。网页、运行资源、使用中的完整数据集分片和访问控制记录保存在私有 COS。访客通过 HTTPS 网关访问，输入 8 位数字访问密钥后阅读；浏览器不会获得公开 COS 地址。
+腾讯云分享保存一份独立、内容只读的看板或分析报告副本。网页、运行资源、使用中的完整数据集分片和访问控制记录保存在私有 COS。访客通过 HTTPS 网关访问，输入 8 位数字访问密钥后阅读；浏览器不会获得公开 COS 地址。
 
 清理任务由腾讯云 SCF 定时触发执行，不由本地 MCP、用户电脑或网页网关进程执行。删除范围包括该分享副本的对象历史版本、删除标记、密钥哈希与清理任务记录。本地项目原稿和其他分享副本保留。
 
-### MCP 操作
+### 从作者工作区发布
 
-先完成编辑批次，再用最新版本发布：
+用 `dashboard_submit` 保存内容，再调用作者工作区的 `dashboard_publish`，提供明确的保存版本 `revision` 和 `share` 选项。Web 版本中心的「分享此版本」使用同一个入口。分享选项包括 `expiration`（`7d`、`30d`、`never`）、`annotationMode`（`view` 或 `annotate`）和 UUID v4 `requestId`。请求结果不确定时，沿用同一请求 ID。
 
-1. `dashboard_get` 读取草稿与版本。
-2. 有修改时按 `dashboard_edit_begin` → 修改 → `dashboard_edit_finish` 完成检查点；用 `dashboard_version_publish` 将选定已保存版本设为正式发布版本。
-3. 调用 `dashboard_share_publish`，传入相同的 `projectRoot`、`dashboardId`；`expectedRevision` 使用当前 `publishedRevision`。可通过 `pages` 指定其他页面及其当前正式发布版本，每页都需先发布。草稿可以比发布版本更新。
-4. 将返回的 `accessUrl` 交给指定读者，打开后自动填入密钥，再点击“打开分享”；也可分别发送 `url` 和 `accessKey`。
-
-| 参数 | 说明 |
-| --- | --- |
-| `expiration` | `never` 不过期；`7d` 七天后过期，默认值；`30d` 三十天后过期。时间从发布时开始计算 |
-| `accessKey` | 可选，必须是 8 位 ASCII 数字字符串，可包含前导零；省略时随机生成 |
-| `expectedRevision` | 项目模式下必须等于当前正式发布版本，防止误分享未发布草稿 |
-| `annotationMode` | `view` 仅查看，默认值；`annotate` 允许新增批注。内容始终只读，旧分享不自动变更 |
-| `requestId` | 可选 UUID v4；同一次发布遇到不确定回执时沿用，避免重复创建 |
-
-返回 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`annotationMode`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`；`cleanupExecutor` 为 `tencent-scf`。分享路径使用不透明十六进制标识。
+结果包含 `shareId`、`url`、`accessUrl`、`accessKey`、`revision`、`annotationMode`、`expiration`、`expiresAt` 和 `cleanupExecutor`。`expiresAt` 是 UTC Unix 秒数，不过期时为 `null`。腾讯云的清理执行方为 `tencent-scf`。
 
 `url` 不含密钥；`accessUrl` 使用 `url#key=访问密钥`，浏览器读取片段后自动填入并从地址栏移除。片段不发送给服务器；表单仍通过 HTTPS POST 校验密钥。带密钥链接只在新建或替换分享时返回；COS 控制记录和状态接口只保留不含密钥的信息。已有 `url` 可由持有者在本机追加同样的片段使用。
 
@@ -304,9 +277,9 @@ bun run release -- 1.2.1
 
 `dashboard_share_status` 查询本项目、本看板的分享任务，可传入一个 `shareId`。它不返回访问密钥。响应不确定时先查询，再决定是否重发。
 
-`dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；多页面分享替换时保留页面范围，并使用各页面当前正式发布版本。其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
+`dashboard_share_replace` 将选定分享替换为当前正式发布版本：先完成新副本上传，再撤销旧分享，返回新链接和新密钥；替换时保留原分享的批注权限。其他分享不受影响。若 `previousRevoked=false`，保留返回的新凭据，并按 `followUp` 撤销旧分享。
 
-`dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试。清理完成后，该任务从状态列表消失。此操作也适用于不过期分享。
+`dashboard_share_delete` 撤销一个 `shareId`，立即阻止访问，并将物理删除交给 SCF。`cleanupState=pending` 表示等待清理或重试。作者工作区保留该分享的撤销引用。此操作也适用于不过期分享。
 
 原 `dashboard_share` 和 `dashboard_share_revoke` 继续用于自托管服务的签名预览链接；它们不创建或删除 COS 分享副本。
 
@@ -314,7 +287,7 @@ bun run release -- 1.2.1
 
 | 组成 | 职责 |
 | --- | --- |
-| HTTPS 网关 | 将现有自托管服务器部署在云端；提供 `/s/<shareId>/` 密钥表单、会话和逐文件鉴权。每次请求都检查到期时间 |
+| HTTPS 网关 | 以 `sharing` 角色运行 Runtime，提供 `/s/<shareId>/` 密钥表单、会话和逐文件鉴权。每次请求都检查到期时间 |
 | 私有 COS | 保存独立网页与数据；对象不公开，响应设置 `no-store` |
 | PostgreSQL 分享批注 RPC | 仅服务端可调用；校验分享版本、权限、过期、撤销与重复提交，独立保存批注，不生成内容版本 |
 | SCF 云函数 | 每 6 小时扫描清理任务；删除到期、撤销或中断上传的副本；删除失败保留任务并使函数调用失败，后续触发继续重试 |
@@ -329,7 +302,7 @@ bun run release -- 1.2.1
 
 部署环境使用通用环境变量。COS 支持执行角色注入的临时凭据；设置 `CHARTS_COS_AUTH=cloudbase` 时使用服务端 CloudBase API Key 换取临时凭据，并在运行期间刷新。网页中不包含云凭据。
 
-| 环境变量 | 网关/发布进程 | SCF |
+| 环境变量 | 分享网关 | SCF |
 | --- | --- | --- |
 | `CHARTS_PUBLIC_URL` | 必填，已部署网关的 HTTPS 地址，可含路径前缀 | 不需要 |
 | `CHARTS_COS_REGION` | 必填，COS 地域 | 必填，同一地域 |
@@ -373,25 +346,21 @@ docker buildx build --platform linux/amd64 \
 
 ### 从本地项目迁移选定数据
 
-云端迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。目标支持批量上传时，客户端在发送前压缩，每个数据版本按 5,000 行分片（末片可更少），每片最多 8 MiB gzip、16 MiB 解压后 JSON。客户端直接传给 MCP，不需要另开存储或配置存储凭据。旧服务、已有的旧格式续传，以及新任务显式使用 `--legacy` 时，仍使用 250 行、2 MiB JSON 分片。
+此流程用于自有服务器的 Neon 作者工作区。数据迁移使用 `dataset_transfer_chunk`、`dataset_transfer_finish`、`dataset_transfer_status` 和 `dataset_transfer_cleanup`。目标支持批量上传时，客户端在发送前压缩，每个数据版本按 5,000 行分片（末片可更少），每片最多 8 MiB gzip、16 MiB 解压后 JSON。客户端直接传给 MCP，不需要另开存储或配置存储凭据。旧服务、已有的旧格式续传，以及新任务显式使用 `--legacy` 时，仍使用 250 行、2 MiB JSON 分片。
 
-批量上传的分片、状态查询和合并请求都带 `encoding: gzip-json-v1`。相同传输 ID 和分片编号重试时，解压后的内容必须一致。分片先放到服务端已有的私有对象存储，服务端按序重算完整数据版本，持久保存后才可引用：未切换项目写入 PostgreSQL 业务分块，`cos-v1` 项目生成 COS 数据包并登记 PostgreSQL 元信息。完成后删除该传输的暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 并指定传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 时也调用 finish 完成清理。迁移沿用服务端既有存储权限，不自动更改权限。
+批量上传的分片、状态查询和合并请求都带 `encoding: gzip-json-v1`。相同传输 ID 和分片编号重试时，解压后的内容必须一致。分片先放到服务端已有的私有对象存储，服务端按序重算完整数据版本，持久保存后才可引用：Neon 作者工作区写入 PostgreSQL 业务分块。完成后删除该传输的暂存对象及历史版本。中断可继续；主动放弃时调用 `dataset_transfer_cleanup` 并指定传输 ID。服务重启后状态可能为 `unknown`，重新调用 `dataset_transfer_finish`；返回 `cleanup_required` 时也调用 finish 完成清理。迁移沿用服务端既有存储权限，不自动更改权限。
 
 `bin/transfer-project.py` 从用户审核的清单读取本地草稿与选定数据集，通过上述 MCP 工具传输。清单包含本地 `projectRoot`，每页的 `dashboardId`、`draftRevision`、`componentCount`，以及每个选定数据集的 `id`、`version`、`rowCount`、`bytes`。脚本拒绝版本变化或清单缺少组件绑定的数据，保留组件、筛选、选定数据集的全部指标与批注；其他未选数据集及其指标不进入迁移副本。相同数据版本只传输一次。它创建新页面，不覆盖不同内容的现有页面；目标页面的版本从 1 开始，本地历史不会迁入。来源执行认证状态会标为 supplied。
 
-通过项目 1Password 入口注入 `CHARTS_SERVER_TOKENS`，脚本使用列表中的第一个令牌；`CHARTS_MCP_URL` 是 HTTPS MCP 地址。不要将令牌值写入命令、文件或仓库。项目入口会切换到登记的项目目录，运行前切换到需要使用的源码目录。使用专门的状态文件记录可续传 ID，不包含令牌：
+在私有进程环境中设置 `CHARTS_SERVER_TOKENS` 和 `CHARTS_MCP_URL=https://<作者域名>/mcp`。脚本使用令牌列表中的第一个值。状态文件保存可续传 ID。
 
 ```sh
-project-run <项目目录名> -- /bin/sh -c '
-  cd /absolute/path/charts-design
-  export CHARTS_MCP_URL="$(gh variable get CLOUDBASE_SERVICE_URL)/mcp"
-  bun run python -- bin/transfer-project.py \
-    --manifest /absolute/path/online-migration-manifest.json \
-    --project <远程项目名> --state /private/tmp/charts-transfer-state.json
-'
+bun run python -- bin/transfer-project.py \
+  --manifest /absolute/path/online-migration-manifest.json \
+  --project <远程项目名> --state /private/tmp/charts-transfer-state.json
 ```
 
-迁移成功只表示创建了页面，须对每页运行 `dashboard_checkpoint`（内含完整 Doctor）并确认通过，再运行 `dashboard_version_publish`；之后才能通过 `dashboard_share_publish.pages` 创建多页分享。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。
+迁移完成后逐页运行 `dashboard_submit` 检查并保存，然后按需要分享保存版本。传输中止或清理失败时保留状态文件并使用相同参数重试；不要删除该文件后盲目重传。用户决定放弃时，从状态文件的 `uploads` 中取得对应 ID，调用 `dataset_transfer_cleanup`，并确认成功。不会自动清理无人恢复的中断传输。
 
 合并时，`dataset_transfer_status` 的 `phase` 标明读取暂存分块、保存数据库分块或清理；`completed` 和 `total` 对应当前阶段。脚本会记录已完整暂存的版本，恢复时不再发送这些数据行。使用旧版脚本时，只有在已确认某个版本全部分块均已暂存的情况下，才在恢复命令中加 `--resume-staged <完整数据版本号>`；缺块时合并报错，不会创建不完整的数据版本。
 
@@ -421,7 +390,9 @@ stderr 输出 JSON 进度，包括本地准备、分块编码、请求耗时、�
 
 ## COS 业务内容迁移与删除任务
 
-上线时先应用 `20261112020000_cos_assets.sql` 和 `20261112030000_cos_editor.sql`，再部署兼容版本的 Runtime。后一个迁移修复删除预览与确认的 SQL 变量引用，并让新建云端项目默认使用 `cos-v1`。原项目在显式迁移前仍使用 PostgreSQL 业务行；不能直接改格式标记来代替迁移。通过 `dataset_storage_inventory` 的 `cos.format` 检查实际格式，在线编辑接口返回的文档应包含 `storageFormat: "cos-v1"`。
+本节记录原 CloudBase 作者工作区的维护方式。当前 CloudBase 分享部署只维护已发布副本及读者批注。
+
+原工作区上线时先应用 `20261112020000_cos_assets.sql` 和 `20261112030000_cos_editor.sql`，再部署兼容版本的 Runtime。后一个迁移修复删除预览与确认的 SQL 变量引用，并让新建云端项目默认使用 `cos-v1`。原项目在显式迁移前仍使用 PostgreSQL 业务行；不能直接改格式标记来代替迁移。通过 `dataset_storage_inventory` 的 `cos.format` 检查实际格式，在线编辑接口返回的文档应包含 `storageFormat: "cos-v1"`。
 
 新创建的 COS 数据包使用 Rust 从已校验的 SQLite 表生成 Parquet 行分片和单列候选项分片，保留 `query.sqlite3` 供服务器查询与缓存恢复。包描述新增 `dataFormat: "parquet-v1"`，沿用现有对象登记、数据版本与引用清理协议，不增加数据库迁移。原生程序或匹配的 UI 资源缺失时明确报错，不改写成 JSON 新包；服务器镜像已包含原生程序。旧包继续按原格式读取，元数据和版本声明仍使用 JSON。
 

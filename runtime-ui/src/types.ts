@@ -26,6 +26,7 @@ export type Filter = {
   field: string;
   op: "in" | "range" | "contains";
   selectionMode?: "single" | "multiple";
+  alwaysVisible?: boolean;
   required?: boolean;
   scope?: "report" | "table";
   values: any[];

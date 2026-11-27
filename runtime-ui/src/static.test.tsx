@@ -13,6 +13,28 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "location");
 });
 
+// @wu-test type=integration | scope=静态分享筛选常显配置 | protects=固定分享页忽略第四项常显配置或将高级筛选移到主栏
+it("uses saved filter visibility in a published report", async () => {
+  Object.defineProperty(globalThis, "location", { configurable: true, value: new URL("https://charts.example/s/share/") });
+  const doc: Document = {
+    id: "report", revision: 1,
+    manifest: { title: "筛选配置报告", viewMode: "report", report: { markdown: "" },
+      components: {}, layout: {}, metrics: {}, datasets: {},
+      filters: ["月份", "基地", "机型", "航线", "渠道"].map((label, index) => ({
+        id: `choice-${index}`, label, field: "field", op: "contains", values: [],
+        componentIds: [], alwaysVisible: index < 4,
+      })) },
+    snapshot: { datasets: {} },
+  };
+  globalThis.fetch = (async () => Response.json(doc)) as typeof fetch;
+  render(<TooltipProvider><StaticSite /></TooltipProvider>);
+  await screen.findByRole("heading", { name: "筛选配置报告" });
+  expect(screen.getByPlaceholderText("航线").closest("[inert]")).toBeNull();
+  expect(screen.getByPlaceholderText("渠道").closest("[inert]")).not.toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "更多筛选" }));
+  expect(screen.getByPlaceholderText("渠道").closest("[inert]")).toBeNull();
+});
+
 // @wu-test type=integration | scope=StaticSite 页面切换和权限 | protects=多页面分享误加载未选页面、无批注后端的ZIP显示可提交入口
 it("loads selected pages from the shared site", async () => {
   Object.defineProperty(globalThis, "location", { configurable: true, value: new URL("https://charts.example/s/share/") });

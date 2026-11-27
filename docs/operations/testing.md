@@ -72,6 +72,6 @@ Python 使用项目解释器和 `pyproject.toml` 中的依赖；运行配置见 
 
 版本部署由独立的 `cloudbase-release.yml` 执行，流程见 [自托管服务器](self-hosted-server.md#按版本自动发布到-cloudbase)。修改 CI 不自动触发生产部署。
 
-自有服务器使用独立标签 `server-vX.Y.Z`，版本号须与 `package.json` 一致。推送此标签触发 `server-release.yml`：从同一提交构建服务器镜像与 Pages 静态包，检查 Pages 代理，再发布两个包、统一 MCP 客户端配置和 SHA256 校验文件。生产部署另行执行。
+自有服务器使用独立标签 `server-vX.Y.Z`，版本号须与 `package.json` 一致。推送此标签触发 `server-release.yml`：构建作者服务器镜像和可选 Pages 分享代理，检查代理路由，再发布两个包、远程 MCP 客户端配置和 SHA256 校验文件。生产部署另行执行。
 
 维护时机：开发入口、检查范围、构建复用或交付流程变化时更新本文。

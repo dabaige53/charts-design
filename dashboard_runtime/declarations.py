@@ -81,7 +81,9 @@ def common_declarations():
     return {
         'identifierSchema': _identifier(), 'sourceSchema': source,
         'metaSchema': _object({**{key: {'type': 'string', 'maxLength': 1000} for key in ('subtitle', 'org', 'system', 'statusText')}, 'iconKey': {'enum': ['chart', 'plane']}}),
-        'filterSchema': _object({'scope': {'enum': ['report', 'table'], 'default': 'report'}, 'id': _identifier(), 'label': string, 'field': field_name, 'op': {'enum': ['in', 'range', 'contains']}, 'selectionMode': {'enum': ['single', 'multiple'], 'default': 'multiple'}, 'values': {'type': 'array'}, 'componentIds': {'type': 'array', 'items': _identifier()}}, ['id', 'field', 'op', 'values', 'componentIds']),
+        'filterSchema': _object({'scope': {'enum': ['report', 'table'], 'default': 'report'}, 'id': _identifier(), 'label': string, 'field': field_name, 'op': {'enum': ['in', 'range', 'contains']}, 'selectionMode': {'enum': ['single', 'multiple'], 'default': 'multiple'},
+                                 'alwaysVisible': {'type': 'boolean', 'description': 'Show in the primary filter area. If this is set on any filter in a bar, only the filters explicitly set to true are shown there.'},
+                                 'values': {'type': 'array'}, 'componentIds': {'type': 'array', 'items': _identifier()}}, ['id', 'field', 'op', 'values', 'componentIds']),
         'datasetMetaSchema': _object({
             'sourceId': _identifier(),
             'fields': {'type': 'object', 'minProperties': 1,

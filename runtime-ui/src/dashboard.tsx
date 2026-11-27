@@ -745,9 +745,11 @@ function FilterBar({
   const advancedId = React.useId();
   if (!filters.length) return null;
   const declared = filters.filter((f) => f.id !== "runtime-linkage");
-  const primary = primaryFilterIds
-    ? [...new Set(primaryFilterIds)].flatMap((id) => declared.filter((filter) => filter.id === id))
-    : declared.filter((f) => f.op !== "contains").slice(0, 3);
+  const primary = declared.some((filter) => filter.alwaysVisible !== undefined)
+    ? declared.filter((filter) => filter.alwaysVisible)
+    : primaryFilterIds
+      ? [...new Set(primaryFilterIds)].flatMap((id) => declared.filter((filter) => filter.id === id))
+      : declared.filter((filter) => filter.op !== "contains").slice(0, 3);
   const advanced = declared.filter((f) => !primary.includes(f));
   const activeAdvanced = advanced.filter((f) => f.values.length).length;
   const active = filters.flatMap((f) =>

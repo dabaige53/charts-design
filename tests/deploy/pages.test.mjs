@@ -1,60 +1,43 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import worker from "../../deploy/pages/worker.mjs";
 
-const env = { ORIGIN_URL: "https://backend.example", ORIGIN_TOKEN: "origin-secret",
-  ASSETS: { fetch: async () => new Response("static asset") } };
+const env = { ORIGIN_URL: "https://backend.example", ORIGIN_TOKEN: "origin-secret" };
 
-// @wu-test type=integration | scope=deploy/pages/build.mjs | protects=missing viewer assets in the deployable Pages bundle
-test("build copies backend UI resources into the Pages bundle", async () => {
+// @wu-test type=integration | scope=deploy/pages/build.mjs | protects=Pages 包仍依赖作者 UI 构建或绕过分享代理
+test("build packages the share proxy independently from the author UI", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "charts-pages-test-"));
-  const source = process.env.PAGES_TEST_DIST || join(temporary, "dist");
   const output = join(temporary, "pages");
-  const assets = ["app.js", "app.css", "static-worker.js"];
   try {
-    if (!process.env.PAGES_TEST_DIST) {
-      await mkdir(source);
-      await writeFile(join(source, "build.json"), JSON.stringify({ id: "pages-test" }));
-      await Promise.all(assets.map(name => writeFile(join(source, name), `fixture: ${name}`)));
-    }
-    execFileSync(process.execPath, ["deploy/pages/build.mjs", source, output]);
-    for (const name of assets) {
-      assert.deepEqual(await readFile(join(output, "assets", name)), await readFile(resolve(source, name)));
-    }
-    assert.match(await readFile(join(output, "_worker.js"), "utf8"), /ORIGIN_TOKEN/);
+    execFileSync(process.execPath, ["deploy/pages/build.mjs", output]);
+    assert.deepEqual((await readdir(output)).sort(), ["_routes.json", "_worker.js"]);
+    assert.deepEqual(JSON.parse(await readFile(join(output, "_routes.json"), "utf8")),
+      { version: 1, include: ["/*"], exclude: [] });
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
 });
 
-// @wu-test type=integration | scope=deploy/pages/worker.mjs | protects=viewer boot state being detached from deployed static resources
-test("viewer keeps backend boot state and uses Pages assets", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = async () => new Response('<html><head><style>css</style></head><body><script>window.__chartsBoot={"projectRoot":"demo"}</script><script>application</script></body></html>', { headers: { "content-type": "text/html", "cache-control": "public" } });
-  try {
-    const response = await worker.fetch(new Request("https://pages.example/view/demo/board"), env);
-    const html = await response.text();
-    assert.match(html, /window\.__chartsBoot={"projectRoot":"demo"}/);
-    assert.match(html, /href="\/assets\/app.css"/);
-    assert.match(html, /src="\/assets\/app.js"/);
-    assert.equal(response.headers.get("cache-control"), "private, no-store");
-    assert.equal(await (await worker.fetch(new Request("https://pages.example/assets/app.js"), env)).text(), "static asset");
-  } finally { globalThis.fetch = original; }
-});
-
-// @wu-test type=boundary | scope=deploy/pages/worker.mjs | protects=arbitrary proxy access and origin token spoofing
+// @wu-test type=boundary | scope=deploy/pages/worker.mjs | protects=作者入口仍暴露在 Pages 或代理接受伪造的源站令牌
 test("only known paths reach the configured HTTPS origin", async () => {
   const original = globalThis.fetch;
   let forwarded;
   globalThis.fetch = async request => { forwarded = request; return new Response("ok", { headers: { "CDN-Cache-Control": "public" } }); };
   try {
-    for (const path of ["/mcp", "/admin", "/api/v1/p/a/tools/x%2fadmin", "/s/a%2fb/"]) {
-      assert.equal((await worker.fetch(new Request("https://pages.example" + path), env)).status, 404);
+    const denied = [
+      ["GET", "/"], ["POST", "/mcp"], ["POST", "/unified/mcp"],
+      ["GET", "/edit/demo/board"], ["GET", "/view/demo/board"], ["GET", "/assets/app.js"],
+      ["POST", "/api/v1/p/demo/tools/dashboard_get"], ["GET", "/api/v1/p/demo/annotations/board"],
+      ["GET", "/api/v1/p/demo/publications/" + "a".repeat(32) + "/feedback"], ["GET", "/s/a%2fb/"],
+    ];
+    for (const [method, path] of denied) {
+      assert.equal((await worker.fetch(new Request("https://pages.example" + path, { method }), env)).status, 404, path);
     }
+    assert.equal(forwarded, undefined);
     assert.equal((await worker.fetch(new Request("https://pages.example/health"), { ...env, ORIGIN_URL: "http://backend.example" })).status, 503);
     const request = new Request("https://pages.example/s/abc/?signature=a%2Bb", {
       method: "POST", body: "accessKey=12345678",
@@ -88,7 +71,7 @@ test("share redirects and cookies are returned without following redirects", asy
 });
 
 // @wu-test type=boundary | scope=Pages publication annotation gateway | protects=批注和本机发布被静态代理拦截或意外开放任意分享写接口
-test("annotation and author publication routes reach the existing origin", async () => {
+test("reader annotations and publication transfer reach the sharing origin", async () => {
   const original = globalThis.fetch;
   const forwarded = [];
   globalThis.fetch = async request => { forwarded.push(request); return new Response("ok"); };
@@ -97,12 +80,9 @@ test("annotation and author publication routes reach the existing origin", async
     for (const [method, path] of [
       ["POST", `/s/${share}/api/annotations`],
       ["GET", `/s/${share}/api/annotations?dashboardId=board`],
-      ["GET", "/api/v1/p/demo/annotations/board"],
-      ["POST", "/api/v1/p/demo/annotations/board"],
       ["POST", "/api/v1/publications"],
       ["GET", `/api/v1/publications/${share}`],
       ["DELETE", `/api/v1/publications/${share}`],
-      ["GET", `/api/v1/p/demo/publications/${share}/feedback`],
     ]) {
       const response = await worker.fetch(new Request(`https://pages.example${path}`, { method }), env);
       assert.equal(response.status, 200, path);
