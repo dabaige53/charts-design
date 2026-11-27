@@ -61,7 +61,7 @@ jobs:
         with:
           version: '0.12.13'
           enable-cache: true
-      - run: uv sync --locked --extra mcp --no-install-project --python 3.11
+      - run: uv sync --locked --extra mcp --extra cloud --no-install-project --python 3.11
       - run: bun install --frozen-lockfile --production --ignore-scripts
       - name: Lint Python (pyflakes rules)
         run: bun bin/python-runtime.js -m ruff check --output-format=github
