@@ -28,31 +28,34 @@ test('deployment only accepts an exact stable package version tag', () => {
 // @wu-test type=boundary | scope=CloudBase源码包 | protects=本地凭据缓存及设计归档进入云端源码包
 test('source package excludes private configuration and generated files', () => {
   for (const name of ['runtime-ui/.env', 'bin/dev.env.local', 'bin/key.pem',
+    'runtime-core/target/release/charts-design-core', 'dashboard_runtime/native/charts-design-core',
     'runtime-ui/node_modules/a.js', 'runtime-ui/dist/app.js', 'docs/design-system/tokens.json',
     '.git/config', 'boards/data.csv', 'dashboard_runtime/__pycache__/a.pyc']) {
     assert.equal(includeSource(name), false, name);
   }
   for (const name of ['runtime-ui/bun.lock', 'runtime-ui/src/main.tsx',
+    'runtime-core/Cargo.toml', 'runtime-core/Cargo.lock', 'runtime-core/src/lib.rs',
     'dashboard_runtime/server.py', 'package.json', 'skills/executive-charts/SKILL.md']) {
     assert.equal(includeSource(name), true, name);
   }
 });
 
-// @wu-test type=behavior | scope=CloudBase发布健康检查 | protects=旧实例健康响应被当作新版本部署成功
-test('health check requires both the release version and exact commit', () => {
-  const health = { ok: true, release: { version: '1.2.1', commit: 'abc' } };
+// @wu-test type=behavior | scope=CloudBase发布健康检查 | protects=旧实例或创作角色被当作新分享服务
+test('health check requires the sharing role, release version and exact commit', () => {
+  const health = { ok: true, role: 'sharing', release: { version: '1.2.1', commit: 'abc' } };
   assert.equal(matchesRelease(health, '1.2.1', 'abc'), true);
   assert.equal(matchesRelease(health, '1.2.1', 'old'), false);
   assert.equal(matchesRelease(health, '1.2.2', 'abc'), false);
+  assert.equal(matchesRelease({ ...health, role: 'workspace' }, '1.2.1', 'abc'), false);
   assert.equal(matchesRelease({ ok: true }, '1.2.1', 'abc'), false);
 });
 
-// @wu-test type=behavior | scope=CloudBase环境配置 | protects=发布覆盖线上密钥存储参数或保留旧版本标记
+// @wu-test type=behavior | scope=CloudBase环境配置 | protects=云端部署仍开放创作入口或覆盖已有存储配置
 test('deployment preserves runtime settings and replaces release identity', () => {
   const existing = { CHARTS_STORAGE_BACKEND: 'cloudbase', CHARTS_SERVER_SECRET: 'example-secret',
-    CUSTOM_SETTING: 'retained', CHARTS_RELEASE_VERSION: 'old' };
+    CUSTOM_SETTING: 'retained', CHARTS_SERVER_ROLE: 'workspace', CHARTS_RELEASE_VERSION: 'old' };
   const result = runtimeConfig({ ServerConfig: { EnvParams: JSON.stringify(existing) } }, '1.2.1', 'abc');
-  assert.deepEqual(result, { ...existing, CHARTS_RELEASE_VERSION: '1.2.1', CHARTS_RELEASE_COMMIT: 'abc' });
+  assert.deepEqual(result, { ...existing, CHARTS_SERVER_ROLE: 'sharing', CHARTS_RELEASE_VERSION: '1.2.1', CHARTS_RELEASE_COMMIT: 'abc' });
   assert.equal(existing.CHARTS_RELEASE_VERSION, 'old');
   assert.throws(() => runtimeConfig({ ServerConfig: { EnvParams: '{"CHARTS_STORAGE_BACKEND":"local"}' } }, '1.2.1', 'abc'));
 });

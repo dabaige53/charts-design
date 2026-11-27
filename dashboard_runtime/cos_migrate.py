@@ -23,6 +23,43 @@ def _identity(snapshot):
     })
 
 
+def verify_dataset(assets, obj, ref):
+    """Re-read immutable data before the migration can remove its PG row copy."""
+    from .columnar import inspect_parquet, native_binary
+
+    descriptor = obj['descriptor']
+    require(descriptor['metadata'] == ref, 'Dataset metadata changed', 'DATA_CONFLICT')
+    count, binary = 0, None
+    with tempfile.TemporaryDirectory(prefix='charts-cos-verify-') as temporary:
+        target = Path(temporary) / 'read-back.parquet'
+
+        def inspect(name, fields):
+            nonlocal binary
+            if binary is None:
+                binary = native_binary()
+                require(binary is not None, 'Parquet verification needs charts-design-core', 'NATIVE_UNAVAILABLE')
+            target.write_bytes(assets.read_file(obj, name))
+            result = inspect_parquet(target, binary)
+            require(result['fieldOrder'] == fields, 'Uploaded dataset fields differ', 'DATA_CONFLICT')
+            return result['rowCount']
+
+        for name in descriptor['shards']:
+            if name.endswith('.parquet'):
+                count += inspect(name, ref['fieldOrder'])
+            else:
+                import gzip
+                content = json.loads(gzip.decompress(assets.read_file(obj, name)))
+                count += len(content['rows'] if isinstance(content, dict) else content)
+        require(count == ref['rowCount'], 'Uploaded dataset row count differs', 'DATA_INCOMPLETE')
+        for entry in descriptor['options'].values():
+            if isinstance(entry, str):
+                assets.read_file(obj, entry)
+            else:
+                for name in entry['files']:
+                    inspect(name, [entry['field']])
+    assets.read_file(obj, 'query.sqlite3')
+
+
 def migrate(project, workspace, apply=False, partition_fields=None):
     assets = CloudAssets(project)
     original = assets.call('migration_snapshot')
@@ -45,16 +82,7 @@ def migrate(project, workspace, apply=False, partition_fields=None):
                 with store.data._connect() as db:
                     store.data._version(db, ref)
                 obj = assets.save_dataset(store.data, ref)
-            metadata = obj['descriptor']['metadata']
-            require(metadata == ref, 'Dataset metadata changed', 'DATA_CONFLICT')
-            # Re-read uploaded bytes before deleting the only PG row copy.
-            count = 0
-            import gzip
-            for name in obj['descriptor']['shards']:
-                content = json.loads(gzip.decompress(assets.read_file(obj, name)))
-                count += len(content['rows'] if isinstance(content, dict) else content)
-            require(count == ref['rowCount'], 'Uploaded dataset row count differs', 'DATA_INCOMPLETE')
-            assets.read_file(obj, 'query.sqlite3')
+            verify_dataset(assets, obj, ref)
         store.cos_enabled = store.data.cos_enabled = True
         documents = []
         by_content = {}

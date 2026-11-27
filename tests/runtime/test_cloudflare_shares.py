@@ -1,5 +1,4 @@
 import json
-from uuid import uuid4
 
 from dashboard_runtime.cloudflare_shares import clean
 from dashboard_runtime.cloud_shares import CloudShares
@@ -16,47 +15,15 @@ def test_publish_and_revoke_without_tencent(tmp_path, monkeypatch):
     service.call('dashboard_create', {'dashboardId': 'board', 'document': executive_document('board')})
     service.call('dashboard_version_publish', {'dashboardId': 'board', 'expectedRevision': 1, 'revision': 1})
     clean()
-    share = service.call('dashboard_share_publish', {'dashboardId': 'board', 'expectedRevision': 1})
     gateway = CloudShares.from_environment()
+    share = gateway.publish(service, 'board', 1)
     assert gateway.authenticate(share['shareId'], share['accessKey'])['revision'] == 1
     assert gateway.content(share['shareId'], 'index.html')
-    removed = service.call('dashboard_share_delete', {'dashboardId': 'board', 'shareId': share['shareId']})
+    removed = gateway.revoke(service, 'board', share['shareId'])
     assert removed['cleanupExecutor'] == 'cloudflare-cron'
     clean()
     assert not gateway.storage.list('shares/')
     assert service.store.get('board')['revision'] == 1
-
-
-# @wu-test type=integration | scope=dashboard_publish 分享与重试 | protects=分享失败丢失已发布版本或丢失回执后重试生成第二个链接
-def test_quick_publication_retries_share_with_same_link(tmp_path, monkeypatch):
-    monkeypatch.setenv('CHARTS_STORAGE_BACKEND', 'cloudflare')
-    monkeypatch.setenv('CHARTS_RUNTIME_ROOT', str(tmp_path / 'runtime'))
-    monkeypatch.setenv('CHARTS_PUBLIC_URL', 'https://example.org')
-    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
-    service.call('dashboard_create', {'dashboardId': 'board', 'document': executive_document('board')})
-    service.call('dashboard_patch', {'dashboardId': 'board', 'expectedRevision': 1,
-                 'operations': [{'op': 'set_title', 'value': 'Current draft'}]})
-    args = {'dashboardId': 'board', 'share': {'requestId': str(uuid4()), 'expiration': '30d'}}
-
-    partial = service.call('dashboard_publish', args)
-    assert partial['publishedRevision'] == 2 and 'share' not in partial
-    assert partial['shareError']['code'] == 'CLOUD_CLEANER_UNAVAILABLE'
-    service.call('dashboard_patch', {'dashboardId': 'board', 'expectedRevision': 2,
-                 'operations': [{'op': 'set_title', 'value': 'Later draft'}]})
-    clean()
-    completed = service.call('dashboard_publish', args)
-    share = completed['share']
-    assert share['expiration'] == '30d'
-    gateway = CloudShares.from_environment()
-    assert gateway.authenticate(share['shareId'], share['accessKey'])['revision'] == 2
-    assert gateway.content(share['shareId'], 'index.html')
-
-    reopened = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
-    repeated = reopened.call('dashboard_publish', args)
-    assert repeated['share'] == share
-    assert [item['revision'] for item in repeated['versionStatus']['releases']] == [2]
-    assert repeated['versionStatus']['draftRevision'] == 3
-    assert gateway.storage.list('jobs/') == [f"jobs/{share['shareId']}.json"]
 
 
 # @wu-test type=integration | scope=Cloudflare 私密分享清理 | protects=清理误连腾讯云或误删尚未过期的分享

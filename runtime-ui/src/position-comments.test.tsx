@@ -6,6 +6,35 @@ import type { Config, Document } from "./types";
 
 afterEach(cleanup);
 
+// @wu-test type=integration | scope=PositionComments 旧批注定位 | protects=无引文且无坐标的旧批注使批注列表和正常标记停止渲染
+it("keeps an unpositioned comment readable without hiding valid markers", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
+  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class { observe() {} disconnect() {} } });
+  const page = document.createElement("div");
+  document.body.append(page);
+  page.getBoundingClientRect = () => new window.DOMRect(0, 0, 100, 100);
+  try {
+    const doc: Document = { id: "board", revision: 2, progressive: true,
+      manifest: { title: "Board", components: {}, filters: [], layout: {}, metrics: {}, datasets: {} },
+      snapshot: { datasets: {} } };
+    const old = { id: "old", componentId: null, text: "Missing position", anchor: { scope: "page", kind: "element" } };
+    const placed = { ...old, id: "valid", text: "With position",
+      anchor: { scope: "page", kind: "area", rect: { x: 0, y: 0, width: 0.5, height: 0.5 } } };
+    const call = mock(async () => ({ revision: 2, annotations: [old, placed], independentSave: true }));
+    render(<TooltipProvider><PositionComments document={doc} root={{ current: page }} active onActiveChange={() => {}}
+      onActivityChange={() => {}} call={call} readOnly={false} filters={[]} projectRoot="sample" onNotesChange={() => {}} /></TooltipProvider>);
+    await screen.findByRole("button", { name: /打开批注.*With position/ });
+    expect(screen.queryByRole("button", { name: /打开批注.*Missing position/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "批注列表（2）" }));
+    expect(screen.getByRole("button", { name: /Missing position/ })).toBeTruthy();
+  } finally {
+    cleanup();
+    page.remove();
+    if (original) Object.defineProperty(globalThis, "ResizeObserver", original);
+    else Reflect.deleteProperty(globalThis, "ResizeObserver");
+  }
+});
+
 // @wu-test type=integration | scope=PositionComments | protects=保存时重复读取批注或调用整页修改
 it("uses the loaded revision and sends one request when resolving a comment", async () => {
   const note = { id: "note", componentId: null, text: "Review sample", createdAt: "2026-11-25" };

@@ -8,10 +8,12 @@
   },
   "scripts": {
     "setup": "bun bin/setup-environment.mjs",
+    "native:install": "bun bin/install-native.mjs",
+    "native:build": "bun bin/build-native.mjs",
     "release": "bun bin/release.mjs",
     "deploy:cloudbase": "bun bin/cloudbase-deploy.mjs",
     "deploy:cloudflare": "bunx --package wrangler@4.166.0 wrangler deploy --config deploy/cloudflare/wrangler.json",
-    "ui:install": "bun install --cwd runtime-ui --frozen-lockfile",
+    "ui:install": "bun install --cwd runtime-ui --frozen-lockfile --ignore-scripts",
     "ui:build": "bun run --cwd runtime-ui --bun build",
     "ui:prepare": "bun runtime-ui/scripts/prepare.mjs",
     "ui:typecheck": "bun run --cwd runtime-ui --bun typecheck",
@@ -22,13 +24,18 @@
     "test:unit": "bun bin/python-runtime.js -m pytest tests -q && bun test ./tests/runtime ./tests/development ./tests/deploy",
     "test:components": "bun run --cwd runtime-ui test:components",
     "test:container": "docker build -f deploy/Dockerfile -t charts-design:local . && bun bin/python-runtime.js tests/deploy/container_smoke.py --image charts-design:local",
-    "check": "bun run check:skills && bun run check:docs && bun bin/check-js-syntax.mjs && bun bin/python-runtime.js -m py_compile skills/executive-charts/scripts/*.py skills/executive-charts/scripts/core/*.py tests/deploy/container_smoke.py",
+    "check": "bun run check:skills && bun run check:docs && bun bin/check-js-syntax.mjs && bun bin/python-runtime.js -m py_compile skills/executive-charts/scripts/*.py skills/executive-charts/scripts/core/*.py tests/deploy/container_smoke.py tests/acceptance/run.py",
     "check:skills": "bun bin/check-skill-links.js",
     "check:docs": "bun bin/check-doc-links.js",
     "lint:py": "bun bin/python-runtime.js -m ruff check",
     "runtime:test": "bun bin/python-runtime.js -m pytest tests/runtime -q && bun test ./tests/runtime",
     "runtime:serve": "bun bin/dashboard-runtime.js serve",
-    "runtime:mcp": "bun bin/dashboard-runtime.js mcp"
+    "runtime:mcp": "bun bin/dashboard-runtime.js mcp",
+    "deploy:init": "bun deploy/init.mjs",
+    "test:data": "bun bin/python-runtime.js tests/acceptance/run.py seed",
+    "test:function": "bun bin/python-runtime.js tests/acceptance/run.py verify",
+    "test:performance": "bun bin/python-runtime.js tests/acceptance/run.py perf",
+    "test:million": "bun bin/python-runtime.js tests/acceptance/run.py perf --rows 1000000"
   },
   "files": [
     "bin/",
@@ -49,7 +56,12 @@
     "dashboard_runtime/*.py",
     "dashboard_runtime/web/*.mjs",
     "dashboard_runtime/web/dist/",
+    "dashboard_runtime/native/*/charts-design-core*",
     "runtime-ui/package.json",
+    "runtime-core/Cargo.toml",
+    "runtime-core/Cargo.lock",
+    "runtime-core/rust-toolchain.toml",
+    "runtime-core/src/",
     "runtime-ui/dist/components.js",
     "runtime-ui/dist/app.css",
     "runtime-ui/dist/types/",
@@ -79,7 +91,9 @@
     "docs/agent/",
     "docs/reference/",
     "docs/implementation/",
-    "docs/operations/"
+    "docs/operations/",
+    "deploy/init.mjs",
+    "deploy/pages/"
   ],
   "keywords": [
     "mckinsey",
@@ -107,5 +121,8 @@
   },
   "devDependencies": {
     "@cloudbase/cli": "3.9.1"
+  },
+  "dependencies": {
+    "@noble/hashes": "1.8.0"
   }
 }

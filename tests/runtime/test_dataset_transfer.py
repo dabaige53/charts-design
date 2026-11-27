@@ -49,27 +49,72 @@ class MemoryAssetRegistry:
     def __init__(self):
         self.objects = {}
         self.by_version = {}
+        self.shares = []
 
     def call(self, action, _project, **kwargs):
         if action == 'object_get':
-            return self.by_version.get(kwargs['version'])
+            return (self.objects.get(kwargs['id']) if 'id' in kwargs else
+                    self.by_version.get(kwargs['version']))
+        if action == 'share_register':
+            self.shares.append(kwargs)
+            return True
         if action == 'reserve':
             obj = kwargs | {'prefix': kwargs['id'] + '/'}
             self.objects[obj['id']] = obj
             return obj
         assert action == 'ready'
         obj = self.objects[kwargs['id']] | kwargs
+        self.objects[obj['id']] = obj
         self.by_version[obj['version']] = obj
         return obj
 
 
-# @wu-test type=integration | scope=COS dataset repartition | protects=重建分区篡改原数据或更新看板引用
-def test_repartition_stages_one_replacement_and_preserves_original(tmp_path, monkeypatch):
-    import gzip
-    import json
+@pytest.fixture
+def native_cos():
+    from dashboard_runtime.columnar import native_binary
+    if not native_binary():
+        pytest.skip('New COS packages require the native exporter built by the native CI job')
 
+
+# @wu-test type=boundary | scope=remote transfer source lifecycle | protects=批量上传源迭代耗尽提前关闭或校验失败后SQLite连接仍占用文件资源
+@pytest.mark.parametrize('completion', ['exhaust', 'close', 'metadata_error'])
+def test_transfer_batches_close_source_connection(tmp_path, monkeypatch, completion):
+    import sqlite3
+
+    from dashboard_runtime import remote_client
+
+    data = LocalData(tmp_path / 'data')
+    rows = [{'value': 1}, {'value': 2}, {'value': None}]
+    ref = data.import_rows(rows, {'value': {'type': 'number'}})
+    connections, connect = [], sqlite3.connect
+
+    def tracked(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(remote_client.sqlite3, 'connect', tracked)
+    source = remote_client.batches(tmp_path, {**ref, 'rowCount': 4} if completion == 'metadata_error' else ref, size=1)
+    if completion == 'metadata_error':
+        with pytest.raises(ValueError, match='differs'):
+            next(source)
+    else:
+        assert next(source) == rows[:1]
+        assert connections[0].execute('SELECT 1').fetchone() == (1,)
+        if completion == 'close':
+            source.close()
+        else:
+            assert list(source) == [[row] for row in rows[1:]]
+    assert len(connections) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        connections[0].execute('SELECT 1')
+
+
+# @wu-test type=integration | scope=COS dataset repartition | protects=重建分区篡改原数据或更新看板引用
+def test_repartition_stages_one_replacement_and_preserves_original(tmp_path, monkeypatch, native_cos):
     from dashboard_runtime.server import EDIT_TOOLS
     from dashboard_runtime.service import Service
+    from static_fixture import worker_rows
 
     monkeypatch.setenv('CHARTS_STORAGE_BACKEND', 'local')
     fields = {'department': {'type': 'string'}, 'month': {'type': 'string'}, 'value': {'type': 'number'}}
@@ -102,8 +147,8 @@ def test_repartition_stages_one_replacement_and_preserves_original(tmp_path, mon
     index = obj['descriptor']['partitionIndex']
     assert index['field'] == 'department'
     office_a = next(entry['files'][0] for entry in index['entries'] if entry['value'] == 'A')
-    part = json.loads(gzip.decompress(assets.read_file(obj, office_a)))
-    assert part == {'rows': [rows[0], rows[2]], 'ordinals': [1, 3]}
+    assert office_a.endswith('.parquet')
+    assert worker_rows(assets.read_file(obj, office_a), office_a) == [rows[0], rows[2]]
     assert service.call('dataset_repartition', request)['ref'] == replacement
     assert len(registry.objects) == 2
     assert registry.by_version[ref['version']] == original
@@ -111,7 +156,7 @@ def test_repartition_stages_one_replacement_and_preserves_original(tmp_path, mon
 
 
 # @wu-test type=integration | scope=COS report options | protects=月报引用超过十个数据集时无法保存或缺少筛选选项
-def test_cos_report_seed_can_have_more_consumers_than_sqlite_attachment_limit(tmp_path):
+def test_cos_report_seed_can_have_more_consumers_than_sqlite_attachment_limit(tmp_path, native_cos):
     from dashboard_runtime.cloud_project import CloudProjectStore
     from dashboard_runtime.local_view import LocalView
     from dashboard_runtime.model import new_document
@@ -189,7 +234,7 @@ def test_cos_scope_option_seed_tracks_changed_consumer(tmp_path):
 
 
 # @wu-test type=integration | scope=CloudAssets dataset writes | protects=并行写入失败仍将不完整数据包标记为可用
-def test_cos_dataset_failed_parallel_write_never_becomes_ready(tmp_path):
+def test_cos_dataset_failed_parallel_write_never_becomes_ready(tmp_path, native_cos):
     class Database:
         def call(self, action, project, **args):
             if action == 'object_get':
@@ -204,7 +249,7 @@ def test_cos_dataset_failed_parallel_write_never_becomes_ready(tmp_path):
 
         def put(self, key, value, content_type):
             self.writes.wait()
-            if key.endswith('options-1.json.gz'):
+            if key.endswith('-options-1-0.parquet'):
                 raise OSError('option write failed')
             super().put(key, value, content_type)
 
@@ -217,7 +262,131 @@ def test_cos_dataset_failed_parallel_write_never_becomes_ready(tmp_path):
     assets = CloudAssets('test', database=Database(), storage=storage)
     with pytest.raises(OSError, match='option write failed'):
         assets.save_dataset(source, ref)
-    assert set(storage.objects) == {'dataset/rows-0.json.gz', 'dataset/options-0.json.gz'}
+    assert set(storage.objects) == {f"dataset/{ref['version']}-0.parquet",
+                                    f"dataset/{ref['version']}-options-0-0.parquet"}
+
+
+# @wu-test type=integration | scope=COS Parquet persistence and browser query | protects=首次云保存递归读取未ready对象或分区排序遗漏空值缺失字段候选项及缓存恢复
+def test_cos_parquet_package_preserves_query_file_partition_order_and_options(tmp_path, monkeypatch, native_cos):
+    from types import SimpleNamespace
+
+    from dashboard_runtime.cos_view import authorized_file, web_document
+    from dashboard_runtime.model import new_document
+    from static_fixture import worker_query
+
+    registry = MemoryAssetRegistry()
+    assets = CloudAssets('test', database=registry, storage=MemoryStorage())
+    cloud = CloudData(tmp_path / 'writer', MemoryDatabase(), 'test', assets, cos_enabled=True)
+    cloud.partition_fields = ['department']
+    fields = {'department': {'type': 'string'}, 'amount': {'type': 'number'},
+              'active': {'type': 'boolean'}, 'label': {'type': 'string'}}
+    rows = [
+        {'department': 'B', 'amount': 3, 'active': True, 'label': '首行'},
+        {'department': 'A', 'amount': None, 'active': False},
+        {'department': 'B', 'active': None, 'label': None},
+        {'department': None, 'amount': 1.5},
+        {'amount': 0, 'active': True},
+    ]
+    with monkeypatch.context() as patch:
+        patch.setattr(LocalData, 'iter_rows', lambda *_args, **_kwargs: pytest.fail('Cloud packaging must read SQLite natively'))
+        ref = cloud.import_rows(rows, fields)
+    obj = registry.by_version[ref['version']]
+    descriptor = obj['descriptor']
+    assert (descriptor['format'], descriptor['dataFormat'], descriptor['queryFormat']) == ('cos-dataset-v1', 'parquet-v1', 1)
+    assert all(name.endswith('.parquet') for name in descriptor['files'] if name not in ('manifest.json', 'query.sqlite3'))
+    assert set(descriptor['options']) == set(fields)
+    assert all(entry['field'] == field and entry['files'] for field, entry in descriptor['options'].items())
+
+    fresh = CloudData(tmp_path / 'fresh-cache', MemoryDatabase(), 'test', assets, cos_enabled=True)
+    assert list(fresh.iter_rows(ref)) == rows
+    assert fresh.aggregate(ref, {'total': {'aggregation': 'sum', 'field': 'amount'}}) == [{'total': 4.5}]
+    doc = new_document('board', 'Cloud Parquet')
+    doc['manifest']['datasets'] = {'sales': {'fields': fields}}
+    doc['manifest']['components'] = {'table': {'kind': 'table', 'datasetId': 'sales'}}
+    selected = {'id': 'department', 'field': 'department', 'op': 'in', 'componentIds': ['table'], 'values': ['B']}
+    doc['manifest']['filters'] = [selected, {'id': 'amount', 'field': 'amount', 'op': 'in', 'componentIds': ['table'], 'values': []}]
+    doc['snapshot']['datasetRefs'] = {'sales': ref}
+    store = SimpleNamespace(assets=assets)
+    web = web_document(store, doc, lambda _object, name: name)
+    payloads = {name: authorized_file(store, doc, obj['id'], name) for name in [
+        *descriptor['shards'], *(name for entry in descriptor['options'].values() for name in entry['files']),
+    ]}
+    results = worker_query(web, payloads, [
+        {'detail': True, 'componentId': 'table'},
+        {'detail': True, 'componentId': 'table', 'filters': []},
+        {'filterId': 'amount'},
+    ])
+    selected_files = next(entry['files'] for entry in descriptor['partitionIndex']['entries'] if entry['value'] == 'B')
+    assert results[0]['files'] == selected_files
+    assert results[0]['result']['rows'] == [rows[0], rows[2]]
+    assert results[1]['result']['rows'] == rows
+    assert results[2]['result']['values'] == [None, 0, 1.5, 3]
+    assert results[2]['files'] == descriptor['options']['amount']['files']
+    with pytest.raises(DashboardError) as denied:
+        authorized_file(store, doc, obj['id'], 'query.sqlite3')
+    assert denied.value.code == 'FORBIDDEN'
+
+
+# @wu-test type=boundary | scope=COS new package format | protects=缺少原生程序时静默保存JSON或提前登记半成品
+def test_cos_new_package_requires_native_before_reserving_objects(tmp_path, monkeypatch):
+    from dashboard_runtime import columnar
+
+    source = LocalData(tmp_path / 'source')
+    ref = source.import_rows([{'value': 1}], {'value': {'type': 'number'}})
+    registry, storage = MemoryAssetRegistry(), MemoryStorage()
+    assets = CloudAssets('test', database=registry, storage=storage)
+    monkeypatch.setattr(columnar, 'native_binary', lambda: None)
+    with pytest.raises(DashboardError) as missing:
+        assets.save_dataset(source, ref)
+    assert missing.value.code == 'NATIVE_UNAVAILABLE'
+    assert not registry.objects and not storage.objects
+
+
+# @wu-test type=integration | scope=COS migration read-back verification | protects=只信任Parquet回执或哈希导致损坏分片及错误行数仍删除旧PG数据
+def test_cos_migration_decodes_downloaded_parquet_and_keeps_legacy_readable(tmp_path, native_cos):
+    import copy
+    import gzip
+    import hashlib
+    import json
+
+    from dashboard_runtime.cos_migrate import verify_dataset
+
+    source = LocalData(tmp_path / 'source')
+    rows = [{'label': 'B', 'value': 2}, {'label': 'A'}, {'label': None, 'value': None}]
+    fields = {'label': {'type': 'string'}, 'value': {'type': 'number'}}
+    ref = source.import_rows(rows, fields)
+    source.partition_fields = ['label']
+    assets = CloudAssets('test', database=MemoryAssetRegistry(), storage=MemoryStorage())
+    obj = assets.save_dataset(source, ref)
+    verify_dataset(assets, obj, ref)
+
+    incorrect = copy.deepcopy(obj)
+    incorrect_ref = {**ref, 'rowCount': ref['rowCount'] + 1}
+    incorrect['descriptor']['metadata'] = incorrect_ref
+    with pytest.raises(DashboardError) as count:
+        verify_dataset(assets, incorrect, incorrect_ref)
+    assert count.value.code == 'DATA_INCOMPLETE'
+
+    damaged = copy.deepcopy(obj)
+    name = damaged['descriptor']['shards'][0]
+    key = damaged['prefix'] + name
+    original = assets.storage.objects[key]
+    raw = original[:-8]
+    assets.storage.objects[key] = raw
+    damaged['descriptor']['files'][name] = {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
+    with pytest.raises(DashboardError) as corrupt:
+        verify_dataset(assets, damaged, ref)
+    assert corrupt.value.code == 'PARQUET_EXPORT_FAILED'
+    assets.storage.objects[key] = original
+
+    legacy = copy.deepcopy(obj)
+    legacy['descriptor'].pop('dataFormat')
+    legacy['descriptor'].pop('partitionIndex')
+    legacy['descriptor']['shards'] = ['rows-0.json.gz']
+    legacy['descriptor']['options'] = {'label': 'options-0.json.gz'}
+    assets._put(legacy, legacy['descriptor']['files'], 'rows-0.json.gz', gzip.compress(json.dumps(rows).encode()))
+    assets._put(legacy, legacy['descriptor']['files'], 'options-0.json.gz', gzip.compress(b'["B","A",null]'))
+    verify_dataset(assets, legacy, ref)
 
 
 # @wu-test type=integration | scope=CloudData legacy restore | protects=并发恢复分块乱序改变数据校验值或重复读取已缓存版本

@@ -1,0 +1,125 @@
+name: Native runtime packages
+on:
+  pull_request:
+    paths:
+      - 'runtime-core/**'
+      - 'bin/install-native.mjs'
+      - 'bin/build-native.mjs'
+      - 'package.json'
+      - 'dashboard_runtime/columnar.py'
+      - 'tests/development/native-install.test.mjs'
+      - '.github/workflows/native-release.yml'
+  push:
+    tags: ['native-v*.*.*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-packages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Native ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            extension: ''
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            extension: ''
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            extension: ''
+          - runner: macos-26
+            target: aarch64-apple-darwin
+            extension: ''
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            extension: '.exe'
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+      RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Check immutable release version
+        run: |
+          bun -e 'import {nativeRelease} from "./bin/install-native.mjs"; const r=nativeRelease(process.cwd()); if(process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `native-v${r.version}`) throw Error("Native tag must match Cargo package version");'
+      - name: Install Linux static C toolchain
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo CC_x86_64_unknown_linux_musl=musl-gcc >> "$GITHUB_ENV"
+          echo CC_aarch64_unknown_linux_musl=musl-gcc >> "$GITHUB_ENV"
+      - name: Install pinned Rust target
+        working-directory: runtime-core
+        run: |
+          rustup show
+          rustup target add '${{ matrix.target }}'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            runtime-core/target
+          key: native-package-${{ matrix.target }}-1.91.1-${{ hashFiles('runtime-core/Cargo.lock') }}
+      - name: Test and build on the target platform
+        working-directory: runtime-core
+        run: |
+          cargo test --locked --target '${{ matrix.target }}'
+          cargo build --release --locked --target '${{ matrix.target }}'
+      - name: Verify the real installer and binary
+        run: |
+          bun test ./tests/development/native-install.test.mjs
+          mkdir -p release
+          cp 'runtime-core/target/${{ matrix.target }}/release/charts-design-core${{ matrix.extension }}' 'release/charts-design-core-${{ matrix.target }}${{ matrix.extension }}'
+          bun --eval '
+          import {createHash} from "node:crypto";
+          import {readFileSync} from "node:fs";
+          import {nativeRelease, installNative} from "./bin/install-native.mjs";
+          const root=process.cwd(), release=nativeRelease(root), bytes=readFileSync(`release/${release.asset}`);
+          const hash=createHash("sha256").update(bytes).digest("hex");
+          const receipt=await installNative({root, fetcher: async url => new Response(url.endsWith("/SHA256SUMS") ? `${hash}  ${release.asset}\n` : bytes)});
+          if(receipt.target !== "${{ matrix.target }}") throw Error("Installer selected the wrong target");
+          console.log(JSON.stringify(receipt));'
+      - uses: actions/upload-artifact@v5
+        with:
+          name: native-release-${{ matrix.target }}
+          path: release/charts-design-core-*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish immutable native binaries
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/native-v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: native-release-*
+          merge-multiple: true
+          path: release
+      - name: Check complete target set and publish checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(find release -maxdepth 1 -type f -name 'charts-design-core-*' | wc -l)" -eq 5
+          (cd release && sha256sum charts-design-core-* > SHA256SUMS && sha256sum -c SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Charts Design native $GITHUB_REF_NAME" --notes "固定版本原生 Parquet 导出程序。通过 bun run native:install 安装，运行环境无需 Rust；此发布不部署任何云端服务。"

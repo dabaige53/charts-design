@@ -20,6 +20,7 @@
         "dompurify": "^3.4.17",
         "echarts": "^6.0.0",
         "gridstack": "^12.4.2",
+        "hyparquet": "1.33.2",
         "lucide-react": "^0.468.0",
         "radix-ui": "^1.8.1",
         "react": "^19.2.0",
@@ -692,6 +693,8 @@
     "https-proxy-agent": ["https-proxy-agent@7.0.6", "", { "dependencies": { "agent-base": "7.1.4", "debug": "4.4.3" } }, "sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw=="],
 
     "human-signals": ["human-signals@8.0.1", "", {}, "sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ=="],
+
+    "hyparquet": ["hyparquet@1.33.2", "", {}, "sha512-ShBSTCzDKG+ruyf2LpZ8DkNjYSmMA/VoBiFBQKi3lpQbste0NFGQfrAobgtnqLA+k+WU9dnXYM0wtIxmuid5Cg=="],
 
     "iconv-lite": ["iconv-lite@0.6.3", "", { "dependencies": { "safer-buffer": "2.1.2" } }, "sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw=="],
 

@@ -1,24 +1,33 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assetManifest, bundlePath, pagesAsset, releasePath, workerBundle } from "./deployment.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-if (args.length !== 2) {
-  console.error("Usage: bun deploy/pages/build.mjs <backend-web-dist> <output-directory>");
+const withD1 = args[1] === "--d1";
+if (args.length !== (withD1 ? 2 : 1)) {
+  console.error("Usage: bun deploy/pages/build.mjs <output-directory> [--d1]");
   process.exit(1);
 }
-const source = resolve(args[0]);
-const output = resolve(args[1]);
-if (source === output || output.startsWith(source + "/") || source.startsWith(output + "/")) {
-  throw new Error("Source and output directories must not overlap");
+const output = resolve(args[0]);
+await mkdir(output, { recursive: true });
+const bundle = await Bun.build({ entrypoints: [resolve(here, "worker.mjs")], target: "browser",
+  minify: true, naming: "_worker.js" });
+if (!bundle.success) throw new AggregateError(bundle.logs, "Pages worker build failed");
+await Bun.write(resolve(output, "_worker.js"), bundle.outputs[0]);
+if (withD1) {
+  const source = resolve(here, "../../dashboard_runtime/web/dist");
+  const target = resolve(output, "runtime");
+  const { id } = JSON.parse(await readFile(resolve(source, "build.json"), "utf8"));
+  if (!id) throw Error("Missing UI build version. Run bun run ui:prepare.");
+  await mkdir(target, { recursive: true });
+  const names = ["app.js", "app.css", "static-worker.js", "build.json"];
+  for (const name of names)
+    await copyFile(resolve(source, name), resolve(target, name));
+  await writeFile(resolve(output, "." + bundlePath), await workerBundle(await readFile(resolve(output, "_worker.js"))));
+  const runtime = await Promise.all([...names.map(name => "/runtime/" + name), bundlePath].map(async name =>
+    pagesAsset(name, await readFile(resolve(output, "." + name)))));
+  await writeFile(resolve(output, "." + releasePath), JSON.stringify(assetManifest(runtime)));
 }
-const build = JSON.parse(await readFile(resolve(source, "build.json"), "utf8"));
-if (typeof build.id !== "string" || !build.id) throw new Error("Missing UI build id");
-await mkdir(resolve(output, "assets"), { recursive: true });
-for (const name of ["app.js", "app.css", "static-worker.js"]) {
-  await copyFile(resolve(source, name), resolve(output, "assets", name));
-}
-await copyFile(resolve(here, "worker.mjs"), resolve(output, "_worker.js"));
 await writeFile(resolve(output, "_routes.json"), JSON.stringify({ version: 1, include: ["/*"], exclude: [] }));
-await writeFile(resolve(output, "build.json"), JSON.stringify(build) + "\n");

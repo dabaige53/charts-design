@@ -23,7 +23,7 @@
 | [动态编码](implementation/dynamic-encoding.md) | 动态系列、散点、比例、比较和下钻 | 编码与汇总规则改变 |
 | [渲染与覆盖](implementation/echarts-options.md) | 预设、完整 ECharts、自由 HTML/JavaScript、隔离及覆盖 | 渲染入口或合并规则改变 |
 | [统计图后端](implementation/seaborn-backend.md) | Seaborn 原始观测声明、产物和依赖 | 统计能力或限制改变 |
-| [位置批注](implementation/annotation-composer.md) | 选点、锚点、独立保存、冲突与宿主附件目标 | 批注字段、交互或接入状态改变 |
+| [位置批注](implementation/annotation-composer.md) | 选点、锚点、独立权限、HTTP 保存与原版本反馈 | 批注字段、交互或接入状态改变 |
 | [本地更新](operations/local-mcp-update.md) | 构建、安装更新、进程切换与重连 | 本地交付方式改变 |
 | [传输与诊断](operations/mcp-transport-diagnostics.md) | 预览资源、分块、过期结果与请求日志 | 传输或排查方式改变 |
 | [静态部署包](operations/static-deployment.md) | 独立网页资源、数据分片、下载与离线能力 | 静态交付格式改变 |
@@ -46,6 +46,10 @@
 
 ## 历史记录与附件
 
+- [一键验收实测](records/2026-11-27-one-command-acceptance.md) — 功能流程、百万行实测与性能判断。
+- [分析报告独立阅读页验收](records/2026-11-27-analytical-report-acceptance.md)：用户确认的第 4 版、论文版式和两端验证。
+- [本机编辑与独立分享批注](records/2026-11-27-local-sharing-annotations.md)：PR #23 基线、本机浏览器入口、固定版本发布、独立批注权限与反馈、双进程验证及真实云边界。
+- [Runtime 性能与交付改造](records/2026-11-26-runtime-performance.md)：版本一致性、Rust/Parquet、新旧云分享兼容、网页查询及独立部署的实现边界、实测与复现入口。
 - [Magpie 双后端 MCP 交接](records/2026-11-24-magpie-unified-mcp-handoff.md)记录客户端切换结果，以及另一台服务器的接入、验证和恢复步骤。
 - [服务器、Neon 与 Pages 生产验收](records/2026-11-21-neon-pages.md)：同一项目的 MCP、网页编辑、容器重启、密钥分享和清理结果。
 - [COS 统一存储发布](records/2026-11-12-cos-release.md)：版本发布、数据库结构、清理函数与迁移边界。

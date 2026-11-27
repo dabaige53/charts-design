@@ -44,7 +44,7 @@ jobs:
           bun -e 'await Bun.write(process.argv[1], JSON.stringify({CHARTS_SERVER_TOKENS: process.env.CHARTS_SERVER_TOKENS}))' "$secret_file"
           bun run deploy:cloudflare --secrets-file "$secret_file" --var "CHARTS_PUBLIC_URL:$CHARTS_PUBLIC_URL" --var "CHARTS_RELEASE_COMMIT:$(git rev-parse HEAD)" --var "CHARTS_RELEASE_VERSION:$(bun -p "require('./package.json').version")"
           for attempt in $(seq 1 12); do
-            if curl -fsS --max-time 60 "$CHARTS_PUBLIC_URL/health" | jq -e --arg commit "$(git rev-parse HEAD)" '.ok and .release.commit == $commit'; then exit 0; fi
+            if curl -fsS --max-time 60 "$CHARTS_PUBLIC_URL/health" | jq -e --arg commit "$(git rev-parse HEAD)" '.ok and .role == "sharing" and .release.commit == $commit'; then exit 0; fi
             sleep 5
           done
           exit 1

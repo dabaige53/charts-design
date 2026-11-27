@@ -59,6 +59,7 @@ export function DataTable({
   onChange,
   onExport,
   onSaveState,
+  reading = false,
   loading = false,
   error,
   toolbarTarget,
@@ -68,6 +69,7 @@ export function DataTable({
   onChange?: (next: TableState) => void;
   onExport?: () => void;
   onSaveState?: () => void;
+  reading?: boolean;
   loading?: boolean;
   error?: string;
   toolbarTarget?: HTMLElement | null;
@@ -95,7 +97,7 @@ export function DataTable({
         id: String(c.key),
         accessorFn: (row) => row[c.key],
         header:
-          onChange ? (
+          onChange && !reading ? (
             <SortControl
               label={c.title || c.label || c.key}
               align="center"
@@ -116,7 +118,7 @@ export function DataTable({
           ),
         cell: TableValue,
       })),
-    [specs, onChange, state],
+    [specs, onChange, reading, state],
   );
   const sorting: SortingState = state.sortCol
     ? [{ id: state.sortCol, desc: state.sortDir === "desc" }]
@@ -138,7 +140,7 @@ export function DataTable({
       ),
     },
   });
-  const settings = onChange ? (
+  const settings = onChange && !reading ? (
     <>
       <ColumnSettings
         columns={specs.map((c) => ({
@@ -160,7 +162,7 @@ export function DataTable({
   ) : null;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2" aria-busy={loading}>
-      {onChange && (toolbarTarget ? createPortal(
+      {onChange && !reading && (toolbarTarget ? createPortal(
         <div className="screen-only">
           <TableToolbar
             query={state.keyword || ""}
@@ -240,11 +242,11 @@ export function DataTable({
                       <EmptyTitle>
                         {visible.length ? "没有匹配数据" : "未显示任何列"}
                       </EmptyTitle>
-                      <EmptyDescription>
+                      {!reading && <EmptyDescription>
                         {visible.length
                           ? "调整筛选条件或搜索词后重试。"
                           : "打开自定义列配置，勾选需要显示的列。"}
-                      </EmptyDescription>
+                      </EmptyDescription>}
                     </EmptyHeader>
                   </Empty>
                 </TableCell>
@@ -268,7 +270,7 @@ export function DataTable({
           />
         )}
       </footer>
-      {onChange &&
+      {onChange && !reading &&
         (mobile ? (
           <Drawer open={columnsOpen} onOpenChange={setColumnsOpen}>
             <DrawerContent>

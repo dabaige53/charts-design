@@ -1,4 +1,12 @@
 export type Config = Record<string, any>;
+export type AnnotationAccess = {
+  endpoint: string;
+  canRead: boolean;
+  canAnnotate: boolean;
+  canManageAnnotations: boolean;
+  scope: string;
+  author?: { name: string; verified: boolean };
+};
 declare global {
   interface Window {
     __chartsBoot: Config;
@@ -18,6 +26,7 @@ export type Filter = {
   field: string;
   op: "in" | "range" | "contains";
   selectionMode?: "single" | "multiple";
+  alwaysVisible?: boolean;
   required?: boolean;
   scope?: "report" | "table";
   values: any[];
@@ -33,6 +42,8 @@ export type ComponentSpec = {
   [key: string]: any;
 };
 export type Document = {
+  annotationAccess?: AnnotationAccess;
+  publication?: { shareId: string; revision: number };
   staticPages?: { id: string; title: string; path: string }[];
   id: string;
   revision: number;
@@ -46,6 +57,7 @@ export type Document = {
     layout: Record<string, Position[]>;
     metrics: Config;
     datasets: Config;
+    sources?: Config;
     viewMode?: string;
     report?: Config;
   };
@@ -69,3 +81,6 @@ export type TableState = {
   columns?: string[];
   visible?: string[];
 };
+export function hasLiveData(document: Document): boolean {
+  return Object.values(document.manifest.datasets).some((dataset) => dataset.mode === "live");
+}

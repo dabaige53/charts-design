@@ -17,6 +17,7 @@
 | `skills/executive-charts/` | 看板规范、指标卡、布局模板、图表声明和工作区脚本 | 维护源码；本地安装指向此目录 |
 | `skills/analytical-reports/` | 分析报告 Skill 与随包参考材料 | 保留相对引用和随包可用性 |
 | `dashboard_runtime/`、`bin/` | 后端 SQLite 存储、数据计算、MCP 服务与启动更新脚本 | 修改对应维护源码后更新 |
+| `runtime-core/` | Rust 原生导出源码、Cargo 声明及锁文件 | 不提交 target 或原生二进制；通过独立 CI 和容器构建交付 |
 | `deploy/` | 自托管服务器的 Dockerfile、compose、systemd 与 nginx 示例 | 服务器参数或运行方式变化时同步 `docs/operations/self-hosted-server.md`；不存放令牌、密钥或 `charts.env` |
 | `dashboard_runtime/examples/academic-report.md` | 分析报告案例的唯一 Markdown 母稿 | MCP 案例直接读取，避免独立副本 |
 | `tests/`、`.github/workflows/` | 静态检查、后端单元测试与部署镜像冒烟检查 | 检查入口以 `docs/operations/testing.md` 为准，不含浏览器验收 |

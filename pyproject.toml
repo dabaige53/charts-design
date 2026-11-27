@@ -7,7 +7,7 @@ name = "charts-design-runtime"
 version = "0.6.0"
 description = "Versioned dashboard data and MCP runtime with shared React UI components"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["duckdb>=1.5,<2", "psycopg[binary]>=3.2,<4"]
 
 [project.optional-dependencies]
 statistics = ["seaborn>=0.13.2,<0.14", "matplotlib>=3.8,<4", "pandas>=2.1,<3"]

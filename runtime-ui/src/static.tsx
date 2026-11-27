@@ -3,11 +3,14 @@ import { createStaticClient } from "../../dashboard_runtime/web/static-client.mj
 import { DashboardApp } from "./dashboard";
 import { DashboardGrid } from "./grid";
 import { ComponentView } from "./component-view";
-import { ReportView } from "./report";
+import { AnalyticalReportPage, ReportView } from "./report";
 import { Alert, AlertDescription } from "./components/ui/alert";
 import type { Document, ToolCall } from "./types";
 
 export function SnapshotApp({ document: doc }: { document: Document }) {
+  if (doc.manifest.viewMode === "report") {
+    return <AnalyticalReportPage document={doc} component={(id) => <ComponentView document={doc} id={id} reading />} />;
+  }
   const component = (id: string) => <ComponentView document={doc} id={id} />;
   return (
     <main className="p-6">
@@ -17,7 +20,7 @@ export function SnapshotApp({ document: doc }: { document: Document }) {
       <p className="mb-5 text-sm text-muted-foreground">
         当前视图快照 · 版本 {doc.revision}
       </p>
-      {(doc.manifest.viewMode === "report" || doc.manifest.viewMode === "filtered-report") ? (
+      {doc.manifest.viewMode === "filtered-report" ? (
         <ReportView document={doc} component={component} />
       ) : (
         <DashboardGrid document={doc} editing={false} onLayoutChange={() => {}}>
@@ -118,7 +121,9 @@ export function StaticSite() {
           }
           throw Error("独立静态网页不支持此操作。请回到本项目 MCP。");
         };
-        if (live) setState({ doc, call });
+        const selectedId = new URLSearchParams(location.search).get("dashboardId") || doc.id;
+        const selectedDocument = await load(selectedId);
+        if (live) setState({ doc: selectedDocument, call });
       })
       .catch((e) => {
         if (live) setError(String(e));
@@ -146,6 +151,7 @@ export function StaticSite() {
       call={state.call}
       readOnly
       staticMode
+      annotationsInitiallyOpen={state.doc.annotationsOpen === true}
       onFullscreen={
         document.fullscreenEnabled
           ? () => {

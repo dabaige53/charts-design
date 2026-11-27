@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import time
 from typing import Any
-from .model import DashboardError, apply_operations, identifier, inferred_fields, json_bytes, require, validate
+from .model import DashboardError, apply_operations, identifier, inferred_fields, json_bytes, live_datasets, require, validate
 from .query import QueryRunner
 from .store import Store
 from .declarations import declaration_contract
@@ -16,7 +16,7 @@ from .tool_contract import READ_ONLY as READ_ONLY, TOOLS as TOOLS
 class Service:
     project_name: str
 
-    def __init__(self, root, sources_file=None, project_root=None):
+    def __init__(self, root, sources_file=None, project_root=None, *, queries=None):
         from .project import ProjectStore
         from .cloud_database import cloud_enabled
         if cloud_enabled():
@@ -27,7 +27,8 @@ class Service:
         else:
             self.store = ProjectStore(project_root, root) if project_root else Store(root)
             self.views = LocalView(self.store.data)
-        self.queries = QueryRunner(sources_file)
+        self.queries = queries if queries is not None else QueryRunner(sources_file)
+        self.views.queries = self.queries
         self.project_root = project_root
         self.doctor_reports = {}
         from .transport import ResultTransport
@@ -78,6 +79,10 @@ class Service:
                 preload=set(doc['loading'].get('preloadFilterIds', []))
                 for f in doc['manifest']['filters']:
                     if f['id'] in preload and f['op']=='in':
+                        datasets = doc['manifest']['datasets']
+                        if any(datasets[doc['manifest']['components'][cid]['datasetId']].get('mode') == 'live'
+                               for cid in f['componentIds']):
+                            continue
                         import hashlib
                         import json
                         refs=doc['snapshot'].get('datasetRefs', {})
@@ -109,6 +114,8 @@ class Service:
                     grains = {key: value for key, value in (grains or {}).items() if key in components}
                 doc = self.views.prepare(doc, None if tool == 'dashboard_refresh' else args.get('filters'), tables, grains)
                 result['document'] = doc
+                if live_datasets(doc):
+                    result['transient'] = True
             result["statisticalArtifacts"] = statistical_artifacts(self.store.statistical_document(doc))
             if doc.get('computed'):
                 doc['computed']['totalDurationMs'] = (time.perf_counter()-started)*1000
@@ -138,7 +145,7 @@ class Service:
 
         board = draft['id']
         fingerprint = document_fingerprint(draft) if mode == 'full' else None
-        cached = self.doctor_reports.get(board) if reuse else None
+        cached = self.doctor_reports.get(board) if reuse and not live_datasets(draft) else None
         previous = cached[1] if cached is not None and cached[0] == fingerprint else None
         report = diagnose(self, draft, mode, previous)
         if not report['passed']:
@@ -148,65 +155,52 @@ class Service:
         write_json(self.transport.path.parent / 'doctor' / (board+'.json'), report)
         return report
 
-    def _publish(self, args):
+    def _reading_document(self, board, args):
+        """Keep all reader queries on the same draft or displayed checkpoint."""
+        doc = self.store.get(board, hydrate=False)
+        expected = args.get('expectedRevision', doc['revision'])
+        if self.project_root and expected != doc['revision']:
+            try:
+                saved = self.store.readable(board)
+            except DashboardError as error:
+                if error.code != 'NO_SAVED_VERSION':
+                    raise
+            else:
+                if saved['revision'] == expected:
+                    doc = saved
+        if expected != doc['revision']:
+            raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
+        if 'dataVersion' in args:
+            from .doctor import data_version
+            require(args['dataVersion'] == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
+        return doc
+
+    @staticmethod
+    def _validate_tool_args(tool, args):
         from jsonschema import ValidationError, validate as validate_schema
-        from .cloud_shares import CloudShares, share_storage_errors
-        from .versions import Versions
 
         try:
-            validate_schema(args, TOOLS['dashboard_publish'][1])
+            validate_schema(args, TOOLS[tool][1])
         except ValidationError as error:
             raise DashboardError('INVALID_ARGUMENT', error.message) from error
+
+    def _publish(self, args: dict) -> dict:
+        from .versions import Versions
+
+        self._validate_tool_args('dashboard_publish', args)
         require(self.project_root is not None, 'Publish requires a project', 'PROJECT_REQUIRED')
         board = args['dashboardId']
         versions = Versions(self.store)
         status = versions.status(board)
-        share_options = args.get('share')
         expected = int(args.get('expectedRevision', status['draftRevision']))
-        revision = int(args.get('revision', expected))
-        already_published = False
-        prepared_share = None
-        if share_options is not None:
-            storage_errors = share_storage_errors()
-            expiration = share_options.get('expiration', '7d')
-            try:
-                shares = CloudShares.from_environment()
-                share_id, access_key = shares.quick_identity(self, board, args, expiration)
-                previous = shares.quick_result(share_id, access_key, expiration)
-                if previous is not None:
-                    return {'ok': True, 'dashboardId': board, 'publishedRevision': previous['revision'],
-                            'versionStatus': status, 'share': previous}
-                expected, revision, resuming = shares.quick_target(share_id, board, expected, revision,
-                                                                   status['draftRevision'], expiration)
-            except DashboardError:
-                raise
-            except storage_errors as error:
-                raise DashboardError('CLOUD_STORAGE_FAILED', 'Could not prepare the share request.', 503) from error
-            prepared_share = shares, expiration, access_key, share_id, storage_errors
-            already_published = resuming and status['publishedRevision'] == revision
-
-        if not already_published:
-            require(expected == status['draftRevision'], 'Reload before publishing', 'REVISION_CONFLICT')
-            if 'revision' not in args and status['savedRevision'] != revision:
-                saved = self._call('dashboard_checkpoint', {'dashboardId': board, 'expectedRevision': expected})
-                if not saved['ok']:
-                    return saved
-            else:
-                report = self._doctor(versions.read(board, revision), 'full', reuse=True)
-                if not report['passed']:
-                    return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
-                            'message': 'Version checks failed; the published version was not changed.'}, 'doctor': report}
-            status = versions.publish(board, expected, revision)
-        result = {'ok': True, 'dashboardId': board, 'publishedRevision': revision, 'versionStatus': status}
-        if prepared_share is not None:
-            shares, expiration, access_key, share_id, storage_errors = prepared_share
-            try:
-                result['share'] = shares.publish(self, board, revision, expiration, access_key, share_id=share_id)
-            except DashboardError as error:
-                result['shareError'] = error.as_dict()['error']
-            except storage_errors:
-                result['shareError'] = {'code': 'CLOUD_STORAGE_FAILED', 'message': 'Share storage request failed.'}
-        return result
+        revision = args['revision']
+        require(expected == status['draftRevision'], 'Reload before publishing', 'REVISION_CONFLICT')
+        report = self._doctor(versions.read(board, revision), 'full', reuse=True)
+        if not report['passed']:
+            return {'ok': False, 'error': {'code': 'DOCTOR_FAILED',
+                    'message': 'Version checks failed; the published version was not changed.'}, 'doctor': report}
+        status = versions.publish(board, expected, revision)
+        return {'ok': True, 'dashboardId': board, 'publishedRevision': revision, 'versionStatus': status}
 
     def _call(self, tool, args):
         require(isinstance(args, dict), 'Tool arguments must be an object')
@@ -293,26 +287,17 @@ class Service:
             except (CosClientError, CosServiceError) as error:
                 raise DashboardError('CLOUD_STORAGE_FAILED', 'Transfer storage request failed; check the configured COS permissions.', 503) from error
         if tool in ('dashboard_share_publish', 'dashboard_share_delete', 'dashboard_share_status', 'dashboard_share_replace'):
-            from .cloud_shares import CloudShares
-            shares = CloudShares.from_environment()
-            storage_errors = (OSError,)
-            if shares.executor == 'tencent-scf':
-                from qcloud_cos.cos_exception import CosClientError, CosServiceError
-                storage_errors = (CosClientError, CosServiceError)
-            try:
-                if tool == 'dashboard_share_publish':
-                    return shares.publish(self, board, args['expectedRevision'],
-                                          args.get('expiration', '7d'), args.get('accessKey'), args.get('pages'))
-                if tool == 'dashboard_share_replace':
-                    return shares.replace(self, board, args['shareId'], args['expectedRevision'],
-                                          args.get('expiration', '7d'))
-                if tool == 'dashboard_share_status':
-                    return shares.status(self, board, args.get('shareId'))
-                return shares.revoke(self, board, args.get('shareId'))
-            except storage_errors as error:
-                raise DashboardError('CLOUD_STORAGE_FAILED',
-                    'Share storage failed. Check storage and dashboard_share_status before retrying a publish.',
-                    503) from error
+            from .local_shares import LocalShares
+            self._validate_tool_args(tool, args)
+            shares = LocalShares(self)
+            if tool == 'dashboard_share_publish':
+                return shares.publish(board, args['revision'], args.get('expiration', '7d'),
+                                      annotation_mode=args.get('annotationMode', 'view'), request_id=args['requestId'])
+            if tool == 'dashboard_share_replace':
+                return shares.replace(board, args['shareId'], args['expectedRevision'], args.get('expiration', '7d'))
+            if tool == 'dashboard_share_status':
+                return shares.status(board, args.get('shareId'))
+            return shares.revoke(board, args.get('shareId'))
         if tool in ('dashboard_version_status', 'dashboard_version_get', 'dashboard_version_publish',
                     'dashboard_version_delete', 'dashboard_version_delete_preview',
                     'dashboard_version_delete_status', 'dashboard_version_delete_retry', 'dashboard_version_query'):
@@ -434,23 +419,20 @@ class Service:
             return read_export(self.store.root, board, args.get('exportId'), args.get('format'), args.get('offset', 0), args.get('limit', 262144))
         if tool == 'dashboard_export_site':
             from .deployment import export_site
-            return export_site(self.store, board)
+            return export_site(self.store, board, data_format=args.get('dataFormat', 'auto'))
         if tool == 'dashboard_export':
             from .exports import export_dashboard
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._reading_document(board, args))
+            if live_datasets(doc):
+                require(args.get('format') == 'json', '实时 SQL 看板请从服务页面查看，支持导出 JSON 配置', 'LIVE_DATA_REQUIRES_RUNTIME')
+                return export_dashboard(self.store.root, doc, 'json', self.store.data)
             view = self.views.prepare(doc, args.get('filters'), args.get('tableStates'), args.get('granularities'))
             if args.get('format') == 'html':
                 from .statistical import statistical_artifacts
                 view['statisticalArtifacts'] = statistical_artifacts(self.store.statistical_document(view))
             return export_dashboard(self.store.root, view, args.get('format'), self.store.data)
         if tool == 'dashboard_view':
-            doc = self.store.get(board, hydrate=False)
-            if self.project_root and args.get('expectedRevision') != doc['revision'] and args.get('expectedRevision') == self.store.display_revision(board):
-                doc = self.store.readable(board)
-            from .doctor import data_version
-            require(args.get('dataVersion', data_version(doc)) == data_version(doc), 'Data version changed; reload', 'REVISION_CONFLICT')
-            if args.get('expectedRevision', doc['revision']) != doc['revision']:
-                raise DashboardError('REVISION_CONFLICT', 'Data changed; reload the dashboard', 409)
+            doc = self._reading_document(board, args)
             evidence = args.get('includeEvidence', False)
             mode = args.get('responseMode', 'patch' if evidence else 'full')
             require(mode in ('full', 'patch') and (not evidence or mode == 'patch'),
@@ -473,14 +455,17 @@ class Service:
                     selected_doc['manifest']['components'] = {key: doc['manifest']['components'][key] for key in statistical}
                     artifacts = statistical_artifacts(self.store.statistical_document(selected_doc))
                 result = {'id': doc['id'], 'revision': doc['revision'], 'componentIds': ids, 'computed': doc['computed'], 'statisticalArtifacts': artifacts}
+                if live_datasets(doc):
+                    result['transient'] = True
                 if evidence:
                     result['evidence'] = {key: self._component_evidence(doc, key) for key in ids}
                 result['computed']['responseBytes'] = len(json_bytes(result))
                 return result
             return {'document': doc}
         if tool == 'dashboard_filter_options':
-            doc = self.store.compact(self.store.get(board, hydrate=False))
-            return self.views.filter_options(doc, args.get('filterId'), args.get('search', ''), args.get('offset', 0), args.get('limit', 100))
+            doc = self.store.compact(self._reading_document(board, args))
+            result = self.views.filter_options(doc, args.get('filterId'), args.get('search', ''), args.get('offset', 0), args.get('limit', 100))
+            return {**result, 'transient': True} if live_datasets(doc) else result
         if tool == 'dashboard_data_inspect':
             doc = self.store.compact(self.store.get(board, hydrate=False))
             refs = doc['snapshot'].get('datasetRefs', {})
@@ -498,23 +483,23 @@ class Service:
             return {'document': self.store.rollback_migration(board, args.get('expectedRevision'), args.get('backupId'))}
         if tool == 'dataset_attach':
             imported_at = time.perf_counter()
-            require(args.get('connection') in self.queries.sources, 'Configure the local source alias before attaching data', 'SOURCE_NOT_ALLOWED')
+            path = self.queries.sqlite_path(args.get('connection'))
             ds = identifier(args.get('datasetId'))
-            ref = self.store.data.import_sqlite(self.queries.sources[args['connection']], args.get('table'), args.get('fields'))
+            ref = self.store.data.import_sqlite(path, args.get('table'), args.get('fields'))
             source = 'local-' + ds
             ops = [{'op': 'put_source', 'id': source, 'value': {'kind': 'file', 'name': args['connection'] + ':' + args['table'], 'verification': 'runtime-executed'}},
                    {'op': 'put_dataset_ref', 'id': ds, 'meta': {'fields': ref['fields'], 'sourceId': source}, 'ref': ref},
                    {'op': 'set_data_mode', 'value': 'local'}]
             return {'document': self.store.mutate(board, args.get('expectedRevision'), ops), 'import': {'rowCount': ref['rowCount'], 'logicalBytes': ref['bytes'], 'durationMs': (time.perf_counter()-imported_at)*1000}}
         if tool == 'component_data':
-            doc = self.store.compact(self.store.get(board, hydrate=False))
-            require(args.get('expectedRevision', doc['revision']) == doc['revision'], 'Data changed; reopen the component explanation')
+            doc = self.store.compact(self._reading_document(board, args))
             key = args.get('componentId')
             component = doc['manifest']['components'].get(key)
             require(component is not None, 'Component not found')
             ds = component.get('datasetId') or component.get('binding', {}).get('datasetId')
             ref = doc['snapshot'].get('datasetRefs', {}).get(ds) if ds else doc['snapshot'].get('componentDataRefs', {}).get(key)
-            require(ref is not None, 'Component has no row dataset')
+            is_live = ds in live_datasets(doc)
+            require(ref is not None or is_live, 'Component has no row dataset')
             filters = args.get('filters', doc['manifest']['filters'])
             checked = apply_operations(doc, [{'op': 'set_filters', 'value': filters}])
             active = [f for f in checked['manifest']['filters'] if key in f['componentIds'] and f['values']]
@@ -522,29 +507,44 @@ class Service:
             require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 1000, 'Invalid data range')
             search = args.get('search', '')
             require(isinstance(search, str) and len(search) <= 1000, 'Table search must contain at most 1000 characters')
+            if is_live:
+                with self.views.live_request(doc) as live:
+                    ref = live.reference(ds)
+                    assert live.data is not None
+                    result = live.data.rows(ref, active, sort=args.get('sort'), search=search, offset=offset, limit=limit)
+                    return {**result, 'transient': True}
             return self.store.data.rows(ref, active, sort=args.get('sort'), search=search, offset=offset, limit=limit)
         if tool == 'dataset_export':
             import uuid
-            doc = self.store.compact(self.store.get(board, hydrate=False))
+            doc = self.store.compact(self._reading_document(board, args))
             key = args.get('componentId')
             component = doc['manifest']['components'].get(key) if key else None
             ds = component.get('datasetId') if component else args.get('datasetId')
+            is_live = ds in live_datasets(doc)
             ref = doc['snapshot'].get('datasetRefs', {}).get(ds) if ds else doc['snapshot'].get('componentDataRefs', {}).get(key)
-            require(ref is not None, 'Choose an existing dataset or table component')
+            require(ref is not None or is_live, 'Choose an existing dataset or table component')
             filters = args.get('filters', doc['manifest']['filters'])
             checked = apply_operations(doc, [{'op': 'set_filters', 'value': filters}])
             active = [f for f in checked['manifest']['filters'] if f['values'] and (key in f['componentIds'] if key else any(doc['manifest']['components'][cid].get('datasetId') == ds for cid in f['componentIds']))]
+            presentation = {**component.get('presentation', {}), **component.get('config', {})} if component else {}
+            columns = args.get('columns')
+            if presentation.get('groupBy') and columns is None:
+                columns = [col['key'] for col in presentation['columns']]
+            options = {'search': args.get('search', ''), 'group_by': presentation.get('groupBy'),
+                       'sum_fields': presentation.get('sumFields'), 'calculated': presentation.get('calculatedColumns')}
+            if is_live:
+                with self.views.live_request(doc) as live:
+                    ref = live.reference(ds)
+                    assert live.data is not None
+                    result = live.data.export_csv(ref, None, active, columns, args.get('sort'), **options)
+                return {'transient': True, 'export': {**result, 'filename': board + '.csv', 'format': 'csv', 'mimeType': 'text/csv'}}
             export_dir = self.store.root / 'exports'
             export_dir.mkdir(mode=0o700, exist_ok=True)
             export_id = uuid.uuid4().hex
             directory = export_dir / export_id
             directory.mkdir(mode=0o700)
             path = directory / (str(board) + '.csv')
-            presentation = {**component.get('presentation', {}), **component.get('config', {})} if component else {}
-            columns = args.get('columns')
-            if presentation.get('groupBy') and columns is None:
-                columns = [col['key'] for col in presentation['columns']]
-            result = self.store.data.export_csv(ref, path, active, columns, args.get('sort'), search=args.get('search', ''), group_by=presentation.get('groupBy'), sum_fields=presentation.get('sumFields'), calculated=presentation.get('calculatedColumns'))
+            result = self.store.data.export_csv(ref, path, active, columns, args.get('sort'), **options)
             return {'export': {**result, 'id': export_id, 'filename': path.name, 'format': 'csv', 'mimeType': 'text/csv'}}
         if tool == 'dashboard_create':
             if args.get('document'):
@@ -597,7 +597,12 @@ class Service:
             ops = copy.deepcopy(args.get('operations'))
             current = self.store.get(board, hydrate=False)
             require(isinstance(ops, list), 'operations must be an array')
+            live_sources = {meta['sourceId'] for meta in live_datasets(current).values()}
             for op in ops:
+                if isinstance(op, dict):
+                    require(op.get('op') != 'put_live_dataset' and
+                            not (op.get('op') == 'put_source' and op.get('id') in live_sources),
+                            'Use query_execute to configure live SQL', 'INVALID_OPERATION')
                 if isinstance(op, dict) and op.get('op') == 'set_chart':
                     require(False, 'Use set_original_chart with an original code', 'UNSUPPORTED_CHART_FAMILY')
                 if isinstance(op, dict) and op.get('op') == 'put_component' and isinstance(op.get('value'), dict) and op['value'].get('kind') == 'chart':
@@ -628,11 +633,13 @@ class Service:
                     'kpiGuide': kpi_guide(kpis), 'kpiPatterns': PATTERNS,
                     'policy': 'Original components are preserved without automatic conversion; use explicit config and family.'}
         if tool in ('query_inspect', 'semantic_inspect'):
-            doc = self.store.get(board, hydrate=False)
+            doc = self._reading_document(board, args)
             info = self._component_evidence(doc, args.get('componentId'))
             if tool == 'query_inspect':
+                is_live = info['dataset'].get('mode') == 'live'
                 return {**{key: info[key] for key in ('source', 'snapshotUpdatedAt', 'filters', 'localVersion')},
-                        'note': 'Interactive filters query the immutable local data version; upstream source SQL is not re-executed.'}
+                        'note': ('The registered SQL runs on data reads. Interactive filters apply to its result.'
+                                 if is_live else 'Interactive filters query the immutable local data version; upstream source SQL is not re-executed.')}
             component = doc['manifest']['components'][args['componentId']]
             return {'metrics': info['metrics'], 'dataset': info['dataset'],
                     'originalPresentation': component.get('config', {}).get('presentation'),
@@ -640,12 +647,19 @@ class Service:
                     'statisticalAnalysis': component.get('analysis'), 'certified': False}
         if tool == 'legacy_render':
             from .assets import export_component
-            doc = self.store.get(board)
-            if doc['snapshot'].get('datasetRefs'):
-                doc = self.views.prepare(self.store.compact(doc))
+            doc = self.store.get(board, hydrate=False)
             key = args.get('componentId')
             c = doc['manifest']['components'].get(key)
-            require(c is not None and c['kind'] == 'legacy', 'Original component not found')
+            if c is None or c['kind'] != 'legacy':
+                raise DashboardError('INVALID_DOCUMENT', 'Original component not found')
+            live = live_datasets(doc)
+            require(c.get('datasetId') not in live, '实时 SQL 图表请从服务页面查看', 'LIVE_DATA_REQUIRES_RUNTIME')
+            if live:
+                for ds in live:
+                    doc['manifest']['datasets'].pop(ds)
+                doc = self.views.prepare(self.store.compact(doc), component_ids=[key], include_filter_options=False)
+            elif doc['snapshot'].get('datasetRefs'):
+                doc = self.views.prepare(self.store.compact(doc))
             return {'html': export_component(doc, key), 'scope': 'component', 'componentId': key}
         if tool == 'dataset_import':
             import csv
@@ -675,16 +689,24 @@ class Service:
             from .semantic_diff import semantic_diff
             return {'document': updated, 'semanticChanges': semantic_diff(doc, updated)}
         if tool == 'query_execute':
-            doc = self.store.get(board)
+            self._validate_tool_args(tool, args)
+            doc = self.store.get(board, hydrate=False)
             require(doc['revision'] == args.get('expectedRevision'), 'Reload before running a query', 'REVISION_CONFLICT')
             ds = identifier(args.get('datasetId'))
-            rows, fields, source = self.queries.execute(args.get('connection'), args.get('sql'), args.get('parameters'))
+            is_live = args.get('mode') == 'live'
+            require(is_live or 'fields' not in args, 'fields is only supported in live mode')
+            declared = (args.get('fields') or doc['manifest']['datasets'].get(ds, {}).get('fields')) if is_live else None
+            rows, fields, source = self.queries.execute(args['connection'], args['sql'], args.get('parameters'), fields=declared)
             if not rows and ds in doc['manifest']['datasets']:
                 previous = doc['manifest']['datasets'][ds]['fields']
                 fields = {key: previous.get(key, info) for key, info in fields.items()}
             source_id = 'query-' + source['query']['id']
-            operations = [{'op': 'put_source', 'id': source_id, 'value': source},
-                          {'op': 'put_dataset', 'id': ds, 'meta': {'fields': fields, 'sourceId': source_id}, 'rows': rows}]
+            dataset = {'op': 'put_dataset', 'id': ds, 'meta': {'fields': fields, 'sourceId': source_id}, 'rows': rows}
+            if is_live:
+                with self.views.live_request(doc) as live:
+                    live.add(ds, rows, fields)
+                dataset = {'op': 'put_live_dataset', 'id': ds, 'meta': dataset['meta']}
+            operations = [{'op': 'put_source', 'id': source_id, 'value': source}, dataset]
             import uuid
             for key, info in fields.items():
                 mid = 'metric-' + uuid.uuid5(uuid.NAMESPACE_URL, ds + ':' + key).hex[:20]

@@ -1,9 +1,59 @@
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from threading import Barrier
+import json
+import sqlite3
 
 from dashboard_runtime.service import Service
 from dashboard_runtime.model import DashboardError
 import pytest
+
+
+# @wu-test type=boundary | scope=Store connection lifecycle | protects=成功异常或提交失败后连接依赖GC回收、回滚丢失或嵌套连接共用未提交事务
+@pytest.mark.parametrize('outcome', ['commit', 'body_error', 'commit_error'])
+def test_store_connections_close_after_commit_and_rollback(tmp_path, outcome):
+    from dashboard_runtime.store import Store
+
+    store = Store(tmp_path / 'store')
+    with store.connect() as setup:
+        setup.execute('CREATE TABLE lifecycle_parent (id INTEGER PRIMARY KEY)')
+        setup.execute('CREATE TABLE lifecycle_child (parent INTEGER REFERENCES lifecycle_parent(id) DEFERRABLE INITIALLY DEFERRED)')
+        setup.execute('INSERT INTO lifecycle_parent VALUES(1)')
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        setup.execute('SELECT 1')
+
+    def transaction():
+        nonlocal connection, nested
+        with store.connect() as connection:
+            connection.execute('PRAGMA foreign_keys=ON')
+            connection.execute('INSERT INTO lifecycle_parent VALUES(2)')
+            with store.connect() as nested:
+                assert nested is not connection
+                assert [row['id'] for row in nested.execute('SELECT id FROM lifecycle_parent')] == [1]
+            with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+                nested.execute('SELECT 1')
+            assert connection.execute('SELECT count(*) FROM lifecycle_parent').fetchone()[0] == 2
+            if outcome == 'body_error':
+                raise RuntimeError('body failed')
+            if outcome == 'commit_error':
+                connection.execute('INSERT INTO lifecycle_child VALUES(99)')
+
+    connection = nested = None
+    if outcome == 'commit':
+        transaction()
+    else:
+        expected = RuntimeError if outcome == 'body_error' else sqlite3.IntegrityError
+        with pytest.raises(expected):
+            transaction()
+    # Keep the actual objects alive: success must not depend on refcount or GC.
+    assert connection is not None and nested is not None
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        connection.execute('SELECT 1')
+    with store.connect() as verified:
+        assert [row['id'] for row in verified.execute('SELECT id FROM lifecycle_parent')] == ([1, 2] if outcome == 'commit' else [1])
+        assert verified.execute('SELECT count(*) FROM lifecycle_child').fetchone()[0] == 0
+    with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+        verified.execute('SELECT 1')
 
 
 # @wu-test type=integration | scope=独立批注读写 | protects=读取或提交批注会加载整页，或者旧批注列表覆盖并发修改
@@ -60,6 +110,10 @@ def test_concurrent_annotation_appends_are_merged(tmp_path, monkeypatch):
     saved = service.call('dashboard_annotations', {**board, 'includeTargets': False})['annotations']
     assert {item['id'] for item in saved} == {'first', 'second'}
     assert len(saved) == 2
+    folder = service.store.root / 'board'
+    assert json.loads((folder / 'annotations.json').read_text()) == saved
+    events = json.loads((folder / 'annotation-history.json').read_text())
+    assert len(events) == 2 and json.loads(events[-1]['payload']) == saved
 
 
 # @wu-test type=integration | scope=项目草稿检查点 | protects=编辑恢复删除运行缓存后丢批注
@@ -104,7 +158,7 @@ def test_submit_keeps_failed_draft_for_correction(tmp_path, monkeypatch):
         raise DashboardError('ASSET_UNAVAILABLE', 'Data unavailable')
 
     with monkeypatch.context() as patch:
-        patch.setattr(service.views, 'prepare', unavailable)
+        patch.setattr(service.views, 'aggregate', unavailable)
         failed = service.call('dashboard_submit', {**board, 'expectedRevision': 1,
                               'operations': [{'op': 'set_title', 'value': 'Updated'}]})
     assert not failed['ok'] and failed['error']['code'] == 'DOCTOR_FAILED'
@@ -114,26 +168,27 @@ def test_submit_keeps_failed_draft_for_correction(tmp_path, monkeypatch):
     assert saved['ok'] and saved['checkpoint']['revision'] == 2
 
 
-# @wu-test type=behavior | scope=dashboard_publish 内容检查 | protects=检查失败的草稿被保存为检查点或替换线上版本
+# @wu-test type=behavior | scope=dashboard_publish 内容检查 | protects=检查失败的保存版替换正式发布版
 def test_publish_preserves_previous_release_on_failed_checks(tmp_path, monkeypatch):
     from dashboard_runtime.demo import executive_document
 
     service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
     board = {'dashboardId': 'review'}
     service.call('dashboard_create', {**board, 'document': executive_document('review')})
-    assert service.call('dashboard_publish', board)['publishedRevision'] == 1
+    assert service.call('dashboard_publish', {**board, 'revision': 1})['publishedRevision'] == 1
     service.call('dashboard_patch', {**board, 'expectedRevision': 1,
                  'operations': [{'op': 'set_title', 'value': 'Updated'}]})
+    service.store.checkpoint('review', 2)
 
     def unavailable(*args, **kwargs):
         raise DashboardError('ASSET_UNAVAILABLE', 'Data unavailable')
 
-    monkeypatch.setattr(service.views, 'prepare', unavailable)
-    failure = service.call('dashboard_publish', board)
+    monkeypatch.setattr(service.views, 'aggregate', unavailable)
+    failure = service.call('dashboard_publish', {**board, 'revision': 2})
     assert not failure['ok'] and failure['error']['code'] == 'DOCTOR_FAILED'
     status = service.call('dashboard_version_status', board)
     assert status['draftRevision'] == 2
-    assert status['publishedRevision'] == status['savedRevision'] == 1
+    assert status['publishedRevision'] == 1 and status['savedRevision'] == 2
 
 
 # @wu-test type=integration | scope=dashboard_view | protects=筛选后计算值与返回的口径、来源或数据版本不一致
@@ -302,3 +357,129 @@ def test_storage_inventory_routes_to_selected_cloud_project(tmp_path, monkeypatc
         ('assets', 'inventory', 'selected-project'),
     ]
     assert tool_annotations('dataset_storage_inventory')['readOnlyHint']
+
+
+# @wu-test type=performance | scope=ProjectStore 镜像刷新 | protects=普通草稿编辑重写全部历史或批注、保存时重复生成不可变检查点
+def test_design_edits_only_refresh_changed_mirrors(tmp_path, monkeypatch):
+    from dashboard_runtime import project
+
+    store = project.ProjectStore(tmp_path / 'project', tmp_path / 'runtime')
+    store.create('board', 'Original')
+    for revision in range(1, 8):
+        store.mutate('board', revision, [{'op': 'set_title', 'value': f'Title {revision}'}])
+        store.checkpoint('board', revision + 1)
+    written = []
+    original_write = project.write_json
+
+    def record(path, value):
+        written.append(path.relative_to(store.root / 'board').as_posix())
+        original_write(path, value)
+
+    monkeypatch.setattr(project, 'write_json', record)
+    store.mutate('board', 8, [{'op': 'set_title', 'value': 'Latest'}])
+    assert written == ['draft.json']
+    assert json.loads((store.root / 'board/draft.json').read_text())['revision'] == 9
+    written.clear()
+    store.checkpoint('board', 9)
+    assert written == ['history.json', 'checkpoints/9.json']
+    assert len(json.loads((store.root / 'board/history.json').read_text())) == 9
+    written.clear()
+    store.label_checkpoint('board', 9, 1, 'Original')
+    assert written == ['history.json']
+    written.clear()
+    store.checkpoint('board', 9)
+    assert written == ['history.json']
+
+
+# @wu-test type=integration | scope=批注事务与镜像 | protects=批注文件写入长期占用 SQLite 写锁或文件反映尚未提交的批注
+def test_annotation_mirrors_follow_commit_without_blocking_database_writes(tmp_path, monkeypatch):
+    from dashboard_runtime.project import ProjectStore
+
+    store = ProjectStore(tmp_path / 'project', tmp_path / 'runtime')
+    store.create('board', 'Original')
+    original_files = store._annotation_files
+    committed = []
+
+    def check_commit(db, board):
+        # A separate writer must be able to start even while the mirror is being
+        # generated, and must already see the committed annotation.
+        with closing(sqlite3.connect(store.path, timeout=0)) as probe, probe:
+            probe.execute('BEGIN IMMEDIATE')
+            committed.append(json.loads(probe.execute('SELECT payload FROM annotations WHERE board_id=?', (board,)).fetchone()[0]))
+        original_files(db, board)
+
+    monkeypatch.setattr(store, '_annotation_files', check_commit)
+    saved = store.append_annotation('board', {
+        'id': 'note', 'componentId': None, 'text': 'Review', 'createdAt': '2026-11-26',
+    })
+    assert committed == [[saved['annotation']]]
+    assert store.revision('board') == 1 and store.display_revision('board') == 1
+    notes = store.annotation_state('board')['annotations']
+    updated = [{**notes[0], 'text': 'Updated review'}]
+    store.update_annotations('board', 1, notes, updated)
+    assert committed[-1] == updated
+    assert json.loads((store.root / 'board/annotations.json').read_text()) == updated
+
+
+# @wu-test type=boundary | scope=write_json 原子替换 | protects=并发报告或配置写入复用同名临时文件而丢失输出或产生半份 JSON
+def test_atomic_json_writes_use_independent_temporary_files(tmp_path):
+    from dashboard_runtime.project import write_json
+
+    path = tmp_path / 'report.json'
+    ready = Barrier(8, timeout=5)
+    values = [{'id': value, 'payload': '结果' * 1000} for value in range(8)]
+
+    def write(value):
+        ready.wait()
+        write_json(path, value)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(write, values))
+    assert json.loads(path.read_text()) in values
+    assert list(tmp_path.iterdir()) == [path]
+
+
+# @wu-test type=boundary | scope=批注镜像失败重试 | protects=数据库提交后镜像失败，幂等重试不修复文件或重复增加批注事件
+@pytest.mark.parametrize('operation', ['append', 'replace'])
+def test_annotation_retry_repairs_failed_mirrors_without_another_event(tmp_path, monkeypatch, operation):
+    from dashboard_runtime import project
+
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    service.call('dashboard_create', {'dashboardId': 'board', 'title': 'Original'})
+    note = {'id': 'note', 'componentId': None, 'text': 'Review', 'createdAt': '2026-11-26'}
+    args = {'dashboardId': 'board', **({'append': note} if operation == 'append' else {
+        'expectedRevision': 1, 'expectedAnnotations': [], 'annotations': [note],
+    })}
+    original_write = project.write_json
+    failed = False
+
+    def fail_history_once(path, value):
+        nonlocal failed
+        if path.name == 'annotation-history.json' and not failed:
+            failed = True
+            raise OSError('Mirror storage temporarily unavailable')
+        original_write(path, value)
+
+    monkeypatch.setattr(project, 'write_json', fail_history_once)
+    with pytest.raises(OSError, match='temporarily unavailable'):
+        service.call('dashboard_annotations_update', args)
+    stored = service.store.annotation_state('board')['annotations']
+    assert len(stored) == 1 and stored[0]['id'] == note['id']
+    folder = service.store.root / 'board'
+    assert json.loads((folder / 'annotation-history.json').read_text()) == []
+    with service.store.connect() as db:
+        assert db.execute('SELECT count(*) FROM annotation_events WHERE board_id=?', ('board',)).fetchone()[0] == 1
+
+    if operation == 'replace':
+        # Replacement keeps its compare-and-swap contract. After an uncertain
+        # write, reread the saved list before issuing a no-op replacement.
+        with pytest.raises(DashboardError) as conflict:
+            service.call('dashboard_annotations_update', args)
+        assert conflict.value.code == 'ANNOTATION_CONFLICT'
+        args = {'dashboardId': 'board', 'expectedRevision': 1,
+                'expectedAnnotations': stored, 'annotations': stored}
+    service.call('dashboard_annotations_update', args)
+    assert json.loads((folder / 'annotations.json').read_text()) == stored
+    events = json.loads((folder / 'annotation-history.json').read_text())
+    assert len(events) == 1 and json.loads(events[0]['payload']) == stored
+    assert service.store.revision('board') == 1 and service.store.display_revision('board') == 1

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 import hashlib
 import json
 import os
@@ -135,7 +135,7 @@ def batches(root, ref, size=TRANSFER_ROWS):
     version = ref.get('version')
     if not isinstance(version, str) or not re.fullmatch('[0-9a-f]{64}', version):
         raise ValueError('Invalid local data version')
-    with sqlite3.connect(data_path.as_uri() + '?mode=ro', uri=True) as db:
+    with closing(sqlite3.connect(data_path.as_uri() + '?mode=ro', uri=True)) as db:
         record = db.execute('SELECT metadata FROM versions WHERE version=?', (version,)).fetchone()
         if record is None or LocalData._metadata(record[0]) != ref:
             raise ValueError('Local data reference differs from supplied metadata')

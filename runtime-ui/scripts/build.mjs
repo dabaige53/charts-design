@@ -194,6 +194,7 @@ await writeFile(
     id,
     format: 1,
     entries: ["app.js", "app.css", "static-worker.js"],
+    staticDataFormats: ["json-gzip", "parquet-v1"],
     components: 40,
     metrics: 16,
   }) + "\n",

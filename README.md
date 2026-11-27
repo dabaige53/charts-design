@@ -12,6 +12,7 @@
 
 1. **数据资产、指标口径与声明合同**：
    - 业务数据资产：支持 SQLite 事务状态、JSON 镜像与 CSV 导入，项目根目录维护持久资产（`charts-project.json`、`dashboards/`、`data/`）。
+   - 看板可混用静态数据和 SQLite、PostgreSQL、DuckDB 实时查询。通过「刷新报表」重新读取源库，在图表菜单内查看来源 SQL。[配置实时 SQL](docs/implementation/dashboard-runtime.md#数据导入与查询来源)
    - 指标口径定义规范：见 [指标定义规范](skills/executive-charts/references/metric-definitions.md) 与 [数据格式标准](skills/executive-charts/references/data_formatting_standards.md)。
    - 图表与指标声明：保留 40 种图表规范（`skills/executive-charts/references/chart_catalog.json`）、16 种高管指标卡定义（[指标卡选型](skills/executive-charts/references/kpi-cards.md)）与 7 种构图模式（[布局模板](skills/executive-charts/references/layout_templates.md)）。
 
@@ -21,13 +22,16 @@
 
 3. **Runtime 后端与 CLI (`charts-design-runtime`)**：
    - 管理多项目路由、SQLite 存储、数据计算、批次修改与版本检查点。
+   - 本机项目可直接打开浏览器编辑页与预览页；两者均可保存位置批注，预览页的内容与版本操作保持只读。批注通过本机 HTTP 保存，不需要 MCP 往返或公网。
    - 支持 JSON 配置导出：`charts-design-runtime --root ./boards export <id> --format json --output ./export.json`。
    - 详细接口与数据模式见 [Runtime 说明](docs/implementation/dashboard-runtime.md) 与 [项目资产与加载](docs/implementation/project-runtime.md)。
+   - 通过 `bun run native:install` 安装固定版本的预编译 Parquet 导出程序，无需安装 Rust；源码开发可用 `bun run native:build`。服务器容器包含原生程序。`dashboard_export_site` 可导出包含完整运行资源的独立网页，数据格式与交付方式见 [静态部署包](docs/operations/static-deployment.md)。
 
 4. **MCP 协议服务**：
    - 本地 stdio MCP 与自托管 HTTP 远程 MCP（Streamable HTTP + Bearer 令牌）。
-   - 有自己的服务器时，可选 [服务器 MCP/API、Neon 数据库和 Cloudflare Pages 网页](docs/operations/self-hosted-server.md#独立服务器neon-与-cloudflare-pages)，不需要腾讯云账号或 Cloudflare Containers。另有 [Cloudflare Containers 方案](docs/operations/self-hosted-server.md#cloudflare-独立部署)；原 CloudBase 发布流程仍可单独使用。
+   - 自有服务器提供唯一远程 `/mcp`，并在同域运行编辑、开发预览与项目批注。CloudBase 或 Cloudflare 提供独立分享页和读者批注。部署见 [自有服务器与分享服务](docs/operations/self-hosted-server.md)。
    - 腾讯云独立分享副本支持 8 位数字访问密钥、不过期/7 天/30 天；到期由云端 SCF 删除 COS 数据和访问记录。需要部署私有 COS、HTTPS 网关和 SCF 定时任务，见 [腾讯云分享](docs/operations/self-hosted-server.md#腾讯云在线分享与云端清理)。
+   - 版本中心可对明确的已保存版本选择「分享此版本」，权限为「仅查看」或「可批注」。本机和服务器项目通过已配置的分享服务发布固定副本，读者页面、数据和批注不依赖作者电脑在线；作者从同一分享记录按需打开原版本反馈。配置见[本机发布与反馈](docs/operations/self-hosted-server.md#本机通过分享服务发布)。
    - 项目编辑使用 `dashboard_get` 读草稿，再用 `dashboard_submit` 一次提交修改、检查全部组件并保存。通过后按 `nextAction=dashboard_preview` 打开已保存版本；检查失败返回 `DOCTOR_FAILED`，保留草稿，不生成检查点。保存不会发布或分享。
    - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/operations/self-hosted-server.md)。
 
@@ -36,6 +40,21 @@
    - 规范见 [Seaborn 后端说明](docs/implementation/seaborn-backend.md)。
 
 ## CLI 工作区使用 (Workspace Flow)
+
+部署作者 MCP 和 Cloudflare Pages + D1 使用 `bun run deploy:init -- all`。生成测试项目使用 `bun run test:data`，一键验收使用 `bun run test:function`。配置和百万行性能验证见 [部署与 D1](docs/operations/self-hosted-server.md#cloudflare-pages-与-d1-直接分享) 和 [一键验收](docs/operations/testing.md#一键数据功能和性能验收)。
+
+### 打开已有本机项目
+
+```sh
+charts-design-runtime --project-root /absolute/path/project \
+  --runtime-root /absolute/path/runtime-cache serve --dashboard overview
+```
+
+将 `overview` 替换为已有看板或报告的 ID。启动回执提供带权限的 `editUrl`、`viewUrl`；加 `--view` 选择预览作为默认入口。从源码运行时，用 `bun run python -- -m dashboard_runtime` 替换 `charts-design-runtime`。未准备网页资源的源码环境先运行一次 `bun run ui:prepare`。
+
+本地 stdio MCP 的 `dashboard_preview` 继续提供宿主内预览，同时返回普通浏览器的 `browserLinks`。宿主内可通过「在浏览器中批注」进入本机页面；浏览器操作直接连接同进程的 loopback HTTP 服务。重启进程后使用新返回的链接。
+
+### 维护声明资产
 
 CLI workspace 负责将筛选器、KPI、图表和表格组织为清晰的文件资产。开发或 Agent 协作时可以逐块添加、检查和严格校验组件：
 
@@ -83,6 +102,7 @@ charts-design/
 ├── deploy/                             # 自托管后端容器镜像与部署配置
 ├── dashboard_runtime/                  # SQLite 状态、数据计算、查询与 MCP 服务
 │   └── examples/academic-report.md      # 分析报告案例唯一 Markdown 基础稿
+├── runtime-core/                       # Rust 原生 Parquet 导出与锁定依赖
 ├── skills/
 │   ├── executive-charts/               # 看板设计规范、指标卡、布局模板与 workspace 脚本
 │   └── analytical-reports/             # 分析报告 Skill 与学术规范

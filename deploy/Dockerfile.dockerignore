@@ -5,6 +5,8 @@
 !dashboard_runtime/**
 !runtime-ui/
 !runtime-ui/**
+!runtime-core/
+!runtime-core/**
 !skills/
 !skills/executive-charts/
 !skills/executive-charts/**
@@ -19,6 +21,8 @@
 !uv.lock
 !README.md
 **/node_modules
+runtime-core/target
+dashboard_runtime/native
 runtime-ui/dist
 runtime-ui/generated
 **/__pycache__

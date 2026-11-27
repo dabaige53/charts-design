@@ -127,9 +127,10 @@ def test_neon_errors_are_sanitized(driver, exception, code, status):
 def test_migrations_preserve_isolated_runtime_role():
     for migration in migrate.MIGRATIONS.glob('*.sql'):
         converted = migrate.adapt(migration.read_text(), 'charts_app')
-        assert 'auth.role()' not in converted
-        assert 'anon,' not in converted
-        assert 'authenticated' not in converted
-        assert 'TO PUBLIC' not in converted.upper()
+        sql = '\n'.join(line for line in converted.splitlines() if not line.lstrip().startswith('--'))
+        assert 'auth.role()' not in sql
+        assert 'anon,' not in sql
+        assert 'authenticated' not in sql
+        assert 'TO PUBLIC' not in sql.upper()
     with pytest.raises(ValueError):
         migrate.adapt('', 'public')

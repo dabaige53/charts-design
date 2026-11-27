@@ -31,14 +31,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+      - name: Install locked release dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Validate release tag and scripts
         env:
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           bun -e 'import {validateTag} from "./bin/cloudbase-deploy.mjs"; import fs from "node:fs"; validateTag(process.env.RELEASE_TAG, JSON.parse(fs.readFileSync("package.json")).version)'
           bun test ./tests/deploy
-      - name: Install locked CloudBase CLI
-        run: bun install --frozen-lockfile --ignore-scripts
       - name: Build and deploy on CloudBase
         env:
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}

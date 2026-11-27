@@ -45,14 +45,17 @@ def diagnose(service, doc, mode='full', previous=None):
     if previous is not None and all(item['status']=='passed' for item in report['checks']):
         report['checks'].extend(item for item in previous['checks'] if item['check']=='component')
         ids = []
+    check_component = service.views.component_checker(doc)
     for key in ids:
         def calculate(key=key):
-            service.views.prepare(doc, component_ids=[key], include_filter_options=False)
+            check_component(key)
             if doc['manifest']['components'][key]['kind']=='statistical':
                 from .statistical import statistical_artifacts
-                selected=json.loads(json.dumps(doc))
-                selected['manifest']['components']={key: selected['manifest']['components'][key]}
-                statistical_artifacts(service.store.statistical_document(selected))
+                selected = {**doc, 'manifest': {**doc['manifest'],
+                            'components': {key: doc['manifest']['components'][key]}}}
+                artifact = statistical_artifacts(service.store.statistical_document(selected))[key]
+                if 'error' in artifact:
+                    raise DashboardError(artifact.get('code', 'STATISTICAL_RENDER_FAILED'), artifact['error'])
         check('component', calculate, key)
     report['warnings']=[{'code':'ANNOTATION_ANCHOR_UNAVAILABLE','annotationId': note['id']} for note in doc['manifest'].get('annotations',[]) if note.get('componentId') and note['componentId'] not in doc['manifest']['components']]
     report['passed']=all(item['status']=='passed' for item in report['checks'])

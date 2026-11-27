@@ -22,7 +22,7 @@ export class ChartsWorkspace extends DurableObject {
             entrypoint: ["sh", "-ec", "while [ ! -f /tmp/workspace-ready ]; do sleep .1; done; exec python -m dashboard_runtime server"],
             env: {
               CHARTS_SERVER_TOKENS: this.env.CHARTS_SERVER_TOKENS, CHARTS_PUBLIC_URL: this.env.CHARTS_PUBLIC_URL,
-              CHARTS_STORAGE_BACKEND: "cloudflare", CHARTS_STATELESS: "1",
+              CHARTS_STORAGE_BACKEND: "cloudflare", CHARTS_SERVER_ROLE: "sharing",
               CHARTS_RELEASE_COMMIT: this.env.CHARTS_RELEASE_COMMIT || "",
               CHARTS_RELEASE_VERSION: this.env.CHARTS_RELEASE_VERSION || "",
             },
@@ -55,7 +55,10 @@ export class ChartsWorkspace extends DurableObject {
       url.protocol = "http:";
       const forwarded = new Request(url, request);
       const response = await container.getTcpPort(8000).fetch(new Request(forwarded, { redirect: "manual" }));
-      if (["POST", "DELETE"].includes(request.method) && !path.startsWith("/s/") && response.ok) {
+      const annotationWrite = request.method === "POST" && path.match(/^\/s\/([0-9a-f]{32})\/api\/annotations$/);
+      if (annotationWrite && response.ok) {
+        await this.checkpoint.saveAnnotations(container, annotationWrite[1]);
+      } else if (["POST", "DELETE"].includes(request.method) && !path.startsWith("/s/") && response.ok) {
         await this.checkpoint.save(container);
       }
       return response;
@@ -79,7 +82,7 @@ export default {
     if (new URL(request.url).origin !== env.CHARTS_PUBLIC_URL) return new Response(null, { status: 404 });
     return env.CHARTS.getByName("workspace").fetch(request);
   },
-  async scheduled(event, env) {
+  async scheduled(_event, env) {
     await env.CHARTS.getByName("workspace").cleanup();
   },
 };

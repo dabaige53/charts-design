@@ -25,7 +25,8 @@ Read `charts://contract` for the connected server's operations. `chart_declarati
 | Submit declarations or layout, check and save | `dashboard_submit` |
 | Compute chart results and table pages | `dashboard_view` |
 | Show the completed dashboard | `dashboard_preview` |
-| Publish a version or publish and generate a visitor link | `dashboard_publish` |
+| Set a saved version as the formal publication | `dashboard_publish` |
+| Create a visitor link for a saved version | `dashboard_share_publish` |
 | Read comments | `dashboard_annotations` |
 | Export a file or standalone website | `dashboard_export`, `dataset_export`, `dashboard_export_site` |
 

@@ -6,9 +6,10 @@ import {
 } from "lucide-react";
 import { Button } from "./ui";
 import { Textarea } from "./components/ui/textarea";
+import { Input } from "./components/ui/input";
 import { Field, FieldLabel } from "./components/ui/field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
-import type { Config, Document, Filter, ToolCall } from "./types";
+import type { AnnotationAccess, Config, Document, Filter, ToolCall } from "./types";
 
 type Rect = { x: number; y: number; width: number; height: number };
 type Selection = {
@@ -23,7 +24,7 @@ type Selection = {
 };
 type Draft = Selection & { id: string; text: string; editing?: string; original?: Config };
 type NotesSnapshot = { revision: number; annotations: Config[]; independentSave: boolean };
-type Submission = Omit<Draft, "editing" | "original"> & { createdAt: string; view: { revision: number; filters: Filter[] } };
+type Submission = Omit<Draft, "editing" | "original"> & { createdAt: string; authorName?: string; view: { revision: number; filters: Filter[] } };
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
 function CommentAction({ label, children, disabled, destructive = false, onClick }: {
@@ -102,14 +103,16 @@ function locate(root: HTMLElement, value: Selection): Rect | null {
     const box = element.getBoundingClientRect();
     return { x: box.x, y: box.y, width: box.width, height: box.height };
   }
-  const box = scope.getBoundingClientRect(), rect = anchor.rect;
+  const rect = anchor.rect;
+  if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)) return null;
+  const box = scope.getBoundingClientRect();
   return { x: box.x + box.width * rect.x, y: box.y + box.height * rect.y,
     width: box.width * rect.width, height: box.height * rect.height };
 }
 
 export function PositionComments({
   document: doc, root, active, onActiveChange, onActivityChange, call, readOnly,
-  filters, projectRoot, onNotesChange,
+  filters, projectRoot, onNotesChange, canManage = !readOnly, author, scope, initiallyListOpen = false, onCapabilitiesChange,
 }: {
   document: Document;
   root: RefObject<HTMLDivElement | null>;
@@ -118,13 +121,19 @@ export function PositionComments({
   onActivityChange: (value: boolean) => void;
   call: ToolCall;
   readOnly: boolean;
+  canManage?: boolean;
+  author?: AnnotationAccess["author"];
+  scope?: string;
+  initiallyListOpen?: boolean;
+  onCapabilitiesChange?: (access: Partial<AnnotationAccess>) => void;
   filters: Filter[];
   projectRoot?: string | null;
   onNotesChange: (notes: Config[]) => void;
 }) {
   const [notes, setNotes] = useState<Config[]>(doc.manifest.annotations || []);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [listOpen, setListOpen] = useState(false), [openId, setOpenId] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(initiallyListOpen), [openId, setOpenId] = useState<string | null>(null);
+  const [authorName, setAuthorName] = useState("");
   const [replies, setReplies] = useState<Record<string, string>>({});
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -142,7 +151,8 @@ export function PositionComments({
   const notesRef = useRef(notes);
   const loadingNotes = useRef<Promise<NotesSnapshot | null> | null>(null);
   const noteRequest = useRef(0);
-  const key = `charts-position-draft:${JSON.stringify([projectRoot || location.pathname, doc.id, readOnly])}`;
+  const wasReadOnly = useRef(readOnly);
+  const key = `charts-position-draft:${JSON.stringify([scope || projectRoot || location.pathname, doc.id, readOnly])}`;
   const reply = openId ? replies[openId] || "" : "";
   const setReply = (text: string) => {
     if (!openId) return;
@@ -166,11 +176,17 @@ export function PositionComments({
       if (document.visibilityState !== "visible" || busyRef.current) return;
       const request = ++noteRequest.current;
       loadingNotes.current = call("dashboard_annotations", { dashboardId: doc.id, includeTargets: false }).then((value) => {
+        if (!Array.isArray(value.annotations)) throw Error("批注服务未返回可用的列表，请重新打开批注");
         const snapshot = { revision: value.revision, annotations: value.annotations, independentSave: value.independentSave === true };
         if (live && request === noteRequest.current) {
           loadedNotes.current = snapshot;
           notesRef.current = snapshot.annotations;
           setNotes(snapshot.annotations);
+          const capabilities: Partial<AnnotationAccess> = {};
+          if (typeof value.canAnnotate === "boolean") capabilities.canAnnotate = value.canAnnotate;
+          if (typeof value.canManageAnnotations === "boolean") capabilities.canManageAnnotations = value.canManageAnnotations;
+          if (value.author) capabilities.author = value.author;
+          if (Object.keys(capabilities).length) onCapabilitiesChange?.(capabilities);
         }
         return live && request === noteRequest.current ? snapshot : null;
       }).catch((failure) => {
@@ -184,7 +200,7 @@ export function PositionComments({
       live = false;
       document.removeEventListener("visibilitychange", load);
     };
-  }, [call, doc.id, active]);
+  }, [call, doc.id, active, onCapabilitiesChange]);
 
   useEffect(() => {
     try {
@@ -202,7 +218,7 @@ export function PositionComments({
             !rect || !["x", "y", "width", "height"].every((name) =>
               Number.isFinite(rect[name]) && rect[name] >= 0 && rect[name] <= 1))
             throw Error("批注草稿格式已变化");
-          setDraft(candidate);
+          if (!candidate.editing || canManage) setDraft(candidate);
         }
         if (value.replies && typeof value.replies === "object" && !Array.isArray(value.replies) &&
           Object.values(value.replies).every((text) => typeof text === "string"))
@@ -232,6 +248,8 @@ export function PositionComments({
   }, [interacting, onActivityChange]);
   useEffect(() => {
     if (active && readOnly) setListOpen(true);
+    else if (active && wasReadOnly.current && !initiallyListOpen) setListOpen(false);
+    wasReadOnly.current = readOnly;
     if (!active) {
       setOpenId(null);
       setListOpen(false);
@@ -239,7 +257,7 @@ export function PositionComments({
       setDragRect(null);
       reanchor.current = null;
     }
-  }, [active, readOnly]);
+  }, [active, readOnly, initiallyListOpen]);
   useEffect(() => {
     if (picking && draft) input.current?.focus({ preventScroll: true });
   }, [picking, draft?.id, draft?.anchor]);
@@ -370,7 +388,7 @@ export function PositionComments({
   }, [picking, root]);
 
   const write = async (change: (current: Config[]) => Config[]) => {
-    if (readOnly || busyRef.current) return false;
+    if (!canManage || readOnly || busyRef.current) return false;
     busyRef.current = true; setBusy(true); setError("");
     try {
       const latest = loadedNotes.current ?? await loadingNotes.current;
@@ -402,6 +420,7 @@ export function PositionComments({
     } finally { busyRef.current = false; setBusy(false); }
   };
   const append = async (note: Submission) => {
+    if (readOnly) return;
     setSubmissions((entries) => [...entries.filter((entry) => entry.note.id !== note.id), { note }]);
     try {
       const result = await call("dashboard_annotations_update", { dashboardId: doc.id, append: note });
@@ -422,11 +441,12 @@ export function PositionComments({
     }
   };
   const submit = async () => {
-    if (busyRef.current || !draft || draftRef.current !== draft || !draft.text.trim() || !positions.draft) return;
-    if (!draft.editing && (projectRoot || doc.progressive || loadedNotes.current?.independentSave)) {
+    if (readOnly || busyRef.current || !draft || draftRef.current !== draft || !draft.text.trim() || !positions.draft) return;
+    if (!draft.editing && (scope || projectRoot || doc.progressive || loadedNotes.current?.independentSave)) {
       draftRef.current = null;
       setDraft(null); setError("");
       await append({ ...draft, text: draft.text.trim(), createdAt: new Date().toISOString(),
+        ...(author?.verified === false ? { authorName: authorName.trim() } : {}),
         view: { revision: doc.revision, filters } });
       return;
     }
@@ -511,15 +531,15 @@ export function PositionComments({
           {picking && <><MousePointer2 className="size-4" /><span>点击元素或拖动框选，再输入批注</span></>}
           {savingDraft && <span role="status">正在保存批注…</span>}
           {!!pendingCount && <span role="status">正在保存 {pendingCount} 条批注…</span>}
-          {failed && <Button variant="ghost" size="sm" onClick={() => void append(failed.note)}
+          {!readOnly && failed && <Button variant="ghost" size="sm" onClick={() => void append(failed.note)}
             title={failed.error}>重试未保存的批注</Button>}
-          {!picking && draft && !savingDraft && <Button variant="ghost" size="sm" onClick={() => {
+          {!readOnly && !picking && draft && !savingDraft && <Button variant="ghost" size="sm" onClick={() => {
             setOpenId(null); setListOpen(false);
           }}>继续未提交批注</Button>}
-          {!current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => {
+          {canManage && !current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => {
             setListOpen(false); setOpenId(Object.keys(replies)[0]);
           }}>继续未提交回复</Button>}
-          {!current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => setReplies({})}>丢弃未提交回复</Button>}
+          {canManage && !current && Object.keys(replies).length > 0 && <Button variant="ghost" size="sm" onClick={() => setReplies({})}>丢弃未提交回复</Button>}
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setListOpen(!listOpen); setOpenId(null); }}>批注列表（{notes.length}）</Button>
           <Button variant="ghost" size="sm" disabled={busy && !savingDraft} onClick={() => {
             onActiveChange(false); setListOpen(false); setOpenId(null); setHover(null);
@@ -550,7 +570,7 @@ export function PositionComments({
               <X aria-hidden="true" className="size-4" />
             </CommentAction>
           </div>
-          {!showComposer && current && !readOnly && (
+          {!showComposer && current && canManage && !readOnly && (
             <div role="toolbar" aria-label="批注操作"
               className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1">
               <div className="flex items-center gap-1">
@@ -602,6 +622,12 @@ export function PositionComments({
                     }
                   }} />
               </Field>
+              {author?.verified === false && !showComposer.editing && <Field>
+                <FieldLabel htmlFor="position-comment-author" className="text-xs font-medium">署名（可选）</FieldLabel>
+                <Input id="position-comment-author" maxLength={80} value={authorName} placeholder="访客"
+                  onChange={(event) => setAuthorName(event.target.value)} />
+                <p className="text-xs text-muted-foreground">自填署名，未经账户验证。</p>
+              </Field>}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" disabled={busy} onClick={() => { setDraft(null); setError(""); }}>取消</Button>
                 <Button type="submit" className="gap-1.5" disabled={busy || !showComposer.text.trim() || !positions.draft}>
@@ -611,6 +637,10 @@ export function PositionComments({
             </form>}
             {!showComposer && current && (
               <>
+                {(current.author || current.view?.revision != null) && <p className="text-xs text-muted-foreground">
+                  {current.author?.name || "访客"}{current.author?.verified === false ? " · 未验证署名" : ""}
+                  {current.view?.revision != null ? ` · 版本 ${current.view.revision}` : ""}
+                </p>}
                 <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
                   <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
                   <span className="break-words">{locationLabel(current)}{!positions[current.id] ? " · 位置失效或尚未记录" : ""}</span>
@@ -653,7 +683,7 @@ export function PositionComments({
               </div>
             </>}
           </div>
-          {!showComposer && current && !readOnly && (
+          {!showComposer && current && canManage && !readOnly && (
             current.status === "resolved" ? (
               <p className="flex shrink-0 items-center gap-2 border-t border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
                 <CheckCircle2 aria-hidden="true" className="size-3.5 shrink-0" />已解决，重新打开后可继续回复。

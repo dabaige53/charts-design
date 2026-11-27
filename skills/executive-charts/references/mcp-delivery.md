@@ -42,11 +42,11 @@ Use the editor's **版本与分享 → 版本** tab to view or restore a saved v
 | JSON configuration or HTML snapshot | `dashboard_export`; deliver the returned local file or remote download link |
 | Full matching CSV rows | `dataset_export`; deliver the returned CSV |
 | Standalone static website ZIP | `dashboard_export_site`; deliver the returned ZIP |
-| Publish the current draft or a specific saved version | Call `dashboard_publish` once. Omit `revision` to publish the current draft. |
-| Publish and return a visitor link | Call `dashboard_publish` once with `share`, including a new UUID v4 `requestId`. Omit `expiration` for a seven-day link. |
+| Set a saved version as the formal publication | Call `dashboard_publish` with the saved `revision`. |
+| Create a visitor link | Call `dashboard_share_publish` with a saved `revision` and a new UUID v4 `requestId`. Omit `expiration` for a seven-day link. |
 | Manage existing shares | Open **版本与分享 → 分享** in the editor. |
 
-The publication tool checks and saves the draft if needed. From the editor, use **版本与分享 → 版本 → 发布当前草稿** and select **同时生成分享链接** when needed. Each share is an independent copy with its own key and expiration. If the receipt contains `shareError`, report the published revision and link failure. Retry the same call with the same arguments and `share.requestId` when retrying link generation. Static website ZIPs contain the React application and used dataset shards. Remote file exports return managed download links.
+Save a draft with `dashboard_submit`. In the editor, select a saved version and choose **设为正式发布版** or **分享此版本** for the requested action. Each share has its own key and expiration. Retry a share with identical arguments and the original `requestId` after an uncertain receipt. `dashboard_share_status` lists shares without exposing visitor keys. Static website ZIPs contain the React application and used dataset shards. Remote file exports return managed download links.
 
 Details: [static website export](../../../docs/operations/static-deployment.md), [self-hosted service and sharing](../../../docs/operations/self-hosted-server.md).
 

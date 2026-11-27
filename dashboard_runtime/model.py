@@ -1,4 +1,4 @@
-"""Canonical, bounded JSON contract. No generated code or SQL runs at render time."""
+"""Canonical, bounded JSON contract for dashboard definitions and stored data."""
 from __future__ import annotations
 import copy
 import datetime as dt
@@ -19,6 +19,7 @@ TYPES = ('bar', 'line', 'area', 'pie', 'scatter', 'heatmap', 'funnel', 'waterfal
 COLS = {'desktop': 12, 'tablet': 8, 'mobile': 4}
 AGGREGATES = ('sum', 'avg', 'min', 'max', 'count', 'ratio', 'entity_ratio')
 VIEW_MODES = ('dashboard', 'report', 'filtered-report')
+SQL_SOURCE_ENGINES = ('sqlite', 'postgresql', 'duckdb')
 
 class DashboardError(ValueError):
     def __init__(self, code: str, message: str, status: int = 400):
@@ -307,7 +308,9 @@ def validate(doc):
     require(isinstance(refs, dict), 'snapshot.datasetRefs must be an object')
     require(isinstance(table_refs, dict), 'snapshot.componentDataRefs must be an object')
     require(not (set(refs) & set(s['datasets'])), 'Dataset must have either rows or a local version, not both')
-    require(set(m['datasets']) == set(s['datasets']) | set(refs), 'Dataset metadata and snapshot ids must match')
+    live = {key for key, meta in m['datasets'].items() if isinstance(meta, dict) and meta.get('mode') == 'live'}
+    require(not (live & (set(s['datasets']) | set(refs))), 'Live datasets cannot have snapshot rows or a local version')
+    require(set(m['datasets']) == set(s['datasets']) | set(refs) | live, 'Dataset metadata and snapshot ids must match')
     for key in table_refs:
         component = m['components'].get(key, {})
         require(component.get('kind') == 'legacy' and component.get('family') == 'table' and not component.get('binding'),
@@ -333,6 +336,12 @@ def validate(doc):
         for name, info in meta['fields'].items():
             require(isinstance(name, str) and 0 < len(name) < 200, 'Invalid field name')
             require(isinstance(info, dict) and info.get('type') in ('string', 'number', 'boolean', 'date'), f'{name}: invalid field type')
+        if key in live:
+            source = m['sources'][meta['sourceId']]
+            require(source['kind'] == 'query' and source.get('verification') == 'runtime-executed'
+                    and source['query'].get('engine') in SQL_SOURCE_ENGINES and isinstance(source['query'].get('connection'), str),
+                    f'{key}: live data requires a registered SQL query')
+            continue
         if key in refs:
             require(refs[key].get('fields') == meta['fields'], f'{key}: local version fields must match dataset metadata')
             continue
@@ -409,6 +418,7 @@ def validate(doc):
             require(isinstance(c.get('text'), str), 'Text component requires text')
             continue
         if c['kind'] == 'statistical':
+            require(c.get('datasetId') not in live, 'Statistical plots require a static dataset')
             from .statistical import validate_statistical
             validate_statistical(doc, c)
             continue
@@ -458,6 +468,7 @@ def validate(doc):
         require(f.get('op') in ('in', 'range', 'contains'), 'Unknown filter operation')
         require(isinstance(f.get('values'), list), 'Filter values must be an array')
         require(f.get('selectionMode', 'multiple') in ('single', 'multiple'), 'Unknown filter selection mode')
+        require('alwaysVisible' not in f or type(f['alwaysVisible']) is bool, 'alwaysVisible must be a boolean')
         if f.get('selectionMode') == 'single':
             require(f['op'] == 'in' and len(f['values']) <= 1, 'Single-select filter allows at most one value')
         require(all(type(v) in (str, int, float, bool) or v is None for v in f['values']), 'Filter values must be scalar')
@@ -573,6 +584,12 @@ def apply_operations(doc, operations):
             s['datasets'].pop(key, None)
             s.setdefault('datasetRefs', {})[key] = copy.deepcopy(op.get('ref'))
             s['updatedAt'] = utcnow()
+        elif kind == 'put_live_dataset':
+            key = identifier(op.get('id'))
+            m['datasets'][key] = {**op['meta'], 'mode': 'live'}
+            s['datasets'].pop(key, None)
+            s.get('datasetRefs', {}).pop(key, None)
+            s['updatedAt'] = utcnow()
         elif kind == 'remove_component':
             key = op.get('id')
             require(key in m['components'], 'Component does not exist')
@@ -658,6 +675,11 @@ def apply_operations(doc, operations):
         markdown = report_markdown(m)
         m.setdefault('report', {})['markdown'] = markdown
     return validate(result)
+
+def live_datasets(document):
+    return {key: meta for key, meta in document['manifest'].get('datasets', {}).items()
+            if meta.get('mode') == 'live'}
+
 
 def inferred_fields(rows):
     require(isinstance(rows, list) and bool(rows), 'Non-empty rows are needed to infer field types')

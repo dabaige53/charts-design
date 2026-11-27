@@ -98,3 +98,82 @@ def test_write_receipts_preserve_storage_and_revision_flow(tmp_path):
                 assert stale.isError and stale.structuredContent is not None
                 assert stale.structuredContent['error']['code'] == 'REVISION_CONFLICT'
     asyncio.run(check())
+
+
+# @wu-test type=integration | scope=MCP 保存版本读取一致性 | protects=未保存草稿导致预览的图表、明细、筛选项、口径和导出读取不同版本
+def test_saved_reader_queries_keep_one_revision_while_the_draft_changes(tmp_path):
+    from dashboard_runtime.model import apply_operations, new_document
+
+    async def check():
+        root = Path(__file__).resolve().parents[2]
+        params = StdioServerParameters(command=sys.executable,
+            args=['-m', 'dashboard_runtime', '--project-root', str(tmp_path / 'project'),
+                  '--runtime-root', str(tmp_path / 'runtime'), 'mcp'],
+            env={**os.environ, 'PYTHONPATH': str(root) + os.pathsep + os.environ.get('PYTHONPATH', '')})
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+
+                async def call(name, **args):
+                    result = await session.call_tool(name, {'dashboardId': 'pinned', **args})
+                    assert not result.isError, result
+                    assert result.structuredContent is not None
+                    return result.structuredContent
+
+                meta = {'sourceId': 'fixture', 'fields': {'region': {'type': 'string'}, 'revenue': {'type': 'number'}}}
+                rows = [{'region': 'saved', 'revenue': 10}, {'region': 'saved', 'revenue': 20}]
+                metric = {'datasetId': 'sales', 'field': 'revenue', 'aggregation': 'sum',
+                          'label': 'Revenue', 'unit': 'CNY', 'definition': 'Saved revenue definition', 'status': 'unverified'}
+                doc = apply_operations(new_document('pinned', 'Pinned'), [
+                    {'op': 'put_source', 'id': 'fixture', 'value': {'kind': 'fixture', 'name': 'Saved source'}},
+                    {'op': 'put_dataset', 'id': 'sales', 'meta': meta, 'rows': rows},
+                    {'op': 'put_metric', 'id': 'revenue', 'value': metric},
+                    {'op': 'put_component', 'id': 'total', 'value': {'kind': 'kpi', 'title': 'Revenue', 'datasetId': 'sales', 'measures': ['revenue']}},
+                    {'op': 'set_filters', 'value': [{'id': 'region', 'label': 'Region', 'field': 'region', 'op': 'in', 'values': [], 'componentIds': ['total']}]},
+                ])
+                await call('dashboard_create', document=doc)
+                saved = (await call('dashboard_get'))['document']
+                await call('dashboard_patch', expectedRevision=1, operations=[
+                    {'op': 'put_dataset', 'id': 'sales', 'meta': meta, 'rows': [{'region': 'draft', 'revenue': 900}]},
+                    {'op': 'put_metric', 'id': 'revenue', 'value': {**metric, 'unit': 'USD', 'definition': 'Unsaved definition'}},
+                ])
+                pinned = {'expectedRevision': 1, 'dataVersion': saved['dataVersion']}
+                view = await call('dashboard_view', **pinned, responseMode='patch', componentIds=['total'])
+                assert view['revision'] == 1 and view['computed']['components']['total']['value'] == '30 CNY'
+                details = await call('component_data', **pinned, componentId='total', limit=10)
+                assert details['rows'] == rows and details['totalRows'] == 2
+                options = await call('dashboard_filter_options', **pinned, filterId='region')
+                assert options['values'] == ['saved']
+                semantics = await call('semantic_inspect', **pinned, componentId='total')
+                assert semantics['metrics']['revenue']['definition'] == metric['definition']
+                provenance = await call('query_inspect', **pinned, componentId='total')
+                assert provenance['localVersion'] == saved['snapshot']['datasetRefs']['sales']
+                exported = await call('dataset_export', **pinned, componentId='total')
+                csv = Path(exported['export']['path']).read_text()
+                assert 'saved,10' in csv and 'saved,20' in csv and 'draft' not in csv
+                snapshot = await call('dashboard_export', **pinned, format='json')
+                exported_doc = json.loads(Path(snapshot['export']['path']).read_text())
+                assert exported_doc['revision'] == 1
+                assert exported_doc['computed']['components']['total']['value'] == '30 CNY'
+                assert (await call('dashboard_filter_options', filterId='region'))['values'] == ['draft']
+
+                requests = [
+                    ('dashboard_view', {'responseMode': 'patch', 'componentIds': ['total']}),
+                    ('component_data', {'componentId': 'total'}),
+                    ('dashboard_filter_options', {'filterId': 'region'}),
+                    ('semantic_inspect', {'componentId': 'total'}),
+                    ('query_inspect', {'componentId': 'total'}),
+                    ('dataset_export', {'componentId': 'total'}),
+                    ('dashboard_export', {'format': 'json'}),
+                ]
+                for name, args in requests:
+                    for invalid in ({'expectedRevision': 99}, {**pinned, 'dataVersion': 'stale-data'}):
+                        result = await session.call_tool(name, {'dashboardId': 'pinned', **args, **invalid})
+                        assert result.isError and result.structuredContent is not None
+                        assert result.structuredContent['error']['code'] == 'REVISION_CONFLICT'
+                await call('dashboard_checkpoint', expectedRevision=2)
+                historic = await call('dashboard_version_query', revision=1, operation='details',
+                                      request={'componentId': 'total', 'dataVersion': saved['dataVersion']})
+                assert historic['rows'] == rows and historic['totalRows'] == 2
+                assert (await call('dashboard_get'))['document']['revision'] == 2
+    asyncio.run(check())

@@ -46,6 +46,8 @@ tests/test_output/
 
 # Runtime dependencies, local data and review artifacts
 node_modules/
+runtime-core/target/
+dashboard_runtime/native/
 boards/
 *.sqlite3
 *.sqlite3-shm

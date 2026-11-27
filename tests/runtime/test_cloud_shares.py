@@ -50,6 +50,174 @@ def publication(tmp_path, expiration='7d'):
     return service, storage, shares, result
 
 
+def cos_publication(tmp_path, monkeypatch):
+    """Real project versions and query files with an in-memory COS boundary."""
+    import copy
+    import gzip
+
+    from dashboard_runtime import cloud_assets, columnar
+    from dashboard_runtime.cloud_data import CloudData
+    from dashboard_runtime.model import COLS, new_document
+    from dashboard_runtime.versions import Versions
+    from test_dataset_transfer import MemoryAssetRegistry, MemoryDatabase
+
+    if not columnar.native_binary():
+        pytest.skip('COS Parquet sharing requires the native exporter built by the native CI job')
+    monkeypatch.setenv('CHARTS_STORAGE_BACKEND', 'local')
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'source')
+    fields = {'department': {'type': 'string'}, 'value': {'type': 'number'}}
+    rows = {'old': [{'department': 'B', 'value': 3}, {'department': 'A', 'value': None}, {'department': 'B'}],
+            'new': [{'department': 'A', 'value': 10}, {'department': 'B', 'value': 20}]}
+    doc = new_document('board', 'COS formats')
+    doc['manifest']['sources'] = {'fixture': {'kind': 'fixture'}}
+    doc['manifest']['datasets'] = {key: {'sourceId': 'fixture', 'fields': fields} for key in rows}
+    doc['manifest']['components'] = {key: {'kind': 'table', 'datasetId': key, 'title': key} for key in rows}
+    doc['manifest']['layout'] = {bp: [{'id': key, 'x': 0, 'y': index * 4, 'w': width, 'h': 4}
+                                      for index, key in enumerate(rows)] for bp, width in COLS.items()}
+    doc['manifest']['filters'] = [
+        {'id': 'department', 'field': 'department', 'op': 'in', 'componentIds': list(rows), 'values': ['B']},
+        {'id': 'value', 'field': 'value', 'op': 'in', 'componentIds': ['old'], 'values': []},
+    ]
+    doc['snapshot']['datasets'] = copy.deepcopy(rows)
+    for board in ('board', 'second'):
+        page = copy.deepcopy(doc)
+        page['id'] = board
+        service.store.create(board, board, page)
+        Versions(service.store).publish(board, 1, 1)
+    saved = service.store.get('board', hydrate=False)
+    refs = saved['snapshot']['datasetRefs']
+    registry, asset_storage = MemoryAssetRegistry(), MemoryStorage()
+    assets = cloud_assets.CloudAssets('test', database=registry, storage=asset_storage)
+    service.store.data.partition_fields = ['department']
+    for ref in refs.values():
+        assets.save_dataset(service.store.data, ref)
+
+    # Model an existing immutable JSON package using the exact validated query
+    # file. New code never rewrites this old object while publishing a share.
+    old = registry.by_version[refs['old']['version']]
+    query = old['descriptor']['files']['query.sqlite3']
+    for key in list(asset_storage.objects):
+        if key.startswith(old['prefix']) and key != old['prefix'] + 'query.sqlite3':
+            del asset_storage.objects[key]
+    descriptor = {'format': 'cos-dataset-v1', 'queryFormat': 1, 'metadata': refs['old'],
+                  'shards': ['rows-0.json.gz', 'rows-1.json.gz'], 'options': {'value': 'options-1.json.gz'},
+                  'files': {'query.sqlite3': query}, 'partitionIndex': {'field': 'department', 'entries': [
+                      {'value': 'A', 'files': ['rows-0.json.gz']}, {'value': 'B', 'files': ['rows-1.json.gz']},
+                  ]}}
+    old['descriptor'] = descriptor
+    for name, payload in [('rows-0.json.gz', {'rows': [rows['old'][1]], 'ordinals': [2]}),
+                          ('rows-1.json.gz', {'rows': [rows['old'][0], rows['old'][2]], 'ordinals': [1, 3]}),
+                          ('options-1.json.gz', [3, None])]:
+        assets._put(old, descriptor['files'], name, gzip.compress(json.dumps(payload).encode()))
+    assets._put(old, descriptor['files'], 'manifest.json', json.dumps(descriptor).encode())
+    service.store.assets, service.store.cos_enabled, service.store.project = assets, True, 'test'
+    service.store.data = CloudData(tmp_path / 'empty-query-cache', MemoryDatabase(), 'test', assets, cos_enabled=True)
+    monkeypatch.setattr(cloud_assets, 'CloudAssets', lambda *_args, **_kwargs: assets)
+    storage = MemoryStorage()
+    return service, storage, CloudShares(storage, 'https://charts.example.com'), assets, registry, rows
+
+
+# @wu-test type=integration | scope=COS mixed-format multi-page publication | protects=旧包新分享继续JSON或重复转换跨页数据、丢失分区原行序候选项并误删源包旧分享
+def test_cos_share_converts_legacy_once_reuses_parquet_and_cleans_only_owned_files(tmp_path, monkeypatch):
+    import posixpath
+
+    from dashboard_runtime import columnar
+    from static_fixture import worker_query
+
+    service, storage, shares, assets, registry, rows = cos_publication(tmp_path, monkeypatch)
+    asset_storage = assets.storage
+    assert isinstance(asset_storage, MemoryStorage)
+    originals = dict(asset_storage.objects)
+    original_doc = service.store.get('board', hydrate=False)
+    refs = original_doc['snapshot']['datasetRefs']
+    old_obj = registry.by_version[refs['old']['version']]
+    old_share = 'e' * 32
+    old_path = 'data/' + old_obj['id'] + '/rows-1.json.gz'
+    shares._put_json('shares/' + old_share + '/control.json', {
+        'shareId': old_share, 'state': 'active', 'expiresAt': None, 'project': 'test',
+        'files': [old_path], 'assetFiles': {old_path: {'object': old_obj['id'], 'name': 'rows-1.json.gz'}},
+    })
+    old_bytes = shares.content(old_share, old_path)
+    calls, copy = [], columnar.copy_package
+
+    def recorded(*args, **kwargs):
+        calls.append((args[2]['version'], kwargs))
+        return copy(*args, **kwargs)
+
+    monkeypatch.setattr(columnar, 'copy_package', recorded)
+    result = shares.publish(service, 'board', 1, '7d', '01234567',
+                            pages=[{'dashboardId': 'second', 'expectedRevision': 1}])
+    share_id = result['shareId']
+    assert calls == [(refs['old']['version'], {'partition_field': 'department', 'include_options': True})]
+    control = shares.authenticate(share_id, '01234567')
+    root = json.loads(shares.content(share_id, 'document.json'))
+    second = json.loads(shares.content(share_id, 'pages/second/document.json'))
+    for dataset, paths in root['staticFiles'].items():
+        assert all(path.endswith('.parquet') for path in paths)
+        assert [posixpath.normpath(posixpath.join('pages/second', path))
+                for path in second['staticFiles'][dataset]] == paths
+        assert all((path in control['assetFiles']) == (dataset == 'new') for path in paths)
+        assert all((storage.get('shares/' + share_id + '/site/' + path) is not None) == (dataset == 'old') for path in paths)
+    assert all(isinstance(entry, dict) for entries in root['staticOptions'].values() for entry in entries.values())
+    assert len(control['files']) == len(set(control['files']))
+    payloads = {name: shares.content(share_id, name) for name in control['files'] if name.endswith('.parquet')}
+    results = worker_query(root, payloads, [
+        {'detail': True, 'componentId': 'old'},
+        {'detail': True, 'componentId': 'old', 'filters': []},
+        {'filterId': 'value'},
+        {'detail': True, 'componentId': 'new', 'filters': []},
+    ])
+    selected = next(entry['files'] for entry in root['staticPartitionIndexes']['old']['entries'] if entry['value'] == 'B')
+    assert results[0]['files'] == selected
+    assert results[0]['result']['rows'] == [rows['old'][0], rows['old'][2]]
+    assert results[1]['result']['rows'] == rows['old']
+    assert results[2]['result']['values'] == [None, 3]
+    assert results[3]['result']['rows'] == rows['new']
+    assert service.store.get('board', hydrate=False) == original_doc
+    assert asset_storage.objects == originals
+    assert shares.content(old_share, old_path) == old_bytes
+    assert [call['state'] for call in registry.shares] == ['uploading', 'active']
+    assert cleanup_due(storage, result['expiresAt']) == {'removed': 1, 'failed': []}
+    assert not storage.list('shares/' + share_id + '/')
+    assert asset_storage.objects == originals
+    assert shares.content(old_share, old_path) == old_bytes
+
+
+# @wu-test type=boundary | scope=COS legacy-share conversion retry | protects=转换上传失败仍激活分享或重试改变原包及遗失暂存清理任务
+def test_cos_share_failed_conversion_upload_keeps_staging_and_same_id_retries(tmp_path, monkeypatch):
+    service, storage, shares, assets, registry, _ = cos_publication(tmp_path, monkeypatch)
+    asset_storage = assets.storage
+    assert isinstance(asset_storage, MemoryStorage)
+    originals = dict(asset_storage.objects)
+    share_id = 'f' * 32
+    put, attempts = storage.put, []
+
+    def fail_second_file(key, content, content_type='application/octet-stream'):
+        if key.endswith('.parquet'):
+            attempts.append(key)
+            if len(attempts) == 2:
+                raise OSError('publication upload failed')
+        put(key, content, content_type)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, 'put', fail_second_file)
+        with pytest.raises(OSError, match='publication upload failed'):
+            shares.publish(service, 'board', 1, '7d', '01234567', share_id=share_id)
+    assert storage.get('shares/' + share_id + '/control.json') is None
+    job = storage.get('jobs/' + share_id + '.json')
+    assert job is not None
+    staged = json.loads(job)
+    assert staged['state'] == 'uploading' and staged['cleanupAfter'] == staged['stagingUntil']
+    assert [call['state'] for call in registry.shares] == ['uploading']
+    assert storage.get(attempts[0]) is not None
+    assert asset_storage.objects == originals
+    result = shares.publish(service, 'board', 1, '7d', '01234567', share_id=share_id)
+    assert result['shareId'] == share_id
+    assert shares.authenticate(share_id, '01234567')['state'] == 'active'
+    assert [call['state'] for call in registry.shares] == ['uploading', 'uploading', 'active']
+    assert asset_storage.objects == originals
+
+
 # @wu-test type=integration | scope=腾讯云分享副本与到期清理 | protects=到期仅失效链接却残留远程数据密钥或误删原稿和其他分享
 @pytest.mark.parametrize('expiration,days', [('7d', 7), ('30d', 30)])
 def test_publication_expiry_removes_only_its_remote_copy(tmp_path, monkeypatch, expiration, days):
@@ -177,7 +345,7 @@ def test_partial_replacement_returns_new_credentials(tmp_path, monkeypatch):
     put = storage.put
 
     def fail_revoke(key, content, content_type='application/octet-stream'):
-        if key == 'shares/' + old['shareId'] + '/control.json':
+        if key == 'jobs/' + old['shareId'] + '.json':
             raise OSError('simulated revoke failure')
         put(key, content, content_type)
 
@@ -310,10 +478,10 @@ def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeyp
     from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
 
     _, storage, shares, published = publication(tmp_path)
+    monkeypatch.setattr(CloudShares, 'from_environment', lambda public_url: shares)
     server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'gateway-cache',
                                         tokens=('gateway-admin-token-0123456789',),
-                                        public_url='https://charts.example.com'))
-    server.cloud_shares = shares
+                                        public_url='https://charts.example.com', role='sharing'))
     root = '/s/' + published['shareId'] + '/'
     with TestClient(create_app(server), base_url='https://charts.example.com') as client:
         form = client.get(root)
@@ -346,16 +514,16 @@ def test_gateway_gates_every_file_and_rejects_expired_sessions(tmp_path, monkeyp
     ('null', 403),
     ('https://other.example.com', 403),
 ])
-def test_share_form_preserves_browser_origin_and_rejects_foreign_origins(tmp_path, origin, expected_status):
+def test_share_form_preserves_browser_origin_and_rejects_foreign_origins(tmp_path, origin, expected_status, monkeypatch):
     pytest.importorskip('mcp')
     from starlette.testclient import TestClient
     from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
 
     _, _, shares, published = publication(tmp_path)
+    monkeypatch.setattr(CloudShares, 'from_environment', lambda public_url: shares)
     server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'gateway-cache',
                                         tokens=('gateway-admin-token-0123456789',),
-                                        public_url='https://charts.example.com'))
-    server.cloud_shares = shares
+                                        public_url='https://charts.example.com', role='sharing'))
     root = '/s/' + published['shareId'] + '/'
     with TestClient(create_app(server), base_url='https://charts.example.com') as client:
         form = client.get(root)
@@ -376,16 +544,16 @@ def test_share_form_preserves_browser_origin_and_rejects_foreign_origins(tmp_pat
 
 
 # @wu-test type=boundary | scope=8位密钥在线尝试限制 | protects=短数字密钥可被无限在线枚举
-def test_gateway_limits_key_guesses(tmp_path):
+def test_gateway_limits_key_guesses(tmp_path, monkeypatch):
     pytest.importorskip('mcp')
     from starlette.testclient import TestClient
     from dashboard_runtime.server import RemoteServer, ServerSettings, create_app
 
     _, _, shares, published = publication(tmp_path)
+    monkeypatch.setattr(CloudShares, 'from_environment', lambda public_url: shares)
     server = RemoteServer(ServerSettings(workspace=tmp_path / 'gateway', runtime=tmp_path / 'gateway-cache',
                                         tokens=('gateway-admin-token-0123456789',),
-                                        public_url='https://charts.example.com'))
-    server.cloud_shares = shares
+                                        public_url='https://charts.example.com', role='sharing'))
     root = '/s/' + published['shareId'] + '/'
     with TestClient(create_app(server), base_url='https://charts.example.com') as client:
         for _ in range(5):
@@ -393,9 +561,21 @@ def test_gateway_limits_key_guesses(tmp_path):
         assert client.post(root, data={'accessKey': '01234567'}).status_code == 429
 
 # @wu-test type=integration | scope=多页面云分享 | protects=分享遗漏选中页面或替换时丢失页面和发布版本
-def test_multi_page_publication_and_replace(tmp_path):
+@pytest.mark.parametrize('data_format', ['json', 'parquet'])
+def test_multi_page_publication_and_replace(tmp_path, monkeypatch, data_format):
     import gzip
     import posixpath
+    from dashboard_runtime import columnar
+    from static_fixture import worker_rows
+
+    if data_format == 'json':
+        monkeypatch.setattr(columnar, 'native_binary', lambda: None)
+    elif not columnar.native_binary():
+        pytest.skip('Parquet sharing requires the native exporter built by the native CI job')
+
+    def rows(name):
+        raw = shares.content(result['shareId'], name)
+        return worker_rows(raw, name) if data_format == 'parquet' else json.loads(gzip.decompress(raw))
 
     service, storage, shares, _ = publication(tmp_path)
     service.call('dashboard_create', {'dashboardId': 'second', 'document': executive_document('second')})
@@ -419,13 +599,12 @@ def test_multi_page_publication_and_replace(tmp_path):
         for relative, root_file in zip(files, root['staticFiles'][dataset]):
             resolved = posixpath.normpath(posixpath.join('pages/second', relative))
             assert resolved == root_file
-            assert json.loads(gzip.decompress(shares.content(result['shareId'], resolved)))
+            assert rows(resolved)
     assert not [key for key in storage.objects if key.startswith('shares/' + result['shareId'] + '/site/pages/second/data/')]
     third = json.loads(shares.content(result['shareId'], 'pages/third/document.json'))
     third_file = posixpath.normpath(posixpath.join('pages/third', third['staticFiles']['sales'][0]))
     assert third_file.startswith('pages/third/data/')
-    assert json.loads(gzip.decompress(shares.content(result['shareId'], third_file)))[0]['revenue'] != \
-        json.loads(gzip.decompress(shares.content(result['shareId'], root['staticFiles']['sales'][0])))[0]['revenue']
+    assert rows(third_file)[0]['revenue'] != rows(root['staticFiles']['sales'][0])[0]['revenue']
     assert len(shares.status(service, 'board', result['shareId'])['shares'][0]['pages']) == 3
     replaced = shares.replace(service, 'board', result['shareId'], 1)
     assert replaced['previousRevoked']

@@ -134,7 +134,9 @@ class CloudDatabase:
                      'INVALID_BATCH': 400, 'CHECKPOINT_IN_USE': 409,
                      'PLAN_CHANGED': 409, 'ASSET_UNAVAILABLE': 409,
                      'REVISION_DELETED': 409, 'CONFIRMATION_REQUIRED': 409,
-                     'STORAGE_MIGRATED': 409, 'NO_SAVED_VERSION': 404}
+                     'STORAGE_MIGRATED': 409, 'NO_SAVED_VERSION': 404,
+                     'FORBIDDEN': 403, 'SHARE_EXPIRED': 410, 'SHARE_UNAVAILABLE': 410,
+                     'ANNOTATION_LIMIT': 409}
             try:
                 message = json.loads(raw).get('message', '')
             except (ValueError, AttributeError):
@@ -156,7 +158,7 @@ class CloudDatabase:
 
         function = self.url.rsplit('/', 1)[-1]
         require(function in ('charts_runtime', 'charts_assets', 'charts_release',
-                             'charts_delete_checkpoint', 'charts_data_inventory'),
+                             'charts_delete_checkpoint', 'charts_data_inventory', 'charts_share_annotations'),
                 'Unknown PostgreSQL function', 'INVALID_CONFIG')
         pool = _VIEW_CONNECTIONS.get() if function == 'charts_runtime' and action in _POOLED_VIEW_ACTIONS else None
         try:
@@ -210,7 +212,9 @@ class CloudDatabase:
                      'INVALID_BATCH': 400, 'CHECKPOINT_IN_USE': 409,
                      'PLAN_CHANGED': 409, 'ASSET_UNAVAILABLE': 409,
                      'REVISION_DELETED': 409, 'CONFIRMATION_REQUIRED': 409,
-                     'STORAGE_MIGRATED': 409, 'NO_SAVED_VERSION': 404}
+                     'STORAGE_MIGRATED': 409, 'NO_SAVED_VERSION': 404,
+                     'FORBIDDEN': 403, 'SHARE_EXPIRED': 410, 'SHARE_UNAVAILABLE': 410,
+                     'ANNOTATION_LIMIT': 409}
             message = error.diag.message_primary
             if message in codes:
                 label = '暂无已保存版本' if message == 'NO_SAVED_VERSION' else message

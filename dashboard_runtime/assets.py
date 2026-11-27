@@ -2,7 +2,7 @@
 import base64
 import json
 from pathlib import Path
-from .model import DashboardError
+from .model import DashboardError, live_datasets, require
 
 DIST = Path(__file__).parent / 'web' / 'dist'
 MIME_TYPE = 'text/html;profile=mcp-app'
@@ -26,7 +26,7 @@ def ui_resource_uri():
 
 def require_preview():
     if ui_build_id() == 'unavailable':
-        raise DashboardError('UI_UNAVAILABLE', 'UI 尚未打包；请运行 npm run ui:build 和 npm run ui:package。', 503)
+        raise DashboardError('UI_UNAVAILABLE', 'UI 尚未打包；请运行 bun run ui:prepare。', 503)
 
 
 def render_html(mode='web', document=None, legacy=None, idle_timeout: float = 60, boot_state=None):
@@ -49,6 +49,7 @@ def bundle_assets():
 
 def export_document(document):
     import copy
+    require(not live_datasets(document), '实时 SQL 看板请通过运行服务查看', 'LIVE_DATA_REQUIRES_RUNTIME')
     snapshot = copy.deepcopy(document)
     snapshot['snapshot'] = {'datasets': {}}
     snapshot.pop('loading', None)
@@ -57,6 +58,8 @@ def export_document(document):
                                        for key, artifact in snapshot.get('statisticalArtifacts', {}).items()}
     for key in ('sources', 'queries', 'annotations'):
         snapshot['manifest'].pop(key, None)
+    for key in ('browserLinks', 'annotationAccess', 'publicationApiBase', 'publication', 'annotationsOpen'):
+        snapshot.pop(key, None)
     return render_html('snapshot', snapshot)
 
 

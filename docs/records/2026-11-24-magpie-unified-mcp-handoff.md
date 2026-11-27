@@ -4,7 +4,7 @@
 
 在目标服务器上，让 Codex 通过 Magpie 的一个 `charts-design` 条目访问自托管和 CloudBase 两个后端。所有项目继承 Codex 全局的 Magpie 接入。只在 Magpie 管理 Charts Design 的客户端注册。
 
-自托管后端的 `/unified/mcp` 按 `projectRoot` 路由。现有项目只在一边时自动选定后端。同名或新建项目时显式传 `backend: "server"` 或 `"cloudbase"`。已有归属保存在网关的 `backend-routes.sqlite3`。两端原有 MCP 服务仍供网关及运维使用。路由规则见[一个 MCP 入口访问两个后端](../operations/self-hosted-server.md#一个-mcp-入口访问两个后端)。
+自托管后端的 `/unified/mcp` 按 `projectRoot` 路由。现有项目只在一边时自动选定后端。同名或新建项目时显式传 `backend: "server"` 或 `"cloudbase"`。已有归属保存在网关的 `backend-routes.sqlite3`。两端原有 MCP 服务仍供网关及运维使用。这是当时的路由规则。当前部署入口见[自有服务器与 Neon](../operations/self-hosted-server.md#自有服务器与-neon)。
 
 ## 已完成
 
@@ -17,7 +17,7 @@
 ## 在目标服务器接入
 
 1. 核对目标服务器的 Codex 全局配置已由 Magpie 分发。检查 Magpie 资源库和 Codex 用户级、项目级配置。记录已有 `charts-design` 条目的分发范围，确认只替换 Charts Design 的旧条目。
-2. 取用[统一 MCP 配置示例](../../deploy/neon/unified-mcp.example.json)中的地址。让目标服务器的私有运行入口向子进程注入 `CHARTS_UNIFIED_TOKEN`。使用目标机器已授权的凭据映射，确认 Magpie 的运行账号可读。
+2. 取用[当时的统一 MCP 配置示例](https://github.com/dabaige53/charts-design/blob/486bd637f59b824a30f9e990cfa0ed8f8d9d3906/deploy/neon/unified-mcp.example.json)中的地址。让目标服务器的私有运行入口向子进程注入 `CHARTS_UNIFIED_TOKEN`。使用目标机器已授权的凭据映射，确认 Magpie 的运行账号可读。
 3. 使用目标服务器上的 `uvx` 准备 `mcp-proxy==0.15.0`。启动命令使用目标机实际路径，并在同一个进程内将 `CHARTS_UNIFIED_TOKEN` 映射到 `API_ACCESS_TOKEN`。以下命令应由私有凭据入口启动。先确认转接器能完成 MCP 初始化和 `tools/list`。
 
    ```sh

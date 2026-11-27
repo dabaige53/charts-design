@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRequestQueue } from "../../dashboard_runtime/web/request-queue.mjs";
+import { hasLiveData } from "./types";
 import type {
   Config,
   Document,
@@ -15,6 +16,21 @@ type View = {
   grains: Record<string, string>;
   linkageSource?: string;
 };
+
+export function linkageConsumers(document: Document, sourceId: string, field: string) {
+  const { components, datasets } = document.manifest;
+  const source = components[sourceId];
+  const datasetId = source?.binding?.datasetId;
+  const type = datasets[datasetId]?.fields?.[field]?.type;
+  if (!type || source.binding.categoryField !== field) return [];
+  return Object.entries(components).filter(([id, target]) => {
+    const targetDataset = target.datasetId || target.binding?.datasetId;
+    return id !== sourceId && target.kind !== "statistical" && target.kind !== "text" &&
+      (target.kind !== "legacy" || !!target.binding) &&
+      (targetDataset === datasetId || (!!source.linkGroup && target.linkGroup === source.linkGroup)) &&
+      datasets[targetDataset]?.fields?.[field]?.type === type;
+  }).map(([id]) => id);
+}
 export function mergeView(document: Document, patch: Config): Document {
   return {
     ...document,
@@ -52,7 +68,8 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
   const [loading, setLoading] = useState<string[]>([]),
     [error, setError] = useState(""),
     [errors, setErrors] = useState<Record<string, string>>({}),
-    [saving, setSaving] = useState(false);
+    [saving, setSaving] = useState(false),
+    [dataEpoch, setDataEpoch] = useState(0);
   const current = useRef(initial),
     reader = useRef(view),
     generation = useRef(0),
@@ -191,6 +208,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
       setError("");
       setErrors({});
       const sameDashboard = current.current.id === doc.id;
+      if (preserveView && hasLiveData(doc)) setDataEpoch((epoch) => epoch + 1);
       current.current = doc;
       setDocument((previous) =>
         preserveView && previous.id === doc.id && previous.dataVersion === doc.dataVersion
@@ -198,7 +216,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
           : doc,
       );
       const previous = reader.current;
-      const next: View = preserveView
+      const next: View = preserveView && sameDashboard
         ? {
             filters: doc.manifest.filters.map((f) => ({
               ...f,
@@ -220,6 +238,16 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
             ),
           }
         : { filters: doc.manifest.filters, tables: {}, grains: {} };
+      if (preserveView && sameDashboard && previous.linkageSource) {
+        const link = previous.filters.find((filter) => filter.id === "runtime-linkage");
+        if (link) {
+          const componentIds = linkageConsumers(doc, previous.linkageSource, link.field);
+          if (componentIds.length) {
+            next.filters = [...next.filters, { ...link, componentIds }];
+            next.linkageSource = previous.linkageSource;
+          }
+        }
+      }
       reader.current = next;
       setView(next);
       active.current = new Set(
@@ -316,14 +344,15 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     }, targets);
   };
   const reload = async () => {
+    const doc = current.current;
     try {
       setError("");
-      const result = await call("dashboard_preview", {
-        dashboardId: current.current.id,
+      const result = await call(hasLiveData(doc) ? "dashboard_refresh" : "dashboard_preview", {
+        dashboardId: doc.id,
       });
-      accept(result.document, true);
+      if (live.current && current.current === doc) accept(result.document, true);
     } catch (e) {
-      setError(String(e));
+      if (live.current && current.current === doc) setError(String(e));
     }
   };
   const save = async (operations: Config[]) => {
@@ -406,6 +435,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     error,
     errors,
     saving,
+    dataEpoch,
     activate,
     setFilter,
     setFilters,

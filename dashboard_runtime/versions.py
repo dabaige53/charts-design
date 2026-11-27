@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import json
 import hashlib
+import threading
 import uuid
 
 from .cloud_database import CloudDatabase
 from .model import DashboardError, json_bytes, require, utcnow
+
+_INITIALIZATION_LOCK = threading.Lock()
 
 
 class ReleaseDatabase(CloudDatabase):
@@ -19,21 +22,27 @@ class Versions:
     def __init__(self, store):
         self.store = store
         self.remote = ReleaseDatabase() if getattr(store, 'database', None) is not None else None
-        if self.remote is None:
-            with store.connect() as db:
-                db.execute('''CREATE TABLE IF NOT EXISTS releases (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, board_id TEXT NOT NULL,
-                    revision INTEGER NOT NULL, created_at TEXT NOT NULL, document TEXT NOT NULL)''')
-                db.execute('CREATE TABLE IF NOT EXISTS version_heads(board_id TEXT PRIMARY KEY, published INTEGER)')
-                db.execute('''INSERT OR IGNORE INTO version_heads
-                    SELECT board_id,revision FROM releases WHERE id IN (SELECT max(id) FROM releases GROUP BY board_id)''')
-                db.execute('''CREATE TABLE IF NOT EXISTS version_delete_plans (
-                    token TEXT PRIMARY KEY, board_id TEXT, revision INTEGER, fingerprint TEXT, plan TEXT)''')
+        if self.remote is None and not getattr(store, '_versions_initialized', False):
+            with _INITIALIZATION_LOCK:
+                if not getattr(store, '_versions_initialized', False):
+                    with store.connect() as db:
+                        db.execute('''CREATE TABLE IF NOT EXISTS releases (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT, board_id TEXT NOT NULL,
+                            revision INTEGER NOT NULL, created_at TEXT NOT NULL, document TEXT NOT NULL)''')
+                        db.execute('CREATE INDEX IF NOT EXISTS releases_board ON releases(board_id,id)')
+                        db.execute('CREATE INDEX IF NOT EXISTS releases_revision ON releases(board_id,revision,id)')
+                        db.execute('CREATE TABLE IF NOT EXISTS version_heads(board_id TEXT PRIMARY KEY, published INTEGER)')
+                        db.execute('''INSERT OR IGNORE INTO version_heads
+                            SELECT board_id,revision FROM releases WHERE id IN (SELECT max(id) FROM releases GROUP BY board_id)''')
+                        db.execute('''CREATE TABLE IF NOT EXISTS version_delete_plans (
+                            token TEXT PRIMARY KEY, board_id TEXT, revision INTEGER, fingerprint TEXT, plan TEXT)''')
+                    store._versions_initialized = True
 
     def status(self, board):
         if self.remote:
             return self.remote.call('status', self.store.project, board=board)
         with self.store.connect() as db:
+            db.execute('BEGIN')
             current = db.execute('SELECT revision FROM boards WHERE id=?', (board,)).fetchone()
             require(current is not None, 'Dashboard not found', 'NOT_FOUND')
             saved = db.execute('SELECT max(revision) FROM revisions WHERE board_id=?', (board,)).fetchone()[0]
@@ -47,6 +56,7 @@ class Versions:
         if self.remote:
             return self.store._decode(self.remote.call('read', self.store.project, board=board, revision=revision))
         with self.store.connect() as db:
+            db.execute('BEGIN')
             row = db.execute('SELECT document FROM revisions WHERE board_id=? AND revision=?', (board, revision)).fetchone()
             if row is None:
                 row = db.execute('SELECT document FROM releases WHERE board_id=? AND revision=? ORDER BY id DESC LIMIT 1',
@@ -148,5 +158,5 @@ class Versions:
                            (revision + 1, json_bytes(stored).decode(), board))
             db.execute('DELETE FROM batches WHERE board_id=?', (board,))
             db.execute('DELETE FROM version_delete_plans WHERE token=?', (confirmation,))
-        self.store._files(board)
+        self.store._files(board, draft=current[0] == revision, annotations=False, checkpoints=(revision,))
         return {'deleted': True, 'revision': revision, 'state': 'complete'}

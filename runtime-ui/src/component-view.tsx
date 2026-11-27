@@ -3,7 +3,7 @@ import type { ECharts } from "echarts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
-import { GripVertical } from "lucide-react";
+import { CodeXml, GripVertical } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -132,6 +132,7 @@ export function ComponentView({
   tableState,
   onTableChange,
   editing = false,
+  reading = false,
   onGrain,
   onInspect,
   onReadData,
@@ -153,6 +154,7 @@ export function ComponentView({
   tableState?: TableState;
   onTableChange?: (s: TableState) => void;
   editing?: boolean;
+  reading?: boolean;
   onGrain?: (g: string) => void;
   onInspect?: () => Promise<Config>;
   onReadData?: (state: TableState) => Promise<Config>;
@@ -170,7 +172,11 @@ export function ComponentView({
 }) {
   const c = doc.manifest.components[id],
     family = c.family || c.kind;
+  const dataset = doc.manifest.datasets[c.datasetId || c.binding?.datasetId];
+  const source = doc.manifest.sources?.[dataset?.sourceId || c.sourceId];
+  const sql = source?.query?.sql;
   const [table, setTable] = useState(false),
+    [sqlOpen, setSqlOpen] = useState(false),
     [details, setDetails] = useState<Config | null>(null),
     [detailError, setDetailError] = useState(""),
     [detailOpen, setDetailOpen] = useState(false),
@@ -261,13 +267,13 @@ export function ComponentView({
   const localError = detailError;
   const card = (
         <Card
-          className="h-full min-h-0"
+          className={reading ? "h-full min-h-0 gap-0 bg-transparent py-0 shadow-none ring-0" : "h-full min-h-0"}
           size={family === "kpi" ? "sm" : "default"}
           data-component-id={id}
           data-family={family}
           aria-busy={loading}
         >
-          <CardHeader className={`shrink-0${family === "chart" || family === "table" ? " component-header-with-tools" : ""}`}>
+          {!reading && <CardHeader className={`shrink-0${family === "chart" || family === "table" ? " component-header-with-tools" : ""}`}>
             <CardTitle className="flex items-start gap-2">
               {editing && (
                 <GripVertical className="resize-handle mt-1 size-4 shrink-0 text-muted-foreground" />
@@ -281,6 +287,7 @@ export function ComponentView({
             )}
             <CardAction className="component-actions screen-only flex min-w-0 flex-wrap items-center gap-2">
               {family === "table" && <div ref={setTableToolbarTarget} />}
+              {family === "statistical" && <IconAction label="查看 SQL" onClick={() => setSqlOpen(true)}><CodeXml /></IconAction>}
               {family === "chart" ? (
                 <ChartToolbar
                   chartType={!custom && editing && onChartType && ["c01", "c02"].includes(config.code) ? config.code : undefined}
@@ -320,6 +327,7 @@ export function ComponentView({
                   expanded={expanded}
                   onExpand={() => setExpanded((value) => !value)}
                   onInfo={() => void inspect()}
+                  onSql={() => setSqlOpen(true)}
                 />
               ) : (
                 <IconAction
@@ -330,8 +338,8 @@ export function ComponentView({
                 </IconAction>
               )}
             </CardAction>
-          </CardHeader>
-          <CardContent className="relative flex min-h-0 flex-1 flex-col">
+          </CardHeader>}
+          <CardContent className={`relative flex min-h-0 flex-1 flex-col${reading ? " px-0" : ""}`}>
           {actionError && (
             <RecoveryAlert title="操作未完成" message={actionError} onRetry={() => setActionError("")} retryLabel="返回组件" />
           )}
@@ -369,6 +377,7 @@ export function ComponentView({
                 visible: tableState?.visible ?? config.tableState?.visible,
               }}
               onChange={onTableChange}
+              reading={reading}
               onSaveState={editing ? onSaveTable : undefined}
               onExport={onExport ? () => run(onExport) : undefined}
               loading={loading}
@@ -420,6 +429,19 @@ export function ComponentView({
           </DialogContent>
         </Dialog>
   );
+  const sqlDialog = (
+    <Dialog open={sqlOpen} onOpenChange={setSqlOpen}>
+      <DialogContent className="max-h-[85vh] overflow-auto sm:max-w-[720px]">
+        <DialogHeader>
+          <DialogTitle>查看 SQL</DialogTitle>
+          <DialogDescription>{c.title}</DialogDescription>
+        </DialogHeader>
+        {typeof sql === "string" && sql.trim()
+          ? <pre className="overflow-x-auto whitespace-pre-wrap break-words bg-muted p-3 text-sm"><code>{sql}</code></pre>
+          : <p className="text-sm text-muted-foreground">此图表没有可查看的 SQL。</p>}
+      </DialogContent>
+    </Dialog>
+  );
   return (
     <ComponentBoundary
       title={c.title}
@@ -437,9 +459,11 @@ export function ComponentView({
             <DialogDescription className="sr-only">查看放大的当前图表，按 Esc 或点击还原图表返回。</DialogDescription>
             {card}
             {detailsDialog}
+            {sqlDialog}
           </DialogContent>
         </Dialog>
         {!expanded && detailsDialog}
+        {!expanded && sqlDialog}
       </div>
     </ComponentBoundary>
   );

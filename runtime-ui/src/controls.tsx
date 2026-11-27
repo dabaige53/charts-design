@@ -39,6 +39,7 @@ import {
   Search,
   BarChart3,
   MoreHorizontal,
+  CodeXml,
 } from "lucide-react";
 import {
   Button,
@@ -186,13 +187,20 @@ export function MultiSelect({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const sequence = useRef(0),
+    previousLoad = useRef<{ query: string; loader: ChoiceLoader } | null>(null),
     id = useId();
   useEffect(() => {
     const request = ++sequence.current;
-    if (!open || !loadOptions) return;
+    if (!open || !loadOptions) {
+      previousLoad.current = null;
+      return;
+    }
+    const searching = previousLoad.current?.loader === loadOptions &&
+      previousLoad.current.query !== query;
+    previousLoad.current = { query, loader: loadOptions };
     setBusy(true);
     setError("");
-    const timer = setTimeout(() => {
+    const load = () => {
       void loadOptions(query, 0)
         .then((page) => {
           if (request === sequence.current) setRemote(page);
@@ -203,9 +211,11 @@ export function MultiSelect({
         .finally(() => {
           if (request === sequence.current) setBusy(false);
         });
-    }, 150);
+    };
+    const timer = searching ? setTimeout(load, 150) : undefined;
+    if (!searching) load();
     return () => {
-      clearTimeout(timer);
+      if (timer !== undefined) clearTimeout(timer);
       sequence.current++;
     };
   }, [open, query, loadOptions]);
@@ -643,6 +653,7 @@ export function ChartToolbar({
   onExpand,
   expanded = false,
   onInfo,
+  onSql,
 }: {
   chartType?: string;
   onChartType?: (value: string) => void;
@@ -656,6 +667,7 @@ export function ChartToolbar({
   onExpand?: () => void;
   expanded?: boolean;
   onInfo?: () => void;
+  onSql?: () => void;
 }) {
   return (
     <div
@@ -716,6 +728,7 @@ export function ChartToolbar({
           <DropdownMenuItem disabled={!onExport} onSelect={onExport}><FileDown />导出 CSV</DropdownMenuItem>
           <DropdownMenuItem disabled={!onImage} onSelect={onImage}><ImageDown />下载图片</DropdownMenuItem>
           <DropdownMenuItem disabled={!onCopy} onSelect={onCopy}><Copy />复制图表</DropdownMenuItem>
+          {onSql && <DropdownMenuItem onSelect={onSql}><CodeXml />查看 SQL</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

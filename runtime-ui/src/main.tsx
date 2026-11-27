@@ -12,7 +12,7 @@ import { createToolQueue } from "../../dashboard_runtime/web/request-queue.mjs";
 import { browserDownload, type Download } from "./host";
 import { WebAccess } from "./web-access";
 import { createCosTools } from "./cos-client";
-import type { Config, Document, ToolCall } from "./types";
+import type { AnnotationAccess, Config, Document, ToolCall } from "./types";
 const boot = window.__chartsBoot || { mode: "mcp" };
 let app: App | undefined;
 const webTokenKey = `charts-design-token:${boot.apiBase || "/api/tools/"}:${boot.projectRoot || ""}:${boot.dashboardId || ""}`;
@@ -30,6 +30,10 @@ function readWebToken() {
   return token || stored;
 }
 let webToken = readWebToken();
+const annotationHeaders = (): Record<string, string> => webToken ? { Authorization: "Bearer " + webToken } : {};
+const browserAnnotationsOnly: AnnotationAccess = {
+  endpoint: "", canRead: false, canAnnotate: false, canManageAnnotations: false, scope: "mcp-browser",
+};
 class WebAuthError extends Error {}
 const queue = createToolQueue();
 // Editors immediately consume the updated document; Agent calls default to receipts.
@@ -69,6 +73,13 @@ const remoteCall: ToolCall = async (name, args = {}) =>
 const cosTools = createCosTools(remoteCall, (boot.apiBase || "").split("/api/")[0] + "/assets/static-worker.js",
   () => ({ Authorization: "Bearer " + webToken }));
 const call: ToolCall = boot.mode === "web" ? cosTools.call : remoteCall;
+const openBrowser = async (url: string) => {
+  if (boot.mode === "mcp") {
+    if (!app) throw Error("宿主尚未连接，请重新打开预览");
+    const result = await app.openLink({ url });
+    if (result.isError) throw Error("浏览器未打开，请使用预览回执中的浏览器链接");
+  } else window.open(url, "_blank", "noopener,noreferrer");
+};
 const download: Download = async (file) => {
   if (boot.mode !== "mcp") return browserDownload(file);
   if (!app?.getHostCapabilities()?.downloadFile)
@@ -138,7 +149,7 @@ function Root() {
             current.id === value.document.id &&
             current.revision > value.document.revision
               ? current
-              : value.document,
+              : { ...value.document, ...(value.browserLinks ? { browserLinks: value.browserLinks } : {}) },
           );
         }
       } catch (e) {
@@ -193,7 +204,7 @@ function Root() {
               result.dashboards[0]?.id;
             if (id)
               await receive(
-                await call("dashboard_preview", { dashboardId: id }),
+                await call(boot.readOnly ? "dashboard_preview" : "dashboard_get", { dashboardId: id }),
               );
             else if (live)
               setError("尚无已保存的看板，请通过本项目 MCP 创建。");
@@ -283,11 +294,19 @@ function Root() {
       pageFullscreen={hostFullscreen}
       primaryFilterIds={boot.primaryFilterIds}
       projectRoot={context.projectRoot}
+      annotationAccess={boot.annotationAccess || doc.annotationAccess || (boot.mode === "mcp" ? browserAnnotationsOnly : undefined)}
+      annotationHeaders={annotationHeaders}
+      browserAnnotationUrl={doc.browserLinks?.viewUrl || boot.browserLinks?.viewUrl}
+      annotationsInitiallyOpen={boot.annotationsOpen === true}
+      publicationApiBase={boot.publicationApiBase}
+      browserWorkspaceUrl={doc.browserLinks?.editUrl || boot.browserLinks?.editUrl}
+      onOpenBrowser={openBrowser}
     />
     </>
   );
 }
-createRoot(document.getElementById("root")!).render(
+export const applicationRoot = createRoot(document.getElementById("root")!);
+applicationRoot.render(
   <RenderBoundary>
     <TooltipProvider>
       <Root />
