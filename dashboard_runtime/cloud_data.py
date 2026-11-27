@@ -27,7 +27,6 @@ class CloudData(LocalData):
     def __init__(self, root, database, project, assets: CloudAssets | None = None, cos_enabled=False):
         self.database, self.project = database, project
         self.assets, self.cos_enabled = assets, cos_enabled
-        self.partition_fields: list[str] = []
         self.restore_lock = threading.RLock()
         self.transfer_lock = threading.Lock()
         self.transfers = {}
@@ -333,14 +332,17 @@ class CloudData(LocalData):
             db.execute(f'ATTACH DATABASE ? AS {alias}', (target.as_uri() + '?mode=ro',))
         return alias + '.d_' + version, self._metadata(json.dumps(obj['descriptor']['metadata']))
 
-    def _option_page(self, refs, field, search='', offset=0, limit=100):
+    def _option_page(self, refs, field, search='', offset=0, limit=100, extra=None):
         unique = {ref['version']: ref for ref in refs}
         if not self.cos_enabled or len(unique) <= 10:
-            return super()._option_page(refs, field, search, offset, limit)
+            return super()._option_page(refs, field, search, offset, limit, extra)
         self._validate_option_page(search, offset, limit)
         # SQLite allows ten attached databases per connection. Collect each
         # file's distinct candidates before merging the complete option set.
+        kind = None
         with self._connect() as merged:
+            if extra is not None:
+                merged.execute('PRAGMA temp_store=MEMORY')
             merged.execute('CREATE TEMP TABLE option_values (value UNIQUE)')
             for ref in unique.values():
                 with self._connect() as source:
@@ -351,6 +353,9 @@ class CloudData(LocalData):
                         'INSERT OR IGNORE INTO option_values VALUES (?)',
                         source.execute(f'SELECT DISTINCT {column} FROM {table}'),
                     )
+            if extra is not None:
+                kind, values = extra
+                merged.executemany('INSERT OR IGNORE INTO option_values VALUES (?)', ((v,) for v in values))
             return self._page_option_values(merged, 'option_values', kind, search, offset, limit)
 
     def _indexes(self, db, table, fields, filters, sort=None):

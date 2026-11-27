@@ -137,6 +137,7 @@ class LocalShares:
 
     def publish(self, board, revision, expiration='7d', *, annotation_mode='view', request_id):
         from .deployment import export_site
+        from .model import live_datasets
         from .versions import Versions
 
         identifier(board)
@@ -162,6 +163,7 @@ class LocalShares:
                     return receipt
             else:
                 document = versions.read(board, revision)
+                require(not live_datasets(document), '实时 SQL 看板请通过运行服务查看', 'LIVE_DATA_REQUIRES_RUNTIME')
                 report = self.service._doctor(document, 'full', reuse=True)
                 require(report['passed'], 'Saved version checks failed.', 'DOCTOR_FAILED')
                 with self.connect() as db:

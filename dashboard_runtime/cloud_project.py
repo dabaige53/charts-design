@@ -9,7 +9,7 @@ import uuid
 
 from .cloud_database import CloudDatabase
 from .cloud_data import CloudData
-from .model import (DashboardError, apply_operations, identifier, json_bytes,
+from .model import (DashboardError, apply_operations, identifier, json_bytes, live_datasets,
                     new_document, require, utcnow, validate, validate_annotations, validate_component_content)
 from .project import DEFAULTS
 from .store import Store
@@ -37,9 +37,11 @@ class CloudProjectStore(Store):
     def _encode(self, doc, previous=None):
         if not self.cos_enabled:
             return doc
+        if live_datasets(doc):
+            return self.assets.save_document(doc)
         from .statistical import statistical_artifacts
         changed = None
-        if previous and previous.get('computed'):
+        if previous and previous.get('computed') and not live_datasets(previous):
             old, new = previous['manifest'], doc['manifest']
             same_inputs = all(old.get(key) == new.get(key) for key in ('metrics', 'datasets', 'filters')) and all(
                 previous['snapshot'].get(key) == doc['snapshot'].get(key) for key in ('datasetRefs', 'componentDataRefs'))
@@ -214,6 +216,8 @@ class CloudProjectStore(Store):
             doc['manifest']['annotations'] = copy.deepcopy(previous_notes)
             if use_current_data:
                 doc['snapshot'] = copy.deepcopy(current['snapshot'])
+                if live_datasets(doc) or live_datasets(current):
+                    validate(doc)
         else:
             require(isinstance(operations, list), 'operations must be an array')
             assert isinstance(operations, list)

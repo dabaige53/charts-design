@@ -37,9 +37,7 @@ class ProjectServices:
             service = self._services.get(project)
             if service is None:
                 key = hashlib.sha256(str(project).encode()).hexdigest()[:24]
-                service = Service(self.root / 'projects' / key, project_root=project)
-                # Source aliases remain operator configured, not supplied by tool callers.
-                service.queries = self.default.queries
+                service = Service(self.root / 'projects' / key, project_root=project, queries=self.default.queries)
                 self._services[project] = service
         return service, request
 

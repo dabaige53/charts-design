@@ -309,12 +309,17 @@ TOOLS = {
     }, ('dashboardId', 'componentId'))),
     'query_inspect': ('Inspect component source/query provenance and local data reference without executing upstream SQL. Returns source, filters and snapshot time; supplied provenance is not certified execution. Use semantic_inspect for metric definitions.', schema({**TARGET, **READING_VERSION}, ('dashboardId', 'componentId'))),
     'semantic_inspect': ('Read the actual component metric definitions, units, aggregation and dataset metadata. Returns metrics and provenance-related presentation; certified=false is not approval. Do not replace unknown business definitions with guessed semantics.', schema({**TARGET, **READING_VERSION}, ('dashboardId', 'componentId'))),
-    'query_execute': ('Execute bounded read-only SQLite SQL through an operator-configured connection alias, then replace the destination dataset snapshot and provenance. The query is read-only but saving changes the dashboard. Returns the updated revision and execution metadata; inferred numeric metrics remain unverified.' + WRITE_FLOW, schema({
+    'query_execute': ('Execute bounded read-only SQL against SQLite, PostgreSQL or DuckDB through an operator-configured alias. Save either a snapshot (default) or a live query definition. Live data is fetched at read time and query rows are not stored. Returns the updated revision and execution metadata.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'datasetId': described(ID, 'Destination dataset ID; an existing ID replaces its saved data and affects all bound components.'),
         'connection': described(STR, 'Operator-configured source alias, not a path or URL. Obtain it from project configuration; do not guess aliases.'),
-        'sql': described(STR, 'Single bounded read-only SQLite query against the configured source; never DDL or writes.'),
-        'parameters': described({'type': ['object', 'array']}, 'Named or positional SQL parameters matching the query; omit when none.'),
+        'sql': described(STR, 'Single read-only SELECT, optionally with CTEs, using the configured engine’s SQL dialect.'),
+        'parameters': described({'type': ['object', 'array']}, 'Bound SQL parameters. Use :name or ? for SQLite, %(name)s or %s for PostgreSQL, and $name or ? for DuckDB. Omit when none.'),
+        'mode': described({'enum': ['snapshot', 'live']}, 'live registers the query for chart, table and filter reads. snapshot stores the rows.'),
+        'fields': described({'type': 'object', 'minProperties': 1, 'additionalProperties': {
+            'type': 'object', 'required': ['type'], 'properties': {
+                'type': {'enum': ['string', 'number', 'date', 'boolean']}, 'label': STR}}},
+            'Live mode only. Field definitions keyed by SQL result column. If omitted, reuse the dataset fields or infer from the first execution.'),
     }, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql'))),
     'dataset_import': ('Import a small explicit JSON row array or CSV text; provide exactly one input. Replaces the destination dataset. Returns the updated revision and semanticChanges; inferred numeric fields create unverified sum metrics, which need business review.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED,
@@ -346,11 +351,11 @@ TOOLS = {
         **TARGET, 'format': described({'enum': ['svg', 'png'], 'default': 'svg'}, 'Output image format; SVG is the default.'),
     }, ('dashboardId', 'componentId'))),
     'runtime_info': ('Read installed backend/UI build identities and project/runtime metadata without chart rows. Optional dashboardId returns the displayed checkpoint revision in project mode, not necessarily the editable draft. Use dashboard_get before edits; build identity does not establish host rendering acceptance.', schema(BOARD)),
-    'dashboard_refresh': ('Reload the latest displayed checkpoint while retaining supplied reader filter values, table state and chart grain; never saves them or reruns source SQL. Returns document. Use dashboard_get for the editable draft and dashboard_view for component calculations.', schema({
+    'dashboard_refresh': ('Reload the latest displayed checkpoint while retaining supplied reader filter values, table state and chart grain. The page reloads visible data through dashboard_view, which executes registered live SQL. Snapshot SQL is provenance only. Returns document.', schema({
         **VIEW, 'filters': described({'type': 'array', 'items': {**FILTER, 'required': ['id', 'values']}},
             'Reader value overrides keyed by existing filter id: only id and values are required. Omitted filters retain saved values and current definitions. A runtime-linkage entry must carry its complete declaration.'),
     }, ('dashboardId',))),
-    'dashboard_view': ('Compute temporary local chart aggregates and table pages from immutable data versions; does not save filters or rerun source SQL. full returns document; patch returns only selected computed components. On REVISION_CONFLICT reload and reconcile. For reading use the preview/checkpoint revision; for draft inspection use dashboard_get revision.', schema({
+    'dashboard_view': ('Compute temporary chart aggregates and table pages from immutable data or fresh live SQL results. Reader filters apply to the result and are not saved. full returns document; patch returns selected computed components. On REVISION_CONFLICT reload and reconcile.', schema({
         **VIEW, **READING_VERSION,
         'responseMode': described({'enum': ['full', 'patch'], 'default': 'full'}, 'patch limits computation and response to componentIds; full returns the document and all computed results.'),
         'componentIds': described({'type': 'array', 'items': ID}, 'patch mode only: omit for all, [] for none, or list visible component IDs.'),
@@ -373,7 +378,7 @@ TOOLS = {
         'table': described(STR, 'Existing table name in that source, supplied by the operator/project.'),
         'fields': described(common['datasetMetaSchema']['properties']['fields'], 'Optional field metadata keyed by source column; preserve known types and labels. Omit for inference.'),
     }, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'table'))),
-    'dataset_export': ('Create a managed CSV of all matching dataset/table rows with supplied filters, search, columns and sort; table grouping follows its presentation. Does not change the dashboard. Deliver the returned local path or remote downloadUrl; rowCount reports the exported scope.', schema({
+    'dataset_export': ('Export matching dataset/table rows as CSV using the supplied filters, search, columns and sort. Live SQL returns base64 content in memory. Static data returns a managed local path or remote downloadUrl. rowCount reports the exported scope.', schema({
         **TARGET, **READING_VERSION, 'datasetId': described(ID, 'Existing dataset ID when componentId is omitted; componentId takes precedence when supplied.'),
         'filters': FILTERS, 'columns': described({'type': 'array', 'items': STR}, 'Ordered dataset field keys to export; omit for default/all configured columns.'),
         'sort': SORT, 'search': SEARCH,

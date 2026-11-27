@@ -218,8 +218,12 @@ def main(argv=None):
             if args.format == 'csv':
                 import shutil
                 exported = service.call('dataset_export', {'dashboardId': args.id, 'datasetId': args.dataset, 'componentId': args.component})['export']
-                shutil.copyfile(exported['path'], path)
-                print(json.dumps({'output': str(path.resolve()), 'revision': doc['revision'], 'format': 'csv', **{k: v for k, v in exported.items() if k != 'path'}}))
+                if 'content' in exported:
+                    import base64
+                    path.write_bytes(base64.b64decode(exported.pop('content')))
+                else:
+                    shutil.copyfile(exported.pop('path'), path)
+                print(json.dumps({'output': str(path.resolve()), 'revision': doc['revision'], 'format': 'csv', **exported}))
                 return 0
             if args.format == 'html':
                 exported = service.call('dashboard_export', {'dashboardId': args.id, 'format': 'html'})['export']

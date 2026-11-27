@@ -123,3 +123,39 @@ it("preserves the source chart when applying linkage to other components", async
   expect(result.current.view.linkageSource).toBe("source");
   expect(result.current.document.computed?.components.source.value).toBe(100);
 });
+
+// @wu-test type=integration | scope=useDashboardRuntime 实时 SQL 刷新 | protects=同版本刷新复用旧值或丢失联动条件及表格页码
+it("reloads live data at the same revision with the active linkage and table state", async () => {
+  const initial = document();
+  initial.manifest.components.source.binding.categoryField = "region";
+  initial.manifest.datasets.sales = { mode: "live", fields: { region: { type: "string" } } };
+  let value = 100;
+  const call = mock(async (name: string, args: Config = {}) => name === "dashboard_refresh"
+    ? { document: initial }
+    : patch(args.componentIds[0], value));
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  act(() => { result.current.activate("total"); result.current.activate("details"); });
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  act(() => result.current.link({
+    id: "runtime-linkage", label: "区域收入", field: "region", op: "in",
+    values: ["华东"], componentIds: ["total", "details"],
+  }, "source"));
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  act(() => result.current.setTable("details", { page: 2, pageSize: 10 }));
+  await waitFor(() => expect(result.current.loading).toEqual([]));
+  call.mockClear();
+  value = 200;
+
+  await act(async () => result.current.reload());
+
+  expect(call.mock.calls[0][0]).toBe("dashboard_refresh");
+  await waitFor(() => expect(result.current.document.computed?.components.total.value).toBe(200));
+  const reads = call.mock.calls.filter(([name]) => name === "dashboard_view");
+  expect(reads).toHaveLength(2);
+  for (const [, args] of reads) {
+    expect(args?.expectedRevision).toBe(initial.revision);
+    expect(args?.filters.at(-1)).toMatchObject({ id: "runtime-linkage", values: ["华东"] });
+    expect(args?.tableStates.details.page).toBe(2);
+  }
+  expect(result.current.view.linkageSource).toBe("source");
+});

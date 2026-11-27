@@ -283,10 +283,8 @@ class WorkspaceProjects:
         with self._lock:
             service = self._services.get(name)
             if service is None:
-                service = Service(self.settings.runtime / 'projects' / name, project_root=self.settings.workspace / name)
-                if self.queries is not None:
-                    # Source aliases remain operator configured, not supplied by callers.
-                    service.queries = self.queries
+                service = Service(self.settings.runtime / 'projects' / name,
+                                  project_root=self.settings.workspace / name, queries=self.queries)
                 service.project_name = name
                 self._services[name] = service
         return service
@@ -512,7 +510,7 @@ class RemoteServer:
                     prefix = self.settings.base_path + '/api/v1/p/' + quote(project) + '/content/' + quote(doc['id']) + '/' + str(doc['revision']) + '/'
                     result[field] = web_document(service.store, doc,
                         lambda object_id, filename: prefix + object_id + '/' + filename,
-                        editable=principal.access == 'edit' and field != 'version')
+                        editable=principal.access == 'edit' and field != 'version', show_sql=True)
         if name == 'runtime_info' and not principal.admin:
             result = {key: result[key] for key in SANITIZED_INFO if key in result} | {'projectRoot': project}
         export = result.get('export')

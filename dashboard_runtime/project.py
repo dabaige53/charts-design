@@ -9,7 +9,7 @@ import uuid
 from .store import Store
 from .local_data import LocalData
 from .file_lock import exclusive_file_lock
-from .model import DashboardError, apply_operations, identifier, json_bytes, require, utcnow, validate_annotations
+from .model import DashboardError, apply_operations, identifier, json_bytes, live_datasets, require, utcnow, validate, validate_annotations
 
 DEFAULTS = {'history': {'keepCheckpoints': 100}, 'loading': {'debounceMs': 150, 'maxConcurrent': 4, 'pageSize': 50}}
 
@@ -231,6 +231,8 @@ class ProjectStore(Store):
                 doc['manifest']['annotations'] = copy.deepcopy(current['manifest']['annotations'])
                 if use_current_data:
                     doc['snapshot'] = copy.deepcopy(current['snapshot'])
+                    if live_datasets(doc) or live_datasets(current):
+                        validate(doc)
             else:
                 doc = apply_operations(current, operations)
                 if not any(op['op'] == 'set_annotations' for op in cast(list[dict], operations)):

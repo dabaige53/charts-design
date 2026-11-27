@@ -13,6 +13,7 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 | `cloud_assets.py`、`cos_view.py`、`cos_migrate.py` | COS 内容包与引用登记、统一网页描述、显式项目迁移 |
 | `remote_client.py`、`bin/remote-project.py`、`bin/transfer-project.py` | 远程完整响应读取、上传前检查、分块续传与首次项目迁移 |
 | `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
+| `query.py` | SQLite、PostgreSQL 和 DuckDB 来源连接、只读查询和请求内数据 |
 | `runtime-core/`、`columnar.py` | Rust 只读 SQLite→Parquet 导出、不可变编码缓存及与现有 MCP 的桥接 |
 | `file_lock.py` | 镜像同步与导出缓存的跨进程文件锁，不承载业务版本状态 |
 | `server.py`、`http_server.py` | 自有服务器创作、分享服务请求、本机网页与批注鉴权 |
@@ -125,28 +126,39 @@ bun bin/python-runtime.js -m dashboard_runtime --root ./boards call dataset_impo
 
 大型本地数据更新使用[独立上传入口](../operations/self-hosted-server.md#更新已有看板的数据)，取得验证完成的引用后再更新页面；首次迁移使用同页的清单迁移入口。修改大型组件前可[下载完整配置](../operations/mcp-transport-diagnostics.md#完整配置下载)，复用共用客户端的响应分块处理。
 
-SQL 执行只连接运维配置的 SQLite 来源别名。别名配置为：
+服务从运维管理的 JSON 文件读取 SQLite、PostgreSQL 和 DuckDB 来源别名。
 
 ```json
-{"analytics":{"engine":"sqlite","path":"/absolute/path/analytics.sqlite3"}}
+{
+  "local-sales": {"engine": "sqlite", "path": "/absolute/path/sales.sqlite3"},
+  "warehouse": {"engine": "postgresql", "dsnEnv": "SALES_POSTGRES_DSN"},
+  "local-analytics": {"engine": "duckdb", "path": "/absolute/path/sales.duckdb"}
+}
 ```
 
+PostgreSQL 从 `dsnEnv` 指定的服务进程环境变量读取连接字符串。数据库账号应只拥有看板所需的数据读取权限。SQLite 和 DuckDB 通过数据库文件建立只读连接。外部进程更新 DuckDB 文件时，请在写入连接关闭后刷新看板。
+
 ```sh
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards --sources ./sources.json call query_execute --json-file query.json
+bun bin/python-runtime.js -m dashboard_runtime --project-root ./project --sources ./sources.json call query_execute --json-file query.json
 ```
 
 ```json
 {
   "dashboardId":"demo","expectedRevision":1,"datasetId":"sql-result",
-  "connection":"analytics",
-  "sql":"SELECT region, SUM(revenue) AS revenue FROM sales WHERE month >= :start GROUP BY region",
+  "connection":"warehouse",
+  "mode":"live",
+  "sql":"SELECT region, month, revenue FROM sales WHERE month >= %(start)s",
   "parameters":{"start":"2026-01"}
 }
 ```
 
-查询连接采用只读模式、授权器和函数限制；不接受扩展加载、ATTACH、PRAGMA、DDL 或 DML。时间与行数超限明确失败，不静默截断。查询成功时将 SQL、参数、别名、引擎、耗时、时间与行数和快照一起保存；调用方提供的来源只标记为 supplied，不冒充 runtime-executed。
+查询按源库的 SQL 方言执行，每次最多返回 10,000 行。查询超限会报错。参数通过 `parameters` 传入。PostgreSQL 使用 `%(name)s` 或 `%s`，SQLite 使用 `:name` 或 `?`，DuckDB 使用 `$name` 或 `?`。PostgreSQL 和 DuckDB 的日期、时间和 UUID 转换为文本，`DECIMAL` 和 `NUMERIC` 按看板数值格式处理。数组和其他复合类型需要在 SQL 中转换为可显示的标量。
 
-`query_inspect` 读取来源而不执行 SQL；`semantic_inspect` 使用实际保存的业务定义和聚合规则。`reviewed` 是说明状态，不是企业审批。完整本地数据导入、不可变版本与分页计算由项目数据流程负责。
+默认 `mode: "snapshot"` 同时保存查询来源与数据版本。选择 `mode: "live"` 时，只保存查询定义、字段定义和登记时的执行信息。已有数据集可以通过同一个 ID 切换模式，其历史版本仍保留原引用。
+
+首次登记时可用 `fields` 明确声明字段类型，适用于空结果、日期、布尔值和首批全部为空的列。已有数据集默认沿用原字段定义。保存前用 `dashboard_view` 检查组件绑定，再用 `dashboard_submit` 保存当前草稿。启动页面服务时也要加载同一来源配置，使用 `--sources`，自托管服务器也可用 `CHARTS_SOURCES`。
+
+图表的「更多图表操作 → 查看 SQL」显示所绑定来源的 SQL 文本。`query_inspect` 同样读取来源定义。`semantic_inspect` 读取已保存的业务定义和聚合规则。
 
 ## 导出、部署与验证
 

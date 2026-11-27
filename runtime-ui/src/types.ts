@@ -57,6 +57,7 @@ export type Document = {
     layout: Record<string, Position[]>;
     metrics: Config;
     datasets: Config;
+    sources?: Config;
     viewMode?: string;
     report?: Config;
   };
@@ -80,3 +81,6 @@ export type TableState = {
   columns?: string[];
   visible?: string[];
 };
+export function hasLiveData(document: Document): boolean {
+  return Object.values(document.manifest.datasets).some((dataset) => dataset.mode === "live");
+}

@@ -1,10 +1,52 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, mock } from "bun:test";
 import { DashboardApp } from "./dashboard";
+import { ComponentView } from "./component-view";
 import { TooltipProvider } from "./components/ui/tooltip";
 import type { Config, Document } from "./types";
 
 afterEach(cleanup);
+
+// @wu-test type=integration | scope=图表操作菜单 | protects=查看 SQL 显示错误数据集的语句或把参数值当作 SQL 展示
+it("shows the SQL bound to the chart from its action menu", async () => {
+  const initial: Document = {
+    id: "sql", revision: 1,
+    manifest: {
+      title: "收入",
+      components: { region: { kind: "legacy", family: "chart", title: "区域收入",
+        datasetId: "sales", config: { code: "c01", data: {} } } },
+      filters: [], layout: {}, metrics: {},
+      datasets: { sales: { mode: "live", sourceId: "selected" } },
+      sources: {
+        unrelated: { query: { sql: "SELECT * FROM other" } },
+        selected: { query: { sql: "SELECT * FROM sales WHERE region = :region", parameters: { region: "华东" } } },
+      },
+    },
+    snapshot: { datasets: {} },
+  };
+  const descriptors = ["ResizeObserver", "NodeFilter", "HTMLInputElement"]
+    .map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
+  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class {
+    observe() {} disconnect() {}
+  } });
+  for (const key of ["NodeFilter", "HTMLInputElement"] as const)
+    Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
+  try {
+    render(<TooltipProvider><ComponentView document={initial} id="region" loading /></TooltipProvider>);
+    fireEvent.keyDown(screen.getByRole("button", { name: "更多图表操作" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "查看 SQL" }));
+    await screen.findByRole("dialog", { name: "查看 SQL" });
+    expect(screen.getByText("SELECT * FROM sales WHERE region = :region")).toBeTruthy();
+    expect(screen.queryByText("SELECT * FROM other")).toBeNull();
+    expect(screen.queryByText("华东")).toBeNull();
+  } finally {
+    cleanup();
+    for (const [key, descriptor] of descriptors) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
+});
 
 // @wu-test type=integration | scope=独立论文报告页 | protects=报告页携带看板筛选、导航、编辑和批注入口
 it("renders an academic report without dashboard controls", () => {

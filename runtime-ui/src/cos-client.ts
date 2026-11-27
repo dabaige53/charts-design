@@ -1,6 +1,7 @@
 import { createStaticClient } from "../../dashboard_runtime/web/static-client.mjs";
 import { createStaticQuery } from "../../dashboard_runtime/web/static-query.mjs";
 import type { Config, Document, ToolCall } from "./types";
+import { hasLiveData } from "./types";
 
 export function createVersionReader(doc: Document, workerUrl: string, headers: Record<string, string> = {}) {
   const worker = doc.staticFiles
@@ -12,7 +13,7 @@ export function createVersionReader(doc: Document, workerUrl: string, headers: R
     if (args.expectedRevision != null && args.expectedRevision !== doc.revision)
       throw Error("版本已切换，请重新读取");
     if (name === "dashboard_list") return { dashboards: [{ id: doc.id, title: doc.manifest.title }] };
-    if (name === "dashboard_get" || name === "dashboard_preview") return { document: doc };
+    if (name === "dashboard_get" || name === "dashboard_preview" || name === "dashboard_refresh") return { document: doc };
     if (name === "runtime_info") return { dashboardRevision: doc.revision };
     if (name === "dashboard_view") return query(args);
     if (name === "dashboard_filter_options") return query({ ...args, filters: [] });
@@ -51,13 +52,17 @@ export function createCosTools(remote: ToolCall, workerUrl: string, headers: () 
     if (reader && localTools.has(name)) return reader.call(name, args);
     const result = await remote(name, args);
     const doc = result.document as Document | undefined;
-    if (doc?.storageFormat === "cos-v1") {
+    if (doc?.storageFormat === "cos-v1" && !hasLiveData(doc)) {
       const key = JSON.stringify([headers(), doc.versionKey, doc.manifest, doc.staticFiles]);
       if (keys.get(doc.id) !== key) {
         readers.get(doc.id)?.destroy();
         readers.set(doc.id, createVersionReader(doc, workerUrl, headers()));
         keys.set(doc.id, key);
       }
+    } else if (doc) {
+      readers.get(doc.id)?.destroy();
+      readers.delete(doc.id);
+      keys.delete(doc.id);
     }
     return result;
   };

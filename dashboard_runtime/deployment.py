@@ -98,11 +98,13 @@ def _static_filter_options(data, manifest, refs):
 
 
 def export_site(store, board, output_root=None, document=None, data_format='auto', *, single_parquet=False):
+    from .model import live_datasets
     require_preview()
     from .columnar import export_format, write_parquet
     data_format, binary = export_format(data_format)
     doc = store.compact(document if document is not None else
                         store.readable(board) if getattr(store, 'project_root', None) else store.get(board, hydrate=False))
+    require(not live_datasets(doc), '实时 SQL 看板请通过运行服务查看', 'LIVE_DATA_REQUIRES_RUNTIME')
     doc = copy.deepcopy(doc)
     from .statistical import statistical_artifacts
     doc['statisticalArtifacts'] = {key: {field: value for field, value in artifact.items() if field != 'provenance'}

@@ -3,11 +3,25 @@ from __future__ import annotations
 
 import copy
 
-from .model import DashboardError, require
+from .model import DashboardError, live_datasets, require
 
 
-def web_document(store, document, url_for, editable=False, *, dataset_asset=None):
+def web_document(store, document, url_for, editable=False, *, dataset_asset=None, show_sql=False):
     doc = copy.deepcopy(document)
+    if not editable:
+        sources = doc['manifest'].pop('sources', {})
+        if show_sql:
+            doc['manifest']['sources'] = {
+                key: {'query': {'sql': source['query']['sql']}}
+                for key, source in sources.items() if source.get('kind') == 'query'
+            }
+        for key in ('queries', 'annotations'):
+            doc['manifest'].pop(key, None)
+        for artifact in doc.get('statisticalArtifacts', {}).values():
+            artifact.pop('provenance', None)
+    doc['progressive'] = True
+    if live_datasets(doc):
+        return doc
     doc['staticFiles'], doc['staticOptions'], doc['staticPartitionIndexes'] = {}, {}, {}
     pages = doc.get('computed', {}).get('filterPages', {})
     doc['staticFilterOptions'] = {
@@ -42,13 +56,7 @@ def web_document(store, document, url_for, editable=False, *, dataset_asset=None
             doc['staticPartitionIndexes'][key] = {'field': index['field'],
                 'entries': [{'value': entry['value'], 'files': [url_for(obj['id'], name) for name in entry['files']]}
                             for entry in index['entries']]}
-    if not editable:
-        for key in ('sources', 'queries', 'annotations'):
-            doc['manifest'].pop(key, None)
-        for artifact in doc.get('statisticalArtifacts', {}).values():
-            artifact.pop('provenance', None)
     doc['snapshot']['datasets'] = {}
-    doc['progressive'] = True
     return doc
 
 

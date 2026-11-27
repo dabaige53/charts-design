@@ -6,7 +6,7 @@ import copy
 import threading
 from collections import OrderedDict
 from concurrent.futures import Future
-from contextlib import contextmanager, closing
+from contextlib import contextmanager, closing, nullcontext
 import hashlib
 import json
 import math
@@ -102,9 +102,14 @@ class LocalData:
     """Versions are immutable; result bounds raise errors instead of dropping rows."""
 
     def __init__(self, root):
-        self.root = Path(root)
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.path = self.root / 'data.sqlite3'
+        self.root = Path(root) if root is not None else None
+        if self.root is not None:
+            self.root.mkdir(parents=True, exist_ok=True)
+        self.path = self.root / 'data.sqlite3' if self.root is not None else None
+        self.partition_fields: list[str] = []
+        self._memory = sqlite3.connect(':memory:') if root is None else None
+        if self._memory is not None:
+            self._memory.execute('PRAGMA temp_store=MEMORY')
         self.cache = QueryCache()
         self.index_lock = threading.RLock()
         self.indexed = set()
@@ -115,7 +120,9 @@ class LocalData:
 
     @contextmanager
     def _connect(self):
-        db = sqlite3.connect(self.path, timeout=30, uri=True)
+        path = self.path
+        db = sqlite3.connect(path, timeout=30, uri=True) if path is not None else self._memory
+        assert db is not None
         db.create_function('contains_text', 3, _contains, deterministic=True)
         db.create_function('grain', 2, self._grain, deterministic=True)
         db.create_function('search_text', 3, _search_text, deterministic=True)
@@ -124,7 +131,12 @@ class LocalData:
             with db:
                 yield db
         finally:
-            db.close()
+            if self._memory is None:
+                db.close()
+
+    def close(self):
+        if self._memory is not None:
+            self._memory.close()
 
     @staticmethod
     def _grain(raw, grain):
@@ -518,7 +530,7 @@ class LocalData:
         key = _json(['options', sorted({r['version'] for r in refs}), field, search.lower(), offset, limit])
         return self.cache.get(key, lambda: self._option_page(refs, field, search, offset, limit))[0]
 
-    def _option_page(self, refs, field, search='', offset=0, limit=100):
+    def _option_page(self, refs, field, search='', offset=0, limit=100, extra=None):
         """Page the complete option universe, including across consumer datasets."""
         self._validate_option_page(search, offset, limit)
         with self._connect() as db:
@@ -532,6 +544,12 @@ class LocalData:
                 column = self._column(metadata['fields'], field)
                 kind = metadata['fields'][field]['type']
                 selects.append(f'SELECT {column} AS value FROM {table}')
+            if extra is not None:
+                kind, values = extra
+                db.execute('PRAGMA temp_store=MEMORY')
+                db.execute('CREATE TEMP TABLE live_options (value)')
+                db.executemany('INSERT INTO live_options VALUES (?)', ((v,) for v in values))
+                selects.append('SELECT value FROM live_options')
             if not selects:
                 return {'values': [], 'totalValues': 0, 'offset': offset, 'hasMore': False}
             return self._page_option_values(db, '(' + ' UNION ALL '.join(selects) + ')', kind, search, offset, limit)
@@ -564,9 +582,11 @@ class LocalData:
 
     def export_csv(self, ref, output_path, filters=None, columns=None, sort=None, search='', group_by=None, sum_fields=None, calculated=None):
         started = time.perf_counter()
-        destination = Path(output_path).expanduser().resolve()
-        if destination == self.path.resolve():
+        destination = Path(output_path).expanduser().resolve() if output_path is not None else None
+        if destination is not None and self.path is not None and destination == self.path.resolve():
             raise ValueError('CSV output cannot overwrite the local data database')
+        from io import StringIO
+        buffer = StringIO(newline='')
         count = 0
         with self._connect() as db:
             table, metadata = self._version(db, ref)
@@ -579,7 +599,7 @@ class LocalData:
                 if set(keys) - set(group_by + (sum_fields or [])):
                     raise ValueError('Export columns must be grouped or summed')
             cursor = db.execute(f'SELECT {selected} FROM {table}' + where + order, params)
-            with destination.open('w', encoding='utf-8-sig', newline='') as output:
+            with (destination.open('w', encoding='utf-8-sig', newline='') if destination else nullcontext(buffer)) as output:
                 writer = csv.writer(output)
                 def safe(value):
                     if type(value) is bool:
@@ -592,4 +612,9 @@ class LocalData:
                     decoded = self._decode(keys, row, fields)
                     writer.writerow([safe(decoded.get(k)) for k in keys])
                     count += 1
-        return {'path': str(destination), 'rowCount': count, 'bytes': destination.stat().st_size, 'durationMs': (time.perf_counter()-started)*1000}
+        result = {'rowCount': count, 'durationMs': (time.perf_counter()-started)*1000}
+        if destination is None:
+            import base64
+            payload = buffer.getvalue().encode('utf-8-sig')
+            return {**result, 'bytes': len(payload), 'content': base64.b64encode(payload).decode('ascii')}
+        return {**result, 'path': str(destination), 'bytes': destination.stat().st_size}

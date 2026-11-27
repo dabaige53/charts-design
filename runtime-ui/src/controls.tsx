@@ -39,6 +39,7 @@ import {
   Search,
   BarChart3,
   MoreHorizontal,
+  CodeXml,
 } from "lucide-react";
 import {
   Button,
@@ -652,6 +653,7 @@ export function ChartToolbar({
   onExpand,
   expanded = false,
   onInfo,
+  onSql,
 }: {
   chartType?: string;
   onChartType?: (value: string) => void;
@@ -665,6 +667,7 @@ export function ChartToolbar({
   onExpand?: () => void;
   expanded?: boolean;
   onInfo?: () => void;
+  onSql?: () => void;
 }) {
   return (
     <div
@@ -725,6 +728,7 @@ export function ChartToolbar({
           <DropdownMenuItem disabled={!onExport} onSelect={onExport}><FileDown />导出 CSV</DropdownMenuItem>
           <DropdownMenuItem disabled={!onImage} onSelect={onImage}><ImageDown />下载图片</DropdownMenuItem>
           <DropdownMenuItem disabled={!onCopy} onSelect={onCopy}><Copy />复制图表</DropdownMenuItem>
+          {onSql && <DropdownMenuItem onSelect={onSql}><CodeXml />查看 SQL</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

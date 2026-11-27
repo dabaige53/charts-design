@@ -12,6 +12,7 @@
 
 1. **数据资产、指标口径与声明合同**：
    - 业务数据资产：支持 SQLite 事务状态、JSON 镜像与 CSV 导入，项目根目录维护持久资产（`charts-project.json`、`dashboards/`、`data/`）。
+   - 看板可混用静态数据和 SQLite、PostgreSQL、DuckDB 实时查询。通过「刷新报表」重新读取源库，在图表菜单内查看来源 SQL。[配置实时 SQL](docs/implementation/dashboard-runtime.md#数据导入与查询来源)
    - 指标口径定义规范：见 [指标定义规范](skills/executive-charts/references/metric-definitions.md) 与 [数据格式标准](skills/executive-charts/references/data_formatting_standards.md)。
    - 图表与指标声明：保留 40 种图表规范（`skills/executive-charts/references/chart_catalog.json`）、16 种高管指标卡定义（[指标卡选型](skills/executive-charts/references/kpi-cards.md)）与 7 种构图模式（[布局模板](skills/executive-charts/references/layout_templates.md)）。
 

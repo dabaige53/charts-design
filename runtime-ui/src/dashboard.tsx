@@ -39,7 +39,7 @@ import {
   RangeFilter,
   type ChoiceLoader,
 } from "./controls";
-import { useDashboardRuntime, layoutOperations } from "./runtime";
+import { useDashboardRuntime, layoutOperations, linkageConsumers } from "./runtime";
 import { FilterParameters } from "./filter-parameters";
 import { browserDownload, deliverExport, type Download } from "./host";
 import { RecoveryAlert } from "./recovery-alert";
@@ -48,6 +48,7 @@ import { createAnnotationClient } from "./annotation-client";
 import { VersionCenter } from "./version-center";
 import { useVisibleVersionCheck } from "./resource-refresh";
 import type { AnnotationAccess, Config, Document, Filter, Position, ToolCall } from "./types";
+import { hasLiveData } from "./types";
 function VisibleComponent({
   id,
   onVisible,
@@ -119,6 +120,8 @@ export function DashboardApp({
 }) {
   const runtime = useDashboardRuntime(initial, call),
     doc = runtime.document;
+  const liveData = hasLiveData(doc);
+  const filterCall: ToolCall = useCallback((name, args) => call(name, args), [call, runtime.dataEpoch]);
   const analytical = doc.manifest.viewMode === "report";
   const fullscreenElement = useFullscreenElement();
   const isPageFullscreen = pageFullscreen || fullscreenElement === document.documentElement;
@@ -230,23 +233,14 @@ export function DashboardApp({
     const c = doc.manifest.components[id],
       binding = c.binding;
     if (!binding?.categoryField || !binding.datasetId) return;
-    const value =
+    const raw =
       c.config?.code === "r02" ? (point.value?.[3] ?? point.name) : point.name;
-    if (value == null) return;
+    if (raw == null) return;
+    const type = doc.manifest.datasets[binding.datasetId]?.fields[binding.categoryField]?.type;
+    const value = type === "number" ? Number(raw) : type === "boolean" ? String(raw) === "true" : raw;
+    if (type === "number" && !Number.isFinite(value)) return;
     const old = runtime.view.filters.find((f) => f.id === "runtime-linkage");
-    const consumers = Object.entries(doc.manifest.components)
-      .filter(
-        ([key, target]) =>
-          key !== id &&
-          (target.datasetId === binding.datasetId ||
-            target.binding?.datasetId === binding.datasetId ||
-            (c.linkGroup &&
-              target.linkGroup === c.linkGroup &&
-              doc.manifest.datasets[
-                target.datasetId || target.binding?.datasetId
-              ]?.fields?.[binding.categoryField])),
-      )
-      .map(([key]) => key);
+    const consumers = linkageConsumers(doc, id, binding.categoryField);
     if (!consumers.length) return;
     runtime.link({
       id: "runtime-linkage",
@@ -429,8 +423,8 @@ export function DashboardApp({
           {(
             <IconAction
               label="导出 HTML"
-              disabled={staticMode}
-              unavailable="请在编辑预览页导出 HTML"
+              disabled={staticMode || liveData}
+              unavailable={liveData ? "实时 SQL 看板通过服务页面查看" : "请在编辑预览页导出 HTML"}
               onClick={() =>
                 guard(async () => {
                   const result = await call("dashboard_export", {
@@ -524,7 +518,7 @@ export function DashboardApp({
           key={doc.id}
           document={doc}
           filters={doc.manifest.viewMode === "filtered-report" ? runtime.view.filters.filter((f) => f.scope !== "table") : runtime.view.filters}
-          call={call}
+          call={filterCall}
           onChange={runtime.setFilter}
           onApply={runtime.setFilters}
           onClear={doc.manifest.viewMode === "filtered-report" ? () => runtime.view.filters.filter((f) => f.scope !== "table").forEach((f) => runtime.setFilter(f.id, [])) : runtime.clear}
@@ -533,7 +527,7 @@ export function DashboardApp({
         {doc.manifest.viewMode === "filtered-report" ? (
           <ReportView document={doc} component={component} tableFilters={(id) => {
             const filters = runtime.view.filters.filter((f) => f.scope === "table" && f.componentIds[0] === id);
-            return <FilterBar key={`${doc.id}:${id}`} document={doc} filters={filters} call={call} onChange={runtime.setFilter} onApply={runtime.setFilters} onClear={() => filters.forEach((f) => runtime.setFilter(f.id, []))} />;
+            return <FilterBar key={`${doc.id}:${id}`} document={doc} filters={filters} call={filterCall} onChange={runtime.setFilter} onApply={runtime.setFilters} onClear={() => filters.forEach((f) => runtime.setFilter(f.id, []))} />;
           }} />
         ) : (
           <DashboardGrid

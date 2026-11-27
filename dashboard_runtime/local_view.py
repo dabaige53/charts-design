@@ -4,11 +4,13 @@ from __future__ import annotations
 import copy
 import json
 import time
+from contextlib import closing
 from decimal import Decimal, ROUND_HALF_UP
 
 from .model import MAX_BYTES, apply_operations, json_bytes, require
 from .bindings import KPI_NUMERIC_TARGETS
 from .local_data import QueryCache, semantic_filters
+from .query import LiveQueryRequest
 
 
 def _key(value):
@@ -30,8 +32,9 @@ def formatted(value, metric, signed=False):
 
 
 class LocalView:
-    def __init__(self, data):
+    def __init__(self, data, queries=None):
         self.data = data
+        self.queries = queries
         self.query_cache = QueryCache()
 
     def aggregate(self, ref, metrics, filters, groups=None, grain=None):
@@ -57,7 +60,12 @@ class LocalView:
         # Applying filters already creates an isolated document; do not copy it twice.
         doc = (apply_operations(document, [{'op': 'set_filters', 'value': filters}])
                if filters is not None else copy.deepcopy(document))
-        return self._prepare(doc, table_states, granularities, component_ids, include_filter_options, started=started)
+        with self.live_request(doc) as live:
+            return self._prepare(doc, table_states, granularities, component_ids,
+                                 include_filter_options, started=started, live=live)
+
+    def live_request(self, doc):
+        return closing(LiveQueryRequest(self.queries, doc['manifest']))
 
     def component_checker(self, document):
         """Share immutable definitions and their encoded size for one diagnostic run."""
@@ -76,13 +84,14 @@ class LocalView:
             # Calculation only writes the envelope/snapshot and fresh results.
             # Definitions remain read-only, including when a component fails.
             doc = {**document, 'snapshot': {**document['snapshot']}}
-            self._prepare(doc, component_ids=[component_id], include_filter_options=False,
-                          response_size=response_size)
+            with self.live_request(doc) as live:
+                self._prepare(doc, component_ids=[component_id], include_filter_options=False,
+                              response_size=response_size, live=live)
 
         return check
 
     def _prepare(self, doc, table_states=None, granularities=None, component_ids=None,
-                 include_filter_options=True, response_size=None, started=None):
+                 include_filter_options=True, response_size=None, started=None, *, live):
         started = time.perf_counter() if started is None else started
         m, s = doc['manifest'], doc['snapshot']
         require(not s['datasets'], 'Local preview requires versioned datasets')
@@ -100,6 +109,7 @@ class LocalView:
                     if c.get('datasetId') == ds and (c.get('family') == 'table' or c.get('kind') == 'table'):
                         declared.update(k for k, v in ref['fields'].items() if v['type'] == 'number')
                 self.data.prepare_indexes(ref, declared)
+        live_view = None
         for key in selected:
             c = m['components'][key]
             family = c.get('family', 'chart') if c['kind'] == 'legacy' else c['kind']
@@ -109,6 +119,12 @@ class LocalView:
             binding = c.get('binding')
             ds = c.get('datasetId')
             ref = refs.get(ds) if ds else s.get('componentDataRefs', {}).get(key)
+            view = self
+            if m['datasets'].get(ds, {}).get('mode') == 'live':
+                ref = live.reference(ds)
+                if live_view is None:
+                    live_view = LocalView(live.data)
+                view = live_view
             active = [f for f in m['filters'] if key in f['componentIds'] and f['values']]
             if ref is None:
                 computed['components'][key] = raw
@@ -124,12 +140,12 @@ class LocalView:
                 sort = [{'field': state['sortCol'], 'direction': state.get('sortDir', 'asc')}] if state.get('sortCol') else []
                 search = state.get('keyword', '')
                 require(isinstance(search, str) and len(search) <= 1000, 'Table search must contain at most 1000 characters')
-                request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', []), raw.get('calculatedColumns')) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
+                request = (view.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', []), raw.get('calculatedColumns')) if raw.get('groupBy') else view.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
                 total = request['totalRows']
                 last_page = max(1, (total+size-1)//size)
                 if page > last_page:
                     page = last_page
-                    request = (self.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', []), raw.get('calculatedColumns')) if raw.get('groupBy') else self.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
+                    request = (view.data.grouped_rows(ref, active, fields, sort, (page-1)*size, size, search, raw['groupBy'], raw.get('sumFields', []), raw.get('calculatedColumns')) if raw.get('groupBy') else view.data.rows(ref, active, columns=fields, sort=sort, offset=(page-1)*size, limit=size, search=search))
                 for row in request['rows']:
                     for target, spec in raw.get('calculatedColumns', {}).items():
                         value, unit = row.get(target), row.get(spec['unitField'])
@@ -140,13 +156,13 @@ class LocalView:
                 continue
             if binding and 'encoding' in raw:
                 from .encoding import resolve_encoding
-                raw['data'] = {'records': resolve_encoding(self, ref, m, c, active)}
+                raw['data'] = {'records': resolve_encoding(view, ref, m, c, active)}
                 computed['components'][key] = raw
                 continue
             mids = binding.get('measures', {}) if binding else {mid: mid for mid in c.get('measures', [])}
             definitions = {mid: m['metrics'][mid] for mid in dict.fromkeys(mids.values())}
             if family == 'kpi':
-                result, hit = self.aggregate(ref, definitions, active)
+                result, hit = view.aggregate(ref, definitions, active)
                 computed['cacheHits'] += int(hit)
                 values = result[0]
                 if binding:
@@ -179,7 +195,7 @@ class LocalView:
                 time_field = binding.get('timeField') if binding else raw.get('timeField')
                 if raw.get('type') in ('mc03', 'mc12') and time_field:
                     mid = mids.get('value') if binding else c['measures'][0]
-                    spark, hit = self.aggregate(ref, {mid: definitions[mid]}, active, [time_field])
+                    spark, hit = view.aggregate(ref, {mid: definitions[mid]}, active, [time_field])
                     computed['cacheHits'] += int(hit)
                     spark.sort(key=lambda row: str(row[time_field]))
                     raw['sparkMonths'] = [r[time_field] for r in spark]
@@ -192,7 +208,7 @@ class LocalView:
                 grain = granularities.get(key, raw.get('defaultGranularity', 'month')) if binding.get('timeGrain') else None
                 if grain:
                     raw['defaultGranularity'] = grain
-                grouped, hit = self.aggregate(ref, definitions, active, [category], grain)
+                grouped, hit = view.aggregate(ref, definitions, active, [category], grain)
                 computed['cacheHits'] += int(hit)
                 if grain:
                     grouped.sort(key=lambda row: str(row[category]))
@@ -222,13 +238,13 @@ class LocalView:
                 computed['components'][key] = raw
             else:
                 groups = [c['x']] + ([c['series']] if c.get('series') else [])
-                grouped, hit = self.aggregate(ref, definitions, active, groups)
+                grouped, hit = view.aggregate(ref, definitions, active, groups)
                 computed['cacheHits'] += int(hit)
                 computed['grouped'][key] = [{'x': r[c['x']], 'group': r.get(c.get('series')), 'values': {mid: r[mid] for mid in definitions}} for r in grouped]
         for f in m['filters'] if include_filter_options else []:
             if f['op'] != 'in':
                 continue
-            options = self.filter_options(doc, f['id'])
+            options = self._filter_options(doc, f['id'], live)
             computed['filterOptions'][f['id']] = options['values']
             computed['filterPages'][f['id']] = options
         s['localMode'] = True
@@ -242,10 +258,24 @@ class LocalView:
         return doc
 
     def filter_options(self, document, filter_id, search='', offset=0, limit=100):
+        with self.live_request(document) as live:
+            return self._filter_options(document, filter_id, live, search, offset, limit)
+
+    def _filter_options(self, document, filter_id, live, search='', offset=0, limit=100):
         m = document['manifest']
         declared = next((f for f in m['filters'] if f['id'] == filter_id), None)
         require(declared is not None and declared['op'] == 'in', 'Unknown selection filter')
         assert declared is not None
         refs = document['snapshot'].get('datasetRefs', {})
         consumers = [refs[m['components'][key]['datasetId']] for key in declared['componentIds'] if m['components'][key].get('datasetId') in refs]
+        live_ids = dict.fromkeys(m['components'][key]['datasetId'] for key in declared['componentIds']
+                                if m['datasets'][m['components'][key]['datasetId']].get('mode') == 'live')
+        if live_ids:
+            field = declared['field']
+            kind = m['datasets'][next(iter(live_ids))]['fields'][field]['type']
+            values = set()
+            for dataset_id in live_ids:
+                ref = live.reference(dataset_id)
+                values.update(live.data.distinct(ref, field))
+            return self.data._option_page(consumers, field, search, offset, limit, (kind, values))
         return self.data.option_page(consumers, declared['field'], search, offset, limit)

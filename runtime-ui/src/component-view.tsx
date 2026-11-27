@@ -3,7 +3,7 @@ import type { ECharts } from "echarts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
-import { GripVertical } from "lucide-react";
+import { CodeXml, GripVertical } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -172,7 +172,11 @@ export function ComponentView({
 }) {
   const c = doc.manifest.components[id],
     family = c.family || c.kind;
+  const dataset = doc.manifest.datasets[c.datasetId || c.binding?.datasetId];
+  const source = doc.manifest.sources?.[dataset?.sourceId || c.sourceId];
+  const sql = source?.query?.sql;
   const [table, setTable] = useState(false),
+    [sqlOpen, setSqlOpen] = useState(false),
     [details, setDetails] = useState<Config | null>(null),
     [detailError, setDetailError] = useState(""),
     [detailOpen, setDetailOpen] = useState(false),
@@ -283,6 +287,7 @@ export function ComponentView({
             )}
             <CardAction className="component-actions screen-only flex min-w-0 flex-wrap items-center gap-2">
               {family === "table" && <div ref={setTableToolbarTarget} />}
+              {family === "statistical" && <IconAction label="查看 SQL" onClick={() => setSqlOpen(true)}><CodeXml /></IconAction>}
               {family === "chart" ? (
                 <ChartToolbar
                   chartType={!custom && editing && onChartType && ["c01", "c02"].includes(config.code) ? config.code : undefined}
@@ -322,6 +327,7 @@ export function ComponentView({
                   expanded={expanded}
                   onExpand={() => setExpanded((value) => !value)}
                   onInfo={() => void inspect()}
+                  onSql={() => setSqlOpen(true)}
                 />
               ) : (
                 <IconAction
@@ -423,6 +429,19 @@ export function ComponentView({
           </DialogContent>
         </Dialog>
   );
+  const sqlDialog = (
+    <Dialog open={sqlOpen} onOpenChange={setSqlOpen}>
+      <DialogContent className="max-h-[85vh] overflow-auto sm:max-w-[720px]">
+        <DialogHeader>
+          <DialogTitle>查看 SQL</DialogTitle>
+          <DialogDescription>{c.title}</DialogDescription>
+        </DialogHeader>
+        {typeof sql === "string" && sql.trim()
+          ? <pre className="overflow-x-auto whitespace-pre-wrap break-words bg-muted p-3 text-sm"><code>{sql}</code></pre>
+          : <p className="text-sm text-muted-foreground">此图表没有可查看的 SQL。</p>}
+      </DialogContent>
+    </Dialog>
+  );
   return (
     <ComponentBoundary
       title={c.title}
@@ -440,9 +459,11 @@ export function ComponentView({
             <DialogDescription className="sr-only">查看放大的当前图表，按 Esc 或点击还原图表返回。</DialogDescription>
             {card}
             {detailsDialog}
+            {sqlDialog}
           </DialogContent>
         </Dialog>
         {!expanded && detailsDialog}
+        {!expanded && sqlDialog}
       </div>
     </ComponentBoundary>
   );

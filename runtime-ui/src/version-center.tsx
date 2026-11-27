@@ -8,6 +8,7 @@ import type { Config, Document, ToolCall } from "./types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./components/ui/dialog";
 import { DashboardApp } from "./dashboard";
 import { createVersionReader } from "./cos-client";
+import { hasLiveData } from "./types";
 
 export function VersionCenter({ open, onOpenChange, document, call, onRestore, onSaved, publicationApiBase, requestHeaders, browserWorkspaceUrl, onOpenBrowser, shareScope }: {
   open: boolean; onOpenChange: (open: boolean) => void; document: Document;
@@ -375,7 +376,7 @@ function HistoryPreview({ document, remote }: { document: Document; remote: Tool
       token ? { Authorization: "Bearer " + token } : {});
     const operations: Record<string, string> = { dashboard_view: "view", dashboard_filter_options: "options",
       component_data: "details", semantic_inspect: "semantic", dataset_export: "export" };
-    const value = document.storageFormat === "cos-v1" ? browser : {
+    const value = document.storageFormat === "cos-v1" && !hasLiveData(document) ? browser : {
       destroy: browser.destroy,
       call: (name: string, request: Config = {}) => operations[name]
         ? remote("dashboard_version_query", { dashboardId: document.id, revision: document.revision, operation: operations[name], request })

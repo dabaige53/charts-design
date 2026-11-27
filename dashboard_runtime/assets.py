@@ -2,7 +2,7 @@
 import base64
 import json
 from pathlib import Path
-from .model import DashboardError
+from .model import DashboardError, live_datasets, require
 
 DIST = Path(__file__).parent / 'web' / 'dist'
 MIME_TYPE = 'text/html;profile=mcp-app'
@@ -49,6 +49,7 @@ def bundle_assets():
 
 def export_document(document):
     import copy
+    require(not live_datasets(document), '实时 SQL 看板请通过运行服务查看', 'LIVE_DATA_REQUIRES_RUNTIME')
     snapshot = copy.deepcopy(document)
     snapshot['snapshot'] = {'datasets': {}}
     snapshot.pop('loading', None)

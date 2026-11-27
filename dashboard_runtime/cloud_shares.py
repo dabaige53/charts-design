@@ -226,6 +226,9 @@ class CloudShares:
                         'Publish each selected page before sharing it', 'REVISION_CONFLICT')
                 documents.append((page_id, versions.read(page_id, revision)))
                 seen.add(page_id)
+        from .model import live_datasets
+        require(not any(live_datasets(page_doc) for _, page_doc in documents),
+                '实时 SQL 看板请通过运行服务查看', 'LIVE_DATA_REQUIRES_RUNTIME')
         heartbeat = self.storage.get('cleaner-status.json')
         require(heartbeat is not None and time.time() - json.loads(heartbeat)['completedAt'] < 7 * 3600,
                 'Confirm a successful six-hour cloud cleanup invocation before publishing',
