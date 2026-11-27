@@ -194,7 +194,7 @@ CloudBase 启用可批注分享或本机发布桥前，需要由部署人员应�
 
 ## 自有服务器与 Neon
 
-自有服务器设置 `CHARTS_SERVER_ROLE=workspace`，`CHARTS_PUBLIC_URL` 使用作者域名。客户端配置 `https://<作者域名>/mcp` 与作者服务器的 Bearer 令牌。可以参考 [MCP 客户端配置](../../deploy/neon/mcp.example.json)。
+自有服务器设置 `CHARTS_SERVER_ROLE=workspace`，`CHARTS_PUBLIC_URL` 使用作者域名。客户端配置 `https://<作者域名>/mcp` 与作者服务器的 Bearer 令牌。可以参考 [MCP 客户端配置](../../deploy/mcp.example.json)。
 
 SQLite 方案使用 `deploy/docker-compose.yml`。使用 Neon 时，`deploy/neon/compose.yml` 只向主机回环地址发布 `18160`，数据库、工作区卷和应用独立维护。以数据库所有者的直连 `DATABASE_URL` 和 `CHARTS_NEON_RUNTIME_ROLE` 运行 `python deploy/neon/migrate.py`，应用容器使用权限限定的数据库账号。备份覆盖数据库与持久卷。
 
@@ -223,7 +223,7 @@ bun run deploy:init -- all
 
 每个新分享生成新的分享 ID 和一次 Pages 生产部署。新部署保留所有有效分享的页面和数据，旧链接继续使用原来的 `/s/<shareId>/` 地址。选择「不过期」的分享不受 Cloudflare 旧部署保留期影响。重复提交同一个请求 ID 会返回原分享。读取时 Pages Functions 先检查会话和分享状态，再返回部署内的静态文件。直接访问快照文件路径会被拒绝。
 
-撤销或到期会立即阻止读取。后续部署从当前部署清单移除失效快照，历史部署仍受同一访问检查。既有的 D1 数据分片继续通过原链接读取，直到对应分享撤销或到期。升级 Pages 应使用 `deploy:init`，它会把有效快照加入部署清单。
+撤销或到期会立即阻止读取。后续部署从当前部署清单移除失效快照。作者可在分享记录里检查清理状态，确认当前部署已移除资源。历史部署仍受同一访问检查，保留期由 Cloudflare 管理。既有 D1 分享撤销时会立即删除数据分片和批注。使用 `deploy:init` 升级时会把有效快照加入新部署清单。
 
 ## Cloudflare 独立部署
 

@@ -103,7 +103,9 @@ function locate(root: HTMLElement, value: Selection): Rect | null {
     const box = element.getBoundingClientRect();
     return { x: box.x, y: box.y, width: box.width, height: box.height };
   }
-  const box = scope.getBoundingClientRect(), rect = anchor.rect;
+  const rect = anchor.rect;
+  if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)) return null;
+  const box = scope.getBoundingClientRect();
   return { x: box.x + box.width * rect.x, y: box.y + box.height * rect.y,
     width: box.width * rect.width, height: box.height * rect.height };
 }

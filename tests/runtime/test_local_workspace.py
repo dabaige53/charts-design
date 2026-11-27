@@ -99,7 +99,7 @@ def test_local_preview_annotations_survive_reload_without_content_revision(works
         assert db.execute('SELECT count(*) FROM annotation_events WHERE board_id=?', ('board',)).fetchone()[0] == 1
 
 
-# @wu-test type=boundary | scope=本机预览能力令牌 | protects=预览批注权限获得内容编辑发布权限或跨看板管理权限
+# @wu-test type=boundary | scope=本机预览能力令牌 | protects=只读链接读取草稿或获得编辑、发布和跨看板管理权限
 def test_local_preview_scope_rejects_content_version_and_other_board_writes(workspace):
     workspace.store.create('other', 'Other')
     server = RuntimeHTTPServer(workspace, 0, token='author-secret')
@@ -122,6 +122,13 @@ def test_local_preview_scope_rejects_content_version_and_other_board_writes(work
         assert denied.value.code == 403
         assert 'editUrl' not in request(base, '/api/browser-links/board', token)
         assert workspace.store.revision('board') == 1
+        workspace.store.mutate('board', 1, [{'op': 'set_title', 'value': 'Unpublished draft'}])
+        reading = {'dashboardId': 'board', 'responseMode': 'patch', 'componentIds': []}
+        assert request(base, '/api/tools/dashboard_view', token, reading)['revision'] == 1
+        with pytest.raises(HTTPError) as conflict:
+            request(base, '/api/tools/dashboard_view', token, {**reading, 'expectedRevision': 2})
+        assert conflict.value.code == 409
+        assert json.load(conflict.value)['error']['code'] == 'REVISION_CONFLICT'
 
 
 # @wu-test type=behavior | scope=作者报告段落批注共享HTTP处理器 | protects=报告段落位置无法按保存版读取或只读链接自动开放批注
@@ -164,7 +171,7 @@ def test_stdio_profile_returns_reusable_loopback_browser_links(workspace):
 def share_gateway(tmp_path, monkeypatch):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    state = {'requests': {}, 'attempts': 0, 'fail_once': True, 'active': True}
+    state = {'requests': {}, 'attempts': 0, 'fail_once': True, 'active': True, 'deletes': 0}
 
     class Gateway(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -206,6 +213,11 @@ def share_gateway(tmp_path, monkeypatch):
             self.answer({'shareId': share_id, 'revision': receipt['revision'], 'annotations': [note('feedback')],
                          'url': receipt['url'] + '?feedback=read-only'})
 
+        def do_DELETE(self):
+            share_id = urlparse(self.path).path.rsplit('/', 1)[-1]
+            state['deletes'] += 1
+            self.answer({'shareId': share_id, 'revoked': True, 'cleanupState': 'complete', 'cleanupExecutor': 'd1'})
+
     server = ThreadingHTTPServer(('127.0.0.1', 0), Gateway)
     with running(server) as base:
         monkeypatch.setenv('CHARTS_SHARE_SERVICE_URL', base)
@@ -214,7 +226,7 @@ def share_gateway(tmp_path, monkeypatch):
         yield state
 
 
-# @wu-test type=integration | scope=独立分享持久引用与幂等 HTTP 上传 | protects=丢失回执后重复创建链接、覆写正式发布版、泄露项目批注或重启丢失原版反馈
+# @wu-test type=integration | scope=独立分享持久引用与幂等 HTTP 上传 | protects=丢失回执重复创建链接、覆写正式发布版、泄露项目批注或重启丢失反馈和清理状态
 def test_local_publication_reuses_frozen_archive_and_persistent_reference(workspace, share_gateway, monkeypatch, tmp_path):
     from dashboard_runtime import deployment
 
@@ -273,6 +285,12 @@ def test_local_publication_reuses_frozen_archive_and_persistent_reference(worksp
         shares.feedback('board', receipt['shareId'])
     assert expired.value.code == 'SHARE_EXPIRED'
     assert len(share_gateway['requests']) == 1
+    revoked = shares.revoke('board', receipt['shareId'])
+    assert revoked['cleanupState'] == 'complete'
+    after_restart = LocalShares(Service(tmp_path / 'third-runtime', project_root=workspace.project_root))
+    assert after_restart.status('board')['shares'][0]['cleanupState'] == 'complete'
+    assert after_restart.revoke('board', receipt['shareId']) == revoked
+    assert share_gateway['deletes'] == 1
 
 
 # @wu-test type=boundary | scope=静态ZIP与HTML权限清洗 | protects=重新导入的预览文档把作者令牌或可写批注能力泄漏给阅读者

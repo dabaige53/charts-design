@@ -408,9 +408,15 @@ def worker(fixture, doc, expected, filters, samples, *, base, source, headers=No
                'samples': samples, 'expected': expected, 'table': 'details', 'rows': fixture['rows'],
                'filteredRows': fixture['filteredRows'], 'filters': filters}
     proxy = '0' if urlsplit(base).hostname == '127.0.0.1' else '1'
+    env_keys = ['PATH', 'SYSTEMROOT', 'WINDIR']
+    if proxy == '1':
+        env_keys.extend(('HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+                         'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR'))
+    env = {key: os.environ[key] for key in env_keys if key in os.environ}
+    env['NODE_USE_ENV_PROXY'] = proxy
     try:
         process = subprocess.run(['node', str(ROOT / 'tests/acceptance/share-worker.mjs')], input=json.dumps(payload),
-                                 env={**os.environ, 'NODE_USE_ENV_PROXY': proxy},
+                                 env=env,
                                  text=True, capture_output=True, check=False, timeout=240)
     except subprocess.TimeoutExpired as error:
         raise RuntimeError('The share Worker did not finish its queries within 240 seconds') from error
@@ -479,8 +485,9 @@ def online(root, fixture, tool, doc, expected, filters, samples, keep_share, wor
         published, worker_bytes, loading = share_downloads(client, path)
         assert published['publication']['revision'] == doc['revision']
         assert all(published['staticFilterOptions'][field] == values for field, values in expected.items())
-        script = root / 'published-worker.js'
-        script.write_bytes(worker_bytes)
+        script = DIST / 'static-worker.js'
+        if worker_bytes != script.read_bytes():
+            raise RuntimeError('The published share Worker differs from the trusted build. Prepare the matching UI artifact.')
         cookie = 'charts-share-' + share['shareId']
         note = mk_note()
         note['id'] = 'note-' + request['requestId']
@@ -562,13 +569,16 @@ def main():
         phase('functional')
         checks.update(asyncio.run(check_mcp(root, fixture)))
         subprocess.run(['bun', 'test', 'tests/deploy/pages-d1.test.mjs'], cwd=ROOT, check=True)
+        # Version and annotation assertions mutate a small project. Keep those
+        # mutations separate from the measured fixture and any pending share.
+        with tempfile.TemporaryDirectory(dir=root, prefix='functional-') as temporary:
+            functional_root = Path(temporary)
+            functional = seed(functional_root, 48)
+            functional_service = Service(functional_root / 'runtime', project_root=functional_root / 'project')
+            with workspace(functional_service, functional['board']) as connection:
+                checks.update(check_versions(functional, *connection))
     service = Service(root / 'runtime', project_root=root / 'project')
     with workspace(service, fixture['board']) as (client, tool, author, viewer):
-        if args.mode == 'verify':
-            saved_check = root / 'functional-version-check.json'
-            if not saved_check.is_file():
-                save(saved_check, check_versions(fixture, client, tool, author, viewer))
-            checks.update(read(saved_check))
         phase('local-author')
         local_author, expected = {}, None
         for mode in ('edit', 'preview'):

@@ -268,7 +268,7 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
           </div>
           {shares.map((share) => <article key={share.shareId} className="rounded-lg border p-3">
             <p>{share.pages?.length > 1 ? `包含 ${share.pages.length} 个页面 · ` : ""}版本 {share.revision} · {share.expiresAt ? new Date(share.expiresAt * 1000).toLocaleString() : "不过期"}</p>
-            <p className="my-2 text-xs text-muted-foreground">{share.cleanupState === "pending" ? "等待云端清理" : share.state === "active" ? "可访问" : share.state}</p>
+            <p className="my-2 text-xs text-muted-foreground">{share.cleanupState === "pending" ? "访问已关闭，等待云端清理" : share.cleanupState === "complete" ? "已清理" : share.state === "active" ? "可访问" : share.state}</p>
             <p className="mb-2 text-xs text-muted-foreground">{share.annotationMode === "annotate" ? "可批注" : "仅查看"}</p>
             {(publicationApiBase || /^https?:\/\//.test(share.feedbackUrl || "")) && <Button size="sm" variant="outline" className="mr-2"
               disabled={busy || share.state !== "active" || share.cleanupState === "pending"}
@@ -281,10 +281,10 @@ export function VersionCenter({ open, onOpenChange, document, call, onRestore, o
               await loadShares();
               if (!replacement.previousRevoked) setError("新分享已创建，旧分享撤销失败。请保留新密钥，并再次撤销旧分享。");
             })}>替换为所选保存版</Button>
-            <Button size="sm" variant="outline" disabled={busy || share.cleanupState === "pending"} onClick={() => void run(async () => {
+            <Button size="sm" variant="outline" disabled={busy || share.cleanupState === "complete"} onClick={() => void run(async () => {
               await call("dashboard_share_delete", { dashboardId: document.id, shareId: share.shareId });
               setNewShare(null); await loadShares();
-            })}>撤销分享</Button>
+            })}>{share.cleanupState === "pending" ? "检查清理状态" : "撤销分享"}</Button>
           </article>)}
           {browserWorkspaceUrl && !publicationApiBase && <Button variant="outline" disabled={busy}
             onClick={() => onOpenBrowser ? void run(() => onOpenBrowser(browserWorkspaceUrl))

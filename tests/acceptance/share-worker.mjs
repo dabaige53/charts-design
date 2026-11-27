@@ -13,7 +13,7 @@ globalThis.fetch = async (url, options) => {
   const origin = new URL(workerData.base);
   if (target.origin !== origin.origin || !target.pathname.startsWith(origin.pathname)) throw Error("Unexpected data URL");
   const start = performance.now();
-  const response = await fetchAsset(target, options);
+  const response = await fetchAsset(target, { ...options, redirect: "error" });
   fetched.push({ headersMs: performance.now() - start, bytes: Number(response.headers.get("content-length")) });
   return response;
 };

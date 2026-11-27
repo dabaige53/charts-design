@@ -27,6 +27,14 @@ READING_TOOLS = frozenset({'dashboard_view', 'dashboard_filter_options', 'compon
                            'query_inspect', 'semantic_inspect', 'dashboard_export', 'dataset_export'})
 
 
+def pin_reader_revision(service, args):
+    revision = service.store.display_revision(args['dashboardId'])
+    require(revision is not None, '暂无已保存版本', 'NO_SAVED_VERSION')
+    if args.get('expectedRevision', revision) != revision:
+        raise DashboardError('REVISION_CONFLICT', '请刷新已保存的看板版本', 409)
+    args['expectedRevision'] = revision
+
+
 def annotation_response(service, board, *, revision=None, can_annotate=False, can_manage=False, payload=None):
     """One author-workspace annotation contract for local and remote HTTP.
 
@@ -276,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
                 if name == 'dashboard_get':
                     name = 'dashboard_preview'
                 if name in READING_TOOLS and self.runtime.service.project_root:
-                    args.setdefault('expectedRevision', self.runtime.service.store.readable(principal[1])['revision'])
+                    pin_reader_revision(self.runtime.service, args)
             result = self.runtime.service.call(name, args)
             if principal[0] != 'edit' and name == 'dashboard_list':
                 result['dashboards'] = [item for item in result['dashboards'] if item['id'] == principal[1]]

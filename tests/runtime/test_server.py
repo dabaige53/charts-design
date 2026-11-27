@@ -204,7 +204,7 @@ def free_port():
         return probe.getsockname()[1]
 
 
-# @wu-test type=integration | scope=远程MCP与分享链接 | protects=服务器预览签发至错误域名、网页读者获取编辑权限或旧路由继续转发至云端
+# @wu-test type=integration | scope=远程MCP与分享链接 | protects=预览签发至错误域名、只读链接查询草稿或旧路由继续转发至云端
 @pytest.mark.filterwarnings('ignore:Use `streamable_http_client`:DeprecationWarning')
 def test_remote_mcp_and_scoped_viewer_api(tmp_path, monkeypatch):
     from mcp import ClientSession
@@ -304,6 +304,10 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path, monkeypatch):
         assert status == 200 and '/edit/sales/exec#token=' in edit['url']
         edit_token = edit['url'].split('#token=')[1]
         assert post(api + 'dashboard_patch', {'dashboardId': 'exec', 'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Edited by link'}]}, edit_token)[0] == 200
+        read = {'dashboardId': 'exec', 'responseMode': 'patch', 'componentIds': []}
+        assert post(api + 'dashboard_view', read, token)[1]['revision'] == 1
+        status, conflict = post(api + 'dashboard_view', {**read, 'expectedRevision': 2}, token)
+        assert status == 409 and conflict['error']['code'] == 'REVISION_CONFLICT'
         saved = post(api + 'dashboard_submit', {'dashboardId': 'exec', 'expectedRevision': 2}, edit_token)[1]
         assert saved['checkpoint']['revision'] == 2
         published = post(api + 'dashboard_publish', {'dashboardId': 'exec', 'expectedRevision': 2, 'revision': 2}, edit_token)[1]

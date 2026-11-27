@@ -79,9 +79,9 @@ Python 使用项目解释器和 `pyproject.toml` 中的依赖；运行配置见 
 | `bun run test:performance` | 记录首次候选项、Worker 启动、首批明细、应用筛选和翻页校验 |
 | `bun run test:million` | 用同一套流程验证一百万行，独立校验行数和筛选结果 |
 
-使用 `--output /private/tmp/charts-verify` 保存测试项目和 `report.json`，用同一个目录可复用初始化数据。加 `--ci-server` 可在本机复现 GitHub 作业的作者服务器步骤。失败时查看报告的 `phase` 和对应日志。报告记录首次耗时、各次样本、中位数与 P95，样本较少时以原始值为准。
+使用 `--output /private/tmp/charts-verify` 保存测试项目和 `report.json`，用同一个目录可复用初始化数据。功能验收每次在独立的小型项目执行保存、发布和批注检查，测量和待确认的线上请求使用原测试项目。加 `--ci-server` 可在本机复现 GitHub 作业的作者服务器步骤。失败时查看报告的 `phase` 和对应日志。报告记录首次耗时、各次样本、中位数与 P95，样本较少时以原始值为准。
 
-`test:function`、`test:performance` 和 `test:million` 可加 `--online`。先通过环境提供 `CHARTS_SHARE_SERVICE_URL` 和 `CHARTS_SHARE_SERVICE_TOKEN`。测试 Pages 快照部署时，同时设置 `CHARTS_SHARE_PARQUET_LAYOUT=single`。脚本用同一已保存版本创建 Cloudflare 分享，验证读者密钥、批注重试、作者只读反馈及实际下载的 Worker。成功后自动撤销本轮测试链接。加 `--keep-share` 会保留链接七天。中断后用原输出目录与参数重试，会继续使用同一个发布请求 ID。
+`test:function`、`test:performance` 和 `test:million` 可加 `--online`。通过环境提供 `CHARTS_SHARE_SERVICE_URL` 和 `CHARTS_SHARE_SERVICE_TOKEN`。测试 Pages 快照时设置 `CHARTS_SHARE_PARQUET_LAYOUT=single`，并准备与上线版本匹配的可信 UI 构建。脚本校验线上 Worker 与本机构建一致，再用本机 Worker 读取线上数据，同时检查读者密钥、批注重试和作者只读反馈。成功后自动撤销本轮测试链接。加 `--keep-share` 保留链接七天。中断后用原输出目录与参数重试，会继续使用同一个发布请求 ID。
 
 `test:function`、`test:performance` 和 `test:million` 均可设置 `CHARTS_TEST_MCP_URL`、`CHARTS_TEST_MCP_TOKEN` 和 `CHARTS_TEST_MCP_PROJECT`，测量自有服务器作者页面。先在指定测试项目初始化同一行数的航线数据。脚本从 MCP 取签名编辑和预览链接，再走网页使用的 HTTP 接口，验证候选值和筛选明细与本机一致。Cloudflare 和作者服务器可独立测量。
 
@@ -104,6 +104,6 @@ PYTHONPATH=. bun run python -- tests/fixtures/charts_acceptance.py --output /pri
 
 版本部署由独立的 `cloudbase-release.yml` 执行，流程见 [自托管服务器](self-hosted-server.md#按版本自动发布到-cloudbase)。修改 CI 不自动触发生产部署。
 
-自有服务器使用独立标签 `server-vX.Y.Z`，版本号须与 `package.json` 一致。推送此标签触发 `server-release.yml`：构建作者服务器镜像和可选 Pages 分享代理，检查代理路由，再发布两个包、远程 MCP 客户端配置和 SHA256 校验文件。生产部署另行执行。
+自有服务器使用独立标签 `server-vX.Y.Z`，版本号须与 `package.json` 一致。推送标签触发 `server-release.yml`。任务构建默认 SQLite 作者镜像和可选 Pages 分享代理，验证镜像和代理路由，再发布两个包、远程 MCP 客户端配置和 SHA256 校验文件。生产部署另行执行。
 
 维护时机：开发入口、检查范围、构建复用或交付流程变化时更新本文。

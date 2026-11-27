@@ -498,6 +498,10 @@ class RemoteServer:
                     raise DashboardError('FORBIDDEN', 'This link is limited to another dashboard', 403)
                 args['dashboardId'] = requested
         actual_name = 'dashboard_preview' if name == 'dashboard_get' and principal.access != 'edit' else name
+        if principal.access != 'edit':
+            from .http_server import READING_TOOLS, pin_reader_revision
+            if name in READING_TOOLS:
+                pin_reader_revision(service, args)
         # The HTTP viewer may hold a read-only link, so never issue fresh author links here.
         result = self.profile.decorate(name, args, service.call(actual_name, args), service, browser_links=False)
         if getattr(service.store, 'cos_enabled', False):

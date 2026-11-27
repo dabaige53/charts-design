@@ -92,7 +92,7 @@ async function cleanExpired(db) {
     db.prepare("DELETE FROM annotations WHERE share_id IN (" + due + ")").bind(now),
     db.prepare("UPDATE publications SET document=NULL,files=NULL WHERE id IN (" + due + ")").bind(now),
     db.prepare("DELETE FROM annotations WHERE share_id IN (SELECT id FROM publications WHERE expires_at<=? AND id IN (SELECT share_id FROM pages_snapshots))").bind(now),
-    db.prepare("DELETE FROM pages_snapshots WHERE share_id IN (SELECT id FROM publications WHERE expires_at<=?)").bind(now),
+    db.prepare("UPDATE pages_snapshots SET assets='{}',title='' WHERE assets<>'{}' AND share_id IN (SELECT id FROM publications WHERE expires_at<=?)").bind(now),
     db.prepare("DELETE FROM access_attempts WHERE window<?").bind(Math.floor(now / 600) - 1),
   ]);
 }
@@ -187,19 +187,23 @@ async function noteList(db, share) {
     canAnnotate: share.mode === "annotate", canManageAnnotations: false, author };
 }
 
-async function manage(request, url, id, owner, { db, key }) {
+async function manage(request, url, id, owner, { db, key, env }) {
   const share = await publication(db, id);
   check(share?.owner === owner, 403, "FORBIDDEN", "Share belongs to another author project");
   if (request.method === "DELETE") {
     await db.batch([
       db.prepare("UPDATE publications SET revoked=1,document=NULL,files=NULL WHERE id=?").bind(id),
       db.prepare("DELETE FROM publication_chunks WHERE share_id=?").bind(id),
-      db.prepare("DELETE FROM pages_snapshots WHERE share_id=?").bind(id),
+      db.prepare("UPDATE pages_snapshots SET assets='{}',title='' WHERE share_id=?").bind(id),
       db.prepare("DELETE FROM annotations WHERE share_id=?").bind(id),
       db.prepare("DELETE FROM access_attempts WHERE share_id=?").bind(id),
     ]);
-    return json({ shareId: id, revoked: true, cleanupState: share.snapshot_title !== null ? "pending" : "complete",
-      cleanupExecutor: share.snapshot_title !== null ? "pages" : "d1" });
+    if (share.snapshot_title === null) return json({ shareId: id, revoked: true, cleanupState: "complete", cleanupExecutor: "d1" });
+    // The snapshot tombstone preserves its storage type across repeated revokes.
+    const asset = await env.ASSETS.fetch(new Request(new URL(snapshotPath(id, "document.json"), url), { method: "HEAD" }));
+    await asset.body?.cancel();
+    return json({ shareId: id, revoked: true, cleanupState: asset.status === 404 ? "complete" : "pending",
+      cleanupExecutor: "pages" });
   }
   ready(share);
   check(!url.searchParams.get("dashboardId") || url.searchParams.get("dashboardId") === share.board,
@@ -298,6 +302,7 @@ function normalizedAnnotation(body, share, document) {
   check(!anchor.rect || ["x", "y", "width", "height"].every(key => Number.isFinite(anchor.rect[key]) && anchor.rect[key] >= 0 && anchor.rect[key] <= 1),
     400, "INVALID_ARGUMENT", "批注坐标无效");
   check(anchor.quote === undefined || typeof anchor.quote === "string" && anchor.quote.length <= 1000, 400, "INVALID_ARGUMENT", "引文无效");
+  check(anchor.rect || anchor.kind === "element" && anchor.quote?.trim(), 400, "INVALID_ARGUMENT", "批注需要坐标或引文");
   check(anchor.occurrence === undefined || Number.isSafeInteger(anchor.occurrence) && anchor.occurrence >= 0, 400, "INVALID_ARGUMENT", "引文位置无效");
   check(view?.revision === undefined || view.revision === share.revision, 409, "REVISION_CONFLICT", "批注版本不匹配");
   const filters = view?.filters ?? [];

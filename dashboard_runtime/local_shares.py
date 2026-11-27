@@ -215,22 +215,28 @@ class LocalShares:
             if share_id is not None and receipt['shareId'] != share_id:
                 continue
             due = receipt.get('expiresAt') is not None and time.time() >= receipt['expiresAt']
+            cleanup = receipt.get('cleanup', {})
             shares.append({**{key: receipt[key] for key in ('shareId', 'url', 'revision', 'expiresAt', 'pages', 'annotationMode') if key in receipt},
                            'state': 'expired' if due and row['state'] == 'active' else row['state'],
-                           'cleanupState': 'pending' if due or row['state'] == 'revoked' else 'scheduled' if receipt.get('expiresAt') else 'not_scheduled',
+                           'cleanupState': cleanup.get('cleanupState', 'pending') if due or row['state'] == 'revoked' else 'scheduled' if receipt.get('expiresAt') else 'not_scheduled',
                            'feedbackEndpoint': '/api/publications/' + receipt['shareId'] + '/feedback?' + urlencode({'dashboardId': board}),
                            'localReference': True})
         return {'shares': shares, 'pendingRequests': pending, 'cleanupExecutor': 'share-service'}
 
     def revoke(self, board, share_id):
         row, _ = self._reference(board, share_id)
-        if row['state'] == 'revoked':
-            return {'shareId': share_id, 'revoked': True, 'cleanupState': 'pending', 'cleanupExecutor': 'share-service'}
-        result = self._request('DELETE', self._owner_path(board, share_id))
-        require(result.get('revoked') is True, 'Share service did not confirm revocation', 'SHARE_SERVICE_FAILED')
-        with self.connect() as db:
-            db.execute('UPDATE requests SET state=? WHERE id=?', ('revoked', row['id']))
-        return result
+        with exclusive_file_lock(self.root / '.share-locks' / (row['id'] + '.lock')):
+            row, receipt = self._reference(board, share_id)
+            cleanup = receipt.get('cleanup', {})
+            if row['state'] == 'revoked' and cleanup.get('cleanupState') == 'complete':
+                return {'shareId': share_id, 'revoked': True, **cleanup}
+            result = self._request('DELETE', self._owner_path(board, share_id))
+            require(result.get('revoked') is True, 'Share service did not confirm revocation', 'SHARE_SERVICE_FAILED')
+            receipt['cleanup'] = {key: result[key] for key in ('cleanupState', 'cleanupExecutor') if key in result}
+            with self.connect() as db:
+                db.execute('UPDATE requests SET state=?,receipt=? WHERE id=?',
+                           ('revoked', json.dumps(receipt, ensure_ascii=False), row['id']))
+            return result
 
     def replace(self, board, share_id, revision, expiration='7d'):
         _, previous = self._reference(board, share_id)

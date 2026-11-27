@@ -46,7 +46,7 @@ sys.stdout.buffer.write(out.getvalue())
 `]);
 }
 
-// @wu-test type=integration | scope=Cloudflare Pages + D1 固定分享 | protects=同请求重复发布、筛选候选项丢失、匿名读取数据和越权批注
+// @wu-test type=integration | scope=Cloudflare Pages + D1 固定分享 | protects=同请求重复发布、筛选候选项丢失、匿名读取数据和越权或无效位置批注
 test("publishes a fixed copy, serves trusted assets, and persists authorized annotations", async () => {
   const { sqlite, db } = d1();
   const env = { SHARE_DB: db, CHARTS_SHARE_SERVICE_TOKEN: token, CHARTS_SHARE_SIGNING_SECRET: "test-cookie-signing-secret-at-least-32-characters",
@@ -79,12 +79,15 @@ test("publishes a fixed copy, serves trusted assets, and persists authorized ann
   assert.equal(document.manifest.annotations, undefined);
   assert.equal(await (await send(page + "app.js", { headers: reader })).text(), "trusted app");
   assert.equal(await (await send(page + "data/sales-0.parquet", { headers: reader })).text(), "PAR1 fixture bytes");
-  const note = { id: "note", text: "Check", createdAt: "2026-11-27", componentId: "total", anchor: { scope: "component", kind: "element" } };
+  const note = { id: "note", text: "Check", createdAt: "2026-11-27", componentId: "total",
+    anchor: { scope: "component", kind: "element", quote: "Total" } };
   const annotate = (input = note, revision = 2, visitor = reader) => send(page + "api/annotations", {
     method: "POST", headers: { ...visitor, "Content-Type": "application/json", Origin: origin },
     body: JSON.stringify({ dashboardId: "sample", revision, append: input, authorName: "Reader" }),
   });
   assert.equal((await annotate(note, 1)).status, 409);
+  assert.equal((await annotate({ ...note, anchor: { scope: "component", kind: "element", quote: "  " } })).status, 400);
+  assert.equal((await annotate({ ...note, anchor: { scope: "component", kind: "area", quote: "Total" } })).status, 400);
   const saved = await annotate();
   assert.equal(saved.status, 200, await saved.clone().text());
   assert.deepEqual(await (await annotate()).json(), await saved.json());
@@ -98,14 +101,16 @@ test("publishes a fixed copy, serves trusted assets, and persists authorized ann
   const feedbackSession = await login({ feedbackToken });
   assert.equal(feedbackSession.status, 303);
   assert.equal((await annotate(note, 2, { Cookie: feedbackSession.headers.get("set-cookie").split(";")[0] })).status, 403);
-  assert.equal((await send(path, { method: "DELETE", headers: managed })).status, 200);
+  const deleted = await send(path, { method: "DELETE", headers: managed });
+  assert.equal(deleted.status, 200);
+  assert.equal((await deleted.json()).cleanupState, "complete");
   assert.equal((await send(page + "document.json", { headers: reader })).status, 410);
   assert.equal((await publish()).status, 410);
   assert.equal(sqlite.query("SELECT count(*) AS n FROM publication_chunks").get().n, 0);
   sqlite.close();
 });
 
-// @wu-test type=integration | scope=Pages生产快照发布与访问 | protects=发布回执丢失后重试重复部署，新快照去掉有效旧分享，匿名绕过或Parquet仍写入D1
+// @wu-test type=integration | scope=Pages生产快照发布与访问 | protects=回执丢失重复部署、有效旧分享消失、越权访问或撤销时误报资源已清理
 test("deploys a new snapshot without losing earlier links or writing their data to D1", async () => {
   const { sqlite, db } = d1();
   const encode = new TextEncoder();
@@ -186,16 +191,23 @@ test("deploys a new snapshot without losing earlier links or writing their data 
     const annotation = await send(base + "api/annotations", { method: "POST",
       headers: { Cookie, Origin: origin, "Content-Type": "application/json" },
       body: JSON.stringify({ revision: 2, append: { id: "snapshot-note", text: "Saved", createdAt: "2026-11-27",
-        componentId: "total", anchor: { scope: "component", kind: "element" } } }) });
+        componentId: "total", anchor: { scope: "component", kind: "area", rect: { x: 0, y: 0, width: 0.5, height: 0.5 } } } }) });
     assert.equal(annotation.status, 200, await annotation.clone().text());
     assert.equal(sqlite.query("SELECT count(*) AS n FROM annotations").get().n, 1);
     assert.equal(sqlite.query("SELECT count(*) AS n FROM publication_chunks").get().n, 0);
     assert.equal(sqlite.query("SELECT count(*) AS n FROM publications WHERE document IS NOT NULL").get().n, 0);
     const managed = "/api/v1/publications/" + first.shareId + "?source=" + owner + "&project=project";
-    const revoked = await send(managed, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
+    const revoke = () => send(managed, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
+    const revoked = await revoke();
     assert.equal(revoked.status, 200);
+    assert.deepEqual(await revoked.json(), { shareId: first.shareId, revoked: true, cleanupState: "pending", cleanupExecutor: "pages" });
+    assert.equal((await (await revoke()).json()).cleanupState, "pending");
     assert.equal((await send(base + "data/sales-0.parquet", { headers: { Cookie } })).status, 410);
     assert.equal((await publish(requestId, "never")).status, 410);
+    const latest = await publish(crypto.randomUUID(), "7d");
+    assert.equal(latest.status, 200, await latest.clone().text());
+    assert.equal(deployed[rawPath], undefined);
+    assert.deepEqual(await (await revoke()).json(), { shareId: first.shareId, revoked: true, cleanupState: "complete", cleanupExecutor: "pages" });
   } finally {
     globalThis.fetch = realFetch;
     sqlite.close();
