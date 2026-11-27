@@ -65,8 +65,17 @@ def test_server_workspace_annotation_capability_and_original_revision(tmp_path):
                                json={'dashboardId': 'board', 'expectedRevision': 2}).status_code == 403
         assert client.post(endpoint, headers=auth(annotator), json={'expectedAnnotations': [], 'annotations': []}).status_code == 403
         assert client.get('/api/v1/p/default/annotations/other', headers=auth(annotator)).status_code == 403
+        tools = '/api/v1/p/default/tools/'
+        assert client.post(tools + 'dashboard_get', headers=auth(view), json={'dashboardId': 'board'}).json()['document']['revision'] == 1
+        saved = client.post(tools + 'dashboard_submit', headers=auth(TOKEN),
+                            json={'dashboardId': 'board', 'expectedRevision': 2})
+        assert saved.status_code == 200 and saved.json()['ok'] is True
+        # The existing online view follows the newly saved B checkpoint, while
+        # the annotation created against A keeps its original location context.
+        assert client.post(tools + 'dashboard_get', headers=auth(view), json={'dashboardId': 'board'}).json()['document']['revision'] == 2
+        assert client.get(endpoint + '?revision=1', headers=auth(annotator)).json()['annotations'][0]['context']['designRevision'] == 1
     assert service.store.revision('board') == 2
-    assert service.store.readable('board')['revision'] == 1
+    assert service.store.readable('board')['revision'] == 2
 
 
 def _port():
