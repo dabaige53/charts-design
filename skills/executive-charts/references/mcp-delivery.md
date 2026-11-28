@@ -4,12 +4,14 @@ Use this flow for dashboards and Markdown reports. Read the connected tools' sch
 
 ## Short authoring path
 
-1. Read the existing document once, or select a new dashboard ID. Inspect source metadata and a small sample; resolve only missing access or business rules that affect correctness.
+1. Read the existing document once, or select a new dashboard ID. For known small data, prepare native operations directly using the [complete authoring example](mcp-authoring.md#直接初始化小型看板). If data must be imported first, create a container, import it and follow the receipt's `nextCalls` to `dataset_preview`. Inspect metadata and a small sample; resolve only missing access or business rules that affect correctness.
 2. Choose the required chart and KPI shapes from the analytical question. Fetch `chart_declarations` with `codes` for 1–8 unique selections, or `code` for one; never send both. Consult full-page examples, the full catalog or full schemas only for unfamiliar capabilities.
 3. Reuse data references. Submit related definitions, components, filters and layout together with `dashboard_submit`; its successful receipt includes checking and saving. Run separate validation/Doctor only for a concrete diagnostic need.
 4. Verify affected components together with a patch view and evidence, then open one saved preview. Recheck only the changed behavior after a correction.
 
 Serialize writes to one dashboard because each consumes the prior revision. Independent declaration reads and source inspection may run in parallel. A title or layout edit does not require reimporting rows, rebuilding UI resources or exporting a website.
+
+Use native MCP arguments for both small and larger declaration batches within the tool limits. Local JSON/Markdown files and the authoring script are optional for file review, offline editing or repeatable batch work; they are not an initialization dependency.
 
 ## Project and data
 
@@ -17,9 +19,13 @@ Pass `projectRoot` on every project call, including discovery, diagnostics and c
 
 Read `dashboard_get` before editing. Keep the returned revision, stable component IDs, data references and comments. For affected components, retain the metric scope, aggregation, baseline, units, tooltip fields, sorting, drilldown and filter consumers.
 
-Use `dataset_import` with exactly one of `rows` or `csvText` for small data. Use `dataset_attach` for a configured SQLite table, or `query_execute` for configured read-only SQL. Choose snapshot versus live mode using [local data](local-data.md); take aliases from operator configuration. Inspect imported fields and inferred metrics before binding them: a numeric identifier is not a sum metric. Reuse immutable references returned by the tools.
+When fields and calculations are already known, include `put_source`, `put_dataset`, `put_metric` and `put_component` in one `dashboard_submit` with `createTitle`. Otherwise use `dashboard_create` for an empty container and pass its revision to `dataset_import`, `dataset_attach` or `query_execute`. A component is not required for data inspection.
 
-For large local data, use the [remote upload client](../../../docs/operations/self-hosted-server.md#更新已有看板的数据): `bin/remote-project.py upload` transfers a data version for an existing dashboard; `bin/transfer-project.py` imports selected new pages. Both share preflight, bounded concurrency and verified resume. Keep the state file after interruption. Bind the verified output ref with `put_dataset_ref` and the current revision, preserving dataset metadata and metric definitions. For a large component configuration, use [complete configuration download](../../../docs/operations/mcp-transport-diagnostics.md#完整配置下载) before editing.
+Use `dataset_import` with exactly one of `rows` or `csvText` for small data. Supply `fields` when types must be explicit; empty `rows` require fields. Use `dataset_attach` for a configured SQLite table, or `query_execute` for configured read-only SQL. Choose snapshot versus live mode using [local data](local-data.md). Source aliases and table/schema information must come from the supplied project context or operator; this MCP does not discover or configure connections. Missing access or an unknown alias needs that context, not a generated connection script.
+
+Data write receipts include `dataset.fields`, `dataset.sourceId`, complete definitions in `dataset.metrics` keyed by ID, the current revision and `nextCalls` for native follow-up reads. Use the returned `dataset_preview` call to inspect rows and `dashboard_get` only when the complete draft is needed. Preview reads the dataset without component filters; use `component_data` after binding to inspect a component's filtered rows. Inspect inferred metrics before binding them: automatic sum metrics remain `unverified`, and a numeric identifier is not a sum metric. Reuse immutable references returned by the tools.
+
+For large local files that need transfer to a remote server, use the [remote upload client](../../../docs/operations/self-hosted-server.md#更新已有看板的数据): `bin/remote-project.py upload` transfers a data version for an existing dashboard; `bin/transfer-project.py` imports selected new pages. Both share preflight, bounded concurrency and verified resume. Keep the state file after interruption. Bind the verified output ref with `put_dataset_ref` and the current revision, preserving dataset metadata and metric definitions. This is a bulk transport path; ordinary MCP content authoring does not need an upload script.
 
 For KPI comparisons, aggregate each period at the same scope and grain before calculating the change. Distinguish percentage changes from percentage-point differences. Tooltip totals, shares and detail tables must use the same denominator, including the declared treatment of hidden series.
 
@@ -36,7 +42,7 @@ For an affected filter or chart interaction, check the [interaction defaults](de
 
 Use data write receipts for row counts and version references. Request `includeEvidence: true` in a component `dashboard_view` to compare results with their sources and metric definitions in the same revision. Refreshing data creates a new dataset version; authored prose must be recalculated for that version or remain explicitly tied to its earlier snapshot.
 
-For a row spot-check, request `component_data` with an explicit small `limit` such as 10 and advance `offset` only as needed. Use `dashboard_filter_options` with search and paging for candidate values. A sample does not establish a distribution, distinct count or complete coverage; obtain those through the source query or complete data when the task needs them. Use `dataset_export` for full rows instead of retrieving every page through chat.
+For a dataset spot-check before binding, use `dataset_preview` with `dashboardId`, `datasetId` and a small `limit` (default 20, maximum 100). Reuse the version arguments in the receipt's `nextCalls`. For a bound component's filtered rows, request `component_data` with an explicit small `limit` such as 10. Advance `offset` only as needed. Use `dashboard_filter_options` with search and paging for candidate values. A sample does not establish a distribution, distinct count or complete coverage; obtain those through the source query or complete data when the task needs them. Use `dataset_export` for full rows instead of retrieving every page through chat.
 
 ## Comments and history
 
@@ -67,6 +73,6 @@ Live SQL dashboards require the running source service; independent static expor
 
 For `UI_UNAVAILABLE`, see the [local update procedure](../../../docs/operations/local-mcp-update.md). For service failures, give the operator the request ID and follow the project's [transport diagnostics](../../../docs/operations/mcp-transport-diagnostics.md). Correct the reported cause and repeat the failed step. Keep credentials and raw business rows out of logs.
 
-If a tool returns `transport.resourceUri`, read that MCP resource for the complete JSON. Chunk assembly is a client protocol, not an authoring step. For hosts with resource size limits use the complete configuration download client.
+If a tool returns `transport.resourceUri`, read that exact MCP resource for the complete JSON; preserve any project routing already encoded in its URI. Do not treat the envelope as the document. Chunk assembly belongs to the client protocol. For hosts with resource size limits or an explicitly requested file workflow, use the [complete configuration download client](../../../docs/operations/mcp-transport-diagnostics.md#完整配置下载).
 
 For a requested performance investigation, read [local data](local-data.md) and [transport diagnostics](../../../docs/operations/mcp-transport-diagnostics.md). Compare equivalent data and filters, and separate query duration from rendering duration.

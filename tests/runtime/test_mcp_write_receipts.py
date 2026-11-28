@@ -67,6 +67,9 @@ def test_write_receipts_preserve_storage_and_revision_flow(tmp_path):
                     parts.append(chunk['data'])
                 saved = json.loads(base64.b64decode(''.join(parts)))
                 assert saved['document']['manifest']['components']['note']['text'] == text
+                complete = (await session.read_resource(AnyUrl(transfer['resourceUri']))).contents[0]
+                assert isinstance(complete, TextResourceContents)
+                assert json.loads(complete.text) == saved
 
                 imported = await call('dataset_import', expectedRevision=patched['revision'],
                                       datasetId='sales', rows=[{'month': 'July', 'revenue': 100}])
@@ -97,6 +100,114 @@ def test_write_receipts_preserve_storage_and_revision_flow(tmp_path):
                     'expectedRevision': 1, 'operations': [{'op': 'set_title', 'value': 'Stale'}]})
                 assert stale.isError and stale.structuredContent is not None
                 assert stale.structuredContent['error']['code'] == 'REVISION_CONFLICT'
+    asyncio.run(check())
+
+
+# @wu-test type=integration | scope=MCP数据初始化连续性 | protects=导入后缺少字段和真实指标ID，或必须先造临时组件才能检查数据
+def test_data_receipts_continue_to_inspection_and_authoring(tmp_path):
+    import sqlite3
+
+    upstream = tmp_path / 'upstream.sqlite3'
+    with sqlite3.connect(upstream) as db:
+        db.execute('CREATE TABLE sales (customerId TEXT, amount REAL)')
+        db.executemany('INSERT INTO sales VALUES (?, ?)', [('001', 10), ('002', 20)])
+    sources = tmp_path / 'sources.json'
+    sources.write_text(json.dumps({'sales-db': {'engine': 'sqlite', 'path': str(upstream)}}))
+
+    async def check():
+        root = Path(__file__).resolve().parents[2]
+        project = str(tmp_path / 'project')
+        params = StdioServerParameters(command=sys.executable,
+            args=['-m', 'dashboard_runtime', '--root', str(tmp_path / 'runtime'),
+                  '--sources', str(sources), 'mcp'],
+            env={**os.environ, 'PYTHONPATH': str(root) + os.pathsep + os.environ.get('PYTHONPATH', '')})
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                assert tools['dataset_preview'].annotations.readOnlyHint is True
+                assert tools['dataset_preview'].inputSchema['properties']['limit']['maximum'] == 100
+                assert 'fields' in tools['dataset_import'].inputSchema['properties']
+
+                async def call(tool, arguments):
+                    result = await session.call_tool(tool, arguments)
+                    assert not result.isError, result
+                    assert result.structuredContent is not None
+                    return result.structuredContent
+
+                context = {'projectRoot': project, 'dashboardId': 'analysis'}
+                created = await call('dashboard_create', {**context, 'title': 'Sales analysis'})
+                fields = {'customerId': {'type': 'string'}, 'amount': {'type': 'number'}}
+                imported = await call('dataset_import', {**context, 'expectedRevision': created['revision'],
+                    'datasetId': 'sales', 'fields': fields,
+                    'csvText': 'customerId,amount\n001,10\n002,20\n003,\n'})
+                dataset = imported['dataset']
+                assert dataset['fields'] == fields and dataset['sourceId']
+                assert dataset['mode'] == 'snapshot' and dataset['rowCount'] == 3
+                assert imported['counts']['components'] == 0
+                assert 'document' not in imported
+                metric_id, metric = next(iter(dataset['metrics'].items()))
+                assert len(dataset['metrics']) == 1
+                assert metric['field'] == 'amount' and metric['status'] == 'unverified'
+                assert metric['aggregation'] == 'sum' and metric['unit'] == ''
+
+                # A separate project request must not change the continuation target.
+                await call('dashboard_create', {'projectRoot': str(tmp_path / 'other-project'),
+                    'dashboardId': 'analysis', 'title': 'Other project'})
+                next_call = imported['nextCalls'][0]
+                assert next_call['tool'] == 'dataset_preview'
+                assert next_call['arguments']['projectRoot'] == project
+                sample = await call(next_call['tool'], next_call['arguments'])
+                assert sample['revision'] == imported['revision']
+                assert sample['totalRows'] == 3 and sample['filtersApplied'] is False
+                assert sample['rows'] == [{'customerId': '001', 'amount': 10},
+                    {'customerId': '002', 'amount': 20}, {'customerId': '003', 'amount': None}]
+                assert sample['dataVersion'] == next_call['arguments']['dataVersion']
+
+                # Bind the returned ID directly; do not reproduce UUID generation.
+                saved = await call('dashboard_submit', {**context, 'expectedRevision': imported['revision'],
+                    'operations': [
+                        {'op': 'put_metric', 'id': metric_id, 'value': {**metric, 'label': 'Sales amount',
+                            'unit': 'CNY', 'definition': 'Sum of supplied sales amounts; missing values excluded.'}},
+                        {'op': 'put_component', 'id': 'total', 'value': {'kind': 'kpi', 'title': 'Sales amount',
+                            'datasetId': 'sales', 'measures': [metric_id]}},
+                        {'op': 'put_component', 'id': 'detail', 'value': {'kind': 'table', 'title': 'Sales rows',
+                            'datasetId': 'sales'}},
+                        {'op': 'set_report_markdown', 'value': '# Sales analysis\n\n```chart\n{"componentId":"total"}\n```\n\n```chart\n{"componentId":"detail"}\n```'},
+                        {'op': 'set_view_mode', 'value': 'report'},
+                    ]})
+                assert saved['ok'] and saved['nextAction'] == 'dashboard_preview'
+                view = await call('dashboard_view', {**context, 'expectedRevision': saved['revision'],
+                    'componentIds': ['total'], 'includeEvidence': True})
+                assert view['computed']['components']['total']['value'] == '30 CNY'
+                assert view['evidence']['total']['metrics'][metric_id]['status'] == 'unverified'
+                preview = await call(saved['nextAction'], context)
+                assert preview['document']['revision'] == saved['revision']
+                assert preview['document']['manifest']['viewMode'] == 'report'
+                assert '"componentId":"detail"' in preview['document']['manifest']['report']['markdown']
+
+                attached = await call('dataset_attach', {**context, 'expectedRevision': saved['revision'],
+                    'datasetId': 'a' * 80, 'connection': 'sales-db', 'table': 'sales'})
+                assert attached['dataset']['id'] == 'a' * 80
+                assert len(attached['dataset']['sourceId']) <= 80
+                assert attached['dataset']['fields']['amount']['type'] == 'number'
+                assert attached['dataset']['metrics'] == {}
+                next_call = attached['nextCalls'][0]
+                assert (await call(next_call['tool'], next_call['arguments']))['totalRows'] == 2
+
+                queried = await call('query_execute', {**context, 'expectedRevision': attached['revision'],
+                    'datasetId': 'live-sales', 'connection': 'sales-db', 'sql': 'SELECT * FROM sales',
+                    'mode': 'live', 'fields': fields})
+                assert queried['dataset']['mode'] == 'live'
+                assert queried['dataset']['fields'] == fields and queried['dataset']['sourceId']
+                assert 'version' not in queried['dataset'] and 'rowCount' not in queried['dataset']
+                assert len(queried['dataset']['metrics']) == 1
+                with sqlite3.connect(upstream) as db:
+                    db.execute('INSERT INTO sales VALUES (?, ?)', ('004', 40))
+                next_call = queried['nextCalls'][0]
+                sample = await call(next_call['tool'], next_call['arguments'])
+                assert sample['transient'] is True and sample['mode'] == 'live'
+                assert sample['totalRows'] == 3 and sample['rows'][-1]['amount'] == 40
     asyncio.run(check())
 
 

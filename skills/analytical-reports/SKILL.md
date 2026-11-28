@@ -7,7 +7,7 @@ description: Migrate external legacy reports. Create, revise and refresh evidenc
 
 Write a report that answers the user's question with traceable data and figures. Save Markdown as the report source. The shared renderer presents `report` as a standalone, full-width academic reading page. Use MCP or CLI to revise the source and chart declarations.
 
-For an external report migration, first delegate a [page-by-page source audit and MCP mapping](../executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp) when a subagent is available; otherwise perform it directly. Preserve prose, figures, table filters and metric definitions. Use the [authoring script](../executive-charts/references/mcp-authoring.md) for repeatable file-based edits; a small, known batch can go directly to MCP.
+For an external report migration, first delegate a [page-by-page source audit and MCP mapping](../executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp) when a subagent is available; otherwise perform it directly. Preserve prose, figures, table filters and metric definitions. Create and edit through MCP directly; the [native authoring guide](../executive-charts/references/mcp-authoring.md) provides an initial call and report variant. File-based review, offline edits and repeatable batch work may use the optional script.
 
 ## Read the project and evidence
 
@@ -17,7 +17,7 @@ Use `dashboard_publish` with a saved `revision` to set the formal publication. F
 
 When readers need filter controls, use `filtered-report` and the shared [filter and selection defaults](../executive-charts/references/design_standards.md#操作与更新). Authored Markdown does not recalculate with reader filters: identify the scope of numeric claims and avoid implying they describe every filtered state.
 
-Inspect the source's grain, time range, units and calculations. Register sources, datasets and metrics so figures and prose use the same definitions. Read [metric definitions](../executive-charts/references/metric-definitions.md) when defining calculations.
+Inspect the source's grain, time range, units and calculations. Register sources, datasets and metrics so figures and prose use the same definitions. Data write receipts provide field and metric definitions and `nextCalls`; use `dataset_preview` to inspect a small sample before components exist. It does not apply component filters or establish full-data distributions. Review imported `unverified` sum metrics before using them in claims. Read [metric definitions](../executive-charts/references/metric-definitions.md) when defining calculations.
 
 For a new report, use [the academic master](references/academic-master.md) for reading structure. Read `charts://examples/academic-report` when its runnable Markdown and declaration batch are needed; reuse an already inspected example for the same server version. Replace case-specific sources, data, IDs and claims with the current report's evidence. Do not ask about routine section or typography choices when the task and evidence suffice.
 
@@ -51,8 +51,8 @@ The renderer numbers notes in a final 注释 section with links back to the text
 
 ## Write and deliver
 
-1. Choose the ID and title for a new report, or read the latest revision of an existing report with `dashboard_get`.
-2. Use `dashboard_submit` with `createTitle` for a new report or `expectedRevision` for an edit. Include source, dataset, metric and component operations together with `set_report_markdown` and `set_view_mode`=`report`. Component references resolve within the submission. Save structure diagrams using the [component diagram instructions](../executive-charts/SKILL.md#save-structure-diagrams).
+1. Choose the ID and title for a new report, or read the latest revision of an existing report with `dashboard_get`. If data needs importing and inspection first, follow [shared delivery](../executive-charts/references/mcp-delivery.md#project-and-data), retaining the returned revision.
+2. Use `dashboard_submit` with `createTitle` for a new report or `expectedRevision` for an edit. Include source, dataset, metric and component operations together with `set_report_markdown` and `set_view_mode`=`report` (or `filtered-report` when controls are needed). Pass the Markdown string directly; a local `.md` or JSON patch file is optional. Component references resolve within the submission. Save structure diagrams using the [component diagram instructions](../executive-charts/SKILL.md#save-structure-diagrams).
 3. Inspect affected figures together with `dashboard_view`, using `responseMode: "patch"`, `componentIds` and `includeEvidence: true`. Check numeric claims against the same dataset version and filter scope, then check figure references, notes, units and sources. Use an explicit small `component_data.limit` for a row spot-check. Full-data export is a separate request.
 4. On a failed check, submit corrections at the retained draft revision. Open the saved report with `dashboard_preview` only after success.
 5. Deliver the report or requested export with its main finding, data provenance and concrete unresolved issues.

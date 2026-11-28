@@ -251,6 +251,20 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path, monkeypatch):
                     assert created.structuredContent['dashboardId'] == 'blank'
                     assert created.structuredContent['revision'] == 1
                     assert 'document' not in created.structuredContent
+                    imported = await client.call_tool('dataset_import', {'projectRoot': 'fresh',
+                        'dashboardId': 'blank', 'expectedRevision': created.structuredContent['revision'],
+                        'datasetId': 'sales', 'rows': [{'region': 'East', 'amount': 12}]})
+                    assert not imported.isError and imported.structuredContent is not None
+                    receipt = imported.structuredContent
+                    assert receipt['dataset']['fields']['amount']['type'] == 'number'
+                    next_call = receipt['nextCalls'][0]
+                    assert next_call['tool'] == 'dataset_preview'
+                    assert next_call['arguments']['projectRoot'] == 'fresh'
+                    inspected = await client.call_tool(next_call['tool'], next_call['arguments'])
+                    assert not inspected.isError and inspected.structuredContent is not None
+                    assert inspected.structuredContent['totalRows'] == 1
+                    assert inspected.structuredContent['rows'] == [{'region': 'East', 'amount': 12}]
+                    assert inspected.structuredContent['filtersApplied'] is False
                     preview = await client.call_tool('dashboard_preview', {'projectRoot': 'sales', 'dashboardId': 'exec'})
                     assert not preview.isError and preview.structuredContent is not None
                     assert preview.structuredContent['document']['id'] == 'exec'
@@ -312,7 +326,7 @@ def test_remote_mcp_and_scoped_viewer_api(tmp_path, monkeypatch):
         assert saved['checkpoint']['revision'] == 2
         published = post(api + 'dashboard_publish', {'dashboardId': 'exec', 'expectedRevision': 2, 'revision': 2}, edit_token)[1]
         assert published['publishedRevision'] == published['versionStatus']['savedRevision'] == 2
-        for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dashboard_create', 'dashboard_export_open',
+        for tool in ('dataset_import', 'query_execute', 'dataset_attach', 'dataset_preview', 'dashboard_create', 'dashboard_export_open',
                      'dataset_transfer_chunk', 'dataset_transfer_finish', 'dataset_transfer_status', 'dataset_transfer_cleanup'):
             status, denied = post(api + tool, {'dashboardId': 'exec'}, edit_token)
             assert status == 403 and denied['error']['code'] == 'FORBIDDEN', (tool, denied)

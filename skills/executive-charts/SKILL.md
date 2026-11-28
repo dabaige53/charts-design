@@ -13,7 +13,7 @@ Build around the decision the reader needs to make. Establish the question, audi
 | Existing dashboard or refresh | Read `dashboard_get`; preserve stable IDs and reuse dataset references. Follow **Change or refresh**. |
 | External dashboard migration | First delegate a page-by-page [source audit and MCP mapping](references/existing-project-checklist.md#从外部历史报表迁入-mcp) when a subagent is available; otherwise perform it directly. Preserve content, reading order, geometry and operations. Compare against the original, not the chosen template. |
 
-For larger declarations or repeatable edits, use the [authoring script](references/mcp-authoring.md) to generate and validate files. A small, known operation batch can go directly to MCP.
+Use MCP directly for creation and editing. The [native authoring guide](references/mcp-authoring.md) includes a complete initial `dashboard_submit` call and a report variant. JSON objects are tool arguments; creating intermediate files or running a script is optional, for file-based review, offline edits or repeatable batch work.
 
 ## Find the project and tools
 
@@ -25,6 +25,7 @@ Read the connected server's `charts://contract` once for the relevant operations
 | --- | --- |
 | Read declarations and editable revision | `dashboard_get` |
 | Inspect dataset references and row counts | Import or attachment receipt, existing references in `dashboard_get` |
+| Inspect dataset fields and a small row sample before creating components | `dataset_preview` with `datasetId`; follow the data write receipt's `nextCalls` |
 | Import rows/CSV or attach a configured SQLite table | `dataset_import`, `dataset_attach` |
 | Register a configured read-only SQL snapshot or live source | `query_execute`; choose the data lifecycle using [local data](references/local-data.md) |
 | Submit declarations or layout, check and save | `dashboard_submit` |
@@ -42,8 +43,8 @@ Use native filter and chart-linking controls where supported. Every applied filt
 
 ## Create and fill a dashboard
 
-1. **Read the data.** Inspect metadata and a small row sample for fields, grain, types and units. Obtain time ranges, category counts and missing-value rates from source metadata or full-scope summary queries, not the sample. Record provenance in sources and calculation rules in metrics. Use existing business definitions when available; label synthetic examples. [Metric definitions](references/metric-definitions.md) covers scope and formulas.
-2. **Register the inputs.** Define sources, datasets and metrics before binding components. Reuse a dataset across related calculations. Small imports accept rows or CSV; configured SQLite tables use `dataset_attach`. Read [local data](references/local-data.md) for large datasets, versioned references and exports.
+1. **Read the data.** Inspect available metadata and rows for fields, grain, types and units. For a registered dataset, `dataset_preview` works before any component exists and does not apply component filters. Obtain time ranges, category counts and missing-value rates from source metadata or full-scope summary queries, not the sample. Record provenance in sources and calculation rules in metrics. Use existing business definitions when available; label synthetic examples. [Metric definitions](references/metric-definitions.md) covers scope and formulas.
+2. **Register the inputs.** If small data and its meaning are already known, include `put_source`, `put_dataset`, reviewed metrics and components in one initial `dashboard_submit(createTitle, operations)`. If inspection must come first, create an empty container, import or attach the data, then follow the receipt's `nextCalls` to `dataset_preview`. `dataset_import` accepts rows or CSV and optional explicit `fields`; imported sum metrics remain `unverified`. Reuse a dataset across related calculations. Read [local data](references/local-data.md) for configured SQL, large datasets, versioned references and exports.
 3. **Choose the presentation.** Arrange the decision, evidence and detail in reading order. Follow the [question-to-chart guide](references/design_standards.md#按问题与证据选图) and [KPI selection](references/kpi-cards.md). Pass known shape to `chart_recommend`; set `requiresFilterBinding: true` for charts that must respond to filters. Check each candidate's `requirements`, `cautions` and `bindingMode`; an `encoding` path needs its explicit encoding declaration. Use returned questions to inspect the source first. Keep comparable charts consistent and choose one [layout template](references/layout_templates.md) or retain the accepted layout.
 4. **Declare the components.** Select the renderer below, bind supported filters to explicit consumers and save each component's structure diagram. Put definitions, formulas, sources and detail rows in the shared detail view. KPI cards contain only titles, values, units, comparisons and concise graphical labels; narrative belongs in a separate text component.
 5. **Save and inspect.** Submit sources, datasets, metrics, components, filters and layout in one related batch where possible. `dashboard_submit` already performs full checks and saves; do not add a separate routine validate/doctor/checkpoint sequence. Verify affected results together using one patch view, then inspect only the necessary detail rows. Compare with the source at the same revision and filter scope. Open the saved preview once and use the [design review](references/design_standards.md#交付前的设计复核).

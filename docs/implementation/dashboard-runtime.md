@@ -7,6 +7,7 @@ Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MC
 | 维护入口 | 职责 |
 | --- | --- |
 | `service.py` | 工具执行、数据计算编排与返回结果 |
+| `dataset_authoring.py` | 有界 JSON/CSV 输入解析与无需组件的数据集检查 |
 | `tool_contract.py`、`contract.py` | 工具用途、参数说明、操作结构与发现资源 |
 | `mcp_server.py`、`project_routing.py` | MCP 协议适配、请求项目选择与结果传输 |
 | `store.py`、`project.py`、`local_data.py` | 事务状态、草稿/检查点、批注与不可变数据 |
@@ -84,11 +85,11 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 
 `chart_recommend` 只按已知的数据形态排序，缺少 `measures` 不再默认单指标。需要筛选重算时传 `requiresFilterBinding: true`；返回的 `bindingMode` 区分普通预设和 `config.encoding` 的专用映射，不能把可分组热力图当成可重算相关系数。`requirements`、`cautions`、`fit` 和 `shapeMismatches` 说明缺少的证据、已知结构不匹配与阅读建议，`questions` 可先从已有数据和需求中补齐。`designGuidance` 优先保持比较关系与一致编码，页面已使用某图不自动降低其排名。
 
-同一连接提供编辑、查询、展示、导出、正式发布、创建分享和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。编辑器提供版本历史和分享管理。
+同一连接提供编辑、查询、展示、导出、正式发布、创建分享和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含字段、来源引用、指标定义与已有数据版本。尚未创建组件时用 `dataset_preview` 检查数据；核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。编辑器提供版本历史和分享管理。
 
 ## 编辑与结果确认
 
-新看板已有初始声明时，一次调用 `dashboard_submit`，传 `dashboardId`、`createTitle` 和 `operations`。服务仅创建新 ID。已有 ID 会返回冲突；首次提交失败后，先读 `dashboard_get` 获取草稿状态，再用 `expectedRevision` 修正。导入完整文档或先建空看板时仍使用 `dashboard_create`。
+新看板已有初始声明时，一次调用 `dashboard_submit`，直接传 JSON 对象参数 `dashboardId`、`createTitle` 和 `operations`，无需先生成中间 JSON 文件。服务仅创建新 ID，并在创建前校验完整初始声明及其引用；声明错误不会留下空看板。已有 ID 会返回冲突。存储故障、并发或检查失败后仍先读 `dashboard_get` 确认状态，存在草稿时用其 `expectedRevision` 修正。该入口不把存储、计算与保存包装成跨步骤事务。导入完整文档或先建空看板时仍使用 `dashboard_create`。
 
 所有连接的 `tools/list` 返回同一套 Agent 工具。需要为 COS 数据集分片时，在当前连接调用 `dataset_repartition`。使用 CLI 执行存储盘点、上传暂存清理及存储迁移。直连服务为现有页面和上传程序保留协议回调，参数见 `charts://contract` 的 `clientTools`。
 
@@ -101,6 +102,8 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 `dashboard_get` 读取可编辑草稿，`dashboard_view` 返回实际计算结果。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态。
 
 MCP 中，创建、patch、恢复、数据导入/挂接/查询和数据迁移这八个原本返回文档的写入工具，默认 `responseMode=summary`：返回 `dashboardId`、顶层 `revision`、可能受影响的 `affectedComponentIds`、组件/数据集/指标数量及原有操作元数据；完整 `document` 与图表产物按需读取。共享指标、数据和布局操作可影响多个组件，受影响 ID 可能包含间接受影响或已删除的组件。下一次写入直接使用返回的顶层 `revision`。
+
+`dataset_import`、`dataset_attach`、`query_execute` 的摘要还返回 `dataset.fields`、`sourceId`、`mode` 与按实际 ID 索引的 `metrics`，可以直接用于后续绑定，无需复刻指标 ID 的生成算法。快照包含 `rowCount` 和已有引用 `version`；live 不冒充固定行数或不可变快照。`nextCalls` 提供可直接执行的只读 `dataset_preview` 和 `dashboard_get` 请求，保留该次请求的项目、修订及数据版本；它们是后续选择，不是自动执行队列，也不代表指标已获业务确认。
 
 需要完整结果时可显式传 `responseMode=full`，或按需调用 `dashboard_get`。MCP 编辑器显式请求 full，以继续更新页面；共享 Service、CLI 和网页 HTTP API 保留原文档返回。写入、权限、版本冲突和保存检查沿用既有规则；完整 Doctor 检查在完成编辑批次时执行。读取、预览、完成编辑及错误响应沿用各自原有结构。
 
@@ -122,13 +125,17 @@ bun bin/python-runtime.js -m dashboard_runtime --project-root /absolute/path/pro
 
 ## 数据导入与查询来源
 
-```sh
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards call dataset_import --json-file import.json
-```
+先从 `dashboard_create` 或现有看板取得修订，再直接调用 `dataset_import`，提供 `rows` 或 `csvText` 中的一种。已掌握完整来源、字段和组件声明时，也可在 `dashboard_submit(createTitle, operations)` 中一次登记。MCP 原生操作示例及可选文件构建流程见 [MCP 创作](../../skills/executive-charts/references/mcp-authoring.md)。
 
-`dataset_import` 必须提供 `rows` 或 `csvText` 中的一种。目标数据集存在时替换其数据与元信息。推断得到的数值指标采用默认求和；业务定义、单位和粒度需确认。需要保留数字标识或前导零时，用 JSON 字符串明确类型。整份 schema-v2 文档可通过 `import NEW_ID --file artifact.json` 创建新看板。
+`dataset_import.fields` 可显式声明完整字段类型，适用于日期、布尔、全空字段和空数据集。空 `rows` 或只有表头的 CSV 必须提供 `fields`。JSON 保留标量类型，不把数字自动转成字符串；CSV 按声明类型解析，未声明时沿用数值推断，空单元格成为 `null`，重复/空表头及不一致的列数明确报错。数字标识可使用 JSON 字符串或显式 CSV `string` 字段保留。目标数据集存在时仍替换其数据与元信息；自动建立的数值求和指标保持 `unverified`，业务定义、单位与粒度需复核。
+
+导入后可直接用 `dataset_preview` 读取目标数据集，无需先创建临时表格组件。默认返回 20 行、最多 100 行，以及声明字段、来源 ID、精确总行数和数据版本。样本按原始行顺序读取，不应用组件或页面筛选；`offset` 用于继续读取，不能把少量样本当作完整类别分布或统计结论。快照读取现有不可变版本，live 通过受控只读 SQL 获取当前结果并标记 `transient`。检查通过后再决定指标和组件，提交并保存；已存在组件的聚合与筛选核验继续用 `dashboard_view`。
+
+文件已是用户要求的交付资产时，CLI 仍支持 `call dataset_import --json-file import.json`；整份已审阅 schema-v2 文档可用 `import NEW_ID --file artifact.json` 创建新看板。
 
 大型本地数据更新使用[独立上传入口](../operations/self-hosted-server.md#更新已有看板的数据)，取得验证完成的引用后再更新页面；首次迁移使用同页的清单迁移入口。修改大型组件前可[下载完整配置](../operations/mcp-transport-diagnostics.md#完整配置下载)，复用共用客户端的响应分块处理。
+
+`dataset_attach` 在复制源表之前确认目标存在且修订一致，避免明确过期的请求先导入整表。复制后的最终写入仍保留并发检查；复制期间若发生其他修改，需读取当前草稿再决定如何使用已准备的数据。
 
 服务从运维管理的 JSON 文件读取 SQLite、PostgreSQL 和 DuckDB 来源别名。
 

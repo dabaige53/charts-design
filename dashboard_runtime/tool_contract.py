@@ -150,7 +150,7 @@ READ_ONLY = {
     'dashboard_version_status', 'dashboard_version_get',
     'dashboard_version_delete_status',
     'dashboard_version_query',
-    'dataset_transfer_status',
+    'dataset_transfer_status', 'dataset_preview',
     'dataset_storage_inventory',
 }
 MAINTENANCE_TOOLS = frozenset({
@@ -161,7 +161,7 @@ AUTHOR_TOOLS = frozenset({
     'dashboard_list', 'dashboard_get', 'dashboard_create', 'dashboard_submit', 'dashboard_preview', 'dashboard_publish',
     'dashboard_share_publish', 'dashboard_share_status',
     'dashboard_view', 'dashboard_filter_options', 'component_data', 'dashboard_annotations',
-    'dashboard_annotations_update', 'dataset_import', 'dataset_attach', 'query_execute',
+    'dashboard_annotations_update', 'dataset_import', 'dataset_attach', 'dataset_preview', 'query_execute',
     'chart_recommend', 'chart_declarations', 'statistical_render',
     'dashboard_export', 'dataset_export', 'dashboard_export_site', 'dataset_repartition',
 })
@@ -198,7 +198,7 @@ TOOLS = {
     }, ('dashboardId', 'revision'))),
     'dashboard_submit': ('Submit related design changes once. Applies operations atomically to the expected draft, checks all components and saves one checkpoint. Omit operations to check and save an already reviewed draft (e.g. after importing data). Never publishes or shares. On DOCTOR_FAILED the changed draft remains; fix it at the returned revision. On conflict or uncertain outcome inspect current state before retrying.', schema({
         'dashboardId': BOARD['dashboardId'], 'expectedRevision': EXPECTED,
-        'createTitle': described({'type': 'string', 'minLength': 1}, 'Create a new dashboard and submit its initial operations in this call. An existing ID is rejected. On failure read dashboard_get before retrying.'),
+        'createTitle': described({'type': 'string', 'minLength': 1}, 'Validate the complete initial operations before creating a new dashboard and submitting them. Invalid declarations leave the ID unused; an existing ID is rejected. For storage, concurrency or Doctor failures inspect dashboard_get before retrying.'),
         'operations': {**OPERATIONS, 'items': {'oneOf': [item for name, item in OPERATION_SCHEMAS.items() if name != 'set_annotations']}},
         'name': NAME,
     }, ('dashboardId',), oneOf=[{'required': ['expectedRevision'], 'not': {'required': ['createTitle']}},
@@ -321,16 +321,24 @@ TOOLS = {
                 'type': {'enum': ['string', 'number', 'date', 'boolean']}, 'label': STR}}},
             'Live mode only. Field definitions keyed by SQL result column. If omitted, reuse the dataset fields or infer from the first execution.'),
     }, ('dashboardId', 'expectedRevision', 'datasetId', 'connection', 'sql'))),
-    'dataset_import': ('Import a small explicit JSON row array or CSV text; provide exactly one input. Replaces the destination dataset. Returns the updated revision and semanticChanges; inferred numeric fields create unverified sum metrics, which need business review.' + WRITE_FLOW, schema({
+    'dataset_import': ('Import a small explicit JSON row array or CSV text directly, without an intermediate file or script; provide exactly one input. Replaces the destination dataset. Optional fields declares exact types, including numeric-looking identifiers, dates or empty data. CSV empty cells become null; duplicate headers and inconsistent row widths are rejected. Returns the updated revision and semanticChanges; inferred numeric fields create unverified sum metrics, which need business review. MCP summaries include dataset fields, sourceId, metric definitions keyed by their actual IDs and ready-to-call read-only nextCalls.' + WRITE_FLOW, schema({
         **BOARD, 'expectedRevision': EXPECTED,
         'datasetId': described(ID, 'Destination dataset ID; an existing ID replaces its metadata and complete row set.'),
-        'rows': described({'type': 'array', 'minItems': 1, 'items': {'type': 'object'}}, 'Non-empty explicit row objects with field keys and typed JSON values; do not also provide csvText.'),
-        'csvText': described(STR, 'CSV contents including a header and data rows, not a file path. Numeric-looking cells are inferred as numbers; use JSON strings to preserve numeric identifiers. Do not also provide rows.'),
+        'rows': described({'type': 'array', 'maxItems': common['limits']['maxRowsAcrossDatasets'], 'items': {'type': 'object'}}, 'Explicit row objects with typed JSON values; [] requires fields. JSON values are not coerced to fit declared fields. Do not also provide csvText.'),
+        'csvText': described(STR, 'CSV contents including a unique non-empty header, not a file path. Numeric-looking cells are inferred as numbers unless fields declares string; empty cells become null. Header-only CSV requires fields. Do not also provide rows.'),
+        'fields': described(common['datasetMetaSchema']['properties']['fields'], 'Optional complete field definitions. Declare string for numeric identifiers, date for time fields, or types for empty/all-null data. CSV text is converted by the declared type; JSON scalars must already match. This does not confirm business meaning, units or aggregation.'),
         'name': described(STR, 'Source display name; defaults to datasetId.'),
     }, ('dashboardId', 'expectedRevision', 'datasetId'), oneOf=[
         {'required': ['rows'], 'not': {'required': ['csvText']}},
         {'required': ['csvText'], 'not': {'required': ['rows']}},
-    ])),
+    ], allOf=[{'if': {'required': ['rows'], 'properties': {'rows': {'maxItems': 0}}},
+               'then': {'required': ['fields']}}])),
+    'dataset_preview': ('Inspect an existing dataset before creating any chart or table component. Returns declared fields, sourceId, exact totalRows and a bounded raw row page. No saved or component filters apply; the sample is for inspection, not whole-dataset statistics. Does not write a draft or checkpoint. Snapshot reads use the immutable data version; live reads execute the configured read-only SQL and are transient. Use the import receipt revision, then make business and chart decisions from explicit evidence.', schema({
+        **BOARD, **READING_VERSION,
+        'datasetId': described(ID, 'Existing dataset ID from a data write receipt or document.manifest.datasets; no componentId is needed.'),
+        'offset': described({'type': 'integer', 'minimum': 0, 'maximum': 2**53 - 1, 'default': 0}, 'Zero-based offset into raw source order, without component filters.'),
+        'limit': described({'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 20}, 'Maximum rows in this inspection page; use dataset_export for the complete dataset.'),
+    }, ('dashboardId', 'datasetId'))),
     'legacy_render': ('Return standalone HTML for one existing kind=legacy component using the shared renderer; read-only, does not open the App or create a full-dashboard export. Returns html, scope and componentId. Use dashboard_preview for the saved page.', schema(TARGET, ('dashboardId', 'componentId'))),
     'generation_examples': ('Read explicitly synthetic dashboard/report examples and reusable atomic operations without creating data. Omit caseId for the index; choose a case for detail. Adapt composition and metric definitions to the user request; examples are optional aids.', schema({
         'caseId': described({'enum': ['executive-dashboard', 'operations-scorecard', 'academic-report', 'filtered-report']}, 'Example ID from the index; omission returns discovery information.'),

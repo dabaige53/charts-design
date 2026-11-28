@@ -6,12 +6,12 @@ In a local snapshot project, SQLite holds full data in `data.sqlite3`; `dashboar
 
 | Need | Route | Behavior |
 | --- | --- | --- |
-| Small supplied rows or CSV | `dataset_import` | Save an immutable snapshot; review inferred types and metrics. |
+| Small supplied rows or CSV | `dataset_import` | Save an immutable snapshot; optional `fields` makes types explicit. Empty rows require fields; review inferred metrics. |
 | An existing configured SQLite table | `dataset_attach` | Stream the table through a read-only connection into a snapshot. |
 | A bounded SQL result from SQLite, PostgreSQL or DuckDB | `query_execute` with `mode: "snapshot"` | Execute the source query and retain its result for reproducible editing, saved versions and independent delivery. |
 | Current upstream SQL values while viewing | `query_execute` with `mode: "live"` | Register the source query; subsequent reads execute it and do not store its rows as a data version. |
 
-Source aliases come from operator configuration. Use typed parameters and explicit result-column names; supply live `fields` for dates and booleans when inference is insufficient. SQL results are bounded by the connected runtime. Aggregate or narrow an oversized result without changing the intended analytical scope; do not add an arbitrary `LIMIT` and present it as a complete dataset.
+Source aliases and source schema come from supplied project context or operator configuration. The MCP does not enumerate or create connections. If a required alias or access is missing, obtain it from the operator rather than guessing or generating a connection script. Use typed parameters and explicit result-column names; supply live `fields` for dates and booleans when inference is insufficient. SQL results are bounded by the connected runtime. Aggregate or narrow an oversized result without changing the intended analytical scope; do not add an arbitrary `LIMIT` and present it as a complete dataset.
 
 Live mode needs the source service online and does not make separate requests a shared database snapshot. Batch related components in one `dashboard_view` so that a request can reuse the same live dataset. For a reproducible report or independent share, use a deliberate snapshot. Static export/sharing of live definitions is rejected; preserve the live original when creating a requested fixed copy.
 
@@ -19,16 +19,18 @@ Live mode needs the source service online and does not make separate requests a 
 
 Follow [shared delivery](mcp-delivery.md) for project routing, revisions and edit batches.
 
-1. Read the runtime's configured SQLite connection aliases. Each alias declares `engine: "sqlite"` and an existing file's `path` in the operator-owned `--sources` JSON.
-2. Read the dashboard revision or create an empty dashboard for attachment. Call `dataset_attach` with `dashboardId`, `expectedRevision`, `datasetId`, `connection` and `table`. Supply explicit field metadata for dates and booleans. The source table streams through a read-only connection into an immutable version.
-3. Check the row count and dataset version in the attachment receipt. Pass its dashboard revision to `dashboard_submit` with the reviewed metrics and components. Include units, precision, ratio numerator and denominator, and filter consumers.
+1. Use an already configured SQLite alias and table from the project context. The operator owns its `--sources` configuration; authoring calls accept the alias, not a database path.
+2. Read the dashboard revision or create an empty dashboard for attachment. Call `dataset_attach` with `dashboardId`, `expectedRevision`, `datasetId`, `connection` and `table`. Supply explicit field metadata for dates and booleans. The source table streams through a read-only connection into an immutable version. Small JSON/CSV inputs use `dataset_import` instead; its optional `fields` is a complete field map. CSV text is converted using those types, including string identifiers, dates and booleans; JSON scalar values must already match their declarations.
+3. Review the receipt's fields, source, metric definitions and row count. Follow its `nextCalls` to `dataset_preview` before making components; it returns a bounded dataset page with no component filtering. Pass the returned write revision to `dashboard_submit` with the reviewed metrics and components. Include units, precision, ratio numerator and denominator, and filter consumers. Automatically inferred sum metrics stay `unverified` until their business meaning is established.
 4. Use `dashboard_view` with `includeEvidence: true` to check calculated values, metric definitions and sources together. Open `dashboard_preview` after a successful submission.
 
 ## Filters and table pages
 
 Use `dashboard_view` with `responseMode: "patch"`, selected `componentIds`, temporary `filters`, `tableStates` and `granularities` when checking a subset. `tableStates` maps component IDs to `page`, `pageSize`, optional `sortCol`, `sortDir` and `keyword`. Reader changes preserve the saved design revision. Carry the revision and data version from the same displayed document to detect stale reads.
 
-Use `component_data` with explicit `offset` and a small `limit` for underlying row previews. Check field types, nulls and units from the sample; use full-scope calculations for totals and ratios. Do not fetch the full dataset merely to show the first ten rows.
+Use `dataset_preview` with `dashboardId` and `datasetId` for an initial inspection independent of components. `offset` defaults to 0; `limit` defaults to 20 and is at most 100. Optional `expectedRevision` and `dataVersion` detect stale reads; reuse the receipt's `nextCalls` arguments, rather than substituting the individual `dataset.version` for the dashboard's `dataVersion`. The result includes fields, source ID, total row count and the requested rows, without saved or temporary component filters. A live dataset is read from its configured query at request time; revision checks do not freeze upstream SQL data.
+
+Use `component_data` with explicit `offset` and a small `limit` when the question concerns an existing component's filtered rows. Check field types, nulls and units from the sample; use full-scope calculations for totals, ratios, missing-value rates and distinct counts. A short preview does not establish that its categories cover the dataset. Do not fetch the full dataset merely to show the first ten rows.
 
 Large option lists use `dashboard_filter_options` with `filterId`, optional `search`, `offset` and `limit`. Load additional option pages when the required value is outside the current page.
 
