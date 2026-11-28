@@ -71,6 +71,16 @@ jobs:
         working-directory: runtime-core
     steps:
       - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        if: ${{ !inputs.acceptance_only }}
+        with:
+          bun-version-file: .bun-version
+      - name: Prepare UI for native preview tests
+        if: ${{ !inputs.acceptance_only }}
+        working-directory: .
+        run: |
+          bun run ui:install
+          bun run ui:prepare
       - name: Install pinned Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
@@ -100,6 +110,13 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Prepare UI for native preview tests
+        run: |
+          bun run ui:install
+          bun run ui:prepare
       - name: Install the pinned compiler and coverage tools
         working-directory: runtime-core
         run: |

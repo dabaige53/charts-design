@@ -59,6 +59,10 @@ jobs:
       - name: Verify the shared product version
         run: |
           bun -e 'import {nativeRelease} from "./bin/install-native.mjs"; const r=nativeRelease(process.cwd()),p=await Bun.file("package.json").json(); if(r.version!==p.version || (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `v${r.version}`)) throw Error("Release tag, npm and Cargo versions must match");'
+      - name: Prepare UI for native preview tests
+        run: |
+          bun run ui:install
+          bun run ui:prepare
       - name: Install pinned Rust target
         if: runner.os != 'Linux'
         working-directory: runtime-core
