@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repository = 'https://github.com/dabaige53/charts-design/releases/download';
 const targets = {
-  'linux-x64': 'x86_64-unknown-linux-musl',
-  'linux-arm64': 'aarch64-unknown-linux-musl',
+  'linux-x64': 'x86_64-unknown-linux-gnu',
+  'linux-arm64': 'aarch64-unknown-linux-gnu',
   'darwin-x64': 'x86_64-apple-darwin',
   'darwin-arm64': 'aarch64-apple-darwin',
   'win32-x64': 'x86_64-pc-windows-msvc',
@@ -25,10 +25,10 @@ export function nativeVersion(root) {
 export function nativeRelease(root, platform = process.platform, arch = process.arch) {
   const version = nativeVersion(root);
   const target = targets[`${platform}-${arch}`];
-  if (!target) throw Error(`没有 ${platform}/${arch} 的预编译程序；请使用 bun run native:build。`);
+  if (!target) throw Error(`没有 ${platform}/${arch} 的预编译程序；请检出项目源码并运行 bun run native:build。`);
   const executable = `charts-design-core${platform === 'win32' ? '.exe' : ''}`;
   return { version, target, executable, asset: `charts-design-core-${target}${platform === 'win32' ? '.exe' : ''}`,
-    url: `${repository}/native-v${version}`, destination: path.join(root, 'dashboard_runtime/native', `${platform}-${arch}`) };
+    url: `${repository}/v${version}`, destination: path.join(root, 'runtime-core/native', `${platform}-${arch}`) };
 }
 
 async function download(url, limit, fetcher) {
@@ -65,7 +65,7 @@ export async function installNative({ root, platform = process.platform, arch = 
   const matches = checksums.split(/\r?\n/).map(line => line.match(/^([a-f0-9]{64})  (\S+)$/))
     .filter(match => match?.[2] === release.asset);
   if (matches.length !== 1) throw Error('发布校验文件没有唯一匹配的原生程序。');
-  const bytes = await download(`${release.url}/${release.asset}`, 32 * 1024 * 1024, fetcher);
+  const bytes = await download(`${release.url}/${release.asset}`, 256 * 1024 * 1024, fetcher);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   if (sha256 !== matches[0][1]) throw Error('原生程序 SHA-256 校验失败；原安装保持不变。');
   mkdirSync(release.destination, { recursive: true });
@@ -82,10 +82,30 @@ export async function installNative({ root, platform = process.platform, arch = 
   } finally { rmSync(staging, { recursive: true, force: true }); }
 }
 
+// Installation may run more than once. A working, matching binary needs no network.
+export async function ensureNative({root, env = process.env, platform = process.platform, arch = process.arch,
+  fetcher = fetch, verify = verifyBinary}) {
+  if (env.CHARTS_SKIP_NATIVE_INSTALL === '1') return {skipped: true, reason: 'CHARTS_SKIP_NATIVE_INSTALL'};
+  const version = nativeVersion(root);
+  if (env.CHARTS_CORE_BIN) {
+    const binary = path.resolve(env.CHARTS_CORE_BIN);
+    verify(binary, version);
+    return {version, binary, reused: true};
+  }
+  const release = nativeRelease(root, platform, arch);
+  const binary = path.join(release.destination, release.executable);
+  if (existsSync(binary)) {
+    try { verify(binary, version); return {...release, binary, reused: true}; }
+    catch { /* Replace an incompatible binary only after a verified download. */ }
+  }
+  return installNative({root, platform, arch, fetcher, verify});
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (process.argv.length > 2) throw Error('用法：bun run native:install（版本随当前安装包固定）');
-    const receipt = await installNative({ root: fileURLToPath(new URL('..', import.meta.url)) });
-    console.log(`原生 Parquet 导出已安装：${receipt.version} (${receipt.target})\n${receipt.binary}`);
+    const receipt = await ensureNative({ root: fileURLToPath(new URL('..', import.meta.url)) });
+    console.log(receipt.skipped ? '已按 CHARTS_SKIP_NATIVE_INSTALL 跳过原生安装。'
+      : `Rust Runtime ${receipt.reused ? '已就绪' : '已安装'}：${receipt.version}\n${receipt.binary}`);
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

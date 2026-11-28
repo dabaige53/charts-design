@@ -1,8 +1,8 @@
 import { test } from "bun:test";
 import { Database } from "bun:sqlite";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { deflateRawSync } from "node:zlib";
 import worker from "../../deploy/pages/worker.mjs";
 import { assetManifest, bundlePath, pagesAsset, releasePath } from "../../deploy/pages/deployment.mjs";
 
@@ -29,21 +29,32 @@ const d1 = () => {
 const toSql = value => value instanceof ArrayBuffer ? new Uint8Array(value) : value;
 
 function bundle() {
-  return execFileSync("python3", ["-c", `
-import sys, json, zipfile
-from io import BytesIO
-doc = dict(schemaVersion=2, id='sample', revision=2,
-           manifest=dict(title='Schedule', components={'total': {'kind':'kpi'}}, annotations=['private']),
-           staticFiles={'sales':['data/sales-0.parquet']},
-           staticFilterOptions={'month':['2026-07','2026-08']}, browserLinks=['private'])
-out = BytesIO()
-with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as archive:
-    archive.writestr('document.json',json.dumps(doc))
-    archive.writestr('export-manifest.json',json.dumps(dict(dashboardId='sample',revision=2)))
-    archive.writestr('data/sales-0.parquet',b'PAR1 fixture bytes')
-    archive.writestr('app.js',b'not the trusted application')
-sys.stdout.buffer.write(out.getvalue())
-`]);
+  const document = {schemaVersion: 2, id: 'sample', revision: 2,
+    manifest: {title: 'Schedule', components: {total: {kind: 'kpi'}}, annotations: ['private']},
+    staticFiles: {sales: ['data/sales-0.parquet']},
+    staticFilterOptions: {month: ['2026-07', '2026-08']}, browserLinks: ['private']};
+  const files = {'document.json': JSON.stringify(document),
+    'export-manifest.json': JSON.stringify({dashboardId: 'sample', revision: 2}),
+    'data/sales-0.parquet': 'PAR1 fixture bytes', 'app.js': 'not the trusted application'};
+  const body = [], directory = []; let offset = 0;
+  for (const [name, value] of Object.entries(files)) {
+    const path = Buffer.from(name), raw = Buffer.from(value), compressed = deflateRawSync(raw);
+    let crc = 0xffffffff;
+    for (const byte of raw) { crc ^= byte; for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0); }
+    crc = (crc ^ 0xffffffff) >>> 0;
+    const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50); local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(8, 8); local.writeUInt32LE(crc, 14); local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(raw.length, 22); local.writeUInt16LE(path.length, 26);
+    const central = Buffer.alloc(46); central.writeUInt32LE(0x02014b50); central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6); central.writeUInt16LE(8, 10); central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(compressed.length, 20); central.writeUInt32LE(raw.length, 24);
+    central.writeUInt16LE(path.length, 28); central.writeUInt32LE(offset, 42);
+    body.push(local, path, compressed); directory.push(central, path); offset += local.length + path.length + compressed.length;
+  }
+  const central = Buffer.concat(directory), end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50);
+  end.writeUInt16LE(directory.length / 2, 8); end.writeUInt16LE(directory.length / 2, 10);
+  end.writeUInt32LE(central.length, 12); end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...body, central, end]);
 }
 
 // @wu-test type=integration | scope=Cloudflare Pages + D1 固定分享 | protects=同请求重复发布、筛选候选项丢失、匿名读取数据和越权或无效位置批注

@@ -1,10 +1,51 @@
-import { test } from 'bun:test';
+import { afterAll, beforeAll, test } from 'bun:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
-const pythonEntry = fileURLToPath(new URL('../../bin/python-runtime.js', import.meta.url));
-import {aggregate,visibleRows,grouped,compatible,csv} from '../../dashboard_runtime/web/engine.mjs';
-const doc=JSON.parse(execFileSync(process.execPath,[pythonEntry,'-c','import json;from dashboard_runtime.demo import document;print(json.dumps(document()))'],{encoding:'utf8'}));
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {nativeRuntime} from '../../bin/native-runtime.js';
+import {aggregate,visibleRows,grouped,compatible,csv} from '../../runtime-ui/shared/engine.mjs';
+let doc,directory;
+beforeAll(()=>{
+  directory=mkdtempSync(path.join(tmpdir(),'charts-engine-'));
+  const {binary,env}=nativeRuntime();
+  const call=(tool,args)=>JSON.parse(execFileSync(binary,['--project-root',path.join(directory,'project'),
+    '--runtime-root',path.join(directory,'runtime'),'call',tool,'--json-file','-'],
+    {env,input:JSON.stringify(args),encoding:'utf8'}));
+  const rows=[
+    {month:'2026-07',region:'East',revenue:80,passengers:72,seats:100},
+    {month:'2026-07',region:'South',revenue:60,passengers:45,seats:50},
+    {month:'2026-08',region:'East',revenue:102,passengers:85,seats:100},
+    {month:'2026-08',region:'South',revenue:72,passengers:48,seats:50},
+    {month:'2026-09',region:'East',revenue:96,passengers:80,seats:100},
+    {month:'2026-09',region:'South',revenue:74,passengers:46,seats:50},
+  ];
+  call('dashboard_create',{dashboardId:'fixture',title:'Synthetic revenue and capacity'});
+  call('dashboard_patch',{dashboardId:'fixture',expectedRevision:1,operations:[
+    {op:'put_source',id:'fixture',value:{kind:'fixture',name:'Synthetic acceptance-test data'}},
+    {op:'put_dataset',id:'sales',meta:{sourceId:'fixture',fields:Object.fromEntries(Object.keys(rows[0])
+      .map(key=>[key,{type:['month','region'].includes(key)?'string':'number'}]))},rows},
+    {op:'put_metric',id:'revenue',value:{datasetId:'sales',field:'revenue',aggregation:'sum',label:'Revenue',unit:'10k CNY',
+      definition:'Revenue across the selected months and regions, summed from synthetic records.',status:'unverified'}},
+    {op:'put_component',id:'total',value:{kind:'kpi',title:'Revenue',datasetId:'sales',measures:['revenue']}},
+    {op:'put_component',id:'trend',value:{kind:'legacy',family:'chart',title:'Revenue by month',sourceId:'fixture',
+      config:{code:'t01',unit:'10k CNY',data:{months:['2026-07','2026-08','2026-09'],rpk:[140,174,170]},
+        presentation:{axisLabels:{x:'Month',y:'Revenue'},seriesLabels:['Revenue'],tooltipValueLabels:['Revenue'],
+          units:['10k CNY'],tableHeaders:['Month','Revenue','Change']}},
+      binding:{datasetId:'sales',categoryField:'month',categoryTarget:'months',measures:{rpk:'revenue'}}}},
+    {op:'put_component',id:'details',value:{kind:'table',title:'Synthetic rows',datasetId:'sales'}},
+    {op:'set_filters',value:[{id:'region',label:'Region',field:'region',op:'in',values:[],componentIds:['total','trend','details']}]},
+    {op:'set_status',value:'fixture'},
+  ]});
+  doc=call('dashboard_get',{dashboardId:'fixture'}).document;
+  const preview=call('dataset_preview',{dashboardId:'fixture',datasetId:'sales',expectedRevision:doc.revision,limit:100});
+  assert.equal(preview.totalRows,rows.length);
+  doc.snapshot.datasets.sales=preview.rows;
+  // The shared grouping helpers consume the category role as x.
+  doc.manifest.components.trend.x=doc.manifest.components.trend.binding.categoryField;
+},30000);
+afterAll(()=>{if(directory)rmSync(directory,{recursive:true,force:true});});
 // @wu-test type=behavior | scope=aggregate ratio | protects=比例按百分比平均或零分母产生错误值
 test('weighted ratio is recomputed, not mean of percentages',()=>{
   assert.equal(aggregate([{p:90,s:100},{p:1,s:10}],{aggregation:'ratio',numerator:'p',denominator:'s'}),91/110);
@@ -31,10 +72,7 @@ test('shape compatibility blocks missing roles',()=>{
 // @wu-test type=boundary | scope=CSV export | protects=公式注入及引号破坏CSV
 test('CSV quotes values and neutralizes formula injection',()=>{
   const result=csv([{label:'=HYPERLINK("x")',value:-3}]);
-  const parsed=JSON.parse(execFileSync(process.execPath,[pythonEntry,'-c',
-    'import csv,io,json,sys; print(json.dumps(list(csv.reader(io.StringIO(sys.stdin.read().lstrip(chr(0xfeff)), newline="")))))'
-  ],{input:result,encoding:'utf8'}));
-  assert.deepEqual(parsed,[['label','value'],['\'=HYPERLINK("x")','-3']]);
+  assert.equal(result,'\ufeff"label","value"\r\n"\'=HYPERLINK(""x"")","-3"');
 });
 // @wu-test type=behavior | scope=search filters | protects=搜索影响未绑定组件
 test('declared search recomputes only its explicit consumers',()=>{

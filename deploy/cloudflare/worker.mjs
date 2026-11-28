@@ -19,7 +19,7 @@ export class ChartsWorkspace extends DurableObject {
             throw new Error("Configure the HTTPS origin and server token");
           container.start({
             image: container.images.base, instance: "standard-1", enableInternet: false,
-            entrypoint: ["sh", "-ec", "while [ ! -f /tmp/workspace-ready ]; do sleep .1; done; exec python -m dashboard_runtime server"],
+            entrypoint: ["sh", "-ec", "while [ ! -f /tmp/workspace-ready ]; do sleep .1; done; exec charts-design-core server"],
             env: {
               CHARTS_SERVER_TOKENS: this.env.CHARTS_SERVER_TOKENS, CHARTS_PUBLIC_URL: this.env.CHARTS_PUBLIC_URL,
               CHARTS_STORAGE_BACKEND: "cloudflare", CHARTS_SERVER_ROLE: "sharing",
@@ -31,8 +31,7 @@ export class ChartsWorkspace extends DurableObject {
           await this.checkpoint.restore(container);
           const start = await container.exec(["touch", "/tmp/workspace-ready"]);
           if (await start.exitCode !== 0) throw new Error("Runtime startup failed");
-          const probe = await container.exec(["/app/.venv/bin/python", "-c",
-            "import socket,time\nfor attempt in range(240):\n try:\n  socket.create_connection(('127.0.0.1',8000),1).close(); break\n except OSError: time.sleep(.25)\nelse: raise SystemExit(1)"],
+          const probe = await container.exec(["charts-design-core", "healthcheck", "--wait-seconds", "60"],
           { stdout: "ignore", stderr: "ignore" });
           if (await probe.exitCode !== 0) throw new Error("Runtime unavailable");
           await this.checkpoint.save(container);
@@ -67,7 +66,7 @@ export class ChartsWorkspace extends DurableObject {
 
   cleanup() {
     return this.run(async container => {
-      const job = await container.exec(["/app/.venv/bin/python", "-m", "dashboard_runtime.cloudflare_shares"], {
+      const job = await container.exec(["charts-design-core", "cleanup"], {
         cwd: "/app", env: { CHARTS_RUNTIME_ROOT: "/data/runtime", CHARTS_STORAGE_BACKEND: "cloudflare" },
         stdout: "ignore", stderr: "ignore", user: "10001:10001",
       });

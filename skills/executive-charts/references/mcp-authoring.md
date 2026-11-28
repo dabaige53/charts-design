@@ -1,6 +1,6 @@
 # MCP 原生创作与可选文件构建
 
-直接将 JSON 对象作为 MCP 工具参数。读取目标服务的 `charts://contract` 和所选 `chart_declarations` 后，使用既有原生操作创建与修改；无需先运行 shell、生成 JSON 文件或建立脚本工作区。文件审阅、离线编辑和重复批处理可选用后文的[构建脚本](#可选的文件构建)。
+直接将 JSON 对象作为 MCP 工具参数。读取目标服务的 `charts://contract` 和所选 `chart_declarations` 后，使用既有原生操作创建与修改；无需先运行 shell、生成 JSON 文件或建立脚本工作区。已有文件需要审阅、离线编辑或批量提交时，使用[声明文件流程](dashboard-workspace.md)。
 
 ## 直接初始化小型看板
 
@@ -77,59 +77,20 @@
 
 每次写入后沿用新修订；发生冲突或回执不确定时先读当前状态。非法初始操作在创建前被拒绝；`DOCTOR_FAILED` 则表示已有修改草稿，按返回修订修正，不重复创建。不要用新工具链包装来跳过指标口径、图表选型或业务结果核对。
 
-## 可选的文件构建
+## 已有声明文件
 
-需要文件审阅、离线编辑或重复批处理时，从 Charts Design 仓库或安装包根目录运行[声明脚本](../scripts/mcp_author.py)，使用随该版本提供的 Python 入口。脚本读写同一套原生操作，不是另一种创作协议。业务输入、审查清单、工作文件和输出均放在业务工作区。
-
-以下命令假设当前目录为包根，`work` 是已存在的业务目录，`project` 是 MCP 本地项目绝对路径。在远程服务上传入配置的项目名。
+用户已有文件时，直接用统一 Rust CLI 读取、验证与提交。原子操作与 MCP 完全相同，业务文件留在业务项目中：
 
 ```sh
-author() { bun bin/python-runtime.js skills/executive-charts/scripts/mcp_author.py "$@"; }
-work=/absolute/path/to/authoring
-project=/absolute/path/to/mcp-project
-author init "$work/monthly" --id monthly --title "月度经营" --mode dashboard
-author stage "$work/monthly" source ledger --value "$work/source.json"
-author stage "$work/monthly" dataset sales --value "$work/dataset.json"
-author stage "$work/monthly" metric revenue --value "$work/revenue.json"
-author stage "$work/monthly" component detail --value "$work/detail.json"
-author stage "$work/monthly" filters --value "$work/filters.json"
-author build "$work/monthly" --out "$work/document.json"
-author build "$work/monthly" --format submit --project-root "$project" --out "$work/submit.json"
+charts-design-runtime validate --file document.json
+charts-design-runtime --project-root /absolute/path/project call dashboard_submit --json-file submit.json
 ```
 
-若只准备声明文件，已有 Python 3.10+ 的环境也可在包根以 `PYTHONPATH="$PWD" /path/to/python skills/executive-charts/scripts/mcp_author.py` 执行相同子命令。这条路径只使用随包 Runtime 和 Python 标准库。
-
-分析报告初始化时选择 `--mode report`，需要读者筛选则用 `--mode filtered-report`；构建前用 `author stage "$work/monthly" markdown --value "$work/report.md"` 写入正文。看板无需创建 Markdown。
-
-每个业务文件装一个原生值。以下为输入形状示例，空数据行须替换成经核对的记录，或先导入数据版本。
-
-| 文件 | 输入示例 |
-| --- | --- |
-| source.json | `{"kind":"file","name":"月度销售快照"}` |
-| dataset.json | `{"meta":{"sourceId":"ledger","fields":{"region":{"type":"string"},"amount":{"type":"number"}}},"rows":[]}` |
-| revenue.json | `{"datasetId":"sales","aggregation":"sum","field":"amount","label":"收入","definition":"所选区域及月份内的销售金额合计","unit":"元"}` |
-| detail.json | `{"kind":"table","title":"销售明细","datasetId":"sales"}` |
-| filters.json | `[{"id":"region","label":"区域","field":"region","op":"in","values":[],"componentIds":["detail"]}]` |
-| report.md | 在源文中插入顶层 `chart` 围栏，其中一行 JSON 为 `{"componentId":"detail"}` |
-
-`base.json` 保存构建基线，`steps/` 按文件名顺序执行原生操作，每个 JSON 文件对应一个操作，每个 Markdown 文件对应一次完整的 `set_report_markdown`。重复执行 `stage` 会返回已有文件的位置，直接修改该文件即可。布局、标题等其他原生操作也可写入编号 JSON 文件。正式报告按原图形、字段及指标编写结构图，要求见对应 Skill。需要查看完整可运行样例时，在另一目录显式运行 `author init "$work/example" --id example --example filtered-report`；`--help` 列出其他合成案例。
-
-使用文件工作流修订已有成果时，把同项目 `dashboard_get` 的完整结构化结果保存为 `get.json`。若返回 `transport.resourceUri`，先读取该 MCP 资源取得完整 JSON，不把传输信封存成原声明。资源大小受宿主限制时使用[完整配置下载客户端](../../../docs/operations/mcp-transport-diagnostics.md#完整配置下载)，分块还原由客户端处理。可指定 `dataMode=local` 保留不可变数据引用。用以下命令抽出原声明，文件包含应保留的字段和稳定 ID。
-
-```sh
-author init "$work/revision" --from-document "$work/get.json"
-author stage "$work/revision" filters
-author stage "$work/revision" component detail
-# 修改上两条命令打印的文件，然后构建。
-author build "$work/revision" --out "$work/proposed.json"
-author build "$work/revision" --format submit --project-root "$project" --out "$work/submit.json"
-```
-
-`document` 用于审阅整体 schema-v2 声明；已有设计的 patch 只携带选中的操作及基线 revision。修订其他页时另取该页基线。每次成功写入后再次修改，须以新草稿重新初始化；遇版本冲突也需对照新草稿合并。一个 patch 最多 200 个操作，超过时按能独立校验的依赖组拆批，后续批次取前一批成功回执的 revision。
+`submit.json` 是完整工具参数对象，包含看板 ID、初始标题或当前修订，以及相关操作。提交成功后取新修订；冲突时先读当前草稿再合并。完整文档可用 `import` 创建新 ID，已有旧格式工作区可用 `import-workspace`。详细命令见[声明文件](dashboard-workspace.md)。
 
 ## 将源端记录映射为可计算的 MCP 页面
 
-- `manifest.sources` 记录实际来源；`manifest.datasets` 声明行粒度对应的字段类型，行或版本引用位于 `snapshot`。少量数据用 `put_dataset`；已有版本用 `put_dataset_ref`。文件工作流可将 `{"meta":…,"ref":…}` 交给 `stage dataset` 生成同一操作。同一引用必须在目标项目可读。大数据使用[已有导入和上传工具](mcp-delivery.md#project-and-data)。
+- `manifest.sources` 记录实际来源；`manifest.datasets` 声明行粒度对应的字段类型，行或版本引用位于 `snapshot`。少量数据用 `put_dataset`；已有版本用 `put_dataset_ref`。文件与 MCP 均显式提交同一条 `put_dataset_ref` 操作。同一引用必须在目标项目可读。大数据使用[已有导入和上传工具](mcp-delivery.md#project-and-data)。
 - `manifest.metrics` 保存业务定义、聚合、单位、比例和精度。区分行粒度汇总、按实体去重和基期计算。用 `dashboard_view` 核对实际计算结果。图形、表格和下载都应能追溯到审查表上的定义。
 - 图形用 `kind=legacy`、`family=chart`，`config.code` 决定渲染器，`binding` 决定数据集、分类、系列及指标。预设的堆叠、排名、气泡和跨数据集联动示例见[动态编码](../../../docs/implementation/dynamic-encoding.md)。先核对每个目标的原生能力；缺少事件或状态语义时，记录影响、现有适配入口与验证条件。
 - `set_filters` 整体替换保存的筛选定义。读者临时选值通过 `dashboard_view.filters` 提交，从当前 manifest 复制完整的筛选数组，仅修改选中的 `values`，保留其他条件及每项的字段和消费者。原生 `in` 条件的空数组表示清除此条件。读取选项用 `dashboard_filter_options` 的 filterId、offset、limit；候选集与当前已选值分别验证。Markdown 报告有正文级及独立表内筛选时，使用 `filtered-report`，表内条件写 `scope:"table"` 并给一个表格消费者。

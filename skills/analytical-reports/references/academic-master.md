@@ -1,6 +1,6 @@
 # Academic report master
 
-Read the runnable case at `charts://examples/academic-report`. Its Markdown lives at `dashboard_runtime/examples/academic-report.md`, reused by the CLI `init --demo --mode report`.
+Read the runnable case at `charts://examples/academic-report`. Its Markdown lives at `runtime-core/resources/academic-report.md`, reused by the CLI `init --demo --mode report`.
 
 The master uses six explicitly synthetic rows, revenue aggregation and two declarative charts. It demonstrates:
 

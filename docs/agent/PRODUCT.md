@@ -35,8 +35,6 @@ web
 - 看板编辑、批注、保存、检查点和恢复沿用项目已有流程。
 - 组件画布与设计系统用于维护可复用组件，业务看板使用真实运行组件。
 
-介绍页和展示页的制作方式尚未设定。本次确认的是通过本项目 MCP 生成和查看分析成果的使用流程。
-
 ## Capabilities and Constraints
 
 - 图表支持内置预设、完整原生 ECharts 和 HTML/CSS/JavaScript 自由组件。执行边界和数据绑定范围见 [自由组件说明](../implementation/echarts-options.md)。
@@ -46,7 +44,7 @@ web
 - 数据资产和版本持久化由 Runtime 管理。COS 项目的网页通过共享查询 worker 处理授权数据；展示组件接收结果与事件，不各自实现指标算法。MCP 保留服务端查询能力。
 - 筛选、分页、排序及粒度属于查看状态，不隐式改写已保存的看板定义。
 - 项目数据、稳定组件 ID、版本检查、批次修改和检查点需要保留。
-- MCP 工具以用户要完成的操作为单位。保存版本、设置正式发布版和创建独立分享分别执行。[版本与分享设计](../plans/cloud-hosting-and-version-control.md#mcp-版本与分享)记录每项动作的输入和结果。
+- MCP 工具以用户要完成的操作为单位。保存版本、设置正式发布版和创建独立分享分别执行。[Runtime](../implementation/dashboard-runtime.md#编辑与结果确认)规定每项动作的输入和结果。
 - 腾讯云在线分享采用独立私有副本和 8 位数字访问密钥，支持不过期、7 天和 30 天；到期由云端 SCF 删除副本及访问记录，保留项目原稿。实现与部署条件见 [云端分享与清理](../operations/self-hosted-server.md#腾讯云在线分享与云端清理)。
 - 作者从本机 stdio MCP 或自有服务器的远程 MCP 创作，编辑与预览在同一作者工作区运行。CloudBase 或 Cloudflare 承担独立发布副本、读者批注和到期清理。
 - 设计资产与应用代码分开维护。应用资源构建、MCP 资源打包与画布更新是独立步骤。
@@ -66,15 +64,6 @@ web
 产品说明默认使用简体中文。业务名称、指标、单位和计算含义需要准确，同一概念保持称呼一致。
 
 已有视觉约定维护在设计系统和组件规范中，本文件不另建配色、排版或组件样式规则。
-
-## Evidence on Hand
-
-- [项目说明](../../README.md)：产品入口、看板与分析报告两条路径。
-- [生成路径](../implementation/generation-tracks.md)：数据声明、组件编排和报告生成流程。
-- [Runtime 说明](../implementation/dashboard-runtime.md)：数据计算、状态管理、工具接口与查询流程。
-- [UI 整改计划](../plans/ui-refactor-plan.md)与[组件清单](../implementation/ui-component-inventory.md)：组件范围、实现边界和待确认事项。
-- `docs/design-system/` 与 `docs/design-canvas/`：已有设计系统、组件参考和画板。
-- `dashboard_runtime/demo.py`：产品演示数据与示例看板，不能作为真实客户或业务成效证据。
 
 ## Product Principles
 

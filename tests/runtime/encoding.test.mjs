@@ -1,6 +1,6 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import {encodingRecords,encodingTable} from '../../dashboard_runtime/web/encoding.mjs';
+import {encodingRecords,encodingTable} from '../../runtime-ui/shared/encoding.mjs';
 
 const metric=field=>({field,aggregation:'sum',label:field});
 function fixture(){

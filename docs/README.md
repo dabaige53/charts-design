@@ -1,67 +1,39 @@
-# charts-design 文档
+# Charts Design 文档
 
-项目入口与命令见根目录 [README](../README.md)，Agent 的工作顺序见 [AGENTS.md](../AGENTS.md)。本页用于查找专题文档和历史记录。根目录仅保留此导航；长期准则放 `agent/`，设计规范放 `reference/`，实现说明放 `implementation/`，开发与运维步骤放 `operations/`。新增内容先按 [文件管理](agent/file-management.md) 确定归属。
+[快速开始](../README.md)介绍产品与操作，[开发入口](../AGENTS.md)说明源码职责。各主题只维护一份正文；更改结构前读[文件管理](agent/file-management.md)。
 
-## 项目准则与设计规范
+## 产品与设计
 
-| 文档 | 何时读取 | 更新时机 |
-| --- | --- | --- |
-| [产品上下文](agent/PRODUCT.md) | 判断产品目标、用户和强约束 | 已确认的产品决定改变 |
-| [看板交付术语](agent/GLOSSARY.md) | 区分看板访问链接和业务术语 | 领域概念或称呼确定、改变 |
-| [设计规范](reference/DESIGN.md) | 修改视觉、交互、组件复用或迁移保真 | 通用设计要求改变 |
-| [文件管理](agent/file-management.md) | 新增、移动、合并或清理文件 | 目录、正文职责或保留方式改变 |
+- [产品上下文](agent/PRODUCT.md)：使用者、目标、能力边界与强约束。
+- [交付术语](agent/GLOSSARY.md)：本机、在线和独立分享的访问方式。
+- [设计规范](reference/DESIGN.md)：视觉、交互、可访问性、组件复用与外部报告保真。
+- [图表参考](design-system/project/chart-ui.md)、[React 组件](design-system/project/react-ui.md)：设计资产与生产组件映射。
 
-## 当前实现与操作
+## 创建与维护
 
-| 文档 | 负责内容 | 更新时机 |
-| --- | --- | --- |
-| [Runtime](implementation/dashboard-runtime.md) | 架构、运行配置、工具发现、导入与接口入口 | 模块或运行/接口边界改变 |
-| [项目资产与加载](implementation/project-runtime.md) | 项目选择、存储、草稿、历史、本地数据和渐进视图 | 持久化、路由或查询行为改变 |
-| [生成路径](implementation/generation-tracks.md) | 看板与报告、Markdown 源文、图号及兼容约定 | 生成与源文规则改变 |
-| [组件清单](implementation/ui-component-inventory.md) | 组件源码、输入输出、动态能力与宿主接入状态 | 组件接口或能力改变 |
-| [标题区与绑定](implementation/icon-header-and-bindings.md) | 标题、工具栏、图标、普通绑定与切换 | 操作或绑定约定改变 |
-| [动态编码](implementation/dynamic-encoding.md) | 动态系列、散点、比例、比较和下钻 | 编码与汇总规则改变 |
-| [渲染与覆盖](implementation/echarts-options.md) | 预设、完整 ECharts、自由 HTML/JavaScript、隔离及覆盖 | 渲染入口或合并规则改变 |
-| [统计图后端](implementation/seaborn-backend.md) | Seaborn 原始观测声明、产物和依赖 | 统计能力或限制改变 |
-| [位置批注](implementation/annotation-composer.md) | 选点、锚点、独立权限、HTTP 保存与原版本反馈 | 批注字段、交互或接入状态改变 |
-| [本地更新](operations/local-mcp-update.md) | 构建、安装更新、进程切换与重连 | 本地交付方式改变 |
-| [传输与诊断](operations/mcp-transport-diagnostics.md) | 预览资源、分块、过期结果与请求日志 | 传输或排查方式改变 |
-| [静态部署包](operations/static-deployment.md) | 独立网页资源、数据分片、下载与离线能力 | 静态交付格式改变 |
-| [自托管服务器](operations/self-hosted-server.md) | 远程 MCP、签名链接、腾讯云密钥分享、COS 与 SCF 清理 | 服务、鉴权或云端交付流程改变 |
-| [测试与 CI](operations/testing.md) | 检查层次、环境、标记与授权边界 | 检查入口或要求改变 |
+- [看板 Skill](../skills/executive-charts/SKILL.md)、[报告 Skill](../skills/analytical-reports/SKILL.md)：按决策问题与证据生成成果。
+- [原生创作](../skills/executive-charts/references/mcp-authoring.md)、[共享交付](../skills/executive-charts/references/mcp-delivery.md)：初始化、数据预览、提交、检查与交付。
+- [指标定义](../skills/executive-charts/references/metric-definitions.md)、[数据格式](../skills/executive-charts/references/data_formatting_standards.md)：口径、公式、单位和精度。
+- [图表与设计选型](../skills/executive-charts/references/design_standards.md)、[指标卡](../skills/executive-charts/references/kpi-cards.md)、[布局](../skills/executive-charts/references/layout_templates.md)：比较关系、阅读顺序与明确适用条件。
+- [生成路径](implementation/generation-tracks.md)：Dashboard、Markdown 报告、图号、来源和脚注。
 
-## 生成与设计资产参考
+## 实现
 
-- [外部报表审查](../skills/executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp)与[MCP 声明构建](../skills/executive-charts/references/mcp-authoring.md)用于核对旧报表和初始化、调整目标文件。
-- [看板 Skill](../skills/executive-charts/SKILL.md)、[报告 Skill](../skills/analytical-reports/SKILL.md)及[共享交付流程](../skills/executive-charts/references/mcp-delivery.md)：随包提供的生成步骤与成果保留要求。
-- [指标定义](../skills/executive-charts/references/metric-definitions.md)、[数据格式](../skills/executive-charts/references/data_formatting_standards.md)：业务对象、范围、计算和显示。
-- [指标卡选型](../skills/executive-charts/references/kpi-cards.md)、[布局模板](../skills/executive-charts/references/layout_templates.md)、[生成设计参考](../skills/executive-charts/references/design_standards.md)：按问题选择，不覆盖当前产品与设计规则。
-- [图表参考](design-system/project/chart-ui.md)、[产品 React 组件](design-system/project/react-ui.md)：图形来源、组件映射、构建与设计资源。
-- `design-system/`、`design-canvas/` 内的 README、API 索引和安装副本随资产维护；不作为项目主规范的重复版本。
+| 正文 | 内容 |
+| --- | --- |
+| [Runtime](implementation/dashboard-runtime.md) | Rust 服务、CLI/MCP/HTTP、合同、输入与查询 |
+| [项目资产](implementation/project-runtime.md) | 项目隔离、不可变数据、草稿、保存、发布、历史与渐进加载 |
+| [组件清单](implementation/ui-component-inventory.md) | 维护位置、输入输出、动态能力与宿主边界 |
+| [标题与绑定](implementation/icon-header-and-bindings.md) | 元信息、工具栏、图形切换与保存 |
+| [动态编码](implementation/dynamic-encoding.md) | 系列、散点、比例、比较与下钻 |
+| [渲染入口](implementation/echarts-options.md) | 预设、ECharts、HTML/JavaScript 和隔离 |
+| [统计图](implementation/statistical-charts.md) | 原始观测、统计声明、SVG/PNG 与数值限制 |
+| [位置批注](implementation/annotation-composer.md) | 锚点、独立权限、冲突、保存与分享反馈 |
 
-## 方案
+## 运行与交付
 
-- [UI 组件与 MCP 整改](plans/ui-refactor-plan.md)：原方案范围、阶段与待确认事项；当前能力读取组件清单。
-- [云端托管与版本管理](plans/cloud-hosting-and-version-control.md)：云端部署、API Key、密钥轮换与版本中心的产品方案，未实现部分按文内状态区分。
-
-## 历史记录与附件
-
-- [Dashboard 性能与生成引导](records/2026-11-28-dashboard-performance-and-guidance.md)：查看与数据预览、声明批量读取、Skills 选图判断、定向验证及[原始性能样本](records/2026-11-28-performance-samples.json)。
-- [一键验收实测](records/2026-11-27-one-command-acceptance.md) — 功能流程、百万行实测与性能判断。
-- [分析报告独立阅读页验收](records/2026-11-27-analytical-report-acceptance.md)：用户确认的第 4 版、论文版式和两端验证。
-- [本机编辑与独立分享批注](records/2026-11-27-local-sharing-annotations.md)：PR #23 基线、本机浏览器入口、固定版本发布、独立批注权限与反馈、双进程验证及真实云边界。
-- [Runtime 性能与交付改造](records/2026-11-26-runtime-performance.md)：版本一致性、Rust/Parquet、新旧云分享兼容、网页查询及独立部署的实现边界、实测与复现入口。
-- [Magpie 双后端 MCP 交接](records/2026-11-24-magpie-unified-mcp-handoff.md)记录客户端切换结果，以及另一台服务器的接入、验证和恢复步骤。
-- [服务器、Neon 与 Pages 生产验收](records/2026-11-21-neon-pages.md)：同一项目的 MCP、网页编辑、容器重启、密钥分享和清理结果。
-- [COS 统一存储发布](records/2026-11-12-cos-release.md)：版本发布、数据库结构、清理函数与迁移边界。
-- [CloudBase 资源消耗基线](records/2026-11-12-cloudbase-resource-baseline.md)：云托管、函数、PostgreSQL 和 COS 的只读盘点。
-- [CloudBase 存储与版本管理部署](records/2026-11-11-cloudbase-deployment.md)：本轮存储适配、局部检查、云端部署与验收边界。
-- [早期问题清单](records/ISSUES.md)、[治理复盘](records/ISSUES_AND_POSTMORTEM.md)：旧实现的缺陷与治理事实，不作为现行规则。
-- [动态编码验收](records/dynamic-encoding-validation.md)、[迭代复盘](records/retro-20261028.md)、[MCP 优化交付](records/mcp-improvements-20261028.md)：2026-10-28 的对象、测量、改动与验证边界。
-- [自托管、构图与指标卡验收](records/2026-11-07-server-layout-kpi.md)：对应轮次的性能与部署检查。
-- [共享工作区交付检查](records/2026-11-10-polish-validation.md)：共享工作区、UI 分批调整、批注与保真的既有记录。
-- [看板 MCP 工具审查](records/2026-11-25-mcp-tool-audit.md)：44 项本地入口的用途、发布连接和一次真实看板的调用记录。
-- [测试清理](records/test-purge-20261106.md)、[测试清理变基](records/test-purge-rebase-20261108.md)：逐项处置和当次验证结果。
-- [性能原始记录](records/performance-results.json)、[共享工作区性能结果](records/2026-11-10-polish-performance.json)、[零售截图](images/dynamic-encoding-retail.png)、[虚拟看板截图](images/transfer-prototype-validation.png)：与对应历史记录一起阅读，不替代当前验证。
-
-维护时机：正文职责、位置或方案/记录入口变化时更新。
+- [本地安装与更新](operations/local-mcp-update.md)：原生程序、共享 UI、连接与构建标识。
+- [大响应与诊断](operations/mcp-transport-diagnostics.md)：完整资源、分块、过期响应与日志。
+- [静态部署包](operations/static-deployment.md)：完整资源、Parquet、JSON 分片、离线与权限边界。
+- [自托管服务](operations/self-hosted-server.md)：远程 MCP、签名链接、分享服务和物理清理。
+- [开发检查与 CI](operations/testing.md)：环境、定向验证、构建与发布流程。

@@ -1,5 +1,5 @@
-import { createStaticClient } from "../../dashboard_runtime/web/static-client.mjs";
-import { createStaticQuery } from "../../dashboard_runtime/web/static-query.mjs";
+import { createStaticClient } from "../../runtime-ui/shared/static-client.mjs";
+import { createStaticQuery } from "../../runtime-ui/shared/static-query.mjs";
 import type { Config, Document, ToolCall } from "./types";
 import { hasLiveData } from "./types";
 

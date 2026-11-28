@@ -7,11 +7,11 @@
 | KPI、图表、表格、筛选组成的 Dashboard | `skills/executive-charts/SKILL.md` | `charts://examples/executive-dashboard`、`charts://examples/operations-scorecard` |
 | Markdown 正文与嵌入图表组成的论文式报告 | `skills/analytical-reports/SKILL.md` | `charts://examples/academic-report` |
 
-分析报告以当前认可的学术单栏案例作为母稿；其唯一 Markdown 源文是 `dashboard_runtime/examples/academic-report.md`，CLI 示例和 MCP 案例均从它读取。历史 HTML 示例已从仓库清理。
+分析报告采用学术单栏阅读结构；示例的唯一 Markdown 源文是 `runtime-core/resources/academic-report.md`，CLI 示例和 MCP 案例均从它读取。
 
-## 从空白报告生成，而非套一个静态页面
+## 从数据生成报告
 
-每次 MCP 项目调用都显式传入 `projectRoot`，值为报表资产目录的绝对路径；包括案例与声明发现、读取、编辑、诊断和分块读取。以下示例省略重复参数。旧启动默认项目仅用于兼容，不沿用上一次调用的项目。
+每次 MCP 项目调用都显式传入 `projectRoot`，值为报表资产目录的绝对路径；包括案例与声明发现、读取、编辑、诊断和分块读取。以下示例省略重复参数。省略时仅使用启动默认项目，不沿用上一次调用的项目。
 
 已经掌握数据与组件声明时，可直接一次提交初始 `operations`。需要先认识数据时，先创建空容器并调用 `dataset_import`、`dataset_attach` 或 `query_execute`，再使用回执 `nextCalls` 的 `dataset_preview` 检查字段和有界原始样本。该检查不需要临时组件，也不应用页面筛选；样本不代表全量统计。指标与来源沿用回执中的实际 ID，确认业务口径后再编排以下内容。
 
@@ -22,16 +22,16 @@
 5. 成功后按 `nextAction=dashboard_preview` 打开已保存预览。若完整检查失败，读取保留的草稿并提交修正，不重复提交原操作。
 6. 通过 `dashboard_get` 核实草稿与组件声明，通过 `dashboard_view` 核对实际计算结果；检查数值与单位、图号、图文顺序、指标定义、来源与局限。发生版本冲突时先读取新版本，不盲目覆盖。
 
-## 报告源文与兼容约定
+## 报告源文
 
 报告以一个 Markdown 文档作为正式源文，按学术单栏阅读顺序排版。普通标题、段落、加粗、列表和引用照常使用；顶层 `chart` 围栏在正文中引用既有图表、指标卡或表格，并可提供图注和来源。每个成果保存一种呈现类型；看板网格与报告正文使用相同组件和数据。
 
 ```sh
 # 空白报告，不插入业务数据。
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards init analysis --mode report --title "我的分析报告"
+charts-design-runtime --project-root /absolute/path/project init analysis --mode report --title "我的分析报告"
 
 # 显式合成案例，含正文与图表。
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards init report-demo --mode report --demo
+charts-design-runtime --project-root /absolute/path/project init report-demo --mode report --demo
 ```
 
 ### 正文、图号与阅读顺序
@@ -94,26 +94,9 @@ schema-v2 文档通过 `manifest.viewMode` 保存 `dashboard` 或 `report`；旧
 
 MCP 原生路径直接把完整 Markdown 字符串传给 `set_report_markdown.value`，与相关组件操作一起交给 `dashboard_submit`；无需先写 `.md`、生成 patch 文件或执行脚本。[MCP 创作示例](../../skills/executive-charts/references/mcp-authoring.md#直接初始化小型看板)提供完整看板初始化和报告变体。
 
-需要文件审阅、离线写作或可重复批处理时，再使用 CLI 文件流程。先读取最新版本，再将源文装入操作：
+已有声明文件时，用统一 CLI 读取、验证和提交，见[声明文件](../../skills/executive-charts/references/dashboard-workspace.md)。JSON 导出保留精确源文；HTML 导出使用共享阅读页，单组件导出只呈现该组件。
 
-```sh
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards get report-demo
-bun bin/python-runtime.js - <<'PYCODE'
-import json
-from pathlib import Path
-operations = [
-    {"op": "set_report_markdown", "value": Path("analysis.md").read_text()},
-    {"op": "set_view_mode", "value": "report"},
-]
-Path("report-patch.json").write_text(json.dumps(operations, ensure_ascii=False))
-PYCODE
-# expected 使用 get 返回的最新 revision；此处演示值为 1。
-bun bin/python-runtime.js -m dashboard_runtime --root ./boards patch report-demo --expected 1 --file report-patch.json
-```
-
-MCP 用同样的 `set_report_markdown` 操作，传入项目、看板和最新版本，并完成编辑批次。JSON 导入导出保留精确源文；整份 HTML 导出用共享渲染器保存只读报告。单组件导出按独立看板卡片呈现，不带其他组件和报告元信息。
-
-### 旧报告兼容
+### 外部内容导入
 
 旧 `report.subtitle`、`report.blocks` 和 `set_report` 继续支持。没有正式 Markdown 时，subtitle 最多 1,000 字符，blocks 最多 100 个唯一 block ID 和组件引用。旧 text 组件转换成 Markdown 标题下的转义纯文本，非 text 组件转换成 chart 围栏；迁移不执行旧内容，保留组件、布局和元信息。
 
@@ -139,7 +122,7 @@ MCP 用同样的 `set_report_markdown` 操作，传入项目、看板和最新�
 
 所有四卡及 t06 都声明数据集和指标 binding。收入与旅客量求和；客座率、预算达成率、收益变动率用分子总和除以分母总和。mc03 趋势来自 timeField，mc04 进度 percent 从达成率乘 100；案例不填没有基期证据的同比或环比。t06 同时提供合法的 month/quarter 合成快照，再通过日期字段绑定按月与季度重算。区域、日期范围及区域文本搜索筛选均明确列出 componentIds；空 values 表示不筛选。文本搜索可用 `contains`，指定一个文本 values、明确 field 与 componentIds，不执行隐式跨字段搜索。
 
-`chart_declarations {"code":"t06"}` 和 `{"code":"m01"}` 各返回自身合法的完整合成声明。m01 可以展示目标对比快照，但没有通用筛选绑定；不能用 c01 示例冒充它。目录每个代码的 `filterBinding` 指明 supported、snapshotOnly 与显式绑定要求。当前可绑定代码以 `dashboard_runtime/bindings.py` 为准；其余形状需要单独审查数据变换，不能只把数据集名称写上就宣称支持筛选。mc07–mc09 排名、阈值和拆分辅助字段也没有完整动态变换。
+`chart_declarations {"code":"t06"}` 和 `{"code":"m01"}` 各返回自身合法的完整合成声明。m01 可以展示目标对比快照，但没有通用筛选绑定；不能用 c01 示例冒充它。目录每个代码的 `filterBinding` 指明 supported、snapshotOnly 与显式绑定要求。当前可绑定代码以 `runtime-core/src/runtime/encoding.rs` 为准；其余形状需要单独审查数据变换，不能只把数据集名称写上就宣称支持筛选。mc07–mc09 排名、阈值和拆分辅助字段也没有完整动态变换。
 
 表格列头优先使用 `columns[].title`；`label` 保持兼容，未提供两者时使用 key。真实交付须替换 fixture 来源与数据，重新计算全部说明、基期比较及指标，不沿用合成案例结论。
 

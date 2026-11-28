@@ -11,7 +11,7 @@ Use this flow for dashboards and Markdown reports. Read the connected tools' sch
 
 Serialize writes to one dashboard because each consumes the prior revision. Independent declaration reads and source inspection may run in parallel. A title or layout edit does not require reimporting rows, rebuilding UI resources or exporting a website.
 
-Use native MCP arguments for both small and larger declaration batches within the tool limits. Local JSON/Markdown files and the authoring script are optional for file review, offline editing or repeatable batch work; they are not an initialization dependency.
+Use native MCP arguments for both small and larger declaration batches within the tool limits. When the user already has local JSON/Markdown files, the native CLI validates and submits the same declarations.
 
 ## Project and data
 
@@ -25,7 +25,7 @@ Use `dataset_import` with exactly one of `rows` or `csvText` for small data. Sup
 
 Data write receipts include `dataset.fields`, `dataset.sourceId`, complete definitions in `dataset.metrics` keyed by ID, the current revision and `nextCalls` for native follow-up reads. Use the returned `dataset_preview` call to inspect rows and `dashboard_get` only when the complete draft is needed. Preview reads the dataset without component filters; use `component_data` after binding to inspect a component's filtered rows. Inspect inferred metrics before binding them: automatic sum metrics remain `unverified`, and a numeric identifier is not a sum metric. Reuse immutable references returned by the tools.
 
-For large local files that need transfer to a remote server, use the [remote upload client](../../../docs/operations/self-hosted-server.md#更新已有看板的数据): `bin/remote-project.py upload` transfers a data version for an existing dashboard; `bin/transfer-project.py` imports selected new pages. Both share preflight, bounded concurrency and verified resume. Keep the state file after interruption. Bind the verified output ref with `put_dataset_ref` and the current revision, preserving dataset metadata and metric definitions. This is a bulk transport path; ordinary MCP content authoring does not need an upload script.
+For large local files that need transfer to a remote server, use the [remote upload client](../../../docs/operations/self-hosted-server.md#更新已有看板的数据): `charts-design-runtime remote upload` transfers a data version for an existing dashboard; `charts-design-runtime transfer` imports selected new pages. Both share preflight, bounded concurrency and verified resume. Keep the state file after interruption. Bind the verified output ref with `put_dataset_ref` and the current revision, preserving dataset metadata and metric definitions. This is a bulk transport path; ordinary MCP content authoring does not need an upload script.
 
 For KPI comparisons, aggregate each period at the same scope and grain before calculating the change. Distinguish percentage changes from percentage-point differences. Tooltip totals, shares and detail tables must use the same denominator, including the declared treatment of hidden series.
 

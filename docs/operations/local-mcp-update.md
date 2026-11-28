@@ -1,53 +1,35 @@
-# 本地 MCP 安装更新
+# 本地 MCP 安装与更新
 
-## 按需准备资源并更新 analyst-workspace
+`charts-design-runtime` 和直接二进制 `charts-design-core` 使用同一套命令。安装包提供两个 Skill 与共享 UI，原生程序按操作系统和架构选择；无需 Python 环境。
 
-在 charts-design 本项目的 Codex 本地环境中执行“更新 charts-design MCP”。analyst-workspace 是更新目标，不放置该操作按钮。
+## 安装
 
-该操作先通过 `ui:prepare` 核对已有资源，输入和产物相符时复用，否则构建一次，再打包到本机 Documents 的现有工具目录。验证 MCP 启动和预览资源后，将 analyst-workspace 的 `mcp_servers.charts-design.command` 切换为 Bun，并替换 `args[0]`。安装包记录本次使用的 uv 虚拟环境解释器绝对路径，不复制旧的独立依赖目录。此入口用于已有项目配置的兼容更新；统一注册与多项目路由由 Magpie 管理，不为各业务项目新增注册。
-
-需要 Parquet 导出时，在打包前通过 `bun run native:install` 或 `bun run native:build` 准备本机原生程序。`dashboard_runtime/native/<平台>-<架构>/` 随包保留，安装更新不会丢失已准备的程序；未准备时继续支持原有 JSON 导出，显式请求 Parquet 会提示缺少程序。原生安装与独立网页部署见[静态部署包](static-deployment.md)。
+通过 npm 包启动；安装阶段下载与软件包版本一致的平台程序并验证 SHA-256 和实际版本，已安装的同版本程序不重复下载：
 
 ```sh
-bun bin/python-runtime.js bin/update_local_mcp.py --workspace /Users/w/code/analyst-workspace
+npx --package charts-design charts-design-runtime mcp --runtime-root /absolute/path/runtime-cache
 ```
 
-- 更新脚本读取 Codex 的 TOML 配置，需要 Python 3.11 及以上（标准库 `tomllib`）；Runtime 本身支持 Python 3.10。
-- 启动命令切换为 Bun；保留其余启动参数、启用状态和看板数据目录。
-- 构建或启动检查失败时不切换配置；配置在构建期间变化时停止。
-- 配置采用临时文件原子替换，完成后不保留临时配置。
-- 已运行的宿主会话需重新连接 MCP 并重新打开预览；脚本不强行重启宿主。
+稳定安装可用 `npm install -g charts-design`，再运行同一 `charts-design-runtime` 命令。`charts-design` 是统一命令的简写。npm 启动器使用 Node.js；Bun 只用于源码依赖、前端构建和开发脚本。
 
-资源复用条件与 GitHub 产物使用方式见 [开发检查与 CI](testing.md#本地准备与构建条件)。日常源码修改不触发此安装操作。
+如果安装时显式禁用了生命周期脚本，先执行一次 `charts-design-runtime install-native`。受控离线环境可以设置 `CHARTS_CORE_BIN` 指向已有程序；安装阶段会验证它与包版本一致。`CHARTS_SKIP_NATIVE_INSTALL=1` 显式跳过原生下载，适用于随后自行构建的源码环境。
 
-## 按文件清单更新已有安装包
+源码开发先执行 `bun run setup`，用 `bun run native:install` 安装与包版本匹配的程序，或用 `bun run native:build` 从锁定 Cargo 依赖构建。需要预览时执行 `bun run ui:prepare`；产物相符时直接复用。
 
-已确定目标安装目录与改动文件时，传入明确的包内相对路径：
+原生程序安装到 `runtime-core/native/<平台>-<架构>/`。下载必须验证 SHA-256 并通过实际版本检查，成功后原子替换；失败保留现有安装。可用 `CHARTS_CORE_BIN` 指定已有程序的绝对路径。运行时不临时下载依赖。
 
-```sh
-bun bin/update-runtime.js <INSTALL_ROOT> <FILE...>
-```
+MCP 客户端只配置一个入口，每个项目请求显式携带 `projectRoot`。业务资产与安装目录分开，更新程序不搬移项目，也不为每个业务项目复制一个 MCP 服务。
 
-脚本检查目标包身份和全部源文件，然后复制清单内文件，最后原子写入 `.runtime-generation`。后端源文件更新也必须逐项列入清单。只复制前端产物不会更新后端。依赖变化需另行完成依赖安装或选择完整打包更新；此脚本只复制指定文件。
+## 更新
 
-支持该标记的常驻 Bun 入口在收到后续请求时，停止向旧 Python 进程派发新请求；等待已派发请求返回后，关闭旧进程输入、启动新进程、恢复初始化并执行排队请求。已经执行的写操作不重试。首次部署此 Bun 入口时，宿主仍需重新建立 MCP 连接；入口自身和工具定义的变化不由此机制热更新。
+更新到明确的软件包版本，保留项目目录、运行缓存目录、来源别名与现有访问配置。源码安装同步更新原生程序和 `runtime-ui/dist/`；只复制界面不会更新后端。
 
-## 确认更新生效
+重新连接 MCP 后重新读取工具列表，并打开新预览。协议工具与界面资源的构建标识用于确认连接版本；已经打开的页面不会因为磁盘文件更新而自动替换。
 
-1. 对所用项目调用 `runtime_info`，显式传入 `projectRoot`。检查 `moduleRoot`、`backendBuildId`、`uiBuildId`、进程编号和资产路径，确认连接使用目标安装。
-2. 更新入口或工具定义后重新连接 MCP。重新读取工具列表，调用当前构建的预览工具并打开新预览。
-3. 页面可见时每 5 秒检查版本。发现界面构建标识变化会提示重新打开预览；正在编辑时保留输入。
+## 确认生效
 
-刷新报表只更新数据，不替换界面代码。已打开页面仍由宿主重新打开；本项目没有可调用的宿主 MCP 重载或标签替换接口。工具与资源正确、连接已切换、页面已更新分别记录。宿主尚未实际检查时，验收状态保留待确认。
+1. 对目标项目调用 `runtime_info`，核对 `moduleRoot`、`backendBuildId`、`uiBuildId`、进程编号和资产路径。
+2. 从该连接调用 `dashboard_preview` 并打开当前 UI 资源；过期 URI 会返回 `UI_BUILD_EXPIRED`。
+3. 核对草稿与已保存版本、筛选、导出和所需宿主能力。刷新报表只刷新数据。
 
-## 定向检查
-
-完整打包配置更新：
-
-```sh
-bun bin/python-runtime.js -m pytest tests/test_local_mcp_update.py -q
-```
-
-该检查覆盖单行与多行 TOML 参数、切换 Bun 命令及入口并保留其他配置，以及拒绝未知入口。安装包实际启动与预览资源仍按完整更新脚本检查。
-
-源码或自动检查通过后，仍需确认连接状态。维护时机：构建、安装更新入口、进程切换或重连方式变化时更新本文。
+自动检查、已连接进程、真实宿主显示和线上部署分别确认。构建与本地检查范围见[开发检查](testing.md)。

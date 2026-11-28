@@ -11,10 +11,11 @@ User=charts
 Group=charts
 WorkingDirectory=/opt/charts-design
 EnvironmentFile=/etc/charts-design/charts.env
-Environment=PYTHONPATH=/opt/charts-design
+Environment=CHARTS_PACKAGE_ROOT=/opt/charts-design
+Environment=CHARTS_UI_DIST=/opt/charts-design/runtime-ui/dist
 Environment=CHARTS_WORKSPACE=/var/lib/charts-design/projects
 Environment=CHARTS_RUNTIME_ROOT=/var/lib/charts-design/runtime
-ExecStart=/opt/charts-design/.venv/bin/python -m dashboard_runtime server --host 127.0.0.1 --port 8000
+ExecStart=/opt/charts-design/charts-design-core server --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true

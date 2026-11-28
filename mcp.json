@@ -2,10 +2,10 @@
   "mcpServers": {
     "charts-design": {
       "type": "stdio",
-      "command": "bun",
+      "command": "node",
       "args": [
         "${PLUGIN_ROOT}/bin/dashboard-runtime.js",
-        "--root",
+        "--runtime-root",
         "${PLUGIN_ROOT}/.charts-runtime",
         "mcp"
       ]

@@ -47,7 +47,7 @@ export function inflated(stream, method) {
   return method === 8 ? stream.pipeThrough(new DecompressionStream("deflate-raw")) : stream;
 }
 
-function entries(bytes) {
+export function entries(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
   const read16 = offset => view.getUint16(offset, true);
   const read32 = offset => view.getUint32(offset, true);
@@ -79,7 +79,7 @@ function entries(bytes) {
   return result;
 }
 
-async function entryBytes(bytes, entry) {
+export async function entryBytes(bytes, entry) {
   const input = bytes.subarray(entry.start, entry.start + entry.compressed);
   const body = inflated(new Blob([input]).stream(), entry.method);
   const raw = await boundedBody(new Request("https://archive.invalid/", { method: "POST", body, duplex: "half" }), entry.size);

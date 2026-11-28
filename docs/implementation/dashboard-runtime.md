@@ -1,213 +1,108 @@
 # Runtime：架构、配置与接口入口
 
-Runtime 复用同一套 Service，为 CLI、本地 stdio MCP、自托管 HTTP MCP 和网页编辑器提供数据、指标计算、版本与文件导出。看板和报告使用共享 React 应用。
+一个 Rust 服务实现 CLI、本地 stdio MCP、自托管 Streamable HTTP 和网页接口。数据、计算、版本、验证与导出共用同一套实现；共享 React 应用负责展示和交互。
 
 ## 模块职责
 
-| 维护入口 | 职责 |
+维护代码位于 `runtime-core/src/runtime/`。
+
+| 模块 | 职责 |
 | --- | --- |
-| `service.py` | 工具执行、数据计算编排与返回结果 |
-| `dataset_authoring.py` | 有界 JSON/CSV 输入解析与无需组件的数据集检查 |
-| `tool_contract.py`、`contract.py` | 工具用途、参数说明、操作结构与发现资源 |
-| `mcp_server.py`、`project_routing.py` | MCP 协议适配、请求项目选择与结果传输 |
-| `store.py`、`project.py`、`local_data.py` | 事务状态、草稿/检查点、批注与不可变数据 |
-| `cloud_assets.py`、`cos_view.py`、`cos_migrate.py` | COS 内容包与引用登记、统一网页描述、显式项目迁移 |
-| `remote_client.py`、`bin/remote-project.py`、`bin/transfer-project.py` | 远程完整响应读取、上传前检查、分块续传与首次项目迁移 |
-| `local_view.py`、`bindings.py` | 当前范围的聚合、表格分页及显式指标绑定 |
-| `query.py` | SQLite、PostgreSQL 和 DuckDB 来源连接、只读查询和请求内数据 |
-| `runtime-core/`、`columnar.py` | Rust 只读 SQLite→Parquet 导出、不可变编码缓存及与现有 MCP 的桥接 |
-| `file_lock.py` | 镜像同步与导出缓存的跨进程文件锁，不承载业务版本状态 |
-| `server.py`、`http_server.py` | 自有服务器创作、分享服务请求、本机网页与批注鉴权 |
-| `local_shares.py`、`cloud_shares.py`、`share_annotations.py` | 作者工作区的发布引用、固定版本副本、读者批注存储 |
-| `runtime-ui/src/` | 展示组件、应用状态、布局和宿主能力适配 |
+| `service.rs`、`cli.rs` | 业务操作与统一命令入口 |
+| `contract.rs`、`discovery.rs` | 工具结构、图表声明、示例和推荐 |
+| `dataset_authoring.rs`、`model.rs`、`validation.rs` | 有界输入、原子声明操作和完整语义验证 |
+| `store.rs`、`versions.rs` | 项目事务、数据引用、草稿、保存版、发布与批注 |
+| `data.rs`、`query.rs`、`view.rs`、`encoding.rs` | 数据查询、分页、聚合、绑定和当前视图 |
+| `mcp.rs`、`server.rs`、`transport.rs` | 协议、项目路由、权限、完整结果和诊断 |
+| `statistics.rs` | 直方图、箱线图、OLS 回归与 SVG/PNG |
+| `assets.rs`、`exports.rs`、`deployment.rs` | 共享应用、受管文件与静态网页包 |
+| `cloud.rs`、`cloud_assets.rs`、`cloud_data.rs`、`object_storage.rs` | 云端状态、不可变对象与授权数据 |
 
-展示组件接收 props 和事件，不访问数据库或直接调用 MCP；应用适配层管理工具请求、结果合并和宿主能力。网页批注由 `annotation-client.ts` 调用同源 HTTP 接口，独立于内容工具的传输方式。画布与应用共享组件，分别构建与打包。业务状态通过 Service 和项目存储修改，不手工维护 SQLite 的 JSON 镜像。
-
-Rust 通过受控本机进程接入独立网页、COS 业务行与候选项编码，以及显式迁移前的实际 Parquet 解码校验；MCP/HTTP、版本事务和服务端查询仍由 Python 承担。该边界复用已有工具，不增加常驻服务。纯静态部署使用导出的静态包；允许读者提交批注的分享还需要分享服务的持久存储。具体格式、原生程序准备及兼容行为见[静态部署](../operations/static-deployment.md)。
+工具、操作与图表静态声明位于 `runtime-core/resources/`，随原生程序编译；动态校验、推荐与业务逻辑原生执行。展示组件接收 props 和事件，不直接访问数据库；应用适配层负责工具调用、查看状态和结果合并。
 
 ## 启动与依赖
 
-Python 依赖由 `pyproject.toml` 声明、`uv.lock` 锁定；开发环境使用 uv 创建的 `.venv`。首次使用在仓库根目录执行 `bun run setup`，统一准备 Python 与 Bun 依赖。具体条件见 [开发环境](../operations/testing.md#统一开发环境)。
+`charts-design-runtime` 是原生程序的统一启动器，`charts-design` 是简写；直接运行二进制时使用 `charts-design-core`，运行参数相同。npm 安装阶段准备并验证原生程序；处理 MCP 请求时不下载或编译依赖。启动器使用 Node.js，运行服务不依赖 Python 或 Bun。
 
 ```sh
-bun bin/python-runtime.js -m dashboard_runtime --project-root /absolute/path/project --runtime-root /absolute/path/runtime-cache init demo
-bun bin/python-runtime.js -m dashboard_runtime --project-root /absolute/path/project --runtime-root /absolute/path/runtime-cache serve --dashboard demo
+charts-design-runtime --project-root /absolute/path/project --runtime-root /absolute/path/cache init overview
+charts-design-runtime --project-root /absolute/path/project --runtime-root /absolute/path/cache serve --dashboard overview
+charts-design-runtime --runtime-root /absolute/path/cache mcp
 ```
 
-普通 `init` 创建空白文档，只有显式 `--demo` 才插入合成数据。业务目录包含数据快照、来源 SQL 与参数，不提交到公共仓库。报告创建和源文约定见 [生成路径](generation-tracks.md)。
+`init` 创建空白文档；只有 `--demo` 才插入合成数据。`--mode report` 创建分析报告。`serve` 返回本机回环地址的 `editUrl` 和 `viewUrl`，`--view` 选择预览作为默认入口。编辑页读取草稿，预览页读取已保存版本；内容编辑与批注权限独立。
 
-打开已有看板时直接运行 `serve --dashboard <id>`。回执中的 `editUrl` 打开 `/edit/<id>`，`viewUrl` 打开 `/view/<id>`；加 `--view` 将预览地址设为主 `url`。服务只监听本机回环地址，带令牌的链接可在普通浏览器打开，无需公网或云端部署。编辑页读取草稿；预览页读取最新已保存版本，未保存的新文档须先保存。预览允许查看、筛选和新增批注，不能修改布局、标题、数据定义或版本；预览令牌也不能调用这些写接口。
+共享 UI 的唯一产物目录为 `runtime-ui/dist/`。源码开发需要预览或导出时执行 `bun run ui:prepare`，有效产物直接复用；缺少资源返回 `UI_UNAVAILABLE`。可用 `CHARTS_UI_DIST` 显式指定完整产物目录。Bun 用于安装、前端与开发脚本，Rust 依赖由 Cargo 锁定，详见[开发检查](../operations/testing.md)。
 
-仅在需要本地预览或导出且未使用已打包安装时准备共享应用；有效资源会复用：
-
-```sh
-bun run ui:prepare
-```
-
-缺少资源时预览返回 `UI_UNAVAILABLE`。构建与打包命令维护在 `package.json` 和 `runtime-ui/package.json`；设计组件包通过独立入口更新，不隐式改写画布。
-
-Bun 启动器读取项目根目录忽略的 `.charts-runtime-env.json`：
-
-```json
-{
-  "python": ".venv/bin/python",
-  "isolated": false,
-  "cache": ".runtime-cache",
-  "browsers": ".browser-cache"
-}
-```
-
-解释器选择顺序：显式 `PYTHON` → 本机配置的 `python` → 项目 `.venv`。相对路径按仓库根目录解析；缺少环境时提示运行安装入口，不回退系统 Python。显式 `PYTHON` 不混入旧依赖目录。`dependencies` 与 `isolated` 仅兼容旧安装；`bun run setup` 会移除旧依赖目录配置。缓存与浏览器路径继续由启动器传递。
-
-本地 Python 工作进程和网页服务器在没有请求或可见预览时按配置空闲退出；请求执行期间不计空闲。Bun MCP 启动器保留 stdio 连接，并在下次请求恢复工作进程与初始化；直接 Python MCP 退出后需重连。本地 App 仅在可见时保活；在线页面在切回前台、打开批注等操作时检查更新，不定时轮询版本或批注。超时参数与默认值以 `__main__.py`、`lifecycle.py` 为准。
+本地服务支持空闲退出；请求执行期间不计空闲，界面仅在可见时保活。stdio 的 stdout 只承载协议，诊断写 stderr。更新后的连接和预览需要使用对应构建，见[本地更新](../operations/local-mcp-update.md)。
 
 ## MCP 发现与项目选择
 
-```sh
-bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolute/path/runtime-cache mcp
-```
-
-单入口服务多个项目。每次项目请求显式传入 `projectRoot`；本地使用资产目录绝对路径，远程使用工作区内项目名。请求不会选中一个供后续调用沿用的“当前项目”。默认项目、旧集中存储及 Router 转发约定统一见 [项目资产与加载](project-runtime.md)。
-
-注册由既有注册管理流程维护；生成内容不为每个业务项目新增注册或改写 Agent 配置。更新安装与重连见 [本地更新](../operations/local-mcp-update.md)。日志写 stderr，stdout 只承载协议消息。
+每次项目调用显式传 `projectRoot`：本地为资产目录绝对路径，远程为工作区内项目名。不传时仅使用启动默认值；请求不会改变后续调用的项目。工具、资源、分块和诊断保持同一项目路由，详见[项目资产](project-runtime.md#单入口多项目)。
 
 | 发现入口 | 内容 |
 | --- | --- |
-| `tools/list` | 当前安装与传输实际提供的工具、参数、影响标记和 App 可见范围 |
-| `charts://contract` | 同一份传输适配后的工具定义、原子操作结构和编辑约定 |
-| `charts://catalog`、`chart_declarations` | 当前预设、指标卡、声明要求、示例和绑定能力 |
-| `charts://examples`、`charts://examples/<caseId>` | 明确标记为合成数据的案例；读取不创建资产 |
-| `charts://layouts` | 可选构图建议；显式布局继续可用 |
+| `tools/list` | 当前连接的作者工具、参数、影响标记与 App 元信息 |
+| `charts://contract` | 同一份传输适配后的工具结构、页面回调与原子操作约定 |
+| `charts://catalog`、`charts://declarations` | 图表、KPI、绑定与完整声明 |
+| `chart_declarations` | 不带选择时返回索引；`code` 选一个，`codes` 选 1–8 个唯一代码 |
+| `charts://examples`、`generation_examples` | 明确标记为合成数据的完整案例，读取不创建资产 |
+| `charts://layouts` | 可选布局建议，显式布局同样可用 |
 
-工具定义由 `tool_contract.py` 维护，输入结构说明参数来源、默认值和替换影响。修改定义时同步发现资源与调用方，不在文档手工复制工具枚举。
+同一构建的声明可以复用。批量声明只携带一份公共合同，各预设附带完整示例；业务使用必须替换数据、单位、阈值和叙述。工具定义以打包合同为准，不在文档维护第二份枚举。
 
-`chart_declarations` 不带选择时返回索引；`code` 读取一个图表或 KPI，`codes` 一次读取 1–8 个唯一代码，两者互斥。批量结果只携带一份公共合同，具体图表和 KPI 的 `example` 提供各自可执行的合成操作，ID 互不覆盖。全部预设均有经过文档校验的例子；业务制作仍需替换数据、单位、阈值和叙述。声明发现按安装来源标识缓存不可变 JSON，返回值相互隔离，不缓存用户数据。
-
-`chart_recommend` 只按已知的数据形态排序，缺少 `measures` 不再默认单指标。需要筛选重算时传 `requiresFilterBinding: true`；返回的 `bindingMode` 区分普通预设和 `config.encoding` 的专用映射，不能把可分组热力图当成可重算相关系数。`requirements`、`cautions`、`fit` 和 `shapeMismatches` 说明缺少的证据、已知结构不匹配与阅读建议，`questions` 可先从已有数据和需求中补齐。`designGuidance` 优先保持比较关系与一致编码，页面已使用某图不自动降低其排名。
-
-同一连接提供编辑、查询、展示、导出、正式发布、创建分享和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含字段、来源引用、指标定义与已有数据版本。尚未创建组件时用 `dataset_preview` 检查数据；核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。编辑器提供版本历史和分享管理。
+`chart_recommend` 按已知数据形态排序。未知指标数、时间字段和类别数量保持未知。需要筛选重算时传 `requiresFilterBinding: true`，核对候选的 `bindingMode`、`requirements`、`cautions`、`fit` 和 `shapeMismatches`。动态编码需要显式映射。涉及相关系数重算时，核对推荐的计算条件。已有图形继续按分析问题和数据形态参与排序。
 
 ## 编辑与结果确认
 
-新看板已有初始声明时，一次调用 `dashboard_submit`，直接传 JSON 对象参数 `dashboardId`、`createTitle` 和 `operations`，无需先生成中间 JSON 文件。服务仅创建新 ID，并在创建前校验完整初始声明及其引用；声明错误不会留下空看板。已有 ID 会返回冲突。存储故障、并发或检查失败后仍先读 `dashboard_get` 确认状态，存在草稿时用其 `expectedRevision` 修正。该入口不把存储、计算与保存包装成跨步骤事务。导入完整文档或先建空看板时仍使用 `dashboard_create`。
+新成果已有初始内容时，使用 `dashboard_submit` 的 `dashboardId + createTitle + operations`。JSON 对象直接作为工具参数。服务创建前检查整批声明、来源和数据引用，非法初始内容不留下空文档。已有 ID 返回冲突。
 
-所有连接的 `tools/list` 返回同一套 Agent 工具。需要为 COS 数据集分片时，在当前连接调用 `dataset_repartition`。使用 CLI 执行存储盘点、上传暂存清理及存储迁移。直连服务为现有页面和上传程序保留协议回调，参数见 `charts://contract` 的 `clientTools`。
+修改已有成果先读 `dashboard_get`，用返回的 `revision` 作为 `expectedRevision`。`dashboard_submit` 写入相关修改、检查完整草稿并保存一个检查点；可省略 `operations`，只检查和保存导入后的草稿。检查失败返回 `DOCTOR_FAILED`，保留草稿供修正。数据库、计算和对象存储分阶段执行。回执不明确时，先读取实际状态。
 
-项目设计编辑使用 `dashboard_submit`：传入 `dashboardId`、`expectedRevision` 和相关 `operations`。操作整体写入草稿，再检查该修订并保存一个检查点；未通过检查不替换已保存版本。导入或恢复草稿后，可以省略 `operations` 只检查并保存。既有 Agent 工具 `dashboard_annotations`、`dashboard_annotations_update` 保留兼容；网页通过 HTTP 直接读取和提交独立保存的批注。发布、分享仍须另行明确请求。标准交付顺序见 [共享交付流程](../../skills/executive-charts/references/mcp-delivery.md)。
+`dashboard_get` 读取可编辑草稿，`dashboard_view` 读取计算结果。用 `responseMode: "patch"`、必要的 `componentIds` 和 `includeEvidence: true` 一次核对结果、口径与来源；完成后打开 `dashboard_preview` 查看保存版。逐项设计规则见[共享交付](../../skills/executive-charts/references/mcp-delivery.md)。
 
-用 `dashboard_submit` 保存草稿。作者明确要求设置正式发布版时，调用 `dashboard_publish` 并传入已保存的 `revision`。服务端检查该版本并更新正式发布指针。创建访客链接调用 `dashboard_share_publish`，传入已保存的 `revision` 和 UUID v4 `requestId`。分享成功或失败都不改变草稿、检查点或正式发布指针。回执不确定时，沿用原参数及 `requestId` 重试。编辑器与 MCP 使用相同的发布和分享入口。
+MCP 文档写入默认 `responseMode: "summary"`，返回看板 ID、顶层修订、受影响组件、数量和操作元信息。数据写入另含字段、来源、模式、按实际 ID 索引的指标定义，以及可直接执行的 `nextCalls`。重用返回的指标 ID；自动推断的求和指标仍为 `unverified`。
 
-本机项目向已配置的分享服务发布时，必须选择已保存版本；“版本与分享”中的“分享此版本”同时选择“仅查看”或“可批注”。`local_shares.py` 上传该版本的独立数据副本并在项目内保留分享引用，服务凭据只留在作者进程。分享收到的批注通过对应分享按需读取，不回写草稿；配置和引用位置见 [项目资产与加载](project-runtime.md#保存发布与恢复)。
+`nextCalls` 保留项目、修订及数据版本，供调用方选择执行，不是自动队列。完整草稿可用 `dashboard_get` 或写入时的 `responseMode: "full"` 获取。MCP 编辑器显式请求完整结果；CLI、共享服务和 HTTP 保留各自完整响应。大结果遵循[完整结果传输](../operations/mcp-transport-diagnostics.md)。
 
-`dashboard_get` 读取可编辑草稿，`dashboard_view` 返回实际计算结果。MCP 用 `isError` 和结构化错误标识失败；确认 `ok`、检查报告与文档版本后再展示。响应丢失或过期时先读取现有状态。
+保存、正式发布和独立分享分别执行：
 
-MCP 中，创建、patch、恢复、数据导入/挂接/查询和数据迁移这八个原本返回文档的写入工具，默认 `responseMode=summary`：返回 `dashboardId`、顶层 `revision`、可能受影响的 `affectedComponentIds`、组件/数据集/指标数量及原有操作元数据；完整 `document` 与图表产物按需读取。共享指标、数据和布局操作可影响多个组件，受影响 ID 可能包含间接受影响或已删除的组件。下一次写入直接使用返回的顶层 `revision`。
+| 动作 | 工具与结果 |
+| --- | --- |
+| 保存版本 | `dashboard_submit` 检查并保留不可变修订 |
+| 设为正式发布版 | `dashboard_publish` 指向明确的已保存修订 |
+| 创建访客副本 | `dashboard_share_publish` 使用已保存修订与稳定 UUID v4 `requestId` |
 
-`dataset_import`、`dataset_attach`、`query_execute` 的摘要还返回 `dataset.fields`、`sourceId`、`mode` 与按实际 ID 索引的 `metrics`，可以直接用于后续绑定，无需复刻指标 ID 的生成算法。快照包含 `rowCount` 和已有引用 `version`；live 不冒充固定行数或不可变快照。`nextCalls` 提供可直接执行的只读 `dataset_preview` 和 `dashboard_get` 请求，保留该次请求的项目、修订及数据版本；它们是后续选择，不是自动执行队列，也不代表指标已获业务确认。
-
-需要完整结果时可显式传 `responseMode=full`，或按需调用 `dashboard_get`。MCP 编辑器显式请求 full，以继续更新页面；共享 Service、CLI 和网页 HTTP API 保留原文档返回。写入、权限、版本冲突和保存检查沿用既有规则；完整 Doctor 检查在完成编辑批次时执行。读取、预览、完成编辑及错误响应沿用各自原有结构。
-
-预览工具为 `dashboard_preview`，UI 资源 URI 带运行版本与构建标识。宿主决定显示为对话卡片或面板。分块、资源过期和诊断字段见 [传输与诊断](../operations/mcp-transport-diagnostics.md)。
-
-本地 stdio 预览同时按需启动复用当前项目 Service 的回环网页入口，在回执和文档的 `browserLinks` 返回编辑与预览链接；页面与 MCP 共用空闲生命周期。MCP 宿主中的“在浏览器中批注”打开 `browserLinks.viewUrl`，在普通浏览器使用 HTTP 保存。宿主预览、编辑和查询仍沿用原 MCP 协议，不要求宿主直接访问本机批注接口。网页内容的 `readOnly` 与 `annotationAccess.canAnnotate` 分开判定；具体权限和版本定位见 [批注说明](annotation-composer.md)。
+分享不修改草稿、保存版或正式发布指针。未知分享回执沿用原参数与请求 ID 重试。分享读者是否能新增批注由独立权限决定。历史、删除与分享反馈见[项目资产](project-runtime.md#保存发布与恢复)。
 
 ## 页面元信息与组件声明
 
-页面标题使用 `manifest.title` / `set_title`。`manifest.meta` 提供 `iconKey`、`subtitle`、`org`、`system`、`statusText`；`set_meta` 整体替换，`{}` 清空。文本长度、枚举和兼容读取以当前操作结构与校验器为准；没有 meta 的旧导入仍可读取 `originalWorkspace.meta`。
+`manifest.title` 是页面标题。`set_meta` 整体替换 `iconKey`、`subtitle`、`org`、`system` 和 `statusText`，空对象清除元信息。长度、枚举和操作限制以当前合同为准。
 
-组件声明保存稳定 ID、来源、数据集与指标引用、渲染配置和断点布局。预设、完整 ECharts 与自由 HTML/JavaScript 均通过明确声明进入；执行隔离、原生覆盖与绑定限制见 [渲染与覆盖](echarts-options.md)。历史 `kind=chart` 保留兼容读取，新组件遵循当前声明要求。
+组件使用稳定 ID、来源、数据集与指标引用、渲染配置和断点布局。预设、完整 ECharts、自定义 HTML/JavaScript 均有明确声明，见[渲染入口](echarts-options.md)。统计图按原始观测独立计算，见[统计图](statistical-charts.md)。结构图与组件的真实标记、绑定和含义一起维护，不使用虚构业务值。
 
-```sh
-bun bin/python-runtime.js -m dashboard_runtime --project-root /absolute/path/project --runtime-root /absolute/path/runtime-cache import-workspace imported --path ./old-workspace
-```
-
-工作区导入保留原图表、指标卡和表格声明。历史已丢失字段需要从原资产恢复。
+报告的唯一正式源文为 Markdown；`chart` 围栏引用组件，图注、来源与脚注随源文保存，见[生成路径](generation-tracks.md)。
 
 ## 数据导入与查询来源
 
-先从 `dashboard_create` 或现有看板取得修订，再直接调用 `dataset_import`，提供 `rows` 或 `csvText` 中的一种。已掌握完整来源、字段和组件声明时，也可在 `dashboard_submit(createTitle, operations)` 中一次登记。MCP 原生操作示例及可选文件构建流程见 [MCP 创作](../../skills/executive-charts/references/mcp-authoring.md)。
-
-`dataset_import.fields` 可显式声明完整字段类型，适用于日期、布尔、全空字段和空数据集。空 `rows` 或只有表头的 CSV 必须提供 `fields`。JSON 保留标量类型，不把数字自动转成字符串；CSV 按声明类型解析，未声明时沿用数值推断，空单元格成为 `null`，重复/空表头及不一致的列数明确报错。数字标识可使用 JSON 字符串或显式 CSV `string` 字段保留。目标数据集存在时仍替换其数据与元信息；自动建立的数值求和指标保持 `unverified`，业务定义、单位与粒度需复核。
-
-导入后可直接用 `dataset_preview` 读取目标数据集，无需先创建临时表格组件。默认返回 20 行、最多 100 行，以及声明字段、来源 ID、精确总行数和数据版本。样本按原始行顺序读取，不应用组件或页面筛选；`offset` 用于继续读取，不能把少量样本当作完整类别分布或统计结论。快照读取现有不可变版本，live 通过受控只读 SQL 获取当前结果并标记 `transient`。检查通过后再决定指标和组件，提交并保存；已存在组件的聚合与筛选核验继续用 `dashboard_view`。
-
-文件已是用户要求的交付资产时，CLI 仍支持 `call dataset_import --json-file import.json`；整份已审阅 schema-v2 文档可用 `import NEW_ID --file artifact.json` 创建新看板。
-
-大型本地数据更新使用[独立上传入口](../operations/self-hosted-server.md#更新已有看板的数据)，取得验证完成的引用后再更新页面；首次迁移使用同页的清单迁移入口。修改大型组件前可[下载完整配置](../operations/mcp-transport-diagnostics.md#完整配置下载)，复用共用客户端的响应分块处理。
-
-`dataset_attach` 在复制源表之前确认目标存在且修订一致，避免明确过期的请求先导入整表。复制后的最终写入仍保留并发检查；复制期间若发生其他修改，需读取当前草稿再决定如何使用已准备的数据。
-
-服务从运维管理的 JSON 文件读取 SQLite、PostgreSQL 和 DuckDB 来源别名。
-
-```json
-{
-  "local-sales": {"engine": "sqlite", "path": "/absolute/path/sales.sqlite3"},
-  "warehouse": {"engine": "postgresql", "dsnEnv": "SALES_POSTGRES_DSN"},
-  "local-analytics": {"engine": "duckdb", "path": "/absolute/path/sales.duckdb"}
-}
-```
-
-PostgreSQL 从 `dsnEnv` 指定的服务进程环境变量读取连接字符串。数据库账号应只拥有看板所需的数据读取权限。SQLite 和 DuckDB 通过数据库文件建立只读连接。外部进程更新 DuckDB 文件时，请在写入连接关闭后刷新看板。
-
-```sh
-bun bin/python-runtime.js -m dashboard_runtime --project-root ./project --sources ./sources.json call query_execute --json-file query.json
-```
-
-```json
-{
-  "dashboardId":"demo","expectedRevision":1,"datasetId":"sql-result",
-  "connection":"warehouse",
-  "mode":"live",
-  "sql":"SELECT region, month, revenue FROM sales WHERE month >= %(start)s",
-  "parameters":{"start":"2026-01"}
-}
-```
-
-查询按源库的 SQL 方言执行，每次最多返回 10,000 行。查询超限会报错。参数通过 `parameters` 传入。PostgreSQL 使用 `%(name)s` 或 `%s`，SQLite 使用 `:name` 或 `?`，DuckDB 使用 `$name` 或 `?`。PostgreSQL 和 DuckDB 的日期、时间和 UUID 转换为文本，`DECIMAL` 和 `NUMERIC` 按看板数值格式处理。数组和其他复合类型需要在 SQL 中转换为可显示的标量。
-
-默认 `mode: "snapshot"` 同时保存查询来源与数据版本。选择 `mode: "live"` 时，只保存查询定义、字段定义和登记时的执行信息。已有数据集可以通过同一个 ID 切换模式，其历史版本仍保留原引用。
-
-首次登记时可用 `fields` 明确声明字段类型，适用于空结果、日期、布尔值和首批全部为空的列。已有数据集默认沿用原字段定义。保存前用 `dashboard_view` 检查组件绑定，再用 `dashboard_submit` 保存当前草稿。启动页面服务时也要加载同一来源配置，使用 `--sources`，自托管服务器也可用 `CHARTS_SOURCES`。
-
-图表的「更多图表操作 → 查看 SQL」显示所绑定来源的 SQL 文本。`query_inspect` 同样读取来源定义。`semantic_inspect` 读取已保存的业务定义和聚合规则。
-
-## 导出、部署与验证
-
-| 交付 | 数据与操作范围 |
+| 输入 | 入口与边界 |
 | --- | --- |
-| JSON | 保存配置与不可变本地引用 |
-| HTML | 选定读取版本及当前查看条件的只读快照，不连接上游来源；不传版本参数时读取草稿 |
-| CSV | 导出全部匹配记录；筛选、排序和列选择在完整结果上执行 |
-| 静态网页 ZIP | 使用中的完整数据集分片及共享应用；无批注后端时不显示可提交状态，格式与离线能力见 [静态部署包](../operations/static-deployment.md) |
-| 远程网页与腾讯云副本 | 鉴权、密钥、存储、有效期和 SCF 清理见 [自托管服务器](../operations/self-hosted-server.md) |
+| 小型 JSON / CSV | `dataset_import`，最多 20,000 行、16 MiB；`rows` 与 `csvText` 二选一 |
+| 已配置 SQLite 表 | `dataset_attach`，流式导入不可变数据版本，先检查目标修订 |
+| SQL | `query_execute`，使用管理员配置的 SQLite、PostgreSQL 或 DuckDB 只读连接 |
+| 已有数据版本 | `put_dataset_ref`，字段、版本、行数与内容元信息必须匹配且目标项目可读 |
+| 大型远程数据 | 分块上传，完成后校验数据版本。自有服务器的 SQLite 工作区将暂存分块保存在私有运行目录 |
 
-导出文件使用受管 ID，通过读取工具或远程下载链接交付。
+CSV 支持 UTF-8 BOM、带引号的单元格、空值和显式字段类型。重复/空表头、错列数、不完整引号与非法数值会被拒绝。默认推断保护前导零标识符；空数据必须提供字段声明。单位、百分比比例、主键和聚合口径需要按来源确认，不从名称自动认证。
 
-只读 HTML 和静态 ZIP 移除本机批注及运行权限字段，包括 `browserLinks`、`annotationAccess` 和发布管理入口；导出预览文档时同样移除编辑链接和令牌。正式分享只在服务端为发布副本设置该分享自己的批注权限和接口。
+`dataset_preview` 在没有组件时也能读取字段、完整行数和默认 20 行样本，最多 100 行，支持 offset。样本来自所选数据集的未筛选数据。需要完整统计时，在来源执行明确的聚合查询。数据引用和预览可固定 `expectedRevision` 与 `dataVersion`，不一致返回冲突。
 
-测试层次与授权边界统一见 [测试与 CI](../operations/testing.md)。普通维护只运行受影响的局部检查。
+`--sources FILE` 是操作员提供的连接别名配置。工具只接收别名、只读 SQL 和绑定参数，不接受任意数据库路径或新的凭据。查询只允许单条只读语句，执行时间与行数有上限；参数不拼接进 SQL。
 
-维护时机：模块边界、配置入口、发现方式或导入/交付边界改变时更新；组件外观、报告语法、项目存储和单次验收结果在各自负责正文维护。
+快照模式将查询结果保存为不可变数据。实时模式保存查询声明和字段，每次请求读源库；临时行仅存在于请求及短期内存响应缓存，不写入项目数据、诊断日志或持久结果缓存。静态导出需要固定快照。
 
-## 保存的结构简图
+## 导出与验证
 
-`structure_diagram.py` 维护静态 SVG 清理、标注参数和失效规则。所有组件使用同一声明：legacy 位于 `config.presentation.structureDiagram`，其他组件位于 `presentation.structureDiagram`。MCP 与 Runtime CLI 共用 `put_component`，不新增生成服务。
+`dashboard_export` 生成当前计算视图的 HTML 或完整 JSON，`dataset_export` 输出当前明确范围的 CSV，`dashboard_export_site` 打包完整使用数据和应用资源。静态包保留浏览器筛选能力，见[静态部署](../operations/static-deployment.md)。导出通过受管 ID 读取，不接受任意文件路径。
 
-```json
-{
-  "version": 1,
-  "viewBox": [0, 0, 600, 360],
-  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"220\" y=\"100\" width=\"60\" height=\"180\" fill=\"#123b5d\"/></svg>",
-  "annotations": [
-    {"id": "revenue-mark", "metricId": "revenue", "anchor": [250, 180], "label": [30, 180], "align": "left"}
-  ]
-}
-```
-
-该示例只说明保存格式；生成时必须依据当前组件实际结构绘制。坐标范围固定从 `[0,0]` 开始，宽高为正数且不超过 10000；标注点都在范围内。`align=left` 的文字向右展开，`right` 向左展开，默认居中。标签应留足空间，前端不承担自动排布或类型识别。标注 ID 唯一且稳定，每张简图 1–32 个。指标引用从当前指标声明读取名称与定义；无指标引用时提供名称和描述。未提供定义或引用指标已不存在时，详情明确显示缺失状态，不生成业务解释。
-
-SVG 限制为静态基本图形、分组和文字，最多 100000 字符、2000 个元素。脚本、事件、外部资源、样式、`foreignObject`、嵌套 SVG 和 URL 填充会移除；DTD 与实体声明、无效 XML 会拒绝。后端统一写入 viewBox，前端再次清理并以图片展示。SVG 不含业务数值，与筛选结果无关。
-
-`put_component` 明确携带简图代表 Agent 已同步确认该简图；保存时状态为 `ready`。省略简图且组件声明改变时，保留原简图并标记 `stale`；完全相同的声明不改变状态。预设切换也使简图失效。数据刷新、布局与筛选操作不使简图失效。图形、绑定或系列含义改变时，Agent 必须同步重绘，不能复制未经确认的旧简图。旧组件无简图时只显示未配置状态，其余详情保持可用。
-
-内置案例的简图维护在 `demo_diagrams.py`，按组件 ID 保存独立资产，随案例创建批次提交，不作为生产图表类型适配器。已保存的业务看板和远程分享副本不会因更新案例源码自动迁移；需要读取其实际声明，逐个生成简图并通过现有编辑流程保存。
+数据、来源、指标定义和未验证状态在文档中保留。Doctor 检查声明、不可变引用、组件计算和统计产物；成功表示运行与结构检查通过，业务定义仍需对照实际来源。诊断记录请求编号、阶段、耗时、字节数、修订及构建标识，不记录业务行和凭据。

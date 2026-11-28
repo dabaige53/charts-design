@@ -56,4 +56,4 @@ Use the operator CLI for storage migration and rollback. See [project storage](.
 
 For a requested performance investigation, use an isolated store and read the original source database in read-only mode. Compare independently calculated sums and ratios at the same scope. Use computed results for query duration, response size and cache hits.
 
-The targeted benchmark is `tests/runtime/benchmark_local.py --rows 1000000 --output <report.json>`, run through the project Python entry point. It measures import, preview, filter, aggregate, page, sort, search, export, edit and restore costs.
+Measure import, preview, filter, aggregate, page, sort, search, export, edit and restore separately. Use the native tests and CI entry points described in [development checks](../../../docs/operations/testing.md); report the tested data size and scope.

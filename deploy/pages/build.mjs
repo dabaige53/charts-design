@@ -17,7 +17,7 @@ const bundle = await Bun.build({ entrypoints: [resolve(here, "worker.mjs")], tar
 if (!bundle.success) throw new AggregateError(bundle.logs, "Pages worker build failed");
 await Bun.write(resolve(output, "_worker.js"), bundle.outputs[0]);
 if (withD1) {
-  const source = resolve(here, "../../dashboard_runtime/web/dist");
+  const source = resolve(here, "../../runtime-ui/dist");
   const target = resolve(output, "runtime");
   const { id } = JSON.parse(await readFile(resolve(source, "build.json"), "utf8"));
   if (!id) throw Error("Missing UI build version. Run bun run ui:prepare.");

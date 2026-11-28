@@ -11,7 +11,7 @@ import { isCurrent, recordBuild } from '../../runtime-ui/scripts/build-state.mjs
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'charts-build-'));
   temporaryDirectories.push(root);
-  for (const dir of ['runtime-ui/src', 'runtime-ui/scripts', 'runtime-ui/fixtures', 'runtime-ui/dist', 'dashboard_runtime/web']) {
+  for (const dir of ['runtime-ui/src', 'runtime-ui/scripts', 'runtime-ui/fixtures', 'runtime-ui/dist', 'runtime-ui/shared', 'runtime-core/src/runtime']) {
     mkdirSync(path.join(root, dir), { recursive: true });
   }
   writeFileSync(path.join(root, 'runtime-ui/src/app.ts'), 'export const value = 1;');
@@ -23,7 +23,7 @@ function fixture() {
 // @wu-test type=behavior | scope=CI范围 | protects=纯文档触发构建或源码变更跳过测试
 test('only documentation changes skip the complete checks', () => {
   assert.equal(requiresTests(['docs/operations/testing.md', 'README.md']), false);
-  for (const file of ['runtime-ui/src/app.tsx', 'dashboard_runtime/service.py', 'skills/analytical-reports/SKILL.md', '.github/workflows/dashboard-runtime.yml', 'new-config.json']) {
+  for (const file of ['runtime-ui/src/app.tsx', 'runtime-core/src/runtime/service.rs', 'skills/analytical-reports/SKILL.md', '.github/workflows/dashboard-runtime.yml', 'new-config.json']) {
     assert.equal(requiresTests(['docs/README.md', file]), true, file);
   }
 });
@@ -33,14 +33,14 @@ test('complete unchanged resources survive unrelated backend edits', () => {
   const root = fixture();
   assert.equal(isCurrent(root), false);
   recordBuild(root);
-  writeFileSync(path.join(root, 'dashboard_runtime/service.py'), '# backend only');
+  writeFileSync(path.join(root, 'runtime-core/src/runtime/service.rs'), '// backend only');
   assert.equal(isCurrent(root), true);
 });
 
 // @wu-test type=boundary | scope=UI资源复用 | protects=源码锁文件或共享Worker变更后复用旧UI
 test('build inputs invalidate existing resources', () => {
   const root = fixture();
-  for (const file of ['runtime-ui/src/app.ts', 'runtime-ui/bun.lock', 'dashboard_runtime/web/worker.mjs', 'runtime-ui/scripts/build.mjs']) {
+  for (const file of ['runtime-ui/src/app.ts', 'runtime-ui/bun.lock', 'runtime-ui/shared/worker.mjs', 'runtime-ui/scripts/build.mjs']) {
     recordBuild(root);
     writeFileSync(path.join(root, file), `changed ${file}`);
     assert.equal(isCurrent(root), false, file);

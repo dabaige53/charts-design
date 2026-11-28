@@ -5,8 +5,6 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-      args:
-        EXTRAS: ""          # "statistics" adds Seaborn charts
     image: charts-design:latest
     restart: unless-stopped
     env_file: ${CHARTS_AUTHOR_ENV_FILE:-charts.env}

@@ -174,7 +174,7 @@ const js = app.outputFiles[0].text;
 await writeFile(path.join(out, "app.js"), js);
 await writeFile(path.join(out, "app.css"), css.css);
 await build({
-  entryPoints: [path.join(root, "../dashboard_runtime/web/static-worker.mjs")],
+  entryPoints: [path.join(root, "../runtime-ui/shared/static-worker.mjs")],
   outfile: path.join(out, "static-worker.js"),
   bundle: true,
   format: "esm",

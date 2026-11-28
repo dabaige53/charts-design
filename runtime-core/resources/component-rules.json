@@ -1,0 +1,1138 @@
+{
+  "CHART_CODES": [
+    "c01",
+    "c02",
+    "c03",
+    "c04",
+    "c05",
+    "c06",
+    "c07",
+    "c08",
+    "d01",
+    "d02",
+    "d03",
+    "d04",
+    "f01",
+    "f02",
+    "f03",
+    "fn01",
+    "fn02",
+    "fn03",
+    "fn04",
+    "k01",
+    "k02",
+    "k03",
+    "k04",
+    "k05",
+    "k06",
+    "m01",
+    "m02",
+    "m03",
+    "m04",
+    "r01",
+    "r02",
+    "r03",
+    "r04",
+    "r05",
+    "t01",
+    "t02",
+    "t03",
+    "t04",
+    "t05",
+    "t06"
+  ],
+  "CHART_ARRAY_FIELDS": {
+    "c01": [
+      [
+        "categories",
+        "string"
+      ],
+      [
+        "values",
+        "number"
+      ]
+    ],
+    "c02": [
+      [
+        "categories",
+        "string"
+      ],
+      [
+        "values",
+        "number"
+      ]
+    ],
+    "c03": [
+      [
+        "clusters",
+        "string"
+      ],
+      [
+        "budget",
+        "number"
+      ],
+      [
+        "actual",
+        "number"
+      ]
+    ],
+    "c04": [
+      [
+        "fleets",
+        "string"
+      ],
+      [
+        "deviations",
+        "number"
+      ]
+    ],
+    "c05": [
+      [
+        "categories",
+        "string"
+      ],
+      [
+        "scores",
+        "number"
+      ]
+    ],
+    "c06": [
+      [
+        "hubs",
+        "string"
+      ],
+      [
+        "offSeason",
+        "number"
+      ],
+      [
+        "peakSeason",
+        "number"
+      ]
+    ],
+    "c07": [
+      [
+        "clusters",
+        "string"
+      ],
+      [
+        "base2024",
+        "number"
+      ],
+      [
+        "curr2025",
+        "number"
+      ]
+    ],
+    "c08": [
+      [
+        "categories",
+        "string"
+      ],
+      [
+        "domestic",
+        "number"
+      ],
+      [
+        "intl",
+        "number"
+      ]
+    ],
+    "d01": [
+      [
+        "brackets",
+        "string"
+      ],
+      [
+        "counts",
+        "number"
+      ]
+    ],
+    "d02": [
+      [
+        "categories",
+        "string"
+      ],
+      [
+        "boxData",
+        "array"
+      ]
+    ],
+    "d03": [
+      [
+        "plfRange",
+        "string"
+      ],
+      [
+        "density",
+        "number"
+      ]
+    ],
+    "d04": [
+      [
+        "days",
+        "string"
+      ],
+      [
+        "hours",
+        "string"
+      ],
+      [
+        "data",
+        "array"
+      ]
+    ],
+    "f01": [
+      [
+        "stages",
+        "object"
+      ]
+    ],
+    "f02": [
+      [
+        "nodes",
+        "object"
+      ],
+      [
+        "links",
+        "object"
+      ]
+    ],
+    "f03": [
+      [
+        "cohorts",
+        "string"
+      ],
+      [
+        "months",
+        "string"
+      ],
+      [
+        "matrix",
+        "array"
+      ]
+    ],
+    "fn01": [
+      [
+        "categories",
+        "string"
+      ],
+      [
+        "baseSteps",
+        "number"
+      ],
+      [
+        "deltas",
+        "number"
+      ],
+      [
+        "labels",
+        "string"
+      ]
+    ],
+    "fn02": [
+      [
+        "quarters",
+        "string"
+      ],
+      [
+        "revenue",
+        "number"
+      ],
+      [
+        "cost",
+        "number"
+      ]
+    ],
+    "fn03": [
+      [
+        "variables",
+        "string"
+      ],
+      [
+        "negative",
+        "number"
+      ],
+      [
+        "positive",
+        "number"
+      ]
+    ],
+    "fn04": [
+      [
+        "nodes",
+        "string"
+      ],
+      [
+        "east",
+        "number"
+      ],
+      [
+        "south",
+        "number"
+      ],
+      [
+        "north",
+        "number"
+      ],
+      [
+        "west",
+        "number"
+      ]
+    ],
+    "k01": [
+      [
+        "demographics",
+        "object"
+      ]
+    ],
+    "k02": [
+      [
+        "hubs",
+        "string"
+      ],
+      [
+        "appDirect",
+        "number"
+      ],
+      [
+        "corpDirect",
+        "number"
+      ],
+      [
+        "ota",
+        "number"
+      ]
+    ],
+    "k03": [
+      [
+        "assets",
+        "object"
+      ]
+    ],
+    "k04": [
+      [
+        "causes",
+        "string"
+      ],
+      [
+        "counts",
+        "number"
+      ],
+      [
+        "cumPercent",
+        "number"
+      ]
+    ],
+    "k05": [
+      [
+        "shares",
+        "object"
+      ]
+    ],
+    "k06": [
+      [
+        "hierarchy",
+        "object"
+      ]
+    ],
+    "m01": [
+      [
+        "metrics",
+        "string"
+      ],
+      [
+        "actual",
+        "number"
+      ]
+    ],
+    "m02": [
+      [
+        "quarters",
+        "string"
+      ],
+      [
+        "baseline",
+        "number"
+      ],
+      [
+        "optimistic",
+        "number"
+      ],
+      [
+        "pessimistic",
+        "number"
+      ]
+    ],
+    "m03": [
+      [
+        "airports",
+        "string"
+      ],
+      [
+        "overage",
+        "number"
+      ]
+    ],
+    "r01": [
+      [
+        "routes",
+        "array"
+      ]
+    ],
+    "r02": [
+      [
+        "clusters",
+        "array"
+      ]
+    ],
+    "r03": [
+      [
+        "dimensions",
+        "string"
+      ],
+      [
+        "matrix",
+        "array"
+      ]
+    ],
+    "r04": [
+      [
+        "nodes",
+        "object"
+      ],
+      [
+        "links",
+        "object"
+      ]
+    ],
+    "r05": [
+      [
+        "indicators",
+        "object"
+      ],
+      [
+        "seriesData",
+        "object"
+      ]
+    ],
+    "t01": [
+      [
+        "months",
+        "string"
+      ],
+      [
+        "rpk",
+        "number"
+      ]
+    ],
+    "t02": [
+      [
+        "quarters",
+        "string"
+      ],
+      [
+        "actual",
+        "nullable_number"
+      ],
+      [
+        "forecast",
+        "nullable_number"
+      ]
+    ],
+    "t03": [
+      [
+        "segments",
+        "string"
+      ],
+      [
+        "rates",
+        "number"
+      ]
+    ],
+    "t04": [
+      [
+        "quarters",
+        "string"
+      ],
+      [
+        "premium",
+        "number"
+      ],
+      [
+        "economy",
+        "number"
+      ],
+      [
+        "cargo",
+        "number"
+      ],
+      [
+        "ancillary",
+        "number"
+      ]
+    ],
+    "t05": [
+      [
+        "stages",
+        "string"
+      ],
+      [
+        "lines",
+        "object"
+      ]
+    ]
+  },
+  "CHART_EQUAL_LENGTH_GROUPS": {
+    "c01": [
+      [
+        "categories",
+        "values"
+      ]
+    ],
+    "c02": [
+      [
+        "categories",
+        "values"
+      ]
+    ],
+    "c03": [
+      [
+        "clusters",
+        "budget",
+        "actual"
+      ]
+    ],
+    "c04": [
+      [
+        "fleets",
+        "deviations"
+      ]
+    ],
+    "c05": [
+      [
+        "categories",
+        "scores"
+      ]
+    ],
+    "c06": [
+      [
+        "hubs",
+        "offSeason",
+        "peakSeason"
+      ]
+    ],
+    "c07": [
+      [
+        "clusters",
+        "base2024",
+        "curr2025"
+      ]
+    ],
+    "c08": [
+      [
+        "categories",
+        "domestic",
+        "intl"
+      ]
+    ],
+    "d01": [
+      [
+        "brackets",
+        "counts"
+      ]
+    ],
+    "d02": [
+      [
+        "categories",
+        "boxData"
+      ]
+    ],
+    "d03": [
+      [
+        "plfRange",
+        "density"
+      ]
+    ],
+    "fn01": [
+      [
+        "categories",
+        "baseSteps",
+        "deltas",
+        "labels"
+      ]
+    ],
+    "fn02": [
+      [
+        "quarters",
+        "revenue",
+        "cost"
+      ]
+    ],
+    "fn03": [
+      [
+        "variables",
+        "negative",
+        "positive"
+      ]
+    ],
+    "fn04": [
+      [
+        "nodes",
+        "east",
+        "south",
+        "north",
+        "west"
+      ]
+    ],
+    "k02": [
+      [
+        "hubs",
+        "appDirect",
+        "corpDirect",
+        "ota"
+      ]
+    ],
+    "k04": [
+      [
+        "causes",
+        "counts",
+        "cumPercent"
+      ]
+    ],
+    "m01": [
+      [
+        "metrics",
+        "actual"
+      ]
+    ],
+    "m02": [
+      [
+        "quarters",
+        "baseline",
+        "optimistic",
+        "pessimistic"
+      ]
+    ],
+    "m03": [
+      [
+        "airports",
+        "overage"
+      ]
+    ],
+    "t01": [
+      [
+        "months",
+        "rpk"
+      ]
+    ],
+    "t02": [
+      [
+        "quarters",
+        "actual",
+        "forecast"
+      ]
+    ],
+    "t03": [
+      [
+        "segments",
+        "rates"
+      ]
+    ],
+    "t04": [
+      [
+        "quarters",
+        "premium",
+        "economy",
+        "cargo",
+        "ancillary"
+      ]
+    ]
+  },
+  "CHART_PRESENTATION_CONTRACTS": {
+    "t06": {
+      "axis": [
+        "x",
+        "leftY",
+        "rightY"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2
+    },
+    "c01": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "c02": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "r01": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 2,
+      "units": 2,
+      "numeric": [
+        [
+          "thresholds",
+          "x"
+        ],
+        [
+          "thresholds",
+          "y"
+        ]
+      ]
+    },
+    "fn01": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "f01": {
+      "axis": [],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "fn03": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 1
+    },
+    "c08": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2
+    },
+    "c05": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2,
+      "labels": 3,
+      "numeric": [
+        [
+          "thresholds",
+          "high"
+        ],
+        [
+          "thresholds",
+          "medium"
+        ]
+      ]
+    },
+    "c07": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2
+    },
+    "t01": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "t03": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "k05": {
+      "axis": [],
+      "series": 0,
+      "tooltip": 1,
+      "units": 1,
+      "numeric": [
+        [
+          "totals",
+          "value"
+        ]
+      ]
+    },
+    "d02": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 5,
+      "units": 5
+    },
+    "r03": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "domain": [
+        [
+          "domains",
+          "visualMap"
+        ]
+      ]
+    },
+    "c03": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2
+    },
+    "fn02": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2
+    },
+    "f02": {
+      "axis": [],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "c04": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "m03": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "labels": 2,
+      "numeric": [
+        [
+          "thresholds",
+          "warning"
+        ]
+      ]
+    },
+    "fn04": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 4,
+      "tooltip": 4,
+      "units": 4
+    },
+    "d01": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "d03": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "labels": 2
+    },
+    "t04": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 4,
+      "tooltip": 4,
+      "units": 4
+    },
+    "t02": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2,
+      "labels": 2,
+      "numeric": [
+        [
+          "thresholds",
+          "forecastStartIndex"
+        ]
+      ]
+    },
+    "k02": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 3,
+      "tooltip": 3,
+      "units": 3
+    },
+    "r02": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 4,
+      "units": 4
+    },
+    "f03": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "domain": [
+        [
+          "domains",
+          "visualMap"
+        ]
+      ]
+    },
+    "m01": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "labels": 2,
+      "numeric": [
+        [
+          "thresholds",
+          "target"
+        ]
+      ]
+    },
+    "d04": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "domain": [
+        [
+          "domains",
+          "visualMap"
+        ]
+      ]
+    },
+    "r04": {
+      "axis": [],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "labels": 4,
+      "numeric": [
+        [
+          "thresholds",
+          "primaryNodeSize"
+        ]
+      ]
+    },
+    "c06": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2,
+      "labels": 2,
+      "numeric": [
+        [
+          "thresholds",
+          "target"
+        ]
+      ]
+    },
+    "t05": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": "lines",
+      "tooltip": 1,
+      "units": 1
+    },
+    "k01": {
+      "axis": [],
+      "series": 0,
+      "tooltip": 1,
+      "units": 1
+    },
+    "k04": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2,
+      "labels": 2,
+      "numeric": [
+        [
+          "thresholds",
+          "primaryShare"
+        ]
+      ]
+    },
+    "k03": {
+      "axis": [],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1
+    },
+    "k06": {
+      "axis": [],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "labels": 2,
+      "numeric": [
+        [
+          "thresholds",
+          "primaryShare"
+        ]
+      ]
+    },
+    "m02": {
+      "axis": [
+        "x",
+        "y"
+      ],
+      "series": 3,
+      "tooltip": 3,
+      "units": 3
+    },
+    "r05": {
+      "axis": [],
+      "series": 2,
+      "tooltip": 2,
+      "units": 2,
+      "domain": [
+        [
+          "domains",
+          "indicators"
+        ]
+      ]
+    },
+    "m04": {
+      "axis": [],
+      "series": 1,
+      "tooltip": 1,
+      "units": 1,
+      "labels": 2,
+      "domain": [
+        [
+          "domains",
+          "value"
+        ]
+      ]
+    }
+  },
+  "CHART_TABLE_HEADER_COUNTS": {
+    "c01": 2,
+    "c02": 2,
+    "c03": 5,
+    "c04": 2,
+    "c05": 3,
+    "c06": 4,
+    "c07": 5,
+    "c08": 4,
+    "d01": 3,
+    "d02": 4,
+    "d03": 3,
+    "d04": 3,
+    "f01": 3,
+    "f02": 3,
+    "f03": "months+1",
+    "fn01": 3,
+    "fn02": 4,
+    "fn03": 3,
+    "fn04": 5,
+    "k01": 2,
+    "k02": 4,
+    "k03": 3,
+    "k04": 4,
+    "k05": 3,
+    "k06": 4,
+    "m01": 4,
+    "m02": 4,
+    "m03": 3,
+    "m04": 4,
+    "r01": 4,
+    "r02": 5,
+    "r03": 3,
+    "r04": 3,
+    "r05": 4,
+    "t01": 3,
+    "t02": 3,
+    "t03": 3,
+    "t04": 5,
+    "t05": "stages+1",
+    "t06": 3
+  }
+}

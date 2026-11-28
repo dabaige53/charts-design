@@ -1,6 +1,6 @@
 [package]
 name = "charts-design-core"
-version = "0.1.1"
+version = "1.2.42"
 edition = "2021"
 rust-version = "1.91.1"
 publish = false
@@ -9,11 +9,55 @@ publish = false
 arrow-array = "=60.2.0"
 arrow-schema = "=60.2.0"
 parquet = { version = "=60.2.0", default-features = false, features = ["arrow", "snap"] }
-rusqlite = { version = "=0.41.1", features = ["bundled"] }
+rusqlite = { version = "=0.41.1", features = ["bundled", "functions", "hooks", "modern_sqlite"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.149", features = ["preserve_order"] }
 sha2 = "=0.10.9"
+axum = "=0.8.9"
+base64 = "0.22"
+bytes = "1"
+chrono = { version = "0.4", features = ["serde"] }
+csv = "1.4"
+duckdb = { version = "=1.10506.1", features = ["bundled"] }
+flate2 = "1.1"
+fs2 = "0.4"
+hex = "0.4"
+hmac = "0.12"
+http-body-util = "0.1"
+ipnet = "2"
+jsonschema = { version = "=0.63.2", default-features = false }
+mime_guess = "2"
+md-5 = "0.11"
+native-tls = "0.2"
+percent-encoding = "2.3"
+pbkdf2 = "0.12"
+postgres = { version = "0.19", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"] }
+postgres-native-tls = "=0.5.3"
+quick-xml = { version = "=0.42.0", features = ["serialize"] }
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
+rmcp = { version = "=3.12.0", default-features = false, features = ["server", "transport-io", "transport-streamable-http-server"] }
+resvg = "=0.50.0"
+roxmltree = "0.21"
+rust_decimal = { version = "1", features = ["db-postgres"] }
+sha1 = "0.10"
+similar = "2"
+subtle = "2.6"
+tempfile = "3"
+tokio = { version = "=1.54.1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io", "rt"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs", "limit", "trace"] }
+url = "2.5"
+uuid = { version = "1", features = ["v4", "v5", "serde"] }
+zip = { version = "=9.9.0", default-features = false, features = ["deflate"] }
+
+[build-dependencies]
+sha2 = "0.10.9"
 
 [profile.release]
 lto = "thin"
 strip = true
+
+[profile.dev]
+debug = 0

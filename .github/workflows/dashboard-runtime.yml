@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       acceptance_only:
-        description: 'Only build artifacts and run million-row acceptance'
+        description: Only build artifacts and run million-row acceptance
         type: boolean
         default: false
 concurrency:
@@ -15,10 +15,10 @@ concurrency:
 permissions:
   contents: read
 env:
-  PYTHONUNBUFFERED: '1'
   FORCE_COLOR: '1'
+  CARGO_BUILD_JOBS: '2'
+  CXXFLAGS: '-g0'
 
-# Regular runs check documentation. Executable changes share one UI artifact.
 jobs:
   changes:
     name: Select checks
@@ -51,57 +51,50 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: '0.12.13'
-          enable-cache: true
-      - run: uv sync --locked --extra mcp --extra cloud --no-install-project --python 3.11
       - run: bun install --frozen-lockfile --production --ignore-scripts
-      - name: Lint Python (pyflakes rules)
-        run: bun bin/python-runtime.js -m ruff check --output-format=github
-      - name: Type-check live data and acceptance entry points
-        run: >-
-          bunx --package pyright@1.1.408 pyright --pythonpath .venv/bin/python
-          dashboard_runtime/query.py dashboard_runtime/service.py tests/acceptance/run.py
-      - name: Syntax, skill links and documentation links/anchors
+      - name: Syntax, skill links and documentation links
         run: bun run check
-      - name: Development workflow checks
+      - name: Development and deployment contracts
         run: bun test ./tests/development ./tests/deploy
 
   native:
-    name: Native Parquet exporter
+    name: Rust runtime
     needs: changes
     if: needs.changes.outputs.tests == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: runtime-core
     steps:
       - uses: actions/checkout@v5
-      - name: Install pinned Rust toolchain
-        working-directory: runtime-core
-        run: rustup show
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            runtime-core/target
-          key: native-${{ runner.os }}-1.91.1-${{ hashFiles('runtime-core/Cargo.lock') }}
-      - name: Native format and correctness checks
+      - uses: oven-sh/setup-bun@v2
         if: ${{ !inputs.acceptance_only }}
-        working-directory: runtime-core
+        with:
+          bun-version-file: .bun-version
+      - name: Prepare UI for native preview tests
+        if: ${{ !inputs.acceptance_only }}
+        working-directory: .
+        run: |
+          bun run ui:install
+          bun run ui:prepare
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime-core
+          shared-key: native-runtime
+      - name: Formatting, native behavior and Clippy
+        if: ${{ !inputs.acceptance_only }}
         run: |
           cargo fmt --check
-          cargo test --locked
-          cargo clippy --locked --all-targets -- -D warnings
-      - name: Build native release artifact
-        working-directory: runtime-core
-        run: cargo build --release --locked
+          cargo test --release --locked
+          cargo clippy --release --locked --all-targets -- -D warnings
+      - name: Build the native runtime
+        run: cargo build --release --locked --bin charts-design-core
       - uses: actions/upload-artifact@v5
         with:
           name: native-${{ github.sha }}
@@ -109,12 +102,73 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  coverage:
+    name: Rust coverage gate (84%)
+    needs: changes
+    if: ${{ needs.changes.outputs.tests == 'true' && !inputs.acceptance_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: bun install --frozen-lockfile --production --ignore-scripts
+      - name: Prepare UI for native preview tests
+        run: |
+          bun run ui:install
+          bun run ui:prepare
+      - name: Install the pinned compiler and coverage tools
+        working-directory: runtime-core
+        run: |
+          rustup show
+          rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.6.21
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime-core
+          shared-key: native-coverage
+      - name: Measure the actual native implementation
+        working-directory: runtime-core
+        env:
+          CARGO_PROFILE_RELEASE_STRIP: 'none'
+        shell: bash
+        run: |
+          cargo llvm-cov show-env --export-prefix > "$RUNNER_TEMP/charts-coverage-env.sh"
+          source "$RUNNER_TEMP/charts-coverage-env.sh"
+          cargo llvm-cov clean --workspace
+          cargo test --release --locked
+          CHARTS_CORE_BIN=$(cargo build --release --locked --bin charts-design-core --message-format=json |
+            jq -er 'select(.reason == "compiler-artifact" and .target.name == "charts-design-core") | .executable // empty')
+          export CHARTS_CORE_BIN
+          (
+            cd ..
+            bun test tests/integration/private-sharing.test.mjs
+            bun run test:function --ci-server --samples 1 --output "$RUNNER_TEMP/charts-coverage-functional"
+          )
+          mkdir -p ../reports
+          cargo llvm-cov report --release --lcov --output-path ../reports/coverage.lcov --fail-under-lines 84
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: native-coverage
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+
   ui:
-    name: Shared UI build
+    name: Shared UI and browser data contracts
     needs: [changes, native]
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      CHARTS_CORE_BIN: ${{ github.workspace }}/runtime-core/native/charts-design-core
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -123,8 +177,8 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           name: native-${{ github.sha }}
-          path: dashboard_runtime/native/
-      - run: chmod +x dashboard_runtime/native/charts-design-core
+          path: runtime-core/native/
+      - run: chmod +x runtime-core/native/charts-design-core
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
@@ -134,6 +188,8 @@ jobs:
       - run: bun run ui:typecheck
         if: ${{ !inputs.acceptance_only }}
       - run: bun run ui:build
+      - name: Verify the single distributable UI
+        run: bun run ui:package
       - uses: actions/upload-artifact@v5
         with:
           name: shared-ui-${{ github.sha }}
@@ -143,12 +199,12 @@ jobs:
       - name: React component and interaction tests
         if: ${{ !inputs.acceptance_only }}
         working-directory: runtime-ui
-        env:
-          CHARTS_CORE_BIN: ${{ github.workspace }}/dashboard_runtime/native/charts-design-core
-          PYTHON: python3
         run: |
           mkdir -p reports
           bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
+      - name: Native and browser calculation parity
+        if: ${{ !inputs.acceptance_only }}
+        run: bun test ./tests/runtime
       - uses: actions/upload-artifact@v5
         if: ${{ always() && !inputs.acceptance_only }}
         with:
@@ -156,147 +212,74 @@ jobs:
           path: runtime-ui/reports/
           retention-days: 14
 
-  unit:
-    name: Unit tests (Python ${{ matrix.python }})
-    needs: [changes, ui, native]
-    if: ${{ needs.changes.outputs.tests == 'true' && !inputs.acceptance_only }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        # Compatibility floor, production baseline, and the existing upper CI target.
-        python: ['3.10', '3.11', '3.13']
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python }}
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: '0.12.13'
-          enable-cache: true
-      - name: Install locked backend dependencies
-        run: uv sync --locked --all-extras --no-install-project --python ${{ matrix.python }}
-      - uses: actions/download-artifact@v5
-        with:
-          name: native-${{ github.sha }}
-          path: dashboard_runtime/native/
-      - run: chmod +x dashboard_runtime/native/charts-design-core
-      - uses: actions/download-artifact@v5
-        with:
-          name: shared-ui-${{ github.sha }}
-          path: runtime-ui/dist/
-      - name: Package shared UI for backend protocol checks
-        run: bun runtime-ui/scripts/package.mjs
-      - name: Runtime, MCP protocol and server tests (no browser)
-        run: >-
-          bun bin/python-runtime.js -m pytest tests/runtime -q
-          --junitxml=reports/runtime-unit.xml
-          --cov=dashboard_runtime --cov-report=xml:reports/coverage.xml
-          --cov-report=term:skip-covered --cov-fail-under=84
-      - name: Shared data modules (Bun)
-        if: matrix.python == '3.11'
-        run: bun test ./tests/runtime
-      - name: Python and JavaScript calculation parity
-        if: matrix.python != '3.11'
-        run: bun test ./tests/runtime/engine.test.mjs
-      - name: Workspace and data contracts
-        run: bun bin/python-runtime.js -m pytest tests --ignore=tests/runtime -q --junitxml=reports/workspace.xml
-      - name: Coverage summary
-        if: always()
-        run: |
-          bun bin/python-runtime.js - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          import pathlib, xml.etree.ElementTree as ET
-          path = pathlib.Path('reports/coverage.xml')
-          if path.exists():
-              root = ET.parse(path).getroot()
-              print(f"### dashboard_runtime coverage (Python ${{ matrix.python }}): {float(root.get('line-rate')) * 100:.1f}%")
-              rows = sorted(((float(c.get('line-rate')), c.get('filename')) for c in root.iter('class')))[:8]
-              print('| Lowest covered module | Lines |\n| --- | --- |')
-              for rate, name in rows:
-                  print(f'| {name} | {rate * 100:.0f}% |')
-          EOF
-      - uses: actions/upload-artifact@v5
-        if: always()
-        with:
-          name: unit-reports-py${{ matrix.python }}
-          path: reports/
-          retention-days: 14
-
   container:
     name: Container image smoke test
     needs: changes
     if: ${{ needs.changes.outputs.tests == 'true' && !inputs.acceptance_only }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: '0.12.13'
-      - name: Add fake environment files to detect image leaks
-        run: |
-          uv run --no-project --python 3.11 python - <<'EOF'
-          from pathlib import Path
-          for name in ('deploy/charts.env', '.env', 'dashboard_runtime/.env'):
-              Path(name).write_text('CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n')
-          EOF
-      - name: Build the deployable image
-        run: docker build -f deploy/Dockerfile -t charts-design:ci .
-      - name: Run remote MCP and verify independent Parquet site downloads
-        run: uv run --no-project --python 3.11 python tests/deploy/container_smoke.py --image charts-design:ci
-
-  acceptance:
-    name: Dashboard performance acceptance
-    needs: [changes, ui, native]
-    if: needs.changes.outputs.tests == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version-file: .python-version
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: astral-sh/setup-uv@v7
+      - name: Add fake environment files to detect image leaks
+        run: |
+          bun -e 'for (const path of ["deploy/charts.env", ".env", "runtime-core/.env"]) await Bun.write(path, "CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n")'
+      - name: Build the deployable image
+        run: docker build -f deploy/Dockerfile --build-arg CHARTS_IMAGE_COMMIT="$GITHUB_SHA" -t charts-design:ci .
+      - name: MCP, scoped access, Parquet downloads and non-root isolation
+        run: bun tests/deploy/container-smoke.mjs --image charts-design:ci --commit "$GITHUB_SHA"
+
+  acceptance:
+    name: Dashboard and static-share acceptance
+    needs: [changes, ui, native]
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CHARTS_CORE_BIN: ${{ github.workspace }}/runtime-core/native/charts-design-core
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          version: '0.12.13'
-          enable-cache: true
-      - run: uv sync --locked --extra mcp --no-install-project
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - uses: actions/download-artifact@v5
         with:
           name: native-${{ github.sha }}
-          path: dashboard_runtime/native/
-      - run: chmod +x dashboard_runtime/native/charts-design-core
+          path: runtime-core/native/
+      - run: chmod +x runtime-core/native/charts-design-core
+      - run: bun install --frozen-lockfile --production --ignore-scripts
       - uses: actions/download-artifact@v5
         with:
           name: shared-ui-${{ github.sha }}
           path: runtime-ui/dist/
       - run: bun run ui:package
-      - name: Measure author server and static share with the synthetic fixture
+      - name: Fixed private share lifecycle without external services
+        if: ${{ !inputs.acceptance_only }}
+        run: bun test tests/integration/private-sharing.test.mjs
+      - name: Native stdio MCP, saved previews, annotations and the real share Worker
+        if: ${{ !inputs.acceptance_only }}
+        run: bun run test:function --ci-server --samples 3 --output "$RUNNER_TEMP/charts-functional"
+      - name: Record first-view and data-preview timings
         env:
-          CHARTS_CORE_BIN: ${{ github.workspace }}/dashboard_runtime/native/charts-design-core
           EVENT: ${{ github.event_name }}
         run: |
-          scenario=test:performance
-          if [ "$EVENT" != pull_request ]; then scenario=test:million; fi
-          bun run "$scenario" --ci-server --samples 3 --output "$RUNNER_TEMP/charts-performance"
+          rows=100000
+          if [ "$EVENT" != pull_request ]; then rows=1000000; fi
+          bun run test:performance --rows "$rows" --ci-server --samples 3 --output "$RUNNER_TEMP/charts-performance"
       - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: dashboard-performance
-          path: ${{ runner.temp }}/charts-performance/report.json
+          name: dashboard-acceptance
+          path: |
+            ${{ runner.temp }}/charts-functional/report.json
+            ${{ runner.temp }}/charts-performance/report.json
           if-no-files-found: warn
           retention-days: 14

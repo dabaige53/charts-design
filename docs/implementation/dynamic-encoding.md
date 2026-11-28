@@ -41,15 +41,9 @@
 
 新编码暂不支持 timeGrain、双轴或自动聚合服务状态表。无需时间归并的日期可直接作为分类字段。不是所有 ECharts 组合都属于已验证范围。业务规则、行业颜色及评级排序由调用方声明，产品不内置航空规则。
 
-## 复验入口
+## 验证
 
-- `bun test ./tests/runtime/encoding.test.mjs`：固定点、比例、空结果、描述字段冲突、动态系列及零售分组。
-- `bun bin/python-runtime.js -m pytest tests/runtime/test_encoding.py -q`：SQL 聚合、字段校验和工具发现。
-- `bun bin/python-runtime.js -m pytest tests/runtime/test_encoding_browser.py -q`：零售场景真实浏览器渲染、筛选后系列减少、明细同步、跨数据集下钻及清除。
-- `bun run runtime:test`：现有运行时兼容回归。测试使用项目登记的 Python 依赖和 Chromium；macOS 沙盒可能需要允许启动无界面浏览器。
-- `bun pm pack --destination /private/tmp`：按项目正式入口生成安装包。安装包中的 `runtime_info.uiBuildId` 用于区分开发构建；本次不发布新版本。
-
-![零售通用场景验收](../images/dynamic-encoding-retail.png)
+数据聚合与字段校验由原生 Rust 定向用例覆盖，图表渲染和交互使用共享 UI 测试。实际验收核对筛选后的系列、明细、下钻与清除行为；验证范围按[开发检查](../operations/testing.md)选择。
 
 ## 排名展示与无结果状态
 

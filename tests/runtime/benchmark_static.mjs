@@ -24,7 +24,7 @@ export function options(argv,defaults){
     values[name]=Number(values[name]??value);
     if(!Number.isSafeInteger(values[name])||values[name]<1)throw Error(`--${name} must be a positive integer`);
   }
-  values['candidate-dir']=resolve(values['candidate-dir']||join(repository,'dashboard_runtime/web'));
+  values['candidate-dir']=resolve(values['candidate-dir']||join(repository,'runtime-ui/shared'));
   values.output=resolve(values.output);
   return values;
 }
@@ -36,7 +36,7 @@ export async function sources(config){
       revision=execFileSync('git',['rev-parse','--verify','--end-of-options',config['baseline-ref']+'^{commit}'],{cwd:repository,encoding:'utf8'}).trim();
       temporary=await mkdtemp(join(tmpdir(),'charts-static-baseline-'));
       baseline=temporary;
-      const prefix='dashboard_runtime/web/';
+      const prefix='runtime-ui/shared/';
       const files=execFileSync('git',['ls-tree','-r','--name-only',revision,'--',prefix],{cwd:repository,encoding:'utf8'}).trim().split('\n');
       for(const path of files.filter(path=>path.startsWith(prefix)&&path.endsWith('.mjs'))){
         const target=join(temporary,path.slice(prefix.length));

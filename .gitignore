@@ -1,7 +1,6 @@
 # Ignore all dotfiles and dot directories
 .*
 !.gitignore
-!.python-version
 !.bun-version
 !.github/
 !.github/**
@@ -34,25 +33,14 @@ docs/.impeccable/*
 *.pem
 *.pfx
 
-# Python caches and compiled files
-__pycache__/
-*.egg-info/
-build/
-*.py[cod]
-*$py.class
-dist/test_*
-dist/*verified*
-tests/test_output/
-
 # Runtime dependencies, local data and review artifacts
 node_modules/
 runtime-core/target/
-dashboard_runtime/native/
+runtime-core/native/
 boards/
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal
-dashboard_runtime/web/dist/
 runtime-ui/dist/
 runtime-ui/reports/
 reports/

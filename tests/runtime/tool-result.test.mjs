@@ -1,6 +1,6 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import {decodeToolResult,resolveToolResult} from '../../dashboard_runtime/web/tool-result.mjs';
+import {decodeToolResult,resolveToolResult} from '../../runtime-ui/shared/tool-result.mjs';
 
 // @wu-test type=integration | scope=chunk decoding | protects=大响应丢行或Unicode损坏
 test('large text-only chunk transport preserves Unicode and every row',async()=>{

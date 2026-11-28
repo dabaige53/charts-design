@@ -1,5 +1,5 @@
 // Read compatibility for historical native charts. New declarations use the 40 registered codes.
-import { format } from "../../dashboard_runtime/web/engine.mjs";
+import { format } from "../../runtime-ui/shared/engine.mjs";
 import type { Config, Document } from "./types";
 const types = new Set([
   "bar",

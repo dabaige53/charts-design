@@ -1,7 +1,7 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import {applyEChartsOptions} from '../../dashboard_runtime/web/echarts-options.mjs';
-import {resolveOriginal} from '../../dashboard_runtime/web/bindings.mjs';
+import {applyEChartsOptions} from '../../runtime-ui/shared/echarts-options.mjs';
+import {resolveOriginal} from '../../runtime-ui/shared/bindings.mjs';
 
 // @wu-test type=behavior | scope=ECharts option merging | protects=覆盖配置丢失原数据或函数
 test('native overrides preserve preset data/functions and accept extra fields',()=>{
