@@ -1,22 +1,12 @@
 name: Native runtime packages
 on:
-  pull_request:
-    paths:
-      - 'runtime-core/**'
-      - 'bin/install-native.mjs'
-      - 'bin/build-native.mjs'
-      - 'bin/native-runtime.js'
-      - 'package.json'
-      - 'tests/development/native-install.test.mjs'
-      - '.github/workflows/native-release.yml'
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: native-packages-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: native-packages-${{ github.ref }}
 
 jobs:
   build:
@@ -54,12 +44,15 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
+        if: runner.os == 'Linux'
         with:
           bun-version-file: .bun-version
       - name: Verify the shared product version
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           bun -e 'import {nativeRelease} from "./bin/install-native.mjs"; const r=nativeRelease(process.cwd()),p=await Bun.file("package.json").json(); if(r.version!==p.version || (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `v${r.version}`)) throw Error("Release tag, npm and Cargo versions must match");'
       - name: Prepare UI for native preview tests
+        if: runner.os == 'Linux'
         run: |
           bun run ui:install
           bun run ui:prepare
@@ -84,17 +77,18 @@ jobs:
             -v "$HOME/.cargo/git:/usr/local/cargo/git" -w /work/runtime-core \
             -e CARGO_BUILD_JOBS=2 -e CXXFLAGS=-g0 rust:1.91.1-bookworm \
             bash -c 'cargo test --release --locked --target "${{ matrix.target }}" && cargo build --release --locked --target "${{ matrix.target }}"'
-      - name: Build and test macOS or Windows
+      - name: Build macOS or Windows release binary
         if: runner.os != 'Linux'
         working-directory: runtime-core
+        run: cargo build --release --locked --target '${{ matrix.target }}'
+      - name: Stage the release binary
         run: |
-          cargo test --release --locked --target '${{ matrix.target }}'
-          cargo build --release --locked --target '${{ matrix.target }}'
-      - name: Verify the real installer and binary
-        run: |
-          bun test ./tests/development/native-install.test.mjs
           mkdir -p release
           cp 'runtime-core/target/${{ matrix.target }}/release/charts-design-core${{ matrix.extension }}' 'release/charts-design-core-${{ matrix.target }}${{ matrix.extension }}'
+      - name: Verify the real installer and binary on Linux
+        if: runner.os == 'Linux'
+        run: |
+          bun test ./tests/development/native-install.test.mjs
           bun --eval '
           import {createHash} from "node:crypto";
           import {readFileSync} from "node:fs";

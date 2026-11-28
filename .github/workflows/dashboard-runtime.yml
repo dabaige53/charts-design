@@ -10,8 +10,8 @@ on:
         type: boolean
         default: false
 concurrency:
-  group: dashboard-runtime-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: dashboard-runtime-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 env:
@@ -30,6 +30,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          filter: blob:none
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -60,46 +61,82 @@ jobs:
       - name: Development and deployment contracts
         run: bun test ./tests/development ./tests/deploy
 
-  native:
-    name: Rust runtime
+  build:
+    name: Build Rust runtime and shared UI
     needs: changes
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    defaults:
-      run:
-        working-directory: runtime-core
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
-        if: ${{ !inputs.acceptance_only }}
         with:
           bun-version-file: .bun-version
-      - name: Prepare UI for native preview tests
+      - uses: actions/cache/restore@v4
+        id: ui-cache
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-1.3.8-${{ hashFiles('runtime-ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-1.3.8-
+      - run: bun run ui:install
+      - uses: actions/cache/save@v4
+        if: ${{ github.ref == 'refs/heads/main' && steps.ui-cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.ui-cache.outputs.cache-primary-key }}
+      - run: bun run ui:typecheck
         if: ${{ !inputs.acceptance_only }}
-        working-directory: .
-        run: |
-          bun run ui:install
-          bun run ui:prepare
+      - run: bun run ui:build
+      - name: Verify the single distributable UI
+        run: bun run ui:package
       - name: Install pinned Rust toolchain
+        working-directory: runtime-core
         run: rustup show
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-core
           shared-key: native-runtime
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Formatting, native behavior and Clippy
+        working-directory: runtime-core
         if: ${{ !inputs.acceptance_only }}
         run: |
           cargo fmt --check
           cargo test --release --locked
           cargo clippy --release --locked --all-targets -- -D warnings
       - name: Build the native runtime
+        working-directory: runtime-core
         run: cargo build --release --locked --bin charts-design-core
       - uses: actions/upload-artifact@v5
         with:
           name: native-${{ github.sha }}
           path: runtime-core/target/release/charts-design-core
           if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v5
+        with:
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: React component and interaction tests
+        if: ${{ !inputs.acceptance_only }}
+        working-directory: runtime-ui
+        env:
+          CHARTS_CORE_BIN: ${{ github.workspace }}/runtime-core/target/release/charts-design-core
+        run: |
+          mkdir -p reports
+          bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
+      - name: Native and browser calculation parity
+        if: ${{ !inputs.acceptance_only }}
+        env:
+          CHARTS_CORE_BIN: ${{ github.workspace }}/runtime-core/target/release/charts-design-core
+        run: bun test ./tests/runtime
+      - uses: actions/upload-artifact@v5
+        if: ${{ always() && !inputs.acceptance_only }}
+        with:
+          name: component-reports
+          path: runtime-ui/reports/
           retention-days: 14
 
   coverage:
@@ -133,6 +170,8 @@ jobs:
         with:
           workspaces: runtime-core
           shared-key: native-coverage
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
       - name: Measure the actual native implementation
         working-directory: runtime-core
         env:
@@ -161,57 +200,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  ui:
-    name: Shared UI and browser data contracts
-    needs: [changes, native]
-    if: needs.changes.outputs.tests == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      CHARTS_CORE_BIN: ${{ github.workspace }}/runtime-core/native/charts-design-core
-    steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - uses: actions/download-artifact@v5
-        with:
-          name: native-${{ github.sha }}
-          path: runtime-core/native/
-      - run: chmod +x runtime-core/native/charts-design-core
-      - uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-1.3.8-${{ hashFiles('runtime-ui/bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-1.3.8-
-      - run: bun run ui:install
-      - run: bun run ui:typecheck
-        if: ${{ !inputs.acceptance_only }}
-      - run: bun run ui:build
-      - name: Verify the single distributable UI
-        run: bun run ui:package
-      - uses: actions/upload-artifact@v5
-        with:
-          name: shared-ui-${{ github.sha }}
-          path: runtime-ui/dist/
-          if-no-files-found: error
-          retention-days: 14
-      - name: React component and interaction tests
-        if: ${{ !inputs.acceptance_only }}
-        working-directory: runtime-ui
-        run: |
-          mkdir -p reports
-          bun test ./src --reporter=junit --reporter-outfile=reports/components.xml
-      - name: Native and browser calculation parity
-        if: ${{ !inputs.acceptance_only }}
-        run: bun test ./tests/runtime
-      - uses: actions/upload-artifact@v5
-        if: ${{ always() && !inputs.acceptance_only }}
-        with:
-          name: component-reports
-          path: runtime-ui/reports/
-          retention-days: 14
-
   container:
     name: Container image smoke test
     needs: changes
@@ -229,14 +217,23 @@ jobs:
       - name: Add fake environment files to detect image leaks
         run: |
           bun -e 'for (const path of ["deploy/charts.env", ".env", "runtime-core/.env"]) await Bun.write(path, "CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n")'
+      - uses: docker/setup-buildx-action@v4
       - name: Build the deployable image
-        run: docker build -f deploy/Dockerfile --build-arg CHARTS_IMAGE_COMMIT="$GITHUB_SHA" -t charts-design:ci .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          build-args: CHARTS_IMAGE_COMMIT=${{ github.sha }}
+          tags: charts-design:ci
+          load: true
+          cache-from: type=gha,scope=charts-ci-image
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=charts-ci-image,mode=max' || '' }}
       - name: MCP, scoped access, Parquet downloads and non-root isolation
         run: bun tests/deploy/container-smoke.mjs --image charts-design:ci --commit "$GITHUB_SHA"
 
   acceptance:
     name: Dashboard and static-share acceptance
-    needs: [changes, ui, native]
+    needs: [changes, build]
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15

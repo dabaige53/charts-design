@@ -64,7 +64,7 @@ bun run native:build
 
 Rust 工具链和依赖由 `runtime-core/rust-toolchain.toml` 与 `Cargo.lock` 固定。通用服务器与 Neon 容器在构建阶段编译原生程序，运行镜像只携带二进制。其他安装可把 `charts-design-core` 放到 PATH，或通过 `CHARTS_CORE_BIN` 指定绝对路径；不在首次 MCP 请求中下载或编译程序。
 
-原生发布由 `.github/workflows/native-release.yml` 维护：PR 校验各目标平台的编码测试、真实二进制和安装器；产品 `vX.Y.Z` 标签必须同时匹配 Cargo 与 npm 包版本，全部通过后发布二进制及 `SHA256SUMS`。Linux 产物在 Debian 12 构建，使用 glibc 2.36 与 OpenSSL 3 基线；其余平台以该 Release 实际产物为准。部署仍独立执行。
+原生发布由 `.github/workflows/native-release.yml` 维护：PR 在 Ubuntu 上运行主 CI。原生发布在 Linux x64 和 ARM64 上执行编码测试及实际安装验证，并为 macOS 与 Windows 编译安装包。产品 `vX.Y.Z` 标签必须同时匹配 Cargo 与 npm 包版本，全部构建与 Linux 检查通过后发布二进制及 `SHA256SUMS`。Linux 产物在 Debian 12 构建，使用 glibc 2.36 与 OpenSSL 3 基线；其余平台以该 Release 实际产物为准。部署仍独立执行。
 
 然后导出 ZIP，解压并把内容放入普通静态 HTTP 服务。通过 `index.html` 访问；`file://` 无法可靠读取 Worker 和数据分片。导出包已包含运行资源，部署时无需安装 语言运行时、数据库或原始仓库。只读静态网页包含其使用的完整数据，不承载服务端批注、版本写入或鉴权服务；需要保密的数据应通过受控分享网关交付。
 
