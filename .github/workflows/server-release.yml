@@ -27,8 +27,9 @@ jobs:
           mkdir release
           bun deploy/pages/build.mjs "$RUNNER_TEMP/pages"
           (cd "$RUNNER_TEMP/pages" && zip -qr "$GITHUB_WORKSPACE/release/pages.zip" .)
-          docker build -f deploy/Dockerfile -t "charts-design-api:$GITHUB_REF_NAME" .
-          bun tests/deploy/container-smoke.mjs --image "charts-design-api:$GITHUB_REF_NAME"
+          commit=$(git rev-parse HEAD)
+          docker build -f deploy/Dockerfile --build-arg CHARTS_IMAGE_COMMIT="$commit" -t "charts-design-api:$GITHUB_REF_NAME" .
+          bun tests/deploy/container-smoke.mjs --image "charts-design-api:$GITHUB_REF_NAME" --commit "$commit"
           docker save "charts-design-api:$GITHUB_REF_NAME" | gzip -1 > release/server-image.tar.gz
           cp deploy/mcp.example.json release/
           (cd release && sha256sum pages.zip server-image.tar.gz mcp.example.json > SHA256SUMS)

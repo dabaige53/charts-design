@@ -2093,7 +2093,18 @@ impl RemoteServer {
         if path == "/health" && (input.method == Method::GET || input.method == Method::HEAD) {
             let mut value =
                 json!({"ok":true,"version":env!("CARGO_PKG_VERSION"),"role":self.settings.role});
-            if let Ok(version) = std::env::var("CHARTS_RELEASE_VERSION") {
+            if self.settings.role == "workspace" {
+                value["storage"] = json!(self
+                    .database
+                    .as_ref()
+                    .map_or("sqlite", |db| db.backend.as_str()));
+            }
+            if let Some(commit) = std::env::var("CHARTS_IMAGE_COMMIT")
+                .ok()
+                .filter(|value| !value.is_empty())
+            {
+                value["release"] = json!({"version":env!("CARGO_PKG_VERSION"),"commit":commit});
+            } else if let Ok(version) = std::env::var("CHARTS_RELEASE_VERSION") {
                 value["release"] = json!({"version":version,"commit":std::env::var("CHARTS_RELEASE_COMMIT").unwrap_or_default()});
             }
             return HttpOutput::json(&value);

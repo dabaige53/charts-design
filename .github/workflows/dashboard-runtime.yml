@@ -108,14 +108,6 @@ jobs:
     if: ${{ needs.changes.outputs.tests == 'true' && !inputs.acceptance_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: charts-coverage-owner
-        ports:
-          - 5432/tcp
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -141,17 +133,10 @@ jobs:
         with:
           workspaces: runtime-core
           shared-key: native-coverage
-      - name: Create the isolated PostgreSQL runtime role
-        env:
-          PG_CONTAINER: ${{ job.services.postgres.id }}
-        run: |
-          docker exec "$PG_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 -c \
-            "CREATE ROLE charts_runtime_check LOGIN PASSWORD 'charts-coverage-runtime'"
       - name: Measure the actual native implementation
         working-directory: runtime-core
         env:
           CARGO_PROFILE_RELEASE_STRIP: 'none'
-          PG_TEST_PORT: ${{ job.services.postgres.ports['5432'] }}
         shell: bash
         run: |
           cargo llvm-cov show-env --export-prefix > "$RUNNER_TEMP/charts-coverage-env.sh"
@@ -161,12 +146,9 @@ jobs:
           CHARTS_CORE_BIN=$(cargo build --release --locked --bin charts-design-core --message-format=json |
             jq -er 'select(.reason == "compiler-artifact" and .target.name == "charts-design-core") | .executable // empty')
           export CHARTS_CORE_BIN
-          DATABASE_URL="postgres://postgres:charts-coverage-owner@127.0.0.1:$PG_TEST_PORT/postgres" \
-            CHARTS_NEON_RUNTIME_ROLE=charts_runtime_check "$CHARTS_CORE_BIN" migrate-neon
-          export CHARTS_TEST_NEON_DATABASE_URL="postgres://charts_runtime_check:charts-coverage-runtime@127.0.0.1:$PG_TEST_PORT/postgres"
           (
             cd ..
-            bun test tests/integration/private-sharing.test.mjs tests/integration/neon-workspace.test.mjs
+            bun test tests/integration/private-sharing.test.mjs
             bun run test:function --ci-server --samples 1 --output "$RUNNER_TEMP/charts-coverage-functional"
           )
           mkdir -p ../reports
@@ -248,9 +230,9 @@ jobs:
         run: |
           bun -e 'for (const path of ["deploy/charts.env", ".env", "runtime-core/.env"]) await Bun.write(path, "CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n")'
       - name: Build the deployable image
-        run: docker build -f deploy/Dockerfile -t charts-design:ci .
+        run: docker build -f deploy/Dockerfile --build-arg CHARTS_IMAGE_COMMIT="$GITHUB_SHA" -t charts-design:ci .
       - name: MCP, scoped access, Parquet downloads and non-root isolation
-        run: bun tests/deploy/container-smoke.mjs --image charts-design:ci
+        run: bun tests/deploy/container-smoke.mjs --image charts-design:ci --commit "$GITHUB_SHA"
 
   acceptance:
     name: Dashboard and static-share acceptance

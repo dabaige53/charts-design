@@ -184,11 +184,13 @@ CloudBase 启用可批注分享或本机发布桥前，需要由部署人员应�
 
 清理后只保留不含作者、密钥、页面、数据或批注的退役分享 ID，用来拒绝重放旧发布请求，防止原链接复活。发布的暂存占位与激活相互校验，未激活的中断请求可由既有清理任务回收；成功回执只能在固定副本和批注作用域均就绪后返回。
 
-## 自有服务器与 Neon
+## 自有服务器存储
 
 自有服务器设置 `CHARTS_SERVER_ROLE=workspace`，`CHARTS_PUBLIC_URL` 使用作者域名。客户端配置 `https://<作者域名>/mcp` 与作者服务器的 Bearer 令牌。可以参考 [MCP 客户端配置](../../deploy/mcp.example.json)。
 
-SQLite 方案使用 `deploy/docker-compose.yml`。使用 Neon 时，`deploy/neon/compose.yml` 只向主机回环地址发布 `18160`，数据库、工作区卷和应用独立维护。以数据库所有者的直连 `DATABASE_URL` 和 `CHARTS_NEON_RUNTIME_ROLE` 运行 `charts-design-runtime migrate-neon`，应用容器使用权限限定的数据库账号。备份覆盖数据库与持久卷。
+新部署使用 `deploy/docker-compose.yml` 和服务器磁盘上的 SQLite。作者服务的 `/health` 返回 `storage: "sqlite"`。通过服务器发布流程构建的镜像在 `release.commit` 返回构建提交号。启用前检查目标版本和存储类型。
+
+已有 Neon 工作区继续使用当前数据库和持久卷。维护该部署时，`deploy/neon/compose.yml` 只向主机回环地址发布 `18160`，数据库、工作区卷和应用独立维护。以数据库所有者的直连 `DATABASE_URL` 和 `CHARTS_NEON_RUNTIME_ROLE` 运行 `charts-design-runtime migrate-neon`，应用容器使用权限限定的数据库账号。备份覆盖数据库与持久卷。
 
 需要发布时，在作者服务器设置 `CHARTS_SHARE_SERVICE_URL` 和该分享服务的凭据。作者域名直接提供页面、资源、编辑和预览 API。
 
@@ -344,7 +346,7 @@ docker buildx build --platform linux/amd64 \
 - 开启函数失败告警。部分删除失败时函数抛错，任务继续保留，下一次定时触发重试。
 - 等待首次成功调用，再发布分享。发布工具会检查云函数保存的清理状态。
 
-SCF 由云端定时触发原生清理入口；网关和 MCP 不承担清理轮询，也不需要作者电脑保持在线。操作员手动执行 `cleanup` 时须使用同一部署环境和受限凭据。
+SCF 按云端计划独立执行原生清理。作者电脑关闭时，SCF 继续按计划清理。操作员手动执行 `cleanup` 时须使用同一部署环境和受限凭据。
 
 ### 检查边界
 

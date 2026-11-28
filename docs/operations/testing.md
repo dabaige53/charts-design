@@ -51,6 +51,8 @@ cargo fmt --manifest-path runtime-core/Cargo.toml -- --check
 
 ## 测试维护
 
+使用 `bun test tests/integration/neon-workspace.test.mjs` 检查已有 Neon 工作区的版本保存。提供 `CHARTS_CORE_BIN` 和指向已迁移、可丢弃 PostgreSQL 测试库的 `CHARTS_TEST_NEON_DATABASE_URL`。用例使用测试库的运行账号并创建独立的测试项目。
+
 新增用例优先保护真实失败后果：修订冲突、数据丢失、权限越界、查询范围、传输完整性和渲染声明。每个用例在定义前保留 `@wu-test type=<类型> | scope=<范围> | protects=<失败后果>`。可逆文字改动不另写镜像实现的测试。
 
 性能测量使用明确的数据量、冷/热状态、请求范围和环境。首次候选项、首批明细、筛选、翻页、保存与静态读取分别计时，报告原始样本与中位数；少量样本不声称稳定 P95。公网测量和真实云端写入需要对应环境的明确授权。

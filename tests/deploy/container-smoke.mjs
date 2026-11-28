@@ -32,7 +32,10 @@ async function waitHealthy(base, seconds = 90) {
   while (Date.now() < deadline) {
     try {
       const response = await http('GET', `${base}/health`, undefined, {}, 5000);
-      if (response.status === 200 && json(response.raw).ok) return;
+      if (response.status === 200) {
+        const health = json(response.raw);
+        if (health.ok) return health;
+      }
     } catch { /* The image can still be starting. */ }
     await delay(1000);
   }
@@ -45,9 +48,14 @@ function downloadUrl(url, base) {
   return result.href;
 }
 
-// @wu-test type=integration | scope=部署镜像 | protects=鉴权失效或无法保存或只读令牌可写或原生网页缺少完整数据
-export async function runChecks(base, token) {
-  await waitHealthy(base);
+// @wu-test type=integration | scope=部署镜像 | protects=发布镜像版本错误、鉴权失效、无法保存、只读令牌可写或原生网页缺少完整数据
+export async function runChecks(base, token, expectedCommit) {
+  const health = await waitHealthy(base);
+  if (expectedCommit) {
+    assert.equal(health.role, 'workspace', 'Release image is not running the author workspace');
+    assert.equal(health.storage, 'sqlite', 'Author release image did not use SQLite');
+    assert.deepEqual(health.release, {commit: expectedCommit, version: health.version}, 'Release image reports the wrong build');
+  }
   const denied = await http('POST', `${base}/mcp`, {}, {'Content-Type': 'application/json'});
   assert.equal(denied.status, 401, '/mcp must reject an absent author token');
   console.log('ok  health and bearer enforcement');
@@ -100,6 +108,21 @@ export async function runChecks(base, token) {
     .map(operation => [operation.id, operation.rows]));
   await checkStaticSite(archive.raw, expectedRows, revision);
   console.log('ok  native Parquet export and downloaded Worker preserve all source rows');
+  return {revision, share};
+}
+
+// @wu-test type=integration | scope=SQLite 作者容器重启 | protects=重启后保存版本丢失或已签发链接失效
+export async function checkRestart(base, token, {revision, share}) {
+  await waitHealthy(base);
+  const client = new Mcp(base, token, PROJECT);
+  await client.initialize();
+  const saved = await client.tool('dashboard_get', {dashboardId: BOARD});
+  assert.equal(saved.document.revision, revision, 'Saved revision changed after restart');
+  const response = await http('POST', `${base}/api/v1/p/${PROJECT}/tools/dashboard_get`,
+    {dashboardId: BOARD}, {'Content-Type': 'application/json', Authorization: `Bearer ${share}`});
+  assert.equal(response.status, 200, 'A viewer link issued before restart stopped working');
+  assert.equal(json(response.raw).document.revision, revision, 'Existing viewer link selected the wrong revision');
+  console.log('ok  saved revision and existing viewer link survive a restart');
 }
 
 // @wu-test type=integration | scope=容器独立网页数据 | protects=静默退回JSON或ZIP分片不能由随包Worker恢复
@@ -182,11 +205,11 @@ async function freePort() {
 }
 
 async function main() {
-  const {values} = parseArgs({options: {image: {type: 'string'}, url: {type: 'string'}, token: {type: 'string'}}});
+  const {values} = parseArgs({options: {image: {type: 'string'}, url: {type: 'string'}, token: {type: 'string'}, commit: {type: 'string'}}});
   assert(Boolean(values.image) !== Boolean(values.url), 'Specify exactly one of --image or --url');
   if (values.url) {
     assert(values.token, '--token is required with --url');
-    await runChecks(values.url.replace(/\/$/, ''), values.token);
+    await runChecks(values.url.replace(/\/$/, ''), values.token, values.commit);
     return;
   }
   const token = randomBytes(32).toString('base64url'), port = await freePort();
@@ -197,13 +220,15 @@ async function main() {
     checkImageFiles(container);
     const user = execFileSync('docker', ['exec', container, 'id', '-u'], {encoding: 'utf8'}).trim();
     assert.notEqual(user, '0', 'Container runs as root');
-    await runChecks(base, token);
+    const saved = await runChecks(base, token, values.commit);
+    execFileSync('docker', ['restart', container], {stdio: 'ignore'});
+    await checkRestart(base, token, saved);
     console.log(`ok  container runs as uid ${user}`);
   } catch (error) {
     try { console.error(execFileSync('docker', ['logs', container], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).slice(-4000)); }
     catch (logs) { console.error(String(logs.stderr ?? logs.message).slice(-4000)); }
     throw error;
-  } finally { execFileSync('docker', ['rm', '-f', container], {stdio: 'ignore'}); }
+  } finally { execFileSync('docker', ['rm', '-fv', container], {stdio: 'ignore'}); }
 }
 
 if (import.meta.main) await main();

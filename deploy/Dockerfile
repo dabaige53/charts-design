@@ -36,6 +36,8 @@ COPY --from=ui /build/runtime-ui/dist/ runtime-ui/dist/
 COPY skills/ skills/
 COPY cloudbase/migrations/ cloudbase/migrations/
 COPY package.json README.md ./
+ARG CHARTS_IMAGE_COMMIT
+ENV CHARTS_IMAGE_COMMIT=${CHARTS_IMAGE_COMMIT}
 USER charts
 VOLUME ["/data"]
 EXPOSE 8000
