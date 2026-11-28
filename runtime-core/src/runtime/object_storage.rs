@@ -62,11 +62,20 @@ struct Credentials {
     token: String,
 }
 #[derive(Clone)]
+struct CosConnection {
+    client: Client,
+    credentials: Credentials,
+    host: String,
+    endpoint: String,
+}
+#[derive(Clone)]
 pub struct CosStorage {
     region: String,
     bucket: String,
     pub prefix: String,
     credentials: CredentialCache,
+    #[cfg(test)]
+    connection: Option<Arc<CosConnection>>,
 }
 #[derive(Clone)]
 pub enum Storage {
@@ -552,6 +561,8 @@ impl CosStorage {
             bucket,
             prefix,
             credentials: credential_cache(identity)?,
+            #[cfg(test)]
+            connection: None,
         })
     }
     fn key(&self, key: &str) -> Result<String> {
@@ -638,57 +649,8 @@ impl CosStorage {
             "CloudBase credential response is too large",
             "CLOUD_CREDENTIAL_UNAVAILABLE",
         )?;
-        let response: Value = serde_json::from_slice(&raw).map_err(|_| {
-            Error::new(
-                "CLOUD_CREDENTIAL_UNAVAILABLE",
-                "CloudBase credential exchange returned invalid JSON",
-            )
-        })?;
-        require(
-            response["code"] == 0,
-            "CloudBase credential exchange was rejected",
-            "CLOUD_CREDENTIAL_UNAVAILABLE",
-        )?;
-        let c = &response["data"];
-        let credentials = Credentials {
-            id: c["TmpSecretId"].as_str().unwrap_or("").into(),
-            key: c["TmpSecretKey"].as_str().unwrap_or("").into(),
-            token: c["Token"].as_str().unwrap_or("").into(),
-        };
-        require(
-            !credentials.id.is_empty()
-                && !credentials.key.is_empty()
-                && !credentials.token.is_empty(),
-            "CloudBase credential exchange returned incomplete credentials",
-            "CLOUD_CREDENTIAL_UNAVAILABLE",
-        )?;
-        let expires = ["ExpiredTime", "expiredTime", "Expiration", "expiration"]
-            .into_iter()
-            .find_map(|key| {
-                c.get(key).and_then(|value| {
-                    value.as_i64().or_else(|| {
-                        value.as_str().and_then(|value| {
-                            value.parse::<i64>().ok().or_else(|| {
-                                chrono::DateTime::parse_from_rfc3339(value)
-                                    .ok()
-                                    .map(|time| time.timestamp())
-                            })
-                        })
-                    })
-                })
-            });
-        let lifetime = expires
-            .map(|expiry| expiry - chrono::Utc::now().timestamp() - 60)
-            .unwrap_or(1200);
-        require(
-            lifetime > 0,
-            "CloudBase returned expired credentials",
-            "CLOUD_CREDENTIAL_UNAVAILABLE",
-        )?;
-        *cached = Some((
-            credentials.clone(),
-            Instant::now() + Duration::from_secs((lifetime as u64).min(1200)),
-        ));
+        let (credentials, lifetime) = parse_credentials(&raw, chrono::Utc::now().timestamp())?;
+        *cached = Some((credentials.clone(), Instant::now() + lifetime));
         Ok(credentials)
     }
     fn request(
@@ -717,105 +679,21 @@ impl CosStorage {
         method: &str,
         key: &str,
         params: &BTreeMap<String, String>,
-        mut headers: BTreeMap<String, String>,
+        headers: BTreeMap<String, String>,
         body: Body,
     ) -> Result<Response> {
-        let credentials = self.credentials()?;
+        #[cfg(test)]
+        if let Some(connection) = &self.connection {
+            return connection.request_response(method, key, params, headers, body);
+        }
         let host = format!("{}.cos.{}.myqcloud.com", self.bucket, self.region);
-        headers.insert("host".into(), host.clone());
-        if !credentials.token.is_empty() {
-            headers.insert("x-cos-security-token".into(), credentials.token);
-        }
-        let now = chrono::Utc::now().timestamp();
-        let times = format!("{};{}", now - 60, now + 900);
-        let canonical = |values: &BTreeMap<String, String>| {
-            let mut pairs = values
-                .iter()
-                .map(|(k, v)| (encode(k).to_lowercase(), encode(v)))
-                .collect::<Vec<_>>();
-            pairs.sort();
-            pairs
+        let connection = CosConnection {
+            client: http_client()?.clone(),
+            credentials: self.credentials()?,
+            endpoint: format!("https://{host}"),
+            host,
         };
-        let query = canonical(params);
-        let hs = canonical(&headers);
-        let uri = format!("/{key}");
-        let http = format!(
-            "{}\n{uri}\n{}\n{}\n",
-            method.to_lowercase(),
-            query
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect::<Vec<_>>()
-                .join("&"),
-            hs.iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect::<Vec<_>>()
-                .join("&")
-        );
-        let sign_key = sha1_hmac(credentials.key.as_bytes(), &times);
-        let text = format!(
-            "sha1\n{times}\n{}\n",
-            hex::encode(Sha1::digest(http.as_bytes()))
-        );
-        let signature = sha1_hmac(sign_key.as_bytes(), &text);
-        let authorization=format!("q-sign-algorithm=sha1&q-ak={}&q-sign-time={times}&q-key-time={times}&q-header-list={}&q-url-param-list={}&q-signature={signature}",credentials.id,hs.iter().map(|(k,_)|k.as_str()).collect::<Vec<_>>().join(";"),query.iter().map(|(k,_)|k.as_str()).collect::<Vec<_>>().join(";"));
-        let path = key.split('/').map(encode).collect::<Vec<_>>().join("/");
-        let query = params
-            .iter()
-            .map(|(k, v)| format!("{}={}", encode(k), encode(v)))
-            .collect::<Vec<_>>()
-            .join("&");
-        let url = format!(
-            "https://{host}/{path}{}",
-            if query.is_empty() {
-                String::new()
-            } else {
-                format!("?{query}")
-            }
-        );
-        let mut request = http_client()?
-            .request(
-                method
-                    .parse()
-                    .map_err(|_| Error::new("INVALID_ARGUMENT", "Invalid COS method"))?,
-                url,
-            )
-            .header("authorization", authorization)
-            .body(body);
-        for (key, value) in headers {
-            request = request.header(key, value);
-        }
-        let response = request
-            .send()
-            .map_err(|_| Error::new("COS_UNAVAILABLE", "COS request failed").with_status(503))?;
-        let status = response.status();
-        if !status.is_success() {
-            let mut raw = Vec::new();
-            response
-                .take(1024 * 1024)
-                .read_to_end(&mut raw)
-                .map_err(|_| {
-                    Error::new("COS_UNAVAILABLE", "COS response failed").with_status(503)
-                })?;
-            let text = String::from_utf8_lossy(&raw);
-            let code = roxmltree::Document::parse(&text)
-                .ok()
-                .and_then(|d| {
-                    d.descendants()
-                        .find(|n| n.has_tag_name("Code"))
-                        .and_then(|n| n.text())
-                        .filter(|code| {
-                            code.len() <= 128
-                                && code
-                                    .bytes()
-                                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-                        })
-                        .map(str::to_owned)
-                })
-                .unwrap_or_else(|| "COS_REQUEST_FAILED".into());
-            return Err(Error::new(code, "COS object request failed").with_status(status.as_u16()));
-        }
-        Ok(response)
+        connection.request_response(method, key, params, headers, body)
     }
     fn check_private(&self) -> Result<()> {
         let raw = self.request(
@@ -970,6 +848,166 @@ impl CosStorage {
     }
 }
 
+fn parse_credentials(raw: &[u8], now: i64) -> Result<(Credentials, Duration)> {
+    let response: Value = serde_json::from_slice(raw).map_err(|_| {
+        Error::new(
+            "CLOUD_CREDENTIAL_UNAVAILABLE",
+            "CloudBase credential exchange returned invalid JSON",
+        )
+    })?;
+    require(
+        response["code"] == 0,
+        "CloudBase credential exchange was rejected",
+        "CLOUD_CREDENTIAL_UNAVAILABLE",
+    )?;
+    let c = &response["data"];
+    let credentials = Credentials {
+        id: c["TmpSecretId"].as_str().unwrap_or("").into(),
+        key: c["TmpSecretKey"].as_str().unwrap_or("").into(),
+        token: c["Token"].as_str().unwrap_or("").into(),
+    };
+    require(
+        !credentials.id.is_empty() && !credentials.key.is_empty() && !credentials.token.is_empty(),
+        "CloudBase credential exchange returned incomplete credentials",
+        "CLOUD_CREDENTIAL_UNAVAILABLE",
+    )?;
+    let expires = ["ExpiredTime", "expiredTime", "Expiration", "expiration"]
+        .into_iter()
+        .find_map(|key| {
+            c.get(key).and_then(|value| {
+                value.as_i64().or_else(|| {
+                    value.as_str().and_then(|value| {
+                        value.parse::<i64>().ok().or_else(|| {
+                            chrono::DateTime::parse_from_rfc3339(value)
+                                .ok()
+                                .map(|time| time.timestamp())
+                        })
+                    })
+                })
+            })
+        });
+    let lifetime = expires.map(|expiry| expiry - now - 60).unwrap_or(1200);
+    require(
+        lifetime > 0,
+        "CloudBase returned expired credentials",
+        "CLOUD_CREDENTIAL_UNAVAILABLE",
+    )?;
+    Ok((
+        credentials,
+        Duration::from_secs((lifetime as u64).min(1200)),
+    ))
+}
+
+impl CosConnection {
+    fn request_response(
+        &self,
+        method: &str,
+        key: &str,
+        params: &BTreeMap<String, String>,
+        mut headers: BTreeMap<String, String>,
+        body: Body,
+    ) -> Result<Response> {
+        let credentials = self.credentials.clone();
+        let host = self.host.clone();
+        headers.insert("host".into(), host.clone());
+        if !credentials.token.is_empty() {
+            headers.insert("x-cos-security-token".into(), credentials.token);
+        }
+        let now = chrono::Utc::now().timestamp();
+        let times = format!("{};{}", now - 60, now + 900);
+        let canonical = |values: &BTreeMap<String, String>| {
+            let mut pairs = values
+                .iter()
+                .map(|(k, v)| (encode(k).to_lowercase(), encode(v)))
+                .collect::<Vec<_>>();
+            pairs.sort();
+            pairs
+        };
+        let query = canonical(params);
+        let hs = canonical(&headers);
+        let uri = format!("/{key}");
+        let http = format!(
+            "{}\n{uri}\n{}\n{}\n",
+            method.to_lowercase(),
+            query
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join("&"),
+            hs.iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join("&")
+        );
+        let sign_key = sha1_hmac(credentials.key.as_bytes(), &times);
+        let text = format!(
+            "sha1\n{times}\n{}\n",
+            hex::encode(Sha1::digest(http.as_bytes()))
+        );
+        let signature = sha1_hmac(sign_key.as_bytes(), &text);
+        let authorization=format!("q-sign-algorithm=sha1&q-ak={}&q-sign-time={times}&q-key-time={times}&q-header-list={}&q-url-param-list={}&q-signature={signature}",credentials.id,hs.iter().map(|(k,_)|k.as_str()).collect::<Vec<_>>().join(";"),query.iter().map(|(k,_)|k.as_str()).collect::<Vec<_>>().join(";"));
+        let path = key.split('/').map(encode).collect::<Vec<_>>().join("/");
+        let query = params
+            .iter()
+            .map(|(k, v)| format!("{}={}", encode(k), encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+        let url = format!(
+            "{}/{path}{}",
+            self.endpoint,
+            if query.is_empty() {
+                String::new()
+            } else {
+                format!("?{query}")
+            }
+        );
+        let mut request = self
+            .client
+            .request(
+                method
+                    .parse()
+                    .map_err(|_| Error::new("INVALID_ARGUMENT", "Invalid COS method"))?,
+                url,
+            )
+            .header("authorization", authorization)
+            .body(body);
+        for (key, value) in headers {
+            request = request.header(key, value);
+        }
+        let response = request
+            .send()
+            .map_err(|_| Error::new("COS_UNAVAILABLE", "COS request failed").with_status(503))?;
+        let status = response.status();
+        if !status.is_success() {
+            let mut raw = Vec::new();
+            response
+                .take(1024 * 1024)
+                .read_to_end(&mut raw)
+                .map_err(|_| {
+                    Error::new("COS_UNAVAILABLE", "COS response failed").with_status(503)
+                })?;
+            let text = String::from_utf8_lossy(&raw);
+            let code = roxmltree::Document::parse(&text)
+                .ok()
+                .and_then(|d| {
+                    d.descendants()
+                        .find(|n| n.has_tag_name("Code"))
+                        .and_then(|n| n.text())
+                        .filter(|code| {
+                            code.len() <= 128
+                                && code
+                                    .bytes()
+                                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+                        })
+                        .map(str::to_owned)
+                })
+                .unwrap_or_else(|| "COS_REQUEST_FAILED".into());
+            return Err(Error::new(code, "COS object request failed").with_status(status.as_u16()));
+        }
+        Ok(response)
+    }
+}
+
 fn parse_listing(
     raw: &[u8],
     prefix: &str,
@@ -1093,95 +1131,5 @@ fn delete_body(entries: &[Entry]) -> Result<Vec<u8>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // @wu-test type=integration | scope=streamed private object files | protects=large query files keep bounded memory and failed checksum or byte-count validation cannot replace valid cached data
-    #[test]
-    fn streamed_files_commit_only_after_integrity_verification() {
-        let directory = tempfile::tempdir().unwrap();
-        let storage = Storage::private(directory.path().join("objects"), "test").unwrap();
-        let source = directory.path().join("source.sqlite3");
-        let mut file = fs::File::create(&source).unwrap();
-        let buffer = vec![b'x'; 128 * 1024];
-        for _ in 0..65 {
-            file.write_all(&buffer).unwrap();
-        }
-        drop(file);
-        let (bytes, hash) = file_digest(&source).unwrap();
-        storage
-            .put_file("dataset/query.sqlite3", &source, "application/octet-stream")
-            .unwrap();
-        let target = directory.path().join("download.sqlite3");
-        assert!(storage
-            .download_file("dataset/query.sqlite3", &target, Some(bytes), &hash)
-            .unwrap());
-        assert_eq!(file_digest(&target).unwrap(), (bytes, hash.clone()));
-        fs::write(&target, b"existing valid cache").unwrap();
-        assert!(storage
-            .download_file("dataset/query.sqlite3", &target, Some(bytes - 1), &hash)
-            .is_err());
-        assert_eq!(fs::read(&target).unwrap(), b"existing valid cache");
-        assert!(storage
-            .download_file(
-                "dataset/query.sqlite3",
-                &target,
-                Some(bytes),
-                &"f".repeat(64)
-            )
-            .is_err());
-        assert_eq!(fs::read(&target).unwrap(), b"existing valid cache");
-        assert!(storage.get_bounded("dataset/query.sqlite3", 1024).is_err());
-        assert!(!storage
-            .download_file("missing/query.sqlite3", &target, None, &hash)
-            .unwrap());
-        assert!(storage
-            .put_file("../outside", &source, "application/octet-stream")
-            .is_err());
-        storage.delete_prefix("dataset/").unwrap();
-        assert!(storage.list("dataset/").unwrap().is_empty());
-    }
-
-    // @wu-test type=boundary | scope=COS physical deletion | protects=object versions and delete markers remain explicit, batches are escaped and pagination never escapes a publication prefix
-    #[test]
-    fn cos_pages_preserve_version_ids_and_reject_stalled_or_escaped_markers() {
-        let xml = br#"<ListVersionsResult xmlns="http://cos.example.test/"><IsTruncated>true</IsTruncated><NextKeyMarker>shares/one/object</NextKeyMarker><NextVersionIdMarker>next</NextVersionIdMarker><Version><Key>shares/one/a&amp;b</Key><VersionId>v&lt;1</VersionId><Size>42</Size></Version><DeleteMarker><Key>shares/one/object</Key><VersionId>marker</VersionId></DeleteMarker></ListVersionsResult>"#;
-        let (entries, marker) = parse_listing(xml, "shares/one/", true, "", "").unwrap();
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].size, 42);
-        assert_eq!(entries[1].version.as_deref(), Some("marker"));
-        assert_eq!(marker, Some(("shares/one/object".into(), "next".into())));
-        assert!(parse_listing(xml, "shares/one/", true, "shares/one/object", "next").is_err());
-        assert!(parse_listing(xml, "shares/two/", true, "", "").is_err());
-        let body = String::from_utf8(delete_body(&entries).unwrap()).unwrap();
-        let parsed = roxmltree::Document::parse(&body).unwrap();
-        let versions = parsed
-            .descendants()
-            .filter(|node| node.has_tag_name("VersionId"))
-            .filter_map(|node| node.text())
-            .collect::<Vec<_>>();
-        assert_eq!(versions, vec!["v<1", "marker"]);
-        assert!(body.contains("<Key>shares/one/a&amp;b</Key>"));
-        let missing = br#"<ListVersionsResult><IsTruncated>false</IsTruncated><Version><Key>shares/one/a</Key><Size>1</Size></Version></ListVersionsResult>"#;
-        assert!(parse_listing(missing, "shares/one/", true, "", "").is_err());
-        assert!(delete_body(&[]).is_err());
-    }
-
-    // @wu-test type=unit | scope=COS signing and credential cache | protects=canonical escaping and HMAC primitives stay stable while credential caches remain isolated by configuration
-    #[test]
-    fn signing_primitives_and_shared_credentials_are_stable() {
-        assert_eq!(
-            sha1_hmac(&[0x0b; 20], "Hi There"),
-            "b617318655057264e28bc0b6fb378c8ef146be00"
-        );
-        assert_eq!(encode("中文 /%+"), "%E4%B8%AD%E6%96%87%20%2F%25%2B");
-        let first = credential_cache("test-identity-one".into()).unwrap();
-        let same = credential_cache("test-identity-one".into()).unwrap();
-        let other = credential_cache("test-identity-two".into()).unwrap();
-        assert!(Arc::ptr_eq(&first, &same));
-        assert!(!Arc::ptr_eq(&first, &other));
-        assert!(checked_prefix("../outside/").is_err());
-        assert!(checked_prefix("a\\..\\outside").is_err());
-        assert!(checked_prefix("path\ninvalid").is_err());
-    }
-}
+#[path = "../../tests/unit/object_storage.rs"]
+mod tests;

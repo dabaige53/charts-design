@@ -727,3 +727,7 @@ pub fn export_site(
         json!({"export":{"id":id,"filename":format!("{board}.zip"),"path":archive.canonicalize()?,"directory":site.canonicalize()?,"format":"zip","mimeType":"application/zip","bytes":fs::metadata(&archive)?.len(),"scope":"static-site-with-used-datasets","manifest":manifest}}),
     )
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/deployment.rs"]
+mod tests;

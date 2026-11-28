@@ -67,6 +67,17 @@ jobs:
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      CHARTS_TEST_DATABASE_URL: postgresql://postgres:charts-ci-password@127.0.0.1:5432/postgres?sslmode=disable
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_PASSWORD: charts-ci-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -145,6 +156,17 @@ jobs:
     if: ${{ needs.changes.outputs.tests == 'true' && !inputs.acceptance_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      CHARTS_TEST_DATABASE_URL: postgresql://postgres:charts-ci-password@127.0.0.1:5432/postgres?sslmode=disable
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_PASSWORD: charts-ci-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -191,6 +213,7 @@ jobs:
             bun run test:function --ci-server --samples 1 --output "$RUNNER_TEMP/charts-coverage-functional"
           )
           mkdir -p ../reports
+          cargo llvm-cov report --release --summary-only | tee ../reports/coverage-summary.txt
           cargo llvm-cov report --release --lcov --output-path ../reports/coverage.lcov --fail-under-lines 84
       - uses: actions/upload-artifact@v5
         if: always()
