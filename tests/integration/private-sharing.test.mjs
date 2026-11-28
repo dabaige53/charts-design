@@ -36,12 +36,12 @@ async function startServer(env) {
     {env, stdio: ['ignore', 'pipe', 'pipe']});
   let logs = '', closed = false;
   child.stdout.on('data', data => {logs += data;}); child.stderr.on('data', data => {logs += data;});
-  const exited = new Promise(resolve => child.once('exit', code => {closed = true; resolve(code);}));
+  const exited = new Promise(resolve => child.once('exit', (code, signal) => {closed = true; resolve({code, signal});}));
   const stop = async () => {
     if (closed) return;
     child.kill('SIGTERM');
     const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
-    await exited; clearTimeout(timer);
+    return exited.finally(() => clearTimeout(timer));
   };
   try {
     for (let attempts = 0; attempts < 100; attempts++) {
@@ -65,7 +65,7 @@ function note(revision, id = 'reader-note') {
     view: {revision, filters: []}};
 }
 
-// @wu-test type=integration | scope=独立固定分享完整生命周期 | protects=作者删除后副本失效、重试重复发布、反馈可写或撤销清理后旧密钥复活
+// @wu-test type=integration | scope=独立固定分享完整生命周期 | protects=作者删除或服务重启后副本失效、服务不能正常停机、作者丢失发布引用或重复发布、反馈可写或撤销清理后旧密钥复活
 nativeTest('native fixed publication survives its author and enforces keys, feedback, retries and retirement', async () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'charts-private-sharing-'));
   let server;
@@ -99,6 +99,25 @@ nativeTest('native fixed publication survives its author and enforces keys, feed
       CHARTS_SERVER_SECRET: randomBytes(32).toString('hex'), CLOUDBASE_API_KEY: 'unused'};
     assert.deepEqual(native(['cleanup'], sharingEnv).failed, []);
     server = await startServer(sharingEnv);
+    Object.assign(authorEnv, {CHARTS_SHARE_SERVICE_URL: server.base, CHARTS_SHARE_SERVICE_TOKEN: token,
+      CHARTS_SHARE_PARQUET_LAYOUT: 'single'});
+    const published = {dashboardId: 'frozen', revision, requestId: randomUUID(), expiration: '7d', annotationMode: 'annotate'};
+    const authorReceipt = call('dashboard_share_publish', published);
+    assert.equal(authorReceipt.revision, revision);
+    assert.match(authorReceipt.accessKey, /^\d{8}$/);
+    assert.deepEqual(call('dashboard_share_publish', published), authorReceipt);
+    const authorStatus = () => call('dashboard_share_status', {dashboardId: 'frozen'});
+    const active = authorStatus();
+    assert.deepEqual(active.pendingRequests, []);
+    assert.deepEqual(active.shares.map(({shareId, state, revision}) => ({shareId, state, revision})),
+      [{shareId: authorReceipt.shareId, state: 'active', revision}]);
+    assert.equal(active.shares[0].accessKey, undefined);
+    const removed = call('dashboard_share_delete', {dashboardId: 'frozen', shareId: authorReceipt.shareId});
+    assert.equal(removed.revoked, true);
+    assert.equal(authorStatus().shares[0].state, 'revoked');
+    assert.equal(call('dashboard_get', {dashboardId: 'frozen'}).document.revision, revision);
+    assert.equal(native(['cleanup'], sharingEnv).removed, 1);
+
     const http = (resource, options = {}) => fetch(new URL(resource, server.base),
       {...options, redirect: 'manual', signal: AbortSignal.timeout(15000)});
     const authorHeaders = {Authorization: `Bearer ${token}`};
@@ -146,7 +165,9 @@ nativeTest('native fixed publication survives its author and enforces keys, feed
       assert.deepEqual(data, await unzipEntry(archive, entries.get(name)), `Published bytes changed: ${name}`);
     }
     rmSync(author, {recursive: true, force: true}); rmSync(authorRuntime, {recursive: true, force: true});
-    await server.stop(); server = await startServer(sharingEnv);
+    const stopped = await server.stop();
+    if (process.platform !== 'win32') assert.deepEqual(stopped, {code: 0, signal: null});
+    server = await startServer(sharingEnv);
     assert.deepEqual(await (await publish()).json(), receipt, 'Restart or author removal changed the publication');
     assert.equal((await (await read(`${entry}document.json`)).json()).revision, revision);
 

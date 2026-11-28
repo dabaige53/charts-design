@@ -113,6 +113,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: bun install --frozen-lockfile --production --ignore-scripts
       - name: Prepare UI for native preview tests
         run: |
           bun run ui:install
@@ -133,9 +137,22 @@ jobs:
         working-directory: runtime-core
         env:
           CARGO_PROFILE_RELEASE_STRIP: 'none'
+        shell: bash
         run: |
+          cargo llvm-cov show-env --export-prefix > "$RUNNER_TEMP/charts-coverage-env.sh"
+          source "$RUNNER_TEMP/charts-coverage-env.sh"
+          cargo llvm-cov clean --workspace
+          cargo test --release --locked
+          CHARTS_CORE_BIN=$(cargo build --release --locked --bin charts-design-core --message-format=json |
+            jq -er 'select(.reason == "compiler-artifact" and .target.name == "charts-design-core") | .executable // empty')
+          export CHARTS_CORE_BIN
+          (
+            cd ..
+            bun test tests/integration/private-sharing.test.mjs
+            bun run test:function --ci-server --samples 1 --output "$RUNNER_TEMP/charts-coverage-functional"
+          )
           mkdir -p ../reports
-          cargo llvm-cov --release --locked --lcov --output-path ../reports/coverage.lcov --fail-under-lines 84
+          cargo llvm-cov report --release --lcov --output-path ../reports/coverage.lcov --fail-under-lines 84
       - uses: actions/upload-artifact@v5
         if: always()
         with:
@@ -238,6 +255,7 @@ jobs:
           name: native-${{ github.sha }}
           path: runtime-core/native/
       - run: chmod +x runtime-core/native/charts-design-core
+      - run: bun install --frozen-lockfile --production --ignore-scripts
       - uses: actions/download-artifact@v5
         with:
           name: shared-ui-${{ github.sha }}

@@ -27,6 +27,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    future::Future,
     io::Write,
     net::{SocketAddr, TcpListener},
     path::{Component, Path, PathBuf},
@@ -1724,6 +1725,28 @@ pub fn start_local(service: Arc<Service>, port: u16, lifetime: Lifetime) -> Resu
         thread: Some(thread),
     })
 }
+fn shutdown_signal() -> std::io::Result<impl Future<Output = ()>> {
+    #[cfg(unix)]
+    let (mut interrupt, mut terminate) = {
+        use tokio::signal::unix::{signal, SignalKind};
+        (
+            signal(SignalKind::interrupt())?,
+            signal(SignalKind::terminate())?,
+        )
+    };
+    #[cfg(windows)]
+    let mut interrupt = tokio::signal::windows::ctrl_c()?;
+    Ok(async move {
+        #[cfg(unix)]
+        tokio::select! {
+            _ = interrupt.recv() => {},
+            _ = terminate.recv() => {},
+        }
+        #[cfg(windows)]
+        interrupt.recv().await;
+    })
+}
+
 pub fn serve_local(
     service: Service,
     port: u16,
@@ -1744,11 +1767,18 @@ pub fn serve_local(
             preview.state.port, preview.state.token
         )
     };
-    println!("{}", json!({"url":url,"port":preview.state.port}));
-    while !preview.cancel.is_cancelled() {
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    Ok(())
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .build()?;
+    runtime.block_on(async {
+        let signal = shutdown_signal()?;
+        println!("{}", json!({"url":url,"port":preview.state.port}));
+        tokio::select! {
+            _ = preview.cancel.cancelled() => {},
+            _ = signal => preview.cancel.cancel(),
+        }
+        Ok(())
+    })
 }
 fn html_escape(text: &str) -> String {
     text.replace('&', "&amp;")
@@ -2538,21 +2568,20 @@ pub fn command(options: &Value) -> Result<Option<Value>> {
     let cancel = CancellationToken::new();
     let app = router(server, cancel.clone())?;
     let result = runtime.block_on(async move {
+        let signal = shutdown_signal()?;
         let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
         eprintln!(
             "Charts Design Rust HTTP listening on {}",
             listener.local_addr()?
         );
-        let stop = cancel.clone();
-        tokio::spawn(async move {
-            let _ = tokio::signal::ctrl_c().await;
-            stop.cancel();
-        });
         axum::serve(
             listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
         )
-        .with_graceful_shutdown(cancel.cancelled_owned())
+        .with_graceful_shutdown(async move {
+            signal.await;
+            cancel.cancel();
+        })
         .await
         .map_err(Error::from)
     });
