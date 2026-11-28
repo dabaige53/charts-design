@@ -342,6 +342,14 @@ impl postgres::types::ToSql for PgParam {
     fn accepts(_: &postgres::types::Type) -> bool {
         true
     }
+    fn encode_format(&self, ty: &postgres::types::Type) -> postgres::types::Format {
+        use postgres::types::{Format, Type};
+        match *ty {
+            // PostgreSQL parses date strings when they are bound as text.
+            Type::DATE => Format::Text,
+            _ => Format::Binary,
+        }
+    }
     postgres::types::to_sql_checked!();
 }
 fn postgres_query(env: &str, sql: &str, params: Option<&Value>, timeout: f64) -> Result<RawResult> {
@@ -1052,5 +1060,24 @@ impl LiveQueryRequest {
         let reference = self.data.import_rows(rows, fields)?;
         self.refs.insert(dataset.into(), reference.clone());
         Ok(reference)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use postgres::types::{Format, IsNull, ToSql, Type};
+
+    // @wu-test type=boundary | scope=PostgreSQL DATE 参数绑定 | protects=日期文本以二进制日期发送，导致真实查询被拒绝
+    #[test]
+    fn postgres_date_parameter_uses_postgresql_text_format() {
+        let date = PgParam(json!("2026-11-01"));
+        let mut encoded = bytes::BytesMut::new();
+        assert!(matches!(
+            date.to_sql_checked(&Type::DATE, &mut encoded).unwrap(),
+            IsNull::No
+        ));
+        assert!(matches!(date.encode_format(&Type::DATE), Format::Text));
+        assert_eq!(&encoded[..], b"2026-11-01");
     }
 }
