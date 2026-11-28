@@ -7,7 +7,7 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
@@ -15,6 +15,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
       - name: Verify server release version
         run: test "$GITHUB_REF_NAME" = "server-v$(bun -p "require('./package.json').version")"
       - run: bun install --frozen-lockfile --production --ignore-scripts
@@ -25,7 +28,7 @@ jobs:
           bun deploy/pages/build.mjs "$RUNNER_TEMP/pages"
           (cd "$RUNNER_TEMP/pages" && zip -qr "$GITHUB_WORKSPACE/release/pages.zip" .)
           docker build -f deploy/Dockerfile -t "charts-design-api:$GITHUB_REF_NAME" .
-          python3 tests/deploy/container_smoke.py --image "charts-design-api:$GITHUB_REF_NAME"
+          bun tests/deploy/container-smoke.mjs --image "charts-design-api:$GITHUB_REF_NAME"
           docker save "charts-design-api:$GITHUB_REF_NAME" | gzip -1 > release/server-image.tar.gz
           cp deploy/mcp.example.json release/
           (cd release && sha256sum pages.zip server-image.tar.gz mcp.example.json > SHA256SUMS)

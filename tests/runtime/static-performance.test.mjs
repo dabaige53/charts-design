@@ -1,5 +1,5 @@
 import { test } from 'bun:test';import assert from 'node:assert/strict';
-import {visibleRows,aggregate,aggregateGroups} from '../../dashboard_runtime/web/engine.mjs';
+import {visibleRows,aggregate,aggregateGroups} from '../../runtime-ui/shared/engine.mjs';
 const document=rows=>({dataVersion:'v1',manifest:{components:{a:{datasetId:'sales'},b:{datasetId:'sales'}},metrics:{},datasets:{},filters:[{field:'carrier',op:'in',values:['HO'],componentIds:['a','b']}]},snapshot:{datasets:{sales:rows},componentData:{}}});
 // @wu-test type=behavior | scope=filtered row cache | protects=筛选或数据变化后使用过期结果 | debt=impl-detail
 test('same filter scopes share rows, changing filters or snapshots invalidates results',()=>{

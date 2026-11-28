@@ -85,7 +85,23 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> ExitCode {
-    match run() {
+    let args: Vec<String> = env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        charts_design_core::runtime::cli::help();
+        return ExitCode::SUCCESS;
+    }
+    let result: Result<(), Box<dyn std::error::Error>> =
+        if let Some(result) = charts_design_core::runtime::operations::run(&args) {
+            result.map_err(Into::into)
+        } else if args
+            .first()
+            .is_some_and(|s| matches!(s.as_str(), "export-parquet" | "inspect-parquet"))
+        {
+            run()
+        } else {
+            charts_design_core::runtime::cli::run(&args).map_err(Into::into)
+        };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("charts-design-core: {error}");

@@ -1,115 +1,74 @@
-# Charts Design (麦肯锡风格高管决策看板与分析报告套件)
+# Charts Design
 
----
+通过 MCP 创建、维护和交付经营看板与分析报告。Rust 运行时统一负责数据、计算、版本、导出和服务；共享 React 界面用于 MCP App、本机编辑器、在线预览与独立网页。
 
-本项目使用共享 React 组件构建 MCP 应用、HTML 快照和静态网页。可用能力与宿主接入状态见 [组件清单](docs/implementation/ui-component-inventory.md)，实现与配置见 [Runtime](docs/implementation/dashboard-runtime.md)。
+## 开始使用
 
-文档总览见 [docs/README.md](docs/README.md)，开发与维护的按任务阅读入口见 [AGENTS.md](AGENTS.md)。
-
-环境统一使用 uv 与 Bun；首次在仓库执行 `bun run setup` 安装锁定依赖。开发默认提交分支与 PR，由 GitHub Actions 执行测试和构建。本地仅在需要预览或更新安装时运行 `bun run ui:prepare`；源码与产物相符时复用，不重复构建。操作与检查范围见 [开发检查与 CI](docs/operations/testing.md)。设计系统资源通过 `bun run ui:package:design` 单独更新。
-
-## 当前真实可用入口
-
-1. **数据资产、指标口径与声明合同**：
-   - 业务数据资产：支持 SQLite 事务状态、JSON 镜像与 CSV 导入，项目根目录维护持久资产（`charts-project.json`、`dashboards/`、`data/`）。
-   - 看板可混用静态数据和 SQLite、PostgreSQL、DuckDB 实时查询。通过「刷新报表」重新读取源库，在图表菜单内查看来源 SQL。[配置实时 SQL](docs/implementation/dashboard-runtime.md#数据导入与查询来源)
-   - 指标口径定义规范：见 [指标定义规范](skills/executive-charts/references/metric-definitions.md) 与 [数据格式标准](skills/executive-charts/references/data_formatting_standards.md)。
-   - 图表与指标声明：保留 40 种图表规范（`skills/executive-charts/references/chart_catalog.json`）、16 种高管指标卡定义（[指标卡选型](skills/executive-charts/references/kpi-cards.md)）与 7 种构图模式（[布局模板](skills/executive-charts/references/layout_templates.md)）。
-
-2. **CLI 积木式看板资产管理 (`charts-design dashboard`)**：
-   - 提供 `init`、`import-csv`、`inspect`、`validate`、`meta`、`add`、`table` 完整资产管理工具。
-   - 允许对筛选器、指标卡、图表声明和数据表格进行原子化组装与严格合同校验。
-
-3. **Runtime 后端与 CLI (`charts-design-runtime`)**：
-   - 管理多项目路由、SQLite 存储、数据计算、批次修改与版本检查点。
-   - 本机项目可直接打开浏览器编辑页与预览页；两者均可保存位置批注，预览页的内容与版本操作保持只读。批注通过本机 HTTP 保存，不需要 MCP 往返或公网。
-   - 支持 JSON 配置导出：`charts-design-runtime --root ./boards export <id> --format json --output ./export.json`。
-   - 详细接口与数据模式见 [Runtime 说明](docs/implementation/dashboard-runtime.md) 与 [项目资产与加载](docs/implementation/project-runtime.md)。
-   - 通过 `bun run native:install` 安装固定版本的预编译 Parquet 导出程序，无需安装 Rust；源码开发可用 `bun run native:build`。服务器容器包含原生程序。`dashboard_export_site` 可导出包含完整运行资源的独立网页，数据格式与交付方式见 [静态部署包](docs/operations/static-deployment.md)。
-
-4. **MCP 协议服务**：
-   - 本地 stdio MCP 与自托管 HTTP 远程 MCP（Streamable HTTP + Bearer 令牌）。
-   - 自有服务器提供唯一远程 `/mcp`，并在同域运行编辑、开发预览与项目批注。CloudBase 或 Cloudflare 提供独立分享页和读者批注。部署见 [自有服务器与分享服务](docs/operations/self-hosted-server.md)。
-   - 腾讯云独立分享副本支持 8 位数字访问密钥、不过期/7 天/30 天；到期由云端 SCF 删除 COS 数据和访问记录。需要部署私有 COS、HTTPS 网关和 SCF 定时任务，见 [腾讯云分享](docs/operations/self-hosted-server.md#腾讯云在线分享与云端清理)。
-   - 版本中心可对明确的已保存版本选择「分享此版本」，权限为「仅查看」或「可批注」。本机和服务器项目通过已配置的分享服务发布固定副本，读者页面、数据和批注不依赖作者电脑在线；作者从同一分享记录按需打开原版本反馈。配置见[本机发布与反馈](docs/operations/self-hosted-server.md#本机通过分享服务发布)。
-   - 项目编辑使用 `dashboard_get` 读草稿，再用 `dashboard_submit` 一次提交修改、检查全部组件并保存。通过后按 `nextAction=dashboard_preview` 打开已保存版本；检查失败返回 `DOCTOR_FAILED`，保留草稿，不生成检查点。保存不会发布或分享。
-   - 规范见 [共享交付流程](skills/executive-charts/references/mcp-delivery.md) 与 [自托管服务器](docs/operations/self-hosted-server.md)。
-
-5. **Seaborn 统计图后端（可选）**：
-   - 运行 `uv sync --locked --extra statistics --no-install-project` 后，可基于原始观测数据声明直方图、箱线图、回归散点图，输出纯图产物（SVG/PNG）供嵌入报告。
-   - 规范见 [Seaborn 后端说明](docs/implementation/seaborn-backend.md)。
-
-## CLI 工作区使用 (Workspace Flow)
-
-部署作者 MCP 和 Cloudflare Pages + D1 使用 `bun run deploy:init -- all`。生成测试项目使用 `bun run test:data`，一键验收使用 `bun run test:function`。配置和百万行性能验证见 [部署与 D1](docs/operations/self-hosted-server.md#cloudflare-pages-与-d1-直接分享) 和 [一键验收](docs/operations/testing.md#一键数据功能和性能验收)。
-
-### 打开已有本机项目
+本地 MCP 客户端启动一个入口，在每次调用中传入项目资产目录 `projectRoot`：
 
 ```sh
-charts-design-runtime --project-root /absolute/path/project \
-  --runtime-root /absolute/path/runtime-cache serve --dashboard overview
+npx --package charts-design charts-design-runtime mcp --runtime-root /absolute/path/runtime-cache
 ```
 
-将 `overview` 替换为已有看板或报告的 ID。启动回执提供带权限的 `editUrl`、`viewUrl`；加 `--view` 选择预览作为默认入口。从源码运行时，用 `bun run python -- -m dashboard_runtime` 替换 `charts-design-runtime`。未准备网页资源的源码环境先运行一次 `bun run ui:prepare`。
+远程服务使用 Streamable HTTP `/mcp` 和 Bearer 令牌。单一连接可处理多个项目；本地 `projectRoot` 为绝对目录，远程为工作区内项目名。连接不会记住上一次调用所选的项目。
 
-本地 stdio MCP 的 `dashboard_preview` 继续提供宿主内预览，同时返回普通浏览器的 `browserLinks`。宿主内可通过「在浏览器中批注」进入本机页面；浏览器操作直接连接同进程的 loopback HTTP 服务。重启进程后使用新返回的链接。
+npm 首次安装会下载并校验对应平台的 Rust 程序；已有同版本程序直接复用。npm 启动器使用 Node.js，运行 MCP 不需要 Python、Bun 或本地 Rust 工具链。直接使用已下载的二进制时，将命令名换为 `charts-design-core`。本地安装与更新见[安装说明](docs/operations/local-mcp-update.md)，服务器与分享配置见[自托管服务](docs/operations/self-hosted-server.md)。
 
-### 维护声明资产
+## 从数据到可交付成果
 
-CLI workspace 负责将筛选器、KPI、图表和表格组织为清晰的文件资产。开发或 Agent 协作时可以逐块添加、检查和严格校验组件：
+1. **找到项目与数据。** 修改已有成果先用 `dashboard_get` 读取草稿。新成果在数据和声明已经明确时，可直接用 `dashboard_submit` 的 `createTitle + operations` 初始化；需要先看数据时，创建空容器后调用 `dataset_import`、`dataset_attach` 或 `query_execute`。
+2. **检查数据。** 导入回执包含字段、来源、实际指标 ID、修订号和 `nextCalls`。直接执行其中的 `dataset_preview`，无需先创建组件。样本保留空值与字段类型，明确标识完整行数、分页和读取范围。
+3. **选择呈现。** 用 `chart_recommend` 的数据形态、绑定要求与设计提示确定候选，再用 `chart_declarations` 批量获取所选图表/KPI 的结构与示例。推荐保留未知条件，自动生成的指标标记为待核实。
+4. **提交并核对。** 将相关来源、指标、组件、筛选、布局或报告 Markdown 一起交给 `dashboard_submit`。服务校验并保存同一修订；检查失败保留可修正的草稿。用 `dashboard_view` 一次核对受影响组件与来源，再打开 `dashboard_preview`。
+5. **按需要交付。** 保存版本、设为正式发布版、创建独立分享是三个明确动作。可导出 HTML、JSON、CSV 或可继续筛选的静态网页包。
 
-```bash
-# 1. 初始化空工作区
-charts-design dashboard init ./sales-board --title "销售经营看板" --org "经营分析部"
+JSON 对象直接作为 MCP 参数，文件不是创作前提。完整示例和恢复规则见[原生创作](skills/executive-charts/references/mcp-authoring.md)与[共享交付](skills/executive-charts/references/mcp-delivery.md)。
 
-# 2. 添加 KPI 指标卡定义与图表组件
-charts-design dashboard add kpi ./sales-board revenue --from ./revenue.kpi.json
-charts-design dashboard add chart ./sales-board regional-sales --from ./regional-sales.chart.json
+## 能力
 
-# 3. 关联筛选器与表格
-charts-design dashboard add filter ./sales-board region \
-  --label "区域" --type multi-select --option 华东=华东 --option 华南=华南 \
-  --field region --consumer revenue --consumer regional-sales
-charts-design dashboard table set ./sales-board --from ./sales.table.json
+| 需求 | 支持方式 |
+| --- | --- |
+| 经营看板 | 指标卡、图表、表格、筛选、联动、粒度切换、稳定布局 |
+| 分析报告 | Markdown 正文、图注、来源、交叉引用、脚注与内嵌组件；可选筛选控件 |
+| 图形表达 | 40 种预设图表、16 种 KPI 形态、完整 ECharts、自定义 HTML/JavaScript |
+| 统计分析图 | 原始观测的直方图、箱线图和 OLS 回归图；Rust 输出 SVG/PNG |
+| 数据 | 有界 JSON/CSV 导入、SQLite 表挂接、SQLite/PostgreSQL/DuckDB 只读查询、不可变快照与实时模式 |
+| 查看性能 | 按可见组件计算、精确分页、筛选候选项分页、查询缓存、共享 Worker 与 Parquet 分片 |
+| 版本与协作 | 草稿、完整检查、不可变保存版、正式发布、恢复、独立位置批注 |
+| 交付 | 本机页面、在线编辑/只读页面、固定版本分享、受管文件和静态网页 |
 
-# 4. 检查与严格校验资产结构
-charts-design dashboard inspect ./sales-board --json
-charts-design dashboard validate ./sales-board --strict --json
+数据、指标口径、比较基准与来源由项目保存。图表推荐和布局是选型帮助，不限制自定义图形，也不替代业务判断。详见[产品约定](docs/agent/PRODUCT.md)和[设计规范](docs/reference/DESIGN.md)。
+
+## CLI
+
+CLI 与 MCP 调用同一 Rust 服务。创建空白成果或打开已有项目：
+
+```sh
+charts-design-runtime --project-root /absolute/path/project init overview --title "月度经营"
+charts-design-runtime --project-root /absolute/path/project serve --dashboard overview
 ```
 
-详细工作区命令与组件 schema 见 [工作区说明](skills/executive-charts/references/dashboard-workspace.md)。
+启动回执提供本机编辑页与已保存版本预览页。创建合成演示必须显式加 `--demo`；创建报告用 `--mode report`。
 
-## 两条 Skills 生成路径
+已有声明文件可以直接审阅、导入、提交和导出：
 
-- **Dashboard 路径**：[executive-charts Skill](skills/executive-charts/SKILL.md)，负责高管业务看板的指标拆解、图表推荐、7 种布局构图和数据建模。
-- **分析报告路径**：[analytical-reports Skill](skills/analytical-reports/SKILL.md)，负责以学术单栏规范编写分析报告，包括摘要、章节、图文交叉引用与严谨业务解读。
-
-生成流程与阶段划分见 [生成路径说明](docs/implementation/generation-tracks.md)。两条路径复用共享 React 组件，通过 Runtime 导出 HTML 或打开 MCP 预览。
-
-## 项目结构
-
+```sh
+charts-design-runtime --project-root /absolute/path/project get overview
+charts-design-runtime --project-root /absolute/path/project call dashboard_submit --json-file submit.json
+charts-design-runtime --project-root /absolute/path/project validate overview
+charts-design-runtime --project-root /absolute/path/project export overview --format json --output overview.json
 ```
-charts-design/
-├── AGENTS.md                           # 任务阅读入口与项目约定
-├── README.md                           # 项目入口与常用命令
-├── docs/                               # 规范、实现说明与验证记录
-│   ├── README.md                       # 文档总览与索引
-│   ├── agent/file-management.md         # 文件管理准则
-│   ├── implementation/                # Runtime、组件与接口说明
-│   ├── reference/                     # 设计规范
-│   └── operations/                    # 开发检查、安装、部署与诊断
-├── bin/                                # CLI 与 MCP 启动入口
-├── deploy/                             # 自托管后端容器镜像与部署配置
-├── dashboard_runtime/                  # SQLite 状态、数据计算、查询与 MCP 服务
-│   └── examples/academic-report.md      # 分析报告案例唯一 Markdown 基础稿
-├── runtime-core/                       # Rust 原生 Parquet 导出与锁定依赖
-├── skills/
-│   ├── executive-charts/               # 看板设计规范、指标卡、布局模板与 workspace 脚本
-│   └── analytical-reports/             # 分析报告 Skill 与学术规范
-├── tests/                              # 静态检查、数据与后端单元测试、容器冒烟测试
-├── package.json                        # Bun CLI 入口与检查脚本
-└── pyproject.toml                      # Python 依赖与包配置
-```
+
+`call` 支持 `--json-file -` 从标准输入读取参数；所有原子操作以 `contract` 或连接中的 `charts://contract` 为准。外部工作区导入和文件修改见[声明文件](skills/executive-charts/references/dashboard-workspace.md)。
+
+## Skills 与开发
+
+- [executive-charts](skills/executive-charts/SKILL.md)：从决策问题、数据口径到图表选型、筛选和看板交付。
+- [analytical-reports](skills/analytical-reports/SKILL.md)：以证据组织 Markdown 报告，保持正文、图表和指标定义一致。
+- [文档目录](docs/README.md)：按产品、实现和运维查找说明。
+- [开发入口](AGENTS.md)：源码职责、变更边界与验证要求。
+
+源码开发执行 `bun run setup` 准备锁定依赖，`bun run native:build` 构建运行时。需要本地预览时执行 `bun run ui:prepare`；有效资源直接复用。完整验证由 GitHub Actions 执行，本地只运行与改动相关的检查，见[开发检查](docs/operations/testing.md)。
 
 ## 开源协议
 

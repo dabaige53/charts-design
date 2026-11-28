@@ -18,7 +18,7 @@ export function sourceId(repository) {
   const inputs = [
     ...['src', 'scripts', 'fixtures'].flatMap(dir => files(path.join(ui, dir))),
     ...readdirSync(ui).filter(name => /\.(json|lock|toml|[cm]?js|ts)$/.test(name)).map(name => path.join(ui, name)),
-    ...files(path.join(repository, 'dashboard_runtime/web')).filter(name => name.endsWith('.mjs') && !name.includes(`${path.sep}dist${path.sep}`)),
+    ...files(path.join(repository, 'runtime-ui/shared')).filter(name => name.endsWith('.mjs') && !name.includes(`${path.sep}dist${path.sep}`)),
   ].sort();
   const hash = createHash('sha256');
   for (const file of inputs) hash.update(path.relative(repository, file)).update('\0').update(readFileSync(file)).update('\0');

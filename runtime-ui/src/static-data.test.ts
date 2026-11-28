@@ -4,11 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { decodeParquet, readStaticData } from './static-data';
-import { createStaticQuery } from '../../dashboard_runtime/web/static-query.mjs';
+import { createStaticQuery } from '../../runtime-ui/shared/static-query.mjs';
 
-const root = fileURLToPath(new URL('../..', import.meta.url));
 const native = process.env.CHARTS_CORE_BIN;
 const nativeTest = native ? test : test.skip;
 const directories: string[] = [];
@@ -25,14 +23,18 @@ function fixture(extraArgs: string[] = []) {
     { month: '2026-01-02', group: '甲', n: 2, d: 8, active: true, __charts_missing: '', 整数: -9 },
     { month: '2026-02-01', group: '乙', n: 3.5, d: 0, optional: '', active: null, 整数: 42 },
   ];
-  const source = JSON.parse(execFileSync(process.env.PYTHON || path.join(root, '.venv/bin/python'), ['-c',
-    'import json,sys; from dashboard_runtime.local_data import LocalData; args=json.load(sys.stdin); '
-    + 'args["rows"][0]["整数"]=9007199254740993; data=LocalData(sys.argv[1]); '
-    + 'ref=data.import_rows(args["rows"],args["fields"]); print(json.dumps({"ref":ref,"rows":args["rows"]},ensure_ascii=False))',
-    directory], { cwd: root, input: JSON.stringify({ fields, rows }), encoding: 'utf8' }));
-  const receipt = JSON.parse(execFileSync(native!, ['export-parquet', '--database', path.join(directory, 'data.sqlite3'),
-    '--version', source.ref.version, '--output', path.join(directory, 'parquet'), ...extraArgs], { encoding: 'utf8' }));
-  return { directory, fields, rows: source.rows, receipt };
+  const call = (tool: string, input: string) => JSON.parse(execFileSync(native!, [
+    '--project-root', path.join(directory, 'project'), '--runtime-root', path.join(directory, 'runtime'),
+    'call', tool, '--json-file', '-'], { input, encoding: 'utf8' }));
+  call('dashboard_create', JSON.stringify({ dashboardId: 'fixture', title: 'Parquet scalar fixture' }));
+  // Send the full 64-bit literal to Rust before JavaScript rounds it for display.
+  const input = JSON.stringify({ dashboardId: 'fixture', datasetId: 'data', expectedRevision: 1, fields, rows })
+    .replace('"整数":0', '"整数":9007199254740993');
+  const imported = call('dataset_import', input);
+  const reference = imported.document.snapshot.datasetRefs.data;
+  const receipt = JSON.parse(execFileSync(native!, ['export-parquet', '--database', path.join(directory, 'project/data/data.sqlite3'),
+    '--version', reference.version, '--output', path.join(directory, 'parquet'), ...extraArgs], { encoding: 'utf8' }));
+  return { directory, fields, rows: JSON.parse(input).rows, receipt };
 }
 
 async function readFileRows(f: ReturnType<typeof fixture>) {

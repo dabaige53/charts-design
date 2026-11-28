@@ -6,4 +6,4 @@ After=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/charts-design
-ExecStart=/usr/bin/docker compose -f compose.yml exec -T api python -m dashboard_runtime.cloudflare_shares
+ExecStart=/usr/bin/docker compose -f compose.yml exec -T api charts-design-core cleanup

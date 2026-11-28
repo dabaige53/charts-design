@@ -28,14 +28,15 @@ test('deployment only accepts an exact stable package version tag', () => {
 // @wu-test type=boundary | scope=CloudBase源码包 | protects=本地凭据缓存及设计归档进入云端源码包
 test('source package excludes private configuration and generated files', () => {
   for (const name of ['runtime-ui/.env', 'bin/dev.env.local', 'bin/key.pem',
-    'runtime-core/target/release/charts-design-core', 'dashboard_runtime/native/charts-design-core',
+    'runtime-core/target/release/charts-design-core', 'runtime-core/native/charts-design-core',
     'runtime-ui/node_modules/a.js', 'runtime-ui/dist/app.js', 'docs/design-system/tokens.json',
     '.git/config', 'boards/data.csv', 'dashboard_runtime/__pycache__/a.pyc']) {
     assert.equal(includeSource(name), false, name);
   }
   for (const name of ['runtime-ui/bun.lock', 'runtime-ui/src/main.tsx',
     'runtime-core/Cargo.toml', 'runtime-core/Cargo.lock', 'runtime-core/src/lib.rs',
-    'dashboard_runtime/server.py', 'package.json', 'skills/executive-charts/SKILL.md']) {
+    'runtime-core/src/runtime/server.rs', 'runtime-core/resources/contract.json', 'runtime-core/build.rs',
+    'cloudbase/migrations/001_initial.sql', 'package.json', 'skills/executive-charts/SKILL.md']) {
     assert.equal(includeSource(name), true, name);
   }
 });
@@ -114,6 +115,9 @@ function repository() {
   mkdirSync(join(root, '.github/workflows'), { recursive: true });
   writeFileSync(join(root, '.github/workflows/cloudbase-release.yml'), 'name: fixture\n');
   writeFileSync(join(root, 'package.json'), '{"version":"1.2.0"}\n');
+  mkdirSync(join(root, 'runtime-core'));
+  writeFileSync(join(root, 'runtime-core/Cargo.toml'), '[package]\nname = "charts-design-core"\nversion = "1.2.0"\n');
+  writeFileSync(join(root, 'runtime-core/Cargo.lock'), 'version = 4\n\n[[package]]\nname = "charts-design-core"\nversion = "1.2.0"\n');
   git('add', '.'); git('commit', '-m', 'initial');
   return { root, git };
 }
@@ -123,10 +127,22 @@ test('release publishes a tag pointing to the version commit, without pushing a 
   const { root, git } = repository();
   release(root, ['1.2.1']);
   assert.equal(JSON.parse(readFileSync(join(root, 'package.json'))).version, '1.2.1');
+  assert.match(readFileSync(join(root, 'runtime-core/Cargo.toml'), 'utf8'), /version = "1\.2\.1"/);
+  assert.match(readFileSync(join(root, 'runtime-core/Cargo.lock'), 'utf8'), /name = "charts-design-core"\nversion = "1\.2\.1"/);
   assert.equal(git('rev-parse', 'v1.2.1^{commit}'), git('rev-parse', 'HEAD'));
   assert.match(git('ls-remote', '--tags', 'origin'), /refs\/tags\/v1\.2\.1/);
   assert.equal(git('ls-remote', '--heads', 'origin'), '');
   assert.equal(git('status', '--porcelain'), '');
+});
+
+// @wu-test type=boundary | scope=product version | protects=npm downloads a different native runtime after a release
+test('release rejects divergent npm and Rust versions before changing files', () => {
+  const {root, git} = repository();
+  writeFileSync(join(root, 'runtime-core/Cargo.toml'), '[package]\nname = "charts-design-core"\nversion = "0.1.1"\n');
+  git('add', '.'); git('commit', '-m', 'divergent version');
+  assert.throws(() => release(root, ['1.2.1']), /同一产品版本/);
+  assert.equal(JSON.parse(readFileSync(join(root, 'package.json'))).version, '1.2.0');
+  assert.equal(git('tag', '--list'), '');
 });
 
 // @wu-test type=boundary | scope=版本发布脚本 | protects=预览修改仓库或未提交代码被静默遗漏

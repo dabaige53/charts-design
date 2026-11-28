@@ -1,5 +1,5 @@
 // Preserved chart behavior migrated from aefb7e857663a42a6bb426f8b5ba3eca48cb950e.
-import { format } from "../../../dashboard_runtime/web/engine.mjs";
+import { format } from "../../../runtime-ui/shared/engine.mjs";
 export function encodingOption(doc: any, id: any, records: any) {
   const c: any = doc.manifest.components[id],
     b: any = c.binding,

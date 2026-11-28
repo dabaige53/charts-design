@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createRequestQueue } from "../../dashboard_runtime/web/request-queue.mjs";
+import { createRequestQueue } from "../../runtime-ui/shared/request-queue.mjs";
 import { hasLiveData } from "./types";
 import type {
   Config,

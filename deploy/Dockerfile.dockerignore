@@ -1,31 +1,24 @@
-# BuildKit reads this file for `docker build -f deploy/Dockerfile .`.
-# Only maintained application and backend inputs enter the build.
+# Only maintained build and runtime resources enter the image.
 **
-!dashboard_runtime/
-!dashboard_runtime/**
-!runtime-ui/
-!runtime-ui/**
 !runtime-core/
 !runtime-core/**
+!runtime-ui/
+!runtime-ui/**
 !skills/
 !skills/executive-charts/
 !skills/executive-charts/**
 !skills/analytical-reports/
 !skills/analytical-reports/**
-!bin/
-!bin/**
-!docs/
-!docs/**
+!cloudbase/
+!cloudbase/migrations/
+!cloudbase/migrations/**
 !package.json
-!pyproject.toml
-!uv.lock
 !README.md
 **/node_modules
 runtime-core/target
-dashboard_runtime/native
+runtime-core/native
 runtime-ui/dist
 runtime-ui/generated
-**/__pycache__
 **/.env
 **/.env.*
 **/*.env
@@ -34,4 +27,3 @@ runtime-ui/generated
 **/*.pem
 **/*.pfx
 **/server-secret
-dashboard_runtime/web/dist

@@ -1,5 +1,5 @@
 # Copy to deploy/charts.env (Docker) or /etc/charts-design/charts.env (systemd).
-# Generate access values with:  python3 -c "import secrets;print(secrets.token_urlsafe(32))"
+# Generate access values with: openssl rand -hex 32
 
 # Author workspace. Use its public HTTPS address for MCP, edit and preview.
 CHARTS_SERVER_ROLE=workspace

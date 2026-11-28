@@ -1,12 +1,12 @@
-// Keep the host transport open while the Python worker sleeps between calls.
+// Keep the host transport open while the Rust worker sleeps between calls.
 const path = require('node:path');
 const fs = require('node:fs');
 const {spawn} = require('node:child_process');
 const {createInterface} = require('node:readline');
-const {pythonRuntime} = require('./python-runtime.js');
+const {nativeRuntime} = require('./native-runtime.js');
 
 function runMcp(args) {
-  const {python, env, isolated} = pythonRuntime();
+  const {binary, env} = nativeRuntime();
   let child = null, initialization = null, initialized = null, booting = false;
   let closing = false, draining = false, generation;
   const marker = path.resolve(__dirname, '../.runtime-generation');
@@ -24,7 +24,7 @@ function runMcp(args) {
   function start() {
     generation = currentGeneration();
     draining = false;
-    child = spawn(python, [...(isolated ? ['-S'] : []), '-c', 'import sys,runpy; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module("dashboard_runtime",run_name="__main__")', path.resolve(__dirname, '..'), ...args],
+    child = spawn(binary, args,
       {env, stdio: ['pipe', 'pipe', 'inherit']});
     const worker = child;
     booting = Boolean(initialization);

@@ -4,11 +4,11 @@
 
 默认 `CHARTS_STORAGE_BACKEND=local`，保留下面的 SQLite 和本地文件行为。
 
-`CHARTS_STORAGE_BACKEND=cloudbase` 使用 `CloudProjectStore`，以服务端 `CLOUDBASE_ENV_ID` 和 `CLOUDBASE_API_KEY` 调用 PostgreSQL HTTP RPC；适用于没有 TCP 直连入口的共享 PostgreSQL。先通过 CLI 应用 `cloudbase/migrations/` 中的迁移。RPC 在函数内部检查 `service_role`，不能只依赖函数执行授权；客户端和网页仍使用 MCP 自己的访问令牌。
+`CHARTS_STORAGE_BACKEND=cloudbase` 使用 原生云端 Store，以服务端 `CLOUDBASE_ENV_ID` 和 `CLOUDBASE_API_KEY` 调用 PostgreSQL HTTP RPC；适用于没有 TCP 直连入口的共享 PostgreSQL。先通过 CLI 应用 `cloudbase/migrations/` 中的迁移。RPC 在函数内部检查 `service_role`，不能只依赖函数执行授权；客户端和网页仍使用 MCP 自己的访问令牌。
 
 云端存储按项目记录 `storageFormat`。尚未迁移的项目继续将完整配置和业务行分块保存在 PostgreSQL；`cos-v1` 项目把业务行、配置快照、首页计算结果和统计图产物保存在私有 COS。PostgreSQL 保留草稿与版本指针、数据元信息、批注、编辑批次、权限与分享状态、对象登记及删除任务。变更继续在项目级事务中检查修订号和批注状态。
 
-`cloud_assets.py` 保存不可变对象包，每次上传使用新的对象代次。同项目的可用数据版本复用已有对象包；新包包含有界 Parquet 行分片、单列 Parquet 候选项索引、内容校验值及预生成 SQLite 查询文件，旧压缩 JSON 包继续可读。原生程序直接读取本地已验证表，以 SQLite 去重生成候选项，全部文件上传成功后才登记 ready。项目可配置 `storage.partitionFields`；使用第一个匹配的字符串或日期字段，按字段值实际分片并建立索引，网页只读取所需分片，再对实际行执行筛选。分区文件同时保存原始行号，浏览器合并后恢复原始行序。没有可用分区条件时读取所需数据集的全部分片，不抽样。新包格式与单片限制见[静态部署](../operations/static-deployment.md)。
+`cloud_assets.rs` 保存不可变对象包，每次上传使用新的对象代次。同项目的可用数据版本复用已有对象包；新包包含有界 Parquet 行分片、单列 Parquet 候选项索引、内容校验值及预生成 SQLite 查询文件，旧压缩 JSON 包继续可读。原生程序直接读取本地已验证表，以 SQLite 去重生成候选项，全部文件上传成功后才登记 ready。项目可配置 `storage.partitionFields`；使用第一个匹配的字符串或日期字段，按字段值实际分片并建立索引，网页只读取所需分片，再对实际行执行筛选。分区文件同时保存原始行号，浏览器合并后恢复原始行序。没有可用分区条件时读取所需数据集的全部分片，不抽样。新包格式与单片限制见[静态部署](../operations/static-deployment.md)。
 
 网页编辑、在线只读、历史预览和新的独立分享复用同一查询 worker。鉴权网关转发 COS 字节，普通网页筛选不调用 PostgreSQL 业务行查询。MCP 保留服务端 SQLite 查询语义，冷实例下载对应对象代次的查询文件并直接打开，不再逐块恢复业务行。查询文件、数据分片和字段索引会增加 COS 持久存储；实际时长、流量与费用变化仍需另行测量。
 
@@ -24,7 +24,7 @@
 
 镜像按变更范围刷新：普通设计编辑只写草稿，批注修改只写批注及其事件记录，保存检查点只补充该版本和历史索引，命名只更新历史索引。普通编辑不再遍历全部检查点或重写批注历史。镜像在数据库事务提交后读取同一快照，用每看板文件锁串行更新，并通过独立临时文件原子替换；较慢的文件写入不占用 SQLite 写锁。批注历史仍完整保留，修改批注时刷新对应的完整事件镜像。
 
-项目默认配置由 `dashboard_runtime/project.py` 的 `DEFAULTS` 维护。`loading.pageSize` 是后端未显式提供表格状态时的缺省值，不等同于 UI 明确传入的表格页大小。保存版本固定内容；命名及旧 published 保留标记不阻止用户主动删除。项目检查点不再随保存隐式裁剪。设计 JSON 和业务数据不应作为公共仓库产物提交。
+项目默认配置由 `runtime-core/src/runtime/store.rs` 的 `defaults()` 维护。`loading.pageSize` 是后端未显式提供表格状态时的缺省值，不等同于 UI 明确传入的表格页大小。保存版本固定内容；命名及旧 published 保留标记不阻止用户主动删除。项目检查点不再随保存隐式裁剪。设计 JSON 和业务数据不应作为公共仓库产物提交。
 
 ## 保存、发布与恢复
 
@@ -47,7 +47,7 @@
 报表资产归属于项目，但 MCP 进程不需要固定绑定一个项目。统一入口不带 `--project-root`；在包根目录启动：
 
 ```sh
-bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
+charts-design-runtime --runtime-root "$HOME/.cache/charts-design" mcp
 ```
 
 每次项目工具调用都传 `projectRoot`，值是报表资产目录的绝对路径，不是 Agent 工作目录。示例：
@@ -56,7 +56,7 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 {"projectRoot":"/Users/w/code/analyst-workspace/project/domestic-transfer-analysis","dashboardId":"domestic-transfer-analysis-20261019"}
 ```
 
-相同 `dashboardId` 可存在于不同项目。所有工具，包括 `dashboard_list`、`runtime_info`、分块读取、诊断、编辑、历史和数据导出，都支持该参数。项目路径会规范为绝对真实路径；相对路径和空值被拒绝。首次明确访问新目录时沿用 `ProjectStore` 创建项目资产结构。不提供项目目录枚举、自动发现或跨项目聚合。
+相同 `dashboardId` 可存在于不同项目。所有工具，包括 `dashboard_list`、`runtime_info`、分块读取、诊断、编辑、历史和数据导出，都支持该参数。项目路径会规范为绝对真实路径；相对路径和空值被拒绝。首次明确访问新目录时沿用 `Store` 创建项目资产结构。不提供项目目录枚举、自动发现或跨项目聚合。
 
 每个项目使用固定的 `Service` 和资产目录；运行缓存保存在统一运行目录的 `projects/<项目路径标识>/` 下。不存在“当前项目”，一次调用不会改变下一次调用的项目。传输分块与诊断同样按项目隔离，重启后可用原项目参数继续读取尚未过期的分块。数据源别名继续由启动时的 `--sources` 配置，不允许工具请求另设数据源配置。
 
@@ -140,14 +140,6 @@ Agent 用 `dashboard_submit` 一次提交相关修改，服务端检查并保存
 
 本项目 MCP 中，有数据集绑定的组件在详情面板底部显示“明细数据”，打开面板后通过 `component_data` 读取当前筛选范围内的原始行，并携带当前版本检查。每页默认 10 行，搜索、排序和翻页在后端执行；明细的表格状态独立于看板主表，关闭面板后丢弃。来源与原始定义折叠区保留在明细之后。静态快照、无数据集绑定的组件不调用此接口。
 
-## 独立性能测量
+## 性能测量
 
-百万行本地数据的独立合成验收：
-
-```sh
-bun bin/python-runtime.js tests/runtime/benchmark_local.py --rows 1000000 --output /private/tmp/charts-performance.json
-```
-
-该命令创建独立临时 SQLite 数据，以两张指标卡、一个分类图和一张明细表检查导入、打开、筛选、聚合、翻页、排序、搜索和完整 CSV 导出，并记录响应体积、进程峰值内存及磁盘大小。结果核对独立计算的行数与合计，测量范围为后端查询和数据导出。首次全字段子串搜索需扫描完整数据；自然字符串排序、多列排序及随机深页使用 OFFSET。缓存绑定不可变数据版本。
-
-维护时机：项目选择、持久化、编辑历史、数据版本或渐进查询行为改变时更新；当次测量结果保存为独立证据。
+在独立项目中用合成数据核对导入、打开、筛选、聚合、翻页、排序、搜索和完整 CSV。记录请求范围、冷/热缓存、响应体积、峰值内存和磁盘大小，并对照独立计算的行数与合计。执行入口和范围按[开发检查](../operations/testing.md)。首次全字段子串搜索会扫描数据，自然字符串排序、多列排序及深页使用 OFFSET；缓存绑定不可变数据版本。

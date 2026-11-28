@@ -5,12 +5,12 @@ on:
       - 'runtime-core/**'
       - 'bin/install-native.mjs'
       - 'bin/build-native.mjs'
+      - 'bin/native-runtime.js'
       - 'package.json'
-      - 'dashboard_runtime/columnar.py'
       - 'tests/development/native-install.test.mjs'
       - '.github/workflows/native-release.yml'
   push:
-    tags: ['native-v*.*.*']
+    tags: ['v*.*.*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,16 +22,16 @@ jobs:
   build:
     name: Native ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-24.04
-            target: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-gnu
             extension: ''
           - runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
+            target: aarch64-unknown-linux-gnu
             extension: ''
           - runner: macos-15-intel
             target: x86_64-apple-darwin
@@ -44,6 +44,7 @@ jobs:
             extension: '.exe'
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
+      CARGO_BUILD_JOBS: '2'
       RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
     defaults:
       run:
@@ -55,17 +56,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - name: Check immutable release version
+      - name: Verify the shared product version
         run: |
-          bun -e 'import {nativeRelease} from "./bin/install-native.mjs"; const r=nativeRelease(process.cwd()); if(process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `native-v${r.version}`) throw Error("Native tag must match Cargo package version");'
-      - name: Install Linux static C toolchain
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          echo CC_x86_64_unknown_linux_musl=musl-gcc >> "$GITHUB_ENV"
-          echo CC_aarch64_unknown_linux_musl=musl-gcc >> "$GITHUB_ENV"
+          bun -e 'import {nativeRelease} from "./bin/install-native.mjs"; const r=nativeRelease(process.cwd()),p=await Bun.file("package.json").json(); if(r.version!==p.version || (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `v${r.version}`)) throw Error("Release tag, npm and Cargo versions must match");'
       - name: Install pinned Rust target
+        if: runner.os != 'Linux'
         working-directory: runtime-core
         run: |
           rustup show
@@ -77,10 +72,19 @@ jobs:
             ~/.cargo/git
             runtime-core/target
           key: native-package-${{ matrix.target }}-1.91.1-${{ hashFiles('runtime-core/Cargo.lock') }}
-      - name: Test and build on the target platform
+      - name: Build and test Linux at the Debian Bookworm baseline
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
+          docker run --rm -v "$PWD:/work" -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
+            -v "$HOME/.cargo/git:/usr/local/cargo/git" -w /work/runtime-core \
+            -e CARGO_BUILD_JOBS=2 -e CXXFLAGS=-g0 rust:1.91.1-bookworm \
+            bash -c 'cargo test --release --locked --target "${{ matrix.target }}" && cargo build --release --locked --target "${{ matrix.target }}"'
+      - name: Build and test macOS or Windows
+        if: runner.os != 'Linux'
         working-directory: runtime-core
         run: |
-          cargo test --locked --target '${{ matrix.target }}'
+          cargo test --release --locked --target '${{ matrix.target }}'
           cargo build --release --locked --target '${{ matrix.target }}'
       - name: Verify the real installer and binary
         run: |
@@ -106,7 +110,7 @@ jobs:
   publish:
     name: Publish immutable native binaries
     needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/native-v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -116,10 +120,13 @@ jobs:
           pattern: native-release-*
           merge-multiple: true
           path: release
-      - name: Check complete target set and publish checksums
+      - name: Publish the complete native target set
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           test "$(find release -maxdepth 1 -type f -name 'charts-design-core-*' | wc -l)" -eq 5
           (cd release && sha256sum charts-design-core-* > SHA256SUMS && sha256sum -c SHA256SUMS)
-          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Charts Design native $GITHUB_REF_NAME" --notes "固定版本原生 Parquet 导出程序。通过 bun run native:install 安装，运行环境无需 Rust；此发布不部署任何云端服务。"
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Charts Design $GITHUB_REF_NAME" --notes "Rust Runtime，包含 CLI、MCP、HTTP、数据、版本、导出和分享能力。原生程序与 npm 包使用同一版本；此工作流不部署云服务。"
+          fi
+          gh release upload "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY"

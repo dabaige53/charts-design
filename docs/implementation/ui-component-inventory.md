@@ -1,19 +1,8 @@
 # UI 组件清单与接入状态
 
-本文维护组件接口、源码位置、动态能力与接入状态。原图形资料见 [图表参考](../design-system/project/chart-ui.md)，阶段安排见 [整改计划](../plans/ui-refactor-plan.md)；单次检查结果维护在 records/。
+本文维护组件接口、源码位置、动态能力与宿主边界。原图形资料见[图表参考](../design-system/project/chart-ui.md)。
 
-## 六项状态
-
-| 范围 | 规范或参考 | 画板示例 | 组件实现 | 已构建 | 真实 Runtime 数据 | 本项目 MCP |
-| --- | --- | --- | --- | --- | --- | --- |
-| 筛选、条件、范围与日期 | 已整理 | 筛选器内集中展示 | 官方组件组合 | 已构建 | 工具适配已接 | 协议已验；宿主显示待确认 |
-| 图表与操作栏 | 40 种定义及动态编码 | 每种独立；操作栏相邻 | ECharts TypeScript 模块 | 已构建 | 聚合与动态绑定已接 | 协议已验；宿主显示待确认 |
-| 指标卡 | 16 种及指标定义 | 每种独立 | MetricCard | 已构建 | 后端主值、比较和趋势 | 协议已验；宿主显示待确认 |
-| 标准、交互表格 | 表格与操作区规范 | 两张表格画板 | shadcn/ui + TanStack Table | 已构建 | 后端搜索、排序、分页 | 协议已验；宿主显示待确认 |
-| 基础控件与反馈 | 语义变量与官方结构 | 同类与附属状态归组 | 官方源码与业务组合 | 已构建 | 由父组件传入状态 | 随应用使用；宿主显示待确认 |
-| 布局与报告容器 | 保留 12/8/4 列与 Markdown 合同 | 原布局示意保留 | GridStack、ReportView | 已构建 | 保存、恢复与版本已接 | 协议已验；宿主交互待确认 |
-
-“真实 Runtime 数据”表示组件的数据入口已连接本项目工具；协议验证使用临时项目和明确标注的合成数据，通过实际 stdio MCP 调用，不读取业务项目。所有 UI 运行效果、剪贴板、全屏及宿主下载尚未在目标宿主确认。
+共享组件接入同一 Runtime，设计画板单独维护。剪贴板、下载、全屏和附到对话取决于目标宿主授权，实际交付时分别确认。
 
 ## 版本与分享
 
@@ -23,7 +12,7 @@
 | --- | --- | --- |
 | 版本 | 保存版本、查看历史、恢复草稿、设为正式发布版、创建独立分享 | `dashboard_publish` 设置正式发布版，`dashboard_share_publish` 从所选保存版创建分享 |
 | 分享 | 不过期 / 7 天 / 30 天、创建、替换为当前发布版本、撤销 | 替换生成新链接和密钥；不自动影响其他分享 |
-| 状态 | 草稿、已保存、当前发布、过期与待清理 | 读取工具结果；构建通过，未执行浏览器或宿主交互验收 |
+| 状态 | 草稿、已保存、当前发布、过期与待清理 | 以工具返回的实际状态为准 |
 
 ## 筛选与联动
 
@@ -54,77 +43,19 @@
 | ComponentView | document、id、grain、tableState | onGrain、onTableChange、onInspect、onExport、onSelect | 加载、空、错误、详情；不调用 MCP | 回调适配 |
 | 指标定义与语义 | semantic_inspect 结果 | 打开／关闭 | 指标、公式、单位、来源、实际绑定和计算语义 | 实际工具结果；无预览文案替代 |
 
-详情维护入口为 `runtime-ui/src/semantic-details.tsx`，通用简图为 `runtime-ui/src/semantic-structure.tsx`。所有组件通过展示配置的 `structureDiagram` 提供 SVG、统一坐标和标注，不依赖 ECharts option 或图表类型适配器。简图随容器缩放，结构区域没有内部滚动。共享组件负责缩放、直角引导线、标签切换和下方定义；指标引用读取当前声明。章节锚点、默认展开的六字段指标口径、明细查询、来源和表格字段保持原入口。SVG 在后端按静态白名单清理，前端再次清理并作为隔离图片展示。声明参数和失效规则见 [Runtime](dashboard-runtime.md#保存的结构简图)。
+详情维护入口为 `runtime-ui/src/semantic-details.tsx`，通用简图为 `runtime-ui/src/semantic-structure.tsx`。所有组件通过展示配置的 `structureDiagram` 提供 SVG、统一坐标和标注，不依赖 ECharts option 或图表类型适配器。简图随容器缩放，结构区域没有内部滚动。共享组件负责缩放、直角引导线、标签切换和下方定义；指标引用读取当前声明。章节锚点、默认展开的六字段指标口径、明细查询、来源和表格字段保持原入口。SVG 在后端按静态白名单清理，前端再次清理并作为隔离图片展示。声明参数和失效规则见 [Runtime](dashboard-runtime.md#页面元信息与组件声明)。
 
 各图表保留独立生成逻辑和对应数据表。生产代码读取 `src/charts`；`runtime-ui/fixtures/charts.json` 仅为画板数据。图表 Tooltip 经 DOMPurify 处理。后端统计图保持独立产物，不改用浏览器重算。
 
-| 编码 | 类型 | 实现 | 画板 | 接入 |
-| --- | --- | --- | --- | --- |
-| c01 | 标准垂直柱状图 | `runtime-ui/src/charts/c01.ts` | `ChartC01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| c02 | 排序横向条形图 | `runtime-ui/src/charts/c02.ts` | `ChartC02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| c03 | 分组对比柱状图 | `runtime-ui/src/charts/c03.ts` | `ChartC03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| c04 | 双向偏离条形图 | `runtime-ui/src/charts/c04.ts` | `ChartC04.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| c05 | 棒棒糖图 | `runtime-ui/src/charts/c05.ts` | `ChartC05.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| c06 | 哑铃跨度图 | `runtime-ui/src/charts/c06.ts` | `ChartC06.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| c07 | 目标重叠达成柱 | `runtime-ui/src/charts/c07.ts` | `ChartC07.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| c08 | 双向对峙蝴蝶图 | `runtime-ui/src/charts/c08.ts` | `ChartC08.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| d01 | 客单价频数直方图 | `runtime-ui/src/charts/d01.ts` | `ChartD01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| d02 | 多大区合同箱线图 | `runtime-ui/src/charts/d02.ts` | `ChartD02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| d03 | 工单响应密度曲线 | `runtime-ui/src/charts/d03.ts` | `ChartD03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| d04 | 24H 全周热力矩阵 | `runtime-ui/src/charts/d04.ts` | `ChartD04.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| f01 | 商业决策转化漏斗 | `runtime-ui/src/charts/f01.ts` | `ChartF01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| f02 | 资金价值链桑基图 | `runtime-ui/src/charts/f02.ts` | `ChartF02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| f03 | 客户批次留存 Cohort | `runtime-ui/src/charts/f03.ts` | `ChartF03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| fn01 | EBITDA 瀑布归因图 | `runtime-ui/src/charts/fn01.ts` | `ChartFN01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| fn02 | 盈亏平衡剪刀差走势 | `runtime-ui/src/charts/fn02.ts` | `ChartFN02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| fn03 | 敏感性龙卷风图 | `runtime-ui/src/charts/fn03.ts` | `ChartFN03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| fn04 | 基准归一指数走势 | `runtime-ui/src/charts/fn04.ts` | `ChartFN04.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| k01 | 中心指标环形图 | `runtime-ui/src/charts/k01.ts` | `ChartK01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| k02 | 100%堆叠条形图 | `runtime-ui/src/charts/k02.ts` | `ChartK02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| k03 | 矩形树图 | `runtime-ui/src/charts/k03.ts` | `ChartK03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| k04 | 帕累托 80/20 诊断图 | `runtime-ui/src/charts/k04.ts` | `ChartK04.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| k05 | 标准实心饼图 | `runtime-ui/src/charts/k05.ts` | `ChartK05.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| k06 | 双层嵌套同心饼图 | `runtime-ui/src/charts/k06.ts` | `ChartK06.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| m01 | 目标考核子弹图 | `runtime-ui/src/charts/m01.ts` | `ChartM01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| m02 | 不确定性扇形预测图 | `runtime-ui/src/charts/m02.ts` | `ChartM02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| m03 | 红线阈值监控图 | `runtime-ui/src/charts/m03.ts` | `ChartM03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| m04 | 半环进度仪表盘 | `runtime-ui/src/charts/m04.ts` | `ChartM04.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| r01 | 战略 BCG 四象限矩阵 | `runtime-ui/src/charts/r01.ts` | `ChartR01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| r02 | 战略 3D 气泡图 | `runtime-ui/src/charts/r02.ts` | `ChartR02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| r03 | 多维相关系数热力图 | `runtime-ui/src/charts/r03.ts` | `ChartR03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| r04 | 业务拓扑网络关系图 | `runtime-ui/src/charts/r04.ts` | `ChartR04.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| r05 | 多维能力雷达图 | `runtime-ui/src/charts/r05.ts` | `ChartR05.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| t01 | 极简单线走势图 | `runtime-ui/src/charts/t01.ts` | `ChartT01.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| t02 | 实测与预测折线图 | `runtime-ui/src/charts/t02.ts` | `ChartT02.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| t03 | 阶梯步阶折线图 | `runtime-ui/src/charts/t03.ts` | `ChartT03.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| t04 | 堆叠面积演进图 | `runtime-ui/src/charts/t04.ts` | `ChartT04.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| t05 | 战略斜率对照图 | `runtime-ui/src/charts/t05.ts` | `ChartT05.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
-| t06 | 双Y轴柱线复合图 | `runtime-ui/src/charts/t06.ts` | `ChartT06.dc.html` | 已构建、数据与 MCP 适配已接；宿主待确认 |
+40 个预设在 `runtime-ui/src/charts/<code>.ts` 独立维护，画板名称对应 `Chart<CODE>.dc.html`。具体名称、字段与绑定能力从 `chart_declarations` 获取；不要在 UI 清单复制第二份合同。
 
 历史 `kind=chart` 的八种声明另由 `historical-chart.ts` 读取兼容；新图表按上述注册编码声明。
 
 ## 指标卡
 
-输入：`config` 中明确声明的值、单位、比较值、目标和趋势。输出：只读显示。数据依赖：Runtime 已计算的组件结果；不从标题猜测公式。主值附近合并必要目标、均值和比较信息，避免独立重复副标题行。所有类型已构建、接入数据与 MCP 适配，宿主待确认。
+输入：`config` 中明确声明的值、单位、比较值、目标和趋势。输出：只读显示。数据依赖：Runtime 已计算的组件结果；不从标题猜测公式。主值附近合并必要目标、均值和比较信息，避免独立重复副标题行。
 
-| 编码 | 类型 | 画板 |
-| --- | --- | --- |
-| mc01 | 基础数值卡 | `Metric01.dc.html` |
-| mc02 | 同环比波动卡 | `Metric02.dc.html` |
-| mc03 | 微走势迷你面积卡 | `Metric03.dc.html` |
-| mc04 | 目标进度条形卡 | `Metric04.dc.html` |
-| mc05 | 迷你半环仪表卡 | `Metric05.dc.html` |
-| mc06 | 双指标并列卡 | `Metric06.dc.html` |
-| mc07 | 排位梯队徽章卡 | `Metric07.dc.html` |
-| mc08 | 阈值预警卡 | `Metric08.dc.html` |
-| mc09 | 结构分段卡 | `Metric09.dc.html` |
-| mc10 | 中位数极差分布卡 | `Metric10.dc.html` |
-| mc11 | 环形进度卡 | `Metric11.dc.html` |
-| mc12 | 迷你柱趋势卡 | `Metric12.dc.html` |
-| mc13 | 子弹目标卡 | `Metric13.dc.html` |
-| mc14 | 双期对比卡 | `Metric14.dc.html` |
-| mc15 | 指标清单卡 | `Metric15.dc.html` |
-| mc16 | 大字主指标卡 | `Metric16.dc.html` |
+16 种 KPI 使用 `MetricCard`，对应 `Metric01.dc.html` 至 `Metric16.dc.html`。按问题选型与字段要求见[指标卡指南](../../skills/executive-charts/references/kpi-cards.md)及声明发现。
 
 ### 指标卡主体接口
 
@@ -149,7 +80,7 @@
 
 比较使用真实基准，非零比较字符串保留正负号。动态绑定按指标单位格式化，快照声明提供完整显示值。业务完成率可超过 100%，图形进度显示范围为 0–100。
 
-KPI 专用形态的数据校验仍存在历史路径差异。
+KPI 结构和动态绑定分别按原生声明与编码合同验证。
 
 ## 表格
 
@@ -161,7 +92,7 @@ KPI 专用形态的数据校验仍存在历史路径差异。
 | TableToolbar | keyword、callbacks | 搜索、列配置／CSV 图标及 Tooltip | 禁用与焦点 | 应用调用 `dashboard_view`、`dataset_export` |
 | ColumnSettings | columns、visible、order | onChange、onOrderChange、onReset | 指针拖拽、键盘排序、上移／下移、恢复默认 | dnd-kit；桌面 Sheet、手机 Drawer |
 | Pagination | page、pages、pageSize | onChange(page,pageSize) | 首／前／后／末页、每页条数、页数、边界禁用 | 父表由后端总数计算 pages |
-| 列配置保存 | 当前列顺序／显隐 | 明确点击保存 | 编辑状态可保存；查看调整为临时状态 | begin → patch → finish、revision 检查 |
+| 列配置保存 | 当前列顺序／显隐 | 明确点击保存 | 编辑状态可保存；查看调整为临时状态 | dashboard_submit 与 revision 检查 |
 
 导出读取全部匹配行并保留排序与可见列。后端和静态 Worker 保留原始数值用于排序与 CSV，显示格式与数据值分开。
 
@@ -182,24 +113,24 @@ KPI 专用形态的数据校验仍存在历史路径差异。
 
 纯展示、GridStack、报告、Runtime 状态和宿主能力分别维护于 `component-view.tsx`、`grid.tsx`、`report.tsx`、`runtime.ts`、`main.tsx`／`host.ts`。临时筛选、表格和粒度不隐式保存。项目 `projectRoot` 在适配层固定；按组件加载、请求并发限制、旧响应丢弃和分块完整性检查保留。
 
-| 能力 | 实现与数据状态 | 验证边界 |
-| --- | --- | --- |
-| 预览资源 | 带 uiBuildId 的 `ui://` 资源，后端可读取 | 实际 stdio MCP 已通过；目标宿主未打开确认 |
-| 编辑／检查点／恢复 | 版本检查、项目编辑批次、取消布局草稿 | 后端协议已通过；拖拽和缩放未做 UI 验证 |
-| 位置批注 | `position-comments.tsx`：元素／区域选取、就地输入、编号、回复、解决与重新标记；项目批注独立保存并检查冲突；操作图标、正文与回复区分层 | 已接 MCP 工具、构建打包并通过源码诊断；未运行 UI 测试或浏览器自动化；宿主附到对话未接入 |
-| CSV | 全部匹配行；受管文件分块下载 | 实际工具已通过；宿主下载待确认 |
-| 单图 PNG／复制 | ECharts Canvas Blob；浏览器或宿主适配 | 已构建；目标宿主权限与操作待确认 |
-| HTML 快照 | 当前计算视图、共享组件，移除原始明细与连接 | 导出与资源检查通过；未渲染验收 |
-| 独立静态网页 | 共享应用／Worker、使用中数据集分片与构建标识 | ZIP 内容与数据范围检查通过；未部署 |
-| 发布资源 | npm、Python 包包含编译资源；容器独立构建阶段 | 本地包内容检查；Docker 镜像未构建 |
+| 能力 | 实现与运行约束 |
+| --- | --- |
+| 预览资源 | 带 uiBuildId 的 UI URI；过期构建需重新打开 |
+| 编辑、保存、恢复 | 版本检查、批次提交、完整校验与取消布局草稿 |
+| 位置批注 | 元素/区域选取、就地输入、编号、回复、解决；独立保存与冲突检查；附到宿主对话未接入 |
+| CSV | 全部匹配行和受管文件分块下载；下载由宿主或浏览器适配 |
+| 单图 PNG / 复制 | ECharts Canvas Blob，受浏览器或宿主权限限制 |
+| HTML | 当前计算视图与共享组件，移除原始明细和连接信息 |
+| 静态网页 | 共享应用、Worker、使用中的完整数据分片和构建标识 |
+| 发布资源 | npm 包与原生程序；容器从源码独立构建 |
 
-PDF 产品导出已取消，设计参考 PDF 保留。详细使用见 [静态网页导出](../operations/static-deployment.md)。
+产品提供 HTML、JSON、CSV、PNG 和静态网页；设计参考 PDF 保留。详细使用见 [静态网页导出](../operations/static-deployment.md)。
 
 ## 动态与自由组件能力
 
-内容与渲染校验由工作区 `component_schemas.py`、Runtime 的 `model.py`、`legacy.py`、`declarations.py` 和 `contract.py` 维护；展示入口包括 `metric.tsx`、`component-view.tsx`、`chart.tsx` 和 `custom-surface.tsx`。
+内容与渲染校验由 `runtime-core/src/runtime/` 的 `model.rs`、`validation.rs`、`discovery.rs` 和 `contract.rs` 维护；展示入口包括 `metric.tsx`、`component-view.tsx`、`chart.tsx` 和 `custom-surface.tsx`。
 
-普通系列与动态编码的当前注册范围以 `dashboard_runtime/bindings.py` 为准，不从目录条目总数推断动态能力。
+普通系列与动态编码的当前注册范围以 `runtime-core/src/runtime/encoding.rs` 为准，不从目录条目总数推断动态能力。
 
 预设可以合法快照显示，但不会自动获得筛选与聚合。mc07–mc10、mc15 在注册 KPI 绑定入口仍为快照。
 
@@ -207,13 +138,12 @@ PDF 产品导出已取消，设计参考 PDF 保留。详细使用见 [静态网
 - 时间聚合需要日期合同；跨数据集联动需要明确业务字段关系。
 - c01/c02 保留已实现的预设互换；自由组件通过完整声明修改，不复用该切换操作。
 - 双轴不是全产品禁用项；已有 t06 与自由 ECharts 均可表达。
-- 另有直方图、箱线图、回归三类 Seaborn 静态组件，独立于40个交互预设。
+- 另有直方图、箱线图、回归三类原生统计图组件，独立于40个交互预设。
 
 1. 自由组件支持本地脚本交互，统一后端数据绑定和跨组件事件桥尚待接通。
 2. 任意原始 JSX 的编译、外部扩展自动安装、地图资源自动注册当前未实现；可在 HTML 中提供浏览器可执行代码和所需资源。
 3. 自由图形与显式数据表的业务一致性仍由作者维护，保存校验只检查结构，不解释脚本含义。
 4. 自由脚本运行失败时，组件显示错误并提供重试。
-5. 旧参考文件仍保留历史信息。当前 skill 明确规定其不能覆盖新产品规则；后续修改这些文件时应按现行要求更新。
 
 ## 界面数据更新与阅读状态
 

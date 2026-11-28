@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createStaticClient } from "../../dashboard_runtime/web/static-client.mjs";
+import { createStaticClient } from "../../runtime-ui/shared/static-client.mjs";
 import { DashboardApp } from "./dashboard";
 import { DashboardGrid } from "./grid";
 import { ComponentView } from "./component-view";

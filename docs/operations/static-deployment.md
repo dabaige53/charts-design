@@ -2,7 +2,7 @@
 
 调用 `dashboard_export_site`，传入 `projectRoot` 与 `dashboardId`，取得受管 ZIP。网页使用与 MCP 相同的 React 组件和共享查询 Worker，通过普通静态 HTTP 服务提供，不连接 MCP。
 
-`dataFormat` 可选 `auto`、`parquet`、`json`。默认 `auto` 在原生导出程序和支持 Parquet 的 UI 都已准备时使用 Parquet；旧安装环境继续使用 gzip JSON，回执 `export.manifest.dataFormat` 明确返回实际格式。传 `parquet` 时缺少程序或资源会直接报错，不静默换格式。现有 MCP 调用次数不变。
+`dataFormat` 可选 `auto`、`parquet`、`json`。默认 `auto` 在 UI 支持时使用 Parquet，否则使用 gzip JSON；回执 `export.manifest.dataFormat` 明确实际格式。显式请求 Parquet 时缺少匹配资源会报错。
 
 ## 文件结构
 
@@ -25,7 +25,7 @@ ZIP 保存于运行目录 `exports/<id>/<dashboardId>.zip`。MCP 内使用 `dash
 
 多页云分享在同一个副本中复用内容完全相同的数据分片，页面继续按各自的字段与指标定义读取，避免重复上传相同分片。
 
-`cos-v1` 云项目的新数据包将业务行与筛选候选项均保存为 Parquet，服务端保留 `query.sqlite3` 供 SQL 查询和缓存恢复。新建包明确要求原生程序和匹配 UI；缺少能力时返回错误。分区字段、原始行序和 null/缺失语义继续保留，候选项由 SQLite 去重后流式编码，避免在 Python 中建立全量字典。
+`cos-v1` 云项目的新数据包将业务行与筛选候选项均保存为 Parquet，服务端保留 `query.sqlite3` 供 SQL 查询和缓存恢复。新建包明确要求原生程序和匹配 UI；缺少能力时返回错误。分区字段、原始行序和 null/缺失语义继续保留，候选项由 SQLite 去重后流式编码，避免建立全量内存字典。
 
 新分享直接复用已有 Parquet 数据包，经原鉴权网关读取；遇到旧 JSON 数据包时，从其已校验的 SQLite 查询文件生成该分享专属的 Parquet 行与候选项文件。同次多页分享按数据版本去重，本机编码缓存也可复用；不同旧数据分享的文件仍各自占用存储，随各自的撤销/到期清理。旧数据包和旧分享不重写，已有引用及删除协议保持有效，不需要线上数据库 schema 迁移。
 
@@ -41,7 +41,7 @@ Parquet 由打包在 `static-worker.js` 中的读取器解码，再使用共享�
 
 日期保留原字符串，布尔值、显式 null 与缺失字段分别保留。纯整数列以 Int64 保存；混合浮点的列在整数不能精确转为 Float64 时拒绝导出。网页计算沿用 JavaScript Number 的精度边界，精确标识符应声明为字符串。Parquet 内的 `charts.*` 元数据和缺失位图用于恢复原字段，不是页面展示列。
 
-原生程序只读 SQLite（云项目使用已校验的本地查询缓存），不先把全部行转成 Python JSON。编码缓存按不可变数据版本和格式复用，标题、布局、批注或重新分享不会重新编码同一份数据。每次复制分片校验 SHA-256，损坏缓存会在文件锁内重建；清理运行缓存不会删除原始数据。
+原生程序只读 SQLite（云项目使用已校验的本地查询缓存），按批次编码，不先构造全量 JSON。编码缓存按不可变数据版本和格式复用，标题、布局、批注或重新分享不会重新编码同一份数据。每次复制分片校验 SHA-256，损坏缓存会在文件锁内重建；清理运行缓存不会删除原始数据。
 
 ZIP 中的三个公共网页资源按实际内容复用已压缩模板，文档与业务数据逐次独立写入。整个导出在临时目录中完成，成功后才成为可下载的导出；失败会清理半成品。缓存校验覆盖模板失效、同长度损坏和并发首次创建。业务文档独立打包。
 
@@ -60,13 +60,13 @@ bun run native:install
 bun run native:build
 ```
 
-预编译安装从本仓库的 `native-v<原生版本>` GitHub Release 下载对应平台二进制，先核对 SHA-256，再实际执行版本检查，最后原子替换；下载、校验或执行失败时保留原安装。不会追随 `latest`。发布目标为 Linux x64/arm64、macOS Intel/Apple Silicon 与 Windows x64，Linux 使用静态 musl 构建。尚未发布精确版本、无法联网或不支持的平台会明确报错，可从源码构建。安装后的程序位于 `dashboard_runtime/native/<平台>-<架构>/`，随本机 MCP 安装包保留；不同平台的文件不会被误执行。
+预编译安装从本仓库的 `v<包版本>` GitHub Release 下载对应平台二进制，先核对 SHA-256，再实际执行版本检查，最后原子替换；下载、校验或执行失败时保留原安装。不会追随 `latest`。支持平台以该版本 Release 的实际产物为准。尚未发布精确版本、无法联网或不支持的平台会明确报错，可从源码构建。安装后的程序位于 `runtime-core/native/<平台>-<架构>/`，随本机 MCP 安装包保留；不同平台的文件不会被误执行。
 
 Rust 工具链和依赖由 `runtime-core/rust-toolchain.toml` 与 `Cargo.lock` 固定。通用服务器与 Neon 容器在构建阶段编译原生程序，运行镜像只携带二进制。其他安装可把 `charts-design-core` 放到 PATH，或通过 `CHARTS_CORE_BIN` 指定绝对路径；不在首次 MCP 请求中下载或编译程序。
 
-原生程序独立发布由 `.github/workflows/native-release.yml` 维护：PR 校验各目标平台的编码测试、真实二进制和安装器；`native-vX.Y.Z` 标签必须匹配 Cargo 版本，全部通过后发布二进制及 `SHA256SUMS`。服务部署和原生程序发布各用独立流程。
+原生发布由 `.github/workflows/native-release.yml` 维护：PR 校验各目标平台的编码测试、真实二进制和安装器；产品 `vX.Y.Z` 标签必须同时匹配 Cargo 与 npm 包版本，全部通过后发布二进制及 `SHA256SUMS`。Linux 产物在 Debian 12 构建，使用 glibc 2.36 与 OpenSSL 3 基线；其余平台以该 Release 实际产物为准。部署仍独立执行。
 
-然后导出 ZIP，解压并把内容放入普通静态 HTTP 服务。通过 `index.html` 访问；`file://` 无法可靠读取 Worker 和数据分片。导出包已包含运行资源，部署时无需安装 Rust、Bun、Python、数据库或原始仓库。只读静态网页包含其使用的完整数据，不承载服务端批注、版本写入或鉴权服务；需要保密的数据应通过受控分享网关交付。
+然后导出 ZIP，解压并把内容放入普通静态 HTTP 服务。通过 `index.html` 访问；`file://` 无法可靠读取 Worker 和数据分片。导出包已包含运行资源，部署时无需安装 语言运行时、数据库或原始仓库。只读静态网页包含其使用的完整数据，不承载服务端批注、版本写入或鉴权服务；需要保密的数据应通过受控分享网关交付。
 
 ## 与可批注分享的区别
 

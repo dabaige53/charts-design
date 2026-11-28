@@ -10,7 +10,7 @@ test('update drains in-flight request and replays initialization before queued r
  const process=new EventEmitter();process.stdin={};process.stdout={write:s=>results.push(JSON.parse(s))};
  const modules={
   'node:path':path,'node:fs':{readFileSync:()=>generation},
-  './python-runtime.js':{pythonRuntime:()=>({python:'python',env:{}})},
+  './native-runtime.js':{nativeRuntime:()=>({binary:'charts-design-core',env:{}})},
   'node:readline':{createInterface:({input:i})=>i===process.stdin?input:i},
   'node:child_process':{spawn:()=>{const w=new EventEmitter();w.stdout=new EventEmitter();w.stdin=new EventEmitter();w.sent=[];w.stdin.write=s=>w.sent.push(JSON.parse(s));w.stdin.end=()=>{w.ended=true;};workers.push(w);return w;}}
  };

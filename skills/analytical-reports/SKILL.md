@@ -7,7 +7,7 @@ description: Migrate external legacy reports. Create, revise and refresh evidenc
 
 Write a report that answers the user's question with traceable data and figures. Save Markdown as the report source. The shared renderer presents `report` as a standalone, full-width academic reading page. Use MCP or CLI to revise the source and chart declarations.
 
-For an external report migration, first delegate a [page-by-page source audit and MCP mapping](../executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp) when a subagent is available; otherwise perform it directly. Preserve prose, figures, table filters and metric definitions. Create and edit through MCP directly; the [native authoring guide](../executive-charts/references/mcp-authoring.md) provides an initial call and report variant. File-based review, offline edits and repeatable batch work may use the optional script.
+For an external report migration, first delegate a [page-by-page source audit and MCP mapping](../executive-charts/references/existing-project-checklist.md#从外部历史报表迁入-mcp) when a subagent is available; otherwise perform it directly. Preserve prose, figures, table filters and metric definitions. Create and edit through MCP directly; the [native authoring guide](../executive-charts/references/mcp-authoring.md) provides an initial call and report variant. When the user already has files, use the unified native CLI to validate or submit them.
 
 ## Read the project and evidence
 
@@ -65,6 +65,6 @@ Use `dashboard_annotations` to find the referenced component and comment context
 
 ## Statistical figures
 
-For distributions and raw-observation comparisons, read the statistical declarations and [statistical backend](../../docs/implementation/seaborn-backend.md). With statistics dependencies installed, use `kind: "statistical"`, a histogram, boxplot or regression `plot`, a typed dataset, and explicit `analysis.definition` and `unit`.
+For distributions and raw-observation comparisons, read the statistical declarations and [statistical backend](../../docs/implementation/statistical-charts.md). Use `kind: "statistical"`, a histogram, boxplot or regression `plot`, a typed dataset, and explicit `analysis.definition` and `unit`.
 
 These figures consume raw observations and render static SVG/PNG. Embed them with the same chart fences. Use the report caption as the figure title.

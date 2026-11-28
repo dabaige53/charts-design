@@ -1,6 +1,6 @@
 # 指标卡选型指南（mc01–mc16）
 
-指标卡按“要回答的问题”选型，不按顺序套用 mc01–mc04。MCP 中 `chart_declarations {}` 返回 `kpiGuide`，`chart_declarations {"code":"mc13"}` 返回该卡的字段、可绑定目标和可通过校验的合成示例；`chart_recommend` 会按分析意图给出 `kpiShapes`。字段校验以 `scripts/core/component_schemas.py` 为准。
+指标卡按“要回答的问题”选型，不按顺序套用 mc01–mc04。MCP 中 `chart_declarations {}` 返回 `kpiGuide`，`chart_declarations {"code":"mc13"}` 返回该卡的字段、可绑定目标和可通过校验的合成示例；`chart_recommend` 会按分析意图给出 `kpiShapes`。字段校验以连接中的声明合同和原生校验器为准。
 
 ## 按问题选卡
 

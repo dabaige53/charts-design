@@ -1,7 +1,7 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import {createProjectContext} from '../../dashboard_runtime/web/project-context.mjs';
-import {resolveToolResult} from '../../dashboard_runtime/web/tool-result.mjs';
+import {createProjectContext} from '../../runtime-ui/shared/project-context.mjs';
+import {resolveToolResult} from '../../runtime-ui/shared/tool-result.mjs';
 
 // @wu-test type=boundary | scope=project context | protects=同ID看板跨项目请求或接受其他项目结果
 test('two previews retain their projects for background, view, edit and annotation calls',async()=>{
