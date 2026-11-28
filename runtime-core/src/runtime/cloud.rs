@@ -282,3 +282,7 @@ pub fn call(
         _ => Err(Error::new("UNKNOWN_TOOL", "Unknown cloud operation")),
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/cloud.rs"]
+mod tests;

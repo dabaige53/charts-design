@@ -33,6 +33,8 @@ cargo fmt --manifest-path runtime-core/Cargo.toml -- --check
 
 测试名与工作流以当前源码为准。不要通过放宽断言、跳过或删除仍有用的行为检查来得到绿色结果。本地全量套件、浏览器自动化和目标宿主验收需要当前任务授权。
 
+完整 Rust 套件包含真实 PostgreSQL 工作区、查询与分享集成。运行前启动本机临时 PostgreSQL 17，并将 `CHARTS_TEST_DATABASE_URL` 指向回环地址上的测试管理员连接，例如 `postgresql://postgres:charts-ci-password@127.0.0.1:5432/postgres?sslmode=disable`。测试为每个场景创建独立数据库和受限运行角色，执行正式迁移，再清理测试资产；不会复用生产库。缺少测试连接时直接失败，不能把未执行的数据库验证算作通过。无需数据库的定向检查仍可使用 `--test runtime_authoring` 等单个目标。
+
 ## 本地准备与构建条件
 
 需要预览、静态导出或安装更新时运行 `bun run ui:prepare`。它核对源码、脚本、配置、锁文件及完整产物；输入不变且产物有效时复用，否则构建一次。唯一应用产物目录为 `runtime-ui/dist/`。
@@ -45,7 +47,9 @@ cargo fmt --manifest-path runtime-core/Cargo.toml -- --check
 
 工作流定义在 `.github/workflows/`。主 CI 用同一个 Ubuntu 作业构建共享 UI 和 Rust Runtime。Rust 预览测试与浏览器数据检查使用该作业的产物，协议与性能验收复用按提交上传的 UI 和原生程序。覆盖率检查与构建并行运行，使用独立的带覆盖率统计的原生产物。部署镜像从源码独立构建并验证。PR 从默认分支恢复 UI 依赖、Rust 编译和 Docker 构建缓存，缓存由默认分支更新。
 
-后端行覆盖率使用 `cargo-llvm-cov` 测量。Cargo 用例和使用同次构建的端到端用例共同生成报告，保留 84% 硬门槛。覆盖率报告包含所有运行时模块。更换实现后，用新版本重新测量，并继续检查行为用例。
+后端行覆盖率使用 `cargo-llvm-cov` 测量。Cargo 用例和使用同次构建的端到端用例共同生成报告，保留 84% 硬门槛。覆盖率报告包含所有运行时模块；单元测试正文统一放在 `runtime-core/tests/unit/`，由源模块通过 `#[cfg(test)]` 引用，避免把测试代码本身计入运行时覆盖率。更换实现后，用新版本重新测量，并继续检查行为用例。
+
+主 CI 的原生测试与覆盖率作业各自启动独立 PostgreSQL 服务；Linux 原生发布检查使用相同版本的临时数据库。覆盖率作业在执行门槛前输出逐文件摘要，并将 `coverage-summary.txt` 与 `coverage.lcov` 一起上传，失败时可直接定位未覆盖路径。
 
 PR 和原生发布的自动测试均在 Linux 执行。原生发布按标签或手动触发，Linux x64 和 ARM64 执行编码与安装检查，macOS 和 Windows 只编译安装包。原生程序与 npm 包使用同一产品版本 `vX.Y.Z`。独立执行云平台部署。发布前核对目标提交、版本和镜像或二进制校验值。部署后从健康接口确认实际版本。
 

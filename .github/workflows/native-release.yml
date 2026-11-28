@@ -36,6 +36,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
       CARGO_BUILD_JOBS: '2'
       RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
+      CHARTS_TEST_DATABASE_URL: postgresql://postgres:charts-ci-password@127.0.0.1:5432/postgres?sslmode=disable
     defaults:
       run:
         shell: bash
@@ -73,10 +74,21 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
-          docker run --rm -v "$PWD:/work" -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
+          docker run --detach --name charts-test-postgres -p 5432:5432 \
+            -e POSTGRES_PASSWORD=charts-ci-password postgres:17-bookworm
+          for attempt in $(seq 1 60); do
+            if docker exec charts-test-postgres pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec charts-test-postgres pg_isready -U postgres
+          docker run --rm --network host -e CHARTS_TEST_DATABASE_URL \
+            -v "$PWD:/work" -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
             -v "$HOME/.cargo/git:/usr/local/cargo/git" -w /work/runtime-core \
             -e CARGO_BUILD_JOBS=2 -e CXXFLAGS=-g0 rust:1.91.1-bookworm \
             bash -c 'cargo test --release --locked --target "${{ matrix.target }}" && cargo build --release --locked --target "${{ matrix.target }}"'
+      - name: Remove the disposable PostgreSQL test service
+        if: ${{ always() && runner.os == 'Linux' }}
+        run: docker rm -f charts-test-postgres || true
       - name: Build macOS or Windows release binary
         if: runner.os != 'Linux'
         working-directory: runtime-core

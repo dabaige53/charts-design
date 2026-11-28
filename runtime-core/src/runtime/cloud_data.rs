@@ -459,3 +459,7 @@ impl Drop for ChunkRows {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/cloud_data.rs"]
+mod tests;

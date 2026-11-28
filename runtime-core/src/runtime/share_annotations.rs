@@ -279,3 +279,7 @@ fn alive(scope: &Value, key: &str) -> bool {
             .as_i64()
             .is_some_and(|v| super::shares::now() < v)
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/share_annotations.rs"]
+mod tests;

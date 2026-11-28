@@ -159,3 +159,7 @@ pub fn open_export(
     }
     Ok(json!({"ok":true,"action":action,"path":path}))
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/exports.rs"]
+mod tests;

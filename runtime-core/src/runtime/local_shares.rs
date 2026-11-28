@@ -453,25 +453,5 @@ fn validate_service_url(value: &str) -> Result<()> {
     require(parsed.host_str().is_some()&&parsed.username().is_empty()&&parsed.password().is_none()&&parsed.query().is_none()&&parsed.fragment().is_none()&&(parsed.scheme()=="https"||parsed.scheme()=="http"&&matches!(parsed.host_str(),Some("127.0.0.1"|"localhost"|"::1"|"[::1]"))),"Configure an HTTPS CHARTS_SHARE_SERVICE_URL (loopback HTTP is allowed for local verification)","INVALID_CONFIG")
 }
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn publication_service_credentials_require_a_trusted_origin() {
-        for url in [
-            "https://shares.example/path",
-            "http://localhost:8123",
-            "http://127.0.0.1:8123",
-            "http://[::1]:8123",
-        ] {
-            validate_service_url(url).unwrap();
-        }
-        for url in [
-            "http://shares.example",
-            "https://user:password@shares.example",
-            "https://shares.example/?token=x",
-            "https://shares.example/#key=x",
-        ] {
-            assert!(validate_service_url(url).is_err(), "{url}");
-        }
-    }
-}
+#[path = "../../tests/unit/local_shares.rs"]
+mod tests;
