@@ -296,7 +296,13 @@ export async function checkVersions(root, fixture) {
     const draft = (await author('dashboard_patch', {expectedRevision: status.draftRevision,
       operations: [{op: 'set_title', value: 'Synthetic version acceptance'}]})).document.revision;
     assert.equal((await view('dashboard_get')).document.revision, saved);
-    assert.equal((await request(`${run.origin}/api/tools/dashboard_patch`, {method: 'POST', headers: headers(viewer), body: '{}'})).status, 403);
+    const denied = await request(`${run.origin}/api/tools/dashboard_patch`, {
+      method: 'POST',
+      headers: {...headers(viewer), 'Content-Type': 'application/json'},
+      body: JSON.stringify({dashboardId: fixture.board, expectedRevision: draft,
+        operations: [{op: 'set_title', value: 'Disallowed reader edit'}]}),
+    });
+    assert.equal(denied.status, 403);
     const endpoint = `${run.origin}/api/annotations/${fixture.board}`, annotation = note(), args = {revision: saved, append: annotation};
     const first = await post(endpoint, viewer, args); assert.equal(first.targetRevision, saved);
     await post(endpoint, viewer, args);
