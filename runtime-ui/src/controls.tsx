@@ -293,6 +293,7 @@ export function MultiSelect({
             <CommandInput
               aria-label={`搜索${label}`}
               placeholder="搜索选项"
+              maxLength={1000}
               value={query}
               onValueChange={setQuery}
             />
@@ -758,6 +759,7 @@ export function TableToolbar({
           <InputGroupInput
             id={id}
             type="search"
+            maxLength={1000}
             placeholder="搜索本表"
             value={query}
             onChange={(e) => onQuery(e.target.value)}

@@ -21,8 +21,8 @@
 
 KPI 不允许描述、副标题或解读段落。禁止 `subtitle`、`description`、`desc`、`note`、`detail`、`rankSub`、`trendLabel`、`gaugeSub`。保留标题、数值、单位、同比环比、必要数值标签和图形；定义与计算说明放指标详情，分析放独立文本组件。形态数量和布局模板只是建议。
 
-- 一行 KPI 优先用 2–4 种不同形态；需要直接横向比较的卡保持同一形态。
-- 与布局搭配：mc16 主指标适合 `focus`、`scorecard` 模板；6 张以上 KPI 用 `scorecard`；KPI 需要常驻可见用 `sidebar`。见 [布局模板](layout_templates.md)。
+- 需要直接横向比较的卡保持同一形态、单位与比较基准。数值、趋势和目标回答不同问题时再采用不同形态；不设形态数量配额。
+- 与布局搭配：mc16 可强调主指标；并列监控多个独立指标时可用 `scorecard`；KPI 需要常驻可见时可用 `sidebar`。卡片数量由决策需要决定，见 [布局模板](layout_templates.md)。
 - 筛选需要重算时，绑定 `bindableTargets` 中的字段（如 mc13 的 `actual`/`target`，mc14 的 `currentValue`/`priorValue`，mc12 的 `timeField`）。mc07–mc10、mc15 只支持快照，不能作为筛选消费者。
 - mc13 的 `ranges` 默认是绝对值；绑定后目标会随筛选变化时，使用 `rangeBasis: "target"` 并把区间写成目标的比例（如 `[0.8, 1.0]`）。
 - 同比、环比、目标、区间等比较值必须有真实依据并明确提供，系统不推算；无依据时省略字段，卡片显示中性值。

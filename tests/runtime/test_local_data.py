@@ -1,4 +1,5 @@
 import csv
+from contextlib import contextmanager
 import sqlite3
 
 import pytest
@@ -250,3 +251,104 @@ def test_calculated_grouped_ratio_and_export(tmp_path):
         rows = list(csv.DictReader(handle))
     assert rows[0]['rate'] == '0.3'
     assert rows[1]['rate'] == ''
+
+
+# @wu-test type=performance | scope=筛选候选搜索 | protects=每个输入字符重新对全部重复业务行调用文本搜索
+def test_option_search_runs_on_distinct_candidates(tmp_path, monkeypatch):
+    from dashboard_runtime.local_data import _search_text
+
+    data = LocalData(tmp_path)
+    fields = {'name': {'type': 'string'}}
+    first = data.import_rows(({'name': f'Group-{i % 50:02}'} for i in range(2500)), fields)
+    second = data.import_rows([{'name': 'Group-49'}, {'name': 'Group-50'}, {'name': None}], fields)
+    searched = []
+    connect = data._connect
+
+    def search(value, needle, kind):
+        searched.append(value)
+        return _search_text(value, needle, kind)
+
+    @contextmanager
+    def counted_connection():
+        with connect() as db:
+            db.create_function('search_text', 3, search, deterministic=True)
+            yield db
+
+    monkeypatch.setattr(data, '_connect', counted_connection)
+    page = data.option_page([first, second, first], 'name', search='GROUP-4', limit=3, offset=2)
+    assert page == {'values': ['Group-42', 'Group-43', 'Group-44'], 'totalValues': 10, 'offset': 2, 'hasMore': True}
+    assert len(searched) == 52
+    page['values'].append('not-a-source-value')
+    assert data.option_page([second, first], 'name', search='group-4', limit=3, offset=2)['values'] == ['Group-42', 'Group-43', 'Group-44']
+
+
+# @wu-test type=boundary | scope=候选项空值类型与分页 | protects=先去重搜索改变Unicode布尔值数字null或页尾计数
+@pytest.mark.parametrize('kind,values,search,expected', [
+    ('string', [None, 'ÄLPHA', 'älpha', 'Beta'], 'ÄL', ['ÄLPHA', 'älpha']),
+    ('boolean', [None, True, False], 'TRUE', [True]),
+    ('number', [None, 0, 12, 120, 2.5], '12', [12, 120]),
+    ('date', [None, '2026-01-01', '2026-02-01'], '2026-02', ['2026-02-01']),
+    ('string', [None, 'null', 'NULL', 'present'], 'null', [None, 'NULL', 'null']),
+])
+def test_option_search_preserves_types_and_complete_pagination(tmp_path, kind, values, search, expected):
+    data = LocalData(tmp_path)
+    ref = data.import_rows(({'value': value} for value in values * 4), {'value': {'type': kind}})
+    pages = [data.option_page([ref], 'value', search=search, offset=offset, limit=1)
+             for offset in range(len(expected) + 1)]
+    assert [value for page in pages for value in page['values']] == expected
+    assert all(page['totalValues'] == len(expected) for page in pages)
+    assert [page['hasMore'] for page in pages] == [offset + 1 < len(expected) for offset in range(len(expected) + 1)]
+    assert data.option_page([ref], 'value', search='absent')['totalValues'] == 0
+
+
+# @wu-test type=boundary | scope=候选搜索执行计划探测 | protects=有界探测被当成全量数据而漏掉后半段候选或返回错误总数
+@pytest.mark.parametrize('prefix_kind', ['repeated', 'unique', 'large'])
+def test_option_search_plan_probe_never_limits_the_result(tmp_path, prefix_kind):
+    data = LocalData(tmp_path)
+    prefix = (['head'] * 4096 if prefix_kind == 'repeated' else
+              ['head' + 'x' * 200_000] if prefix_kind == 'large' else [f'head-{index}' for index in range(4096)])
+    values = prefix + ['tail-A', 'tail-B', 'tail-A', None]
+    ref = data.import_rows(({'name': value} for value in values), {'name': {'type': 'string'}})
+    page = data.option_page([ref], 'name', search='tail', limit=1, offset=1)
+    assert page == {'values': ['tail-B'], 'totalValues': 2, 'offset': 1, 'hasMore': False}
+    assert data.option_page([ref], 'name', search='null')['values'] == [None]
+
+
+# @wu-test type=performance | scope=分组明细分页 | protects=每页重复聚合全量数据或总数与排序过滤后的结果不一致
+def test_grouped_page_counts_and_reads_in_one_aggregation(tmp_path, monkeypatch):
+    data = LocalData(tmp_path)
+    fields = {'name': {'type': 'string'}, 'amount': {'type': 'number'}, 'base': {'type': 'number'}, 'rate': {'type': 'number'}}
+    ref = data.import_rows(iter([
+        {'name': 'B', 'amount': 2, 'base': 4}, {'name': 'A', 'amount': 7, 'base': 10},
+        {'name': 'B', 'amount': 3, 'base': 6}, {'name': None, 'amount': 5, 'base': 0},
+    ]), fields)
+    statements = []
+    connect = data._connect
+
+    @contextmanager
+    def traced_connection():
+        with connect() as db:
+            db.set_trace_callback(statements.append)
+            yield db
+
+    monkeypatch.setattr(data, '_connect', traced_connection)
+    def page(offset=0, search='', filters=None):
+        return data.grouped_rows(ref, filters or [], ['name', 'amount', 'rate'],
+                                 [{'field': 'amount', 'direction': 'desc'}], offset, 1, search,
+                                 ['name'], ['amount', 'base', 'rate'],
+                                 {'rate': {'numerator': 'amount', 'denominator': 'base'}})
+
+    first = page()
+    assert first['rows'] == [{'name': 'A', 'amount': 7, 'rate': .7}] and first['totalRows'] == 3
+    assert len([sql for sql in statements if 'GROUP BY' in sql]) == 1
+    # Equal totals retain source order; missing/zero denominators stay null.
+    second, third, beyond = page(1), page(2), page(3)
+    assert second['rows'] == [{'name': 'B', 'amount': 5, 'rate': .5}]
+    assert third['rows'] == [{'name': None, 'amount': 5, 'rate': None}]
+    assert beyond['rows'] == [] and beyond['totalRows'] == 3
+    matched = page(search='B')
+    assert matched['rows'] == second['rows'] and matched['totalRows'] == 1
+    empty = page(search='absent')
+    assert empty['rows'] == [] and empty['totalRows'] == 0
+    filtered = page(filters=[{'field': 'name', 'op': 'in', 'values': ['B']}])
+    assert filtered['rows'] == second['rows'] and filtered['totalRows'] == 1

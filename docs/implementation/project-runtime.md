@@ -74,6 +74,8 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 Agent 用 `dashboard_submit` 一次提交相关修改，服务端检查并保存同一修订。成功后按 `nextAction: dashboard_preview` 打开一次预览。旧客户端仍可使用 `dashboard_edit_begin`、`dashboard_patch`、`dashboard_edit_finish`；两条入口共享草稿、完整检查和检查点，不新增存储格式。
 
+渐进编辑器同样使用 `dashboard_submit`，完成后只读取一次最新草稿，正常保存由四次工具往返缩为两次。检查失败仍读取已保留草稿的新修订，供下一次修正；迟到的保存响应不能覆盖页面已接受的新修订。已确认写入而回读暂时失败时，页面明确提示下一次点击只恢复最新草稿并结束旧编辑，不将原操作重放到可能已被其他作者修改的版本。普通明确拒绝继续保留编辑供修正。
+
 `dashboard_get` 读取可编辑草稿；项目预览与刷新读取最近完成的检查点。`dashboard_edit_finish` 和 `dashboard_checkpoint` 检查失败时返回 `DOCTOR_FAILED`，MCP 同时标记 `isError: true`；草稿与批次保留，不生成检查点。调用方检查 Doctor 问题、读取最新草稿并修复，再用最新版本完成。`REVISION_CONFLICT` 要求重新读取并合并当前修改，不能盲目重放写入。
 
 本机浏览器通过 `serve --dashboard <id>` 返回的 `/edit/<id>`、`/view/<id>` 链接进入同一项目；stdio `dashboard_preview` 也返回 `browserLinks`。内容只读与批注权限独立，预览新增批注直接调用 HTTP。工作区批注请求的 `revision` 表示当前显示版本，服务端用它生成锚点上下文并以 `targetRevision` 回传；响应顶层 `revision` 仍是当前草稿修订，用于批注列表管理的并发检查。追加批注仅写入批注记录。接口、权限和重试规则见 [批注说明](annotation-composer.md)。
@@ -91,6 +93,10 @@ Agent 用 `dashboard_submit` 一次提交相关修改，服务端检查并保存
 ## 加载
 
 项目模式预览返回结构和数据版本，不返回全组件计算结果。页面按可见组件调用 `dashboard_view`，使用 `componentIds`、`responseMode: patch`、`expectedRevision`、`dataVersion`、`filterSequence`。请求按最新筛选代次更新；旧响应不覆盖当前筛选。表格分页和筛选选项独立查询。临时点击下钻不持久化为设计版本。
+
+本地分组明细在同一次聚合中返回当前页和精确总数；只有超出最后一页且没有记录承载总数时另查计数。候选搜索用最多 4096 行、512 KiB 估算保留量的探测选择执行计划：明显重复的标签先去重再搜索，较多唯一值保留先搜索再分组。探测只影响执行顺序，返回值与精确总数始终来自完整数据，保留跨数据集、空值、类型及分页语义。
+
+静态网页的查询器按不可变输入身份复用候选值去重、排序与同一来源最近一次搜索结果。候选缓存最多保留 16 组来源，采用 8 MiB 估算预算；超预算结果直接计算，不进入缓存。该预算不包含原始数据、其他缓存和 Worker 运行时。输入数组替换后使用新的缓存身份，返回页独立于内部缓存。表格排序的字段元信息在每次排序前准备一次，文本搜索的可见列在遍历行前准备一次。
 
 图表计算、筛选候选项、组件明细、口径与来源读取、CSV 和 HTML/JSON 导出共用读取版本选择。网页传入当前页面的 `expectedRevision` 和已有的 `dataVersion`，即使有更新的未保存草稿，也保持读取最新已保存页面对应的定义和数据。省略版本参数时读取草稿；指定既非当前草稿、也非最新保存版的修订时返回 `REVISION_CONFLICT`，历史页面继续使用 `dashboard_version_query` 固定历史修订。筛选项或导出不会悄悄切到草稿的数据。版本状态中的草稿、保存、发布及发布记录在同一个 SQLite 读取快照中返回。
 

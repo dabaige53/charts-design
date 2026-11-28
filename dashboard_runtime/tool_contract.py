@@ -335,15 +335,17 @@ TOOLS = {
     'generation_examples': ('Read explicitly synthetic dashboard/report examples and reusable atomic operations without creating data. Omit caseId for the index; choose a case for detail. Adapt composition and metric definitions to the user request; examples are optional aids.', schema({
         'caseId': described({'enum': ['executive-dashboard', 'operations-scorecard', 'academic-report', 'filtered-report']}, 'Example ID from the index; omission returns discovery information.'),
     })),
-    'chart_declarations': ('Discover authoring schemas and working examples. Omit code for a compact index; provide a preset chart or KPI code from chart_catalog for its definition. Full common schemas: charts://declarations. Does not write data; validate final declarations before completing the edit.', schema({
-        'code': described(STR, 'Installed chart or KPI code from chart_catalog (for example c01 or mc03); omit for the index.'),
-    })),
+    'chart_declarations': ('Discover authoring schemas and explicitly synthetic working examples for every installed chart/KPI preset. Omit code/codes for a compact index; provide code for one definition or codes for a bounded batch sharing common schemas once. Full resource: charts://declarations. Does not write data; replace example values and validate final declarations before completing the edit.', schema({
+        'code': described(STR, 'Installed chart or KPI code from chart_recommend or charts://catalog (for example c01 or mc03); omit for the index.'),
+        'codes': described({'type': 'array', 'items': STR, 'minItems': 1, 'maxItems': 8, 'uniqueItems': True}, 'Fetch 1–8 selected chart/KPI declarations in one call; mutually exclusive with code. Runnable operations are under legacy.chartCodes[code].example or legacy.kpiTypes[code].example; exampleConfig also exposes each KPI config.'),
+    }, **{'not': {'required': ['code', 'codes']}})),
     'layout_templates': ('Read seven optional composition templates and application guidance without editing. Choose by the business question; submit apply_layout_template or explicit set_layout operations. Returns template IDs and layout rules.', schema()),
-    'chart_recommend': ('Optionally rank installed chart codes for a business question and data shape; returns binding capabilities and KPI guidance, without editing. Existing dashboard context down-ranks used codes. Inspect chart_declarations for the selected code before authoring.', schema({
+    'chart_recommend': ('Rank installed chart candidates by business question and supplied data shape, without editing. Returns requirements, cautions, binding mode, unanswered questions and design guidance. Unknown shapes remain unknown; existing comparable charts keep consistent encodings. Set requiresFilterBinding when filters must recompute results, then batch-read selected chart_declarations.', schema({
         'intent': described({'enum': ['comparison', 'ranking', 'trend', 'composition', 'distribution', 'relationship', 'flow', 'change', 'attribution', 'target', 'forecast']}, 'Business comparison or analysis intent, chosen from the user question.'),
         'categories': described(INT, 'Number of categories in the intended chart, if known.'),
-        'measures': described(INT, 'Number of numeric measures to compare, if known.'),
+        'measures': described(INT, 'Number of numeric measures to compare, if known. Omission means unknown, not one measure.'),
         'hasTime': described({'type': 'boolean'}, 'Whether a real time dimension exists in the supplied data.'),
+        'requiresFilterBinding': described({'type': 'boolean', 'default': False}, 'Require a reviewed filter-recomputation path; excludes snapshot-only recommendations and KPI shapes. Inspect bindingMode: encoding needs config.encoding and its own explicit field mapping.'),
         'dashboardId': BOARD['dashboardId'],
         'datasetId': described(ID, 'Optional existing dataset in the supplied dashboard context.'),
     }, ('intent',))),

@@ -10,18 +10,19 @@
 author() { bun bin/python-runtime.js skills/executive-charts/scripts/mcp_author.py "$@"; }
 work=/absolute/path/to/authoring
 project=/absolute/path/to/mcp-project
-author init "$work/monthly" --id monthly --title "月度经营" --mode filtered-report
+author init "$work/monthly" --id monthly --title "月度经营" --mode dashboard
 author stage "$work/monthly" source ledger --value "$work/source.json"
 author stage "$work/monthly" dataset sales --value "$work/dataset.json"
 author stage "$work/monthly" metric revenue --value "$work/revenue.json"
 author stage "$work/monthly" component detail --value "$work/detail.json"
 author stage "$work/monthly" filters --value "$work/filters.json"
-author stage "$work/monthly" markdown --value "$work/report.md"
 author build "$work/monthly" --out "$work/document.json"
 author build "$work/monthly" --format submit --project-root "$project" --out "$work/submit.json"
 ```
 
 若只准备声明文件，已有 Python 3.10+ 的环境也可在包根以 `PYTHONPATH="$PWD" /path/to/python skills/executive-charts/scripts/mcp_author.py` 执行相同子命令。这条路径只使用随包 Runtime 和 Python 标准库。
+
+分析报告初始化时选择 `--mode report`，需要读者筛选则用 `--mode filtered-report`；构建前用 `author stage "$work/monthly" markdown --value "$work/report.md"` 写入正文。看板无需创建 Markdown。仅修改标题、样式或已知字段的小批次可直接调用 MCP，不必先建立脚本工作目录。
 
 每个业务文件装一个原生值。以下为输入形状示例，空数据行须替换成经核对的记录，或先导入数据版本。
 
@@ -59,7 +60,7 @@ author build "$work/revision" --format submit --project-root "$project" --out "$
 
 ## 核对、保存与导出
 
-1. 让源端审查子代理据原件列出每页预期筛选。文件采用数组，每项含目标稳定 ID、field、**全部** componentIds；按业务需要增加 label、op、values、selectionMode、scope。无筛选的页写 `[]`。运行 `author check-filters "$work/document.json" "$work/expected-filters.json"`。命令会报告遗漏、多余及消费者差异，可重复对 `dashboard_get` 回读文件执行。此项只核对声明。用相同授权、数据版本及选中状态逐一重放源端事件，核实受影响与不受影响组件。数值证据来自原报表，不能从待验声明反推。
+1. 按业务问题明确预期筛选；迁移时由源端审查据原件列出每页行为。文件采用数组，每项含目标稳定 ID、field、**全部** componentIds；按业务需要增加 label、op、values、selectionMode、scope。无筛选的页写 `[]`。运行 `author check-filters "$work/document.json" "$work/expected-filters.json"`。命令会报告遗漏、多余及消费者差异，可重复对 `dashboard_get` 回读文件执行。此项只核对声明。用相同授权、数据版本及选中状态逐一重放受影响事件，核实受影响与不受影响组件；迁移的数值证据来自原报表，不能从待验声明反推。
 2. 将生成的 `submit.json` 交给 `dashboard_submit`。新页请求含 `createTitle`，已有页请求含基线 `expectedRevision`。服务执行编辑、检查并保存。导入已审阅的完整文档时才使用 `--format create` 和 `dashboard_create`，随后按返回版本提交检查。
 3. 从数据写入回执检查引用和行数，通过 `dashboard_view` 核对受筛选的汇总或表格页。Doctor 失败会保留草稿，读取并提交修正。成功后调用 `dashboard_preview` 读已完成的检查点。
 4. 若交付独立交互网页，用 `dashboard_export_site` 返回的本地文件或远程下载链接取得完整 ZIP。核对版本和文件清单，在目标宿主复验筛选、联动、数据权限和导出行数。静态包可包含所用数据集的全部行；有权限分区时须复用实际访问控制并验证直接读取分片的权限。详见[静态部署包](../../../docs/operations/static-deployment.md)。

@@ -9,12 +9,16 @@ function sortNumber(value){
 }
 function sortRows(rows,sort,fields){
   if(!sort?.length)return rows;
+  // Compile field metadata once, not for every comparison in an O(n log n) sort.
+  const columns=sort.map(({field,direction='asc'})=>{
+    const raw='raw'+field[0].toUpperCase()+field.slice(1);
+    return {field,sign:direction==='desc'?-1:1,string:fields[field]?.type==='string',raw:fields[raw]?.type==='number'?raw:null};
+  });
   return [...rows].sort((a,b)=>{
-    for(const {field,direction='asc'}of sort){
-      const sign=direction==='desc'?-1:1,raw='raw'+field[0].toUpperCase()+field.slice(1);
+    for(const {field,sign,string,raw}of columns){
       let result;
-      if(fields[field]?.type==='string'&&fields[raw]?.type==='number')result=compareValue(a[raw],b[raw]);
-      else if(fields[field]?.type==='string'){
+      if(string&&raw)result=compareValue(a[raw],b[raw]);
+      else if(string){
         const x=sortNumber(a[field]),y=sortNumber(b[field]);
         if((x==null)!==(y==null))return x==null?1:-1;
         result=x==null?compareValue(a[field],b[field]):compareValue(x,y);
@@ -27,7 +31,8 @@ function sortRows(rows,sort,fields){
 function searchRows(rows,search,fields){
   if(!search)return rows;
   const needle=search.toLocaleLowerCase();
-  return rows.filter(row=>Object.keys(fields).some(key=>!key.startsWith('_')&&!key.startsWith('raw')&&key in row&&
+  const keys=Object.keys(fields).filter(key=>!key.startsWith('_')&&!key.startsWith('raw'));
+  return rows.filter(row=>keys.some(key=>key in row&&
     String(row[key]===null?'null':row[key]).toLocaleLowerCase().includes(needle)));
 }
 // The static site and the build-time seed use exactly the same query implementation.
@@ -71,27 +76,65 @@ export function createStaticQuery(document,read){
     }).catch(error=>{if(scopes.get(key)?.promise===promise)scopes.delete(key);throw error;});
     scopes.set(key,{scope,promise});return promise;
   }
-  function* fieldValues(parts,field){
-    for(const part of parts)for(const row of Array.isArray(part)?part:part.rows)yield row[field]??null;
+  // Source arrays are immutable, as in the row/group caches. Remember identities,
+  // not source rows, so old scopes can still be collected. Bound derived arrays.
+  const optionSources=new WeakMap(),optionPages=new Map(),optionBudget=8*1024*1024;
+  let sourceSequence=0,optionBytes=0;
+  function sourceId(source){
+    if(!optionSources.has(source))optionSources.set(source,++sourceSequence);
+    return optionSources.get(source);
   }
-  async function optionsFor(filter){
+  function cachedOptions(key,search,compute){
+    let entry=optionPages.get(key);
+    if(entry){optionPages.delete(key);optionBytes-=entry.bytes;}
+    else{
+      const candidates=compute();let bytes=key.length*2+128+candidates.length*8;
+      // Include retained scalar payloads, even when a loaded source also owns
+      // the strings. Large values must not bypass the derived-cache budget.
+      for(const value of candidates){
+        bytes+=typeof value==='string'?32+value.length*2:
+          value!==null&&typeof value==='object'?32+JSON.stringify(value).length*2:16;
+        if(bytes>optionBudget)break;
+      }
+      entry={candidates,sourceBytes:bytes};
+    }
+    if(entry.search!==search){
+      // Keep one recent search per immutable source; paging never re-sorts it.
+      // Filter before sorting to preserve mixed scalar comparison semantics.
+      entry.values=(search?entry.candidates.filter(value=>String(value).toLocaleLowerCase().includes(search)):[...entry.candidates]).sort(compareValue);
+      entry.search=search;entry.bytes=entry.sourceBytes+entry.values.length*8+search.length*2;
+    }
+    if(entry.bytes<=optionBudget){
+      optionPages.set(key,entry);optionBytes+=entry.bytes;
+      while(optionPages.size>16||optionBytes>optionBudget){
+        const oldest=optionPages.keys().next().value;optionBytes-=optionPages.get(oldest).bytes;optionPages.delete(oldest);
+      }
+    }
+    return entry.values;
+  }
+  async function optionsFor(filter,search){
     const prepared=document.staticFilterOptions?.[filter.id];
-    if(Array.isArray(prepared))return prepared;
-    const consumers=new Map(filter.componentIds.map(id=>[datasetFor(id),id]));
-    const groups=await Promise.all([...consumers].map(async ([dataset,id])=>{
+    const consumers=Array.isArray(prepared)?new Map():new Map(filter.componentIds.map(id=>[datasetFor(id),id]));
+    const groups=Array.isArray(prepared)?[[{rows:prepared,field:null}]]:await Promise.all([...consumers].map(async ([dataset,id])=>{
       const index=document.staticPartitionIndexes?.[dataset];
-      if(index?.field===filter.field)return index.entries.map(entry=>entry.value);
+      if(index?.field===filter.field)return [{rows:index.entries,field:'value',missingAsNull:false}];
       const source=document.staticOptions?.[dataset]?.[filter.field];
-      if(typeof source==='string')return load(source);
+      if(typeof source==='string')return [{rows:await load(source),field:null}];
       if(source){
         if(typeof source.field!=='string'||!Array.isArray(source.files))throw Error('筛选选项分片描述不完整');
-        return fieldValues(await Promise.all(source.files.map(load)),source.field);
+        return (await Promise.all(source.files.map(load))).map(part=>({rows:Array.isArray(part)?part:part.rows,field:source.field}));
       }
-      return fieldValues([await rowsFor(id,[])],filter.field);
+      return [{rows:await rowsFor(id,[]),field:filter.field}];
     }));
-    const values=new Map();
-    for(const group of groups)for(const value of group)values.set(JSON.stringify(value),value);
-    return [...values.values()];
+    const inputs=groups.flat(),key=JSON.stringify([Array.isArray(prepared),inputs.map(({rows,field,missingAsNull=true})=>[sourceId(rows),field,missingAsNull])]);
+    return cachedOptions(key,search,()=>{
+      if(Array.isArray(prepared))return prepared;
+      const values=new Map();
+      for(const {rows,field,missingAsNull=true}of inputs)for(const row of rows){
+        const value=field===null?row:missingAsNull?row[field]??null:row[field];values.set(JSON.stringify(value),value);
+      }
+      return [...values.values()];
+    });
   }
   function tableRows(doc,id,calculate){
     const c=doc.manifest.components[id],p={...c.presentation,...c.config};let rows=visibleRows(doc,id);
@@ -121,9 +164,11 @@ export function createStaticQuery(document,read){
     if(args.filterId){
       const filter=document.manifest.filters.find(f=>f.id===args.filterId);
       if(!filter||filter.op!=='in')throw Error('Unknown selection filter');
-      const search=(args.search||'').toLocaleLowerCase();
-      const matches=(await optionsFor(filter)).filter(v=>String(v).toLocaleLowerCase().includes(search)).sort(compareValue);
-      const offset=args.offset||0,limit=args.limit||100;
+      const rawSearch=args.search??'',offset=args.offset??0,limit=args.limit??100;
+      if(typeof rawSearch!=='string'||rawSearch.length>1000)throw Error('候选项搜索最多 1000 个字符');
+      if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>1000)throw Error('候选项分页范围无效');
+      const search=rawSearch.toLocaleLowerCase();
+      const matches=await optionsFor(filter,search);
       return {values:matches.slice(offset,offset+limit),offset,totalValues:matches.length,hasMore:offset+limit<matches.length};
     }
     if(args.detail){

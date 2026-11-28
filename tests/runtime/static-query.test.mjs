@@ -189,3 +189,74 @@ test('reading results are isolated and definition changes invalidate computed ro
  typed.manifest.datasets.sales.fields.pax.type='number';
  assert.deepEqual((await typedQuery.query(args)).rows.map(row=>row.pax),['10%','2%']);
 });
+
+// @wu-test type=performance | scope=静态候选项分页 | protects=候选项每次翻页或搜索重新遍历全部行，替换数据源后却复用旧候选值
+test('option pages reuse immutable field values and separate changed sources and fields',async()=>{
+ let reads=0;
+ const rows=Array.from({length:2000},(_,i)=>({get office(){reads++;return 'Office '+String(i%1000).padStart(4,'0');},region:'Region '+i%2}));
+ const doc=make();delete doc.staticPartitions;doc.staticFiles.sales=['all'];
+ doc.manifest.filters=[{id:'office',field:'office',op:'in',componentIds:['card'],values:[]}];
+ let loads=0;
+ const query=createStaticQuery(doc,async file=>{loads++;return file==='all'?rows:[{office:'Replacement'}];});
+ const [first,next]=await Promise.all([
+  query.query({filterId:'office',limit:10}),query.query({filterId:'office',offset:10,limit:10}),
+ ]);
+ assert.equal(first.totalValues,1000);assert.equal(first.values[0],'Office 0000');assert.equal(reads,2000);
+ assert.equal(loads,1);
+ first.values[0]='Changed by consumer';
+ assert.equal(next.values[0],'Office 0010');assert.equal(reads,2000);
+ assert.equal((await query.query({filterId:'office',limit:10})).values[0],'Office 0000');
+ const found=await query.query({filterId:'office',search:'009',limit:5});
+ assert.deepEqual(found.values,['Office 0009','Office 0090','Office 0091','Office 0092','Office 0093']);
+ assert.equal((await query.query({filterId:'office',search:'009',offset:5,limit:5})).values[0],'Office 0094');
+ assert.equal(reads,2000);
+ doc.manifest.filters[0].field='region';
+ assert.deepEqual((await query.query({filterId:'office'})).values,['Region 0','Region 1']);
+ doc.manifest.filters[0].field='office';doc.staticFiles.sales=['replacement'];
+ assert.deepEqual((await query.query({filterId:'office'})).values,['Replacement']);
+});
+
+// @wu-test type=boundary | scope=候选值缓存语义及容量 | protects=混合标量搜索改变比较顺序，或多个候选范围无界常驻
+test('option caching retains scalar search order and evicts older candidate scopes',async()=>{
+ const doc=make();delete doc.staticPartitions;
+ doc.manifest.filters=[];doc.staticOptions={};
+ let reads=0;
+ for(let i=0;i<20;i++){
+  const id='dataset'+i;doc.manifest.components[id]={datasetId:id};
+  doc.manifest.filters.push({id,field:'value',op:'in',componentIds:[id],values:[]});
+  doc.staticOptions[id]={value:{field:'value',files:[id]}};
+ }
+ const query=createStaticQuery(doc,async()=>[12,'word',2,null,false,0,'0'].map(value=>({get value(){reads++;return value;}})));
+ assert.deepEqual((await query.query({filterId:'dataset0',search:'2'})).values,[2,12]);
+ assert.equal(reads,7);
+ assert.deepEqual((await query.query({filterId:'dataset0',search:'null'})).values,[null]);
+ const all=await query.query({filterId:'dataset0'});
+ assert.equal(all.totalValues,7);
+ assert(all.values.includes(0)&&all.values.includes('0')&&all.values.includes(false));
+ assert.equal(reads,7);
+ for(let i=1;i<20;i++)await query.query({filterId:'dataset'+i});
+ const scanned=reads;
+ assert.deepEqual((await query.query({filterId:'dataset0',search:'2'})).values,[2,12]);
+ assert.equal(reads,scanned+7);
+});
+
+// @wu-test type=boundary | scope=候选值缓存失效与资源上限 | protects=同版本替换输入后显示旧值，长字符串缓存越界或非法查询仍读数据
+test('option cache follows replaced arrays and accounts for long scalar values',async()=>{
+ const doc=make();delete doc.staticFiles;delete doc.staticPartitions;
+ doc.dataVersion='same-version';doc.snapshot.datasets.sales=[{office:'Original'}];
+ doc.manifest.filters=[{id:'office',field:'office',op:'in',componentIds:['card'],values:[]}];
+ const query=createStaticQuery(doc,async()=>{throw Error('No files expected');});
+ assert.deepEqual((await query.query({filterId:'office'})).values,['Original']);
+ doc.snapshot.datasets.sales=[{office:'Replacement'}];
+ assert.deepEqual((await query.query({filterId:'office'})).values,['Replacement']);
+ let reads=0;
+ doc.snapshot.datasets.sales=Array.from({length:1000},(_,i)=>({get office(){reads++;return String(i)+':'+ 'x'.repeat(5000);}}));
+ await query.query({filterId:'office'});
+ assert.equal(reads,1000);
+ await query.query({filterId:'office',offset:100});
+ assert.equal(reads,2000);
+ for(const args of [{search:'x'.repeat(1001)},{search:17},{offset:-1},{offset:.5},{limit:0},{limit:1001}]){
+  await assert.rejects(query.query({filterId:'office',...args}));
+ }
+ assert.equal(reads,2000);
+});

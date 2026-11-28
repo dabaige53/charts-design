@@ -1,0 +1,377 @@
+{
+  "recordedDate": "2026-11-28",
+  "timeZone": "Asia/Shanghai",
+  "synthetic": true,
+  "localQueries": {
+    "baselineCommit": "7f614058816c50fd1891b7d2c3a334e7adcd1369",
+    "rows": 1000000,
+    "distinctGroups": 1000,
+    "samples": 5,
+    "uniqueSearchRows": 100000,
+    "python": "3.11.16",
+    "sqlite": "3.53.1",
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "databaseBytes": 34197504,
+    "sourceSha256": {
+      "before": "c3e3202ceeeadd30f711f684d014ef1a755c2839fa2a10a9db3dcfef2592630c",
+      "after": "ed9b04377fb20cd96930916e50dad231659922a1d0d2a0757975b32cbdca22f9"
+    },
+    "scope": "One process, alternating before/after, empty application query caches; OS file cache is not cleared. Excludes import, HTTP, browser rendering and network.",
+    "correctness": "Each measured option page and grouped page checked against independently accumulated source observations, including sums, ratios and exact totals.",
+    "results": {
+      "optionSearch": {
+        "beforeMs": [
+          384.6659420000833,
+          353.0538030001935,
+          362.047493000091,
+          353.69738999997935,
+          345.03826999980447
+        ],
+        "afterMs": [
+          250.35267299995212,
+          230.90832999992017,
+          211.6253350000079,
+          234.3407800001387,
+          221.67466799987778
+        ],
+        "beforeMedianMs": 353.69738999997935,
+        "afterMedianMs": 230.90832999992017,
+        "speedup": 1.5317653979832673
+      },
+      "groupedPage": {
+        "beforeMs": [
+          718.2147490000261,
+          675.6479910000053,
+          667.6287769998908,
+          651.2146349998602,
+          682.8420459999052
+        ],
+        "afterMs": [
+          342.98250200004077,
+          339.8276289999558,
+          332.8916150001078,
+          338.8858800001344,
+          347.0015510001758
+        ],
+        "beforeMedianMs": 675.6479910000053,
+        "afterMedianMs": 339.8276289999558,
+        "speedup": 1.9882079423274122
+      },
+      "uniqueOptionMiss": {
+        "beforeMs": [
+          32.980237999936435,
+          33.10324200015202,
+          33.597331000009945,
+          32.731257000023106,
+          34.389753999903405
+        ],
+        "afterMs": [
+          39.05008900005669,
+          36.42808400013564,
+          37.202957000090464,
+          35.10188499990363,
+          40.96010400007799
+        ],
+        "beforeMedianMs": 33.10324200015202,
+        "afterMedianMs": 37.202957000090464,
+        "speedup": 0.8898013671351858
+      }
+    }
+  },
+  "staticQueries": {
+    "synthetic": true,
+    "runtime": {
+      "bun": "1.3.8",
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "scope": "One decoded dataset; calculated ratio columns; first and next pages, first sort and next sorted page, candidate first page/next page/search/next search page. Up to 100,000 unique candidates; page size 10. Excludes network, Parquet decoding and DOM rendering.",
+    "cache": "Fresh query engine for each sample; subsequent pages retain its cache. Explicit GC before each sample. Baseline and candidate run in separate Bun processes.",
+    "baselineRevision": "7f614058816c50fd1891b7d2c3a334e7adcd1369",
+    "source": {
+      "baseline": {
+        "static-query.mjs": "8820385fa4e5763c44ff938714be3f3f75f4ae687d8ebec386fdfaece90464da",
+        "engine.mjs": "29886208e78a8f95ce37a05697a1b5ddd7822cd5f743a8bacf91db8060d5f833",
+        "bindings.mjs": "e1e8530864f2288c8ea9764a9d220807d3edf84dab80e35fa2f217350fa85651",
+        "encoding.mjs": "c7ad935ce59edd9090b6f5563e00840ef5feefd9d70218e93bbf5c8e89f738fe",
+        "request-queue.mjs": "a269d159c4f14557a2e9f63894bece07f0255d1e2abe06cb4c1b710c099552e8"
+      },
+      "candidate": {
+        "static-query.mjs": "bf3a9525e2f2812fb998ae5c1d38e48564f6cb77db7176a1fab1f3795be26533",
+        "engine.mjs": "29886208e78a8f95ce37a05697a1b5ddd7822cd5f743a8bacf91db8060d5f833",
+        "bindings.mjs": "e1e8530864f2288c8ea9764a9d220807d3edf84dab80e35fa2f217350fa85651",
+        "encoding.mjs": "c7ad935ce59edd9090b6f5563e00840ef5feefd9d70218e93bbf5c8e89f738fe",
+        "request-queue.mjs": "a269d159c4f14557a2e9f63894bece07f0255d1e2abe06cb4c1b710c099552e8"
+      }
+    },
+    "results": {
+      "baseline": {
+        "rows": 1000000,
+        "choices": 100000,
+        "samplesMs": {
+          "firstPage": [
+            2.6816350000000284,
+            0.27655700000013894,
+            2.281972999999198
+          ],
+          "secondPage": [
+            0.1339819999999463,
+            0.1571459999995568,
+            0.11095699999896169
+          ],
+          "sortFirst": [
+            2353.8466719999997,
+            1815.580836,
+            1862.5135960000007
+          ],
+          "sortNext": [
+            0.13135700000020734,
+            0.14536899999984598,
+            0.1583489999993617
+          ],
+          "optionsFirst": [
+            757.5122839999999,
+            445.53035999999975,
+            390.3315419999999
+          ],
+          "optionsNext": [
+            422.3765949999997,
+            340.2750249999999,
+            419.4342710000001
+          ],
+          "optionsSearch": [
+            377.02093800000057,
+            335.2185930000005,
+            445.36461699999927
+          ],
+          "optionsSearchNext": [
+            361.5306980000005,
+            403.3400249999995,
+            319.92945300000065
+          ]
+        },
+        "medianMs": {
+          "firstPage": 2.281972999999198,
+          "secondPage": 0.1339819999999463,
+          "sortFirst": 1862.5135960000007,
+          "sortNext": 0.14536899999984598,
+          "optionsFirst": 445.53035999999975,
+          "optionsNext": 419.4342710000001,
+          "optionsSearch": 377.02093800000057,
+          "optionsSearchNext": 361.5306980000005
+        },
+        "maxRssMiB": 920.7109375
+      },
+      "candidate": {
+        "rows": 1000000,
+        "choices": 100000,
+        "samplesMs": {
+          "firstPage": [
+            1.8165730000000053,
+            0.5275330000001759,
+            0.5136430000002292
+          ],
+          "secondPage": [
+            0.11171799999999621,
+            0.05530399999997826,
+            0.08112200000005032
+          ],
+          "sortFirst": [
+            564.0595390000001,
+            637.0136759999998,
+            616.4698640000001
+          ],
+          "sortNext": [
+            0.15213900000003377,
+            0.23675700000012512,
+            0.2551140000000487
+          ],
+          "optionsFirst": [
+            328.582716,
+            405.60804400000006,
+            202.34767499999998
+          ],
+          "optionsNext": [
+            0.2497960000000603,
+            0.10475699999960852,
+            0.2232560000002195
+          ],
+          "optionsSearch": [
+            138.772428,
+            141.16952500000025,
+            128.06838500000003
+          ],
+          "optionsSearchNext": [
+            0.12104199999998855,
+            0.12952499999983047,
+            0.12429700000029698
+          ]
+        },
+        "medianMs": {
+          "firstPage": 0.5275330000001759,
+          "secondPage": 0.08112200000005032,
+          "sortFirst": 616.4698640000001,
+          "sortNext": 0.23675700000012512,
+          "optionsFirst": 328.582716,
+          "optionsNext": 0.2232560000002195,
+          "optionsSearch": 138.772428,
+          "optionsSearchNext": 0.12429700000029698
+        },
+        "maxRssMiB": 478.859375
+      }
+    }
+  },
+  "mcpDiscovery": {
+    "baselineCommit": "7f614058816c50fd1891b7d2c3a334e7adcd1369",
+    "workingTreeHead": "7f614058816c50fd1891b7d2c3a334e7adcd1369",
+    "python": "3.11.16",
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "samples": 7,
+    "iterationsPerSample": 100,
+    "warmupCallsPerCase": 1,
+    "scope": "Separate source packages and subprocesses; warm per-call elapsed time includes detached return construction. Excludes subprocess startup, HTTP, model generation, browser and network. OS file cache is not cleared. First-call times are diagnostic only; earlier cases may have imported shared dependencies.",
+    "before": {
+      "results": {
+        "declarations_index": {
+          "firstCallMs": 16.872213999931773,
+          "warmMsPerCall": [
+            1.871265019999555,
+            1.709525379999377,
+            1.659822809999696,
+            1.7100233300016043,
+            1.6430212299997038,
+            1.6863381000007394,
+            1.6893798700016305
+          ],
+          "medianMsPerCall": 1.6893798700016305,
+          "jsonBytes": 7078
+        },
+        "declarations_c02": {
+          "firstCallMs": 1.9483209998725215,
+          "warmMsPerCall": [
+            2.099250689998371,
+            2.3399680300008185,
+            2.107518710001841,
+            2.083917710001515,
+            2.224207159999878,
+            2.1165154500022254,
+            2.051272000001063
+          ],
+          "medianMsPerCall": 2.107518710001841,
+          "jsonBytes": 31999
+        },
+        "recommend_comparison": {
+          "firstCallMs": 1.8215810000583588,
+          "warmMsPerCall": [
+            0.11781273999986297,
+            0.12115887000163639,
+            0.11380380999980844,
+            0.11948625999821161,
+            0.12133873999800926,
+            0.11213629999929253,
+            0.11156625000012355
+          ],
+          "medianMsPerCall": 0.11781273999986297,
+          "jsonBytes": 1283
+        }
+      },
+      "delivery": {
+        "codes": [
+          "c02",
+          "t01",
+          "mc03",
+          "mc14"
+        ],
+        "individualJsonBytes": 120334
+      },
+      "sourceSha256": {
+        "dashboard_runtime/declarations.py": "718a3ecb11ca037d566db7e68b3acce41e0b16d6580f34a2b6ae5cd429da7c6e",
+        "dashboard_runtime/recommend.py": "acc48f89c82ee558d62b907f3d78e6d25bd5115cd5e96052f384ca47c787283a",
+        "dashboard_runtime/encoding.py": "a04a1705f59178d374a4bda5d064eb7130896f76557eb866c733343ba11aa0d0",
+        "dashboard_runtime/bindings.py": "01b6158f749933b576b38e269922b4dcee970ef0aacbb6939b25ee101716d845",
+        "dashboard_runtime/kpi_cards.py": "abc624284c6428a9588f0c2910bf5d53cafb2d7e1528cdd5eea4d4ecf081328b",
+        "dashboard_runtime/model.py": "2b1b0a2fc9be4d9839fba86c7010e74c764a256d003a157bd27f95213bd3c0f5",
+        "dashboard_runtime/statistical.py": "18791878413c6f20c38d062d11bcddbee29cfa13c3806d72d032aefd65dfcded",
+        "dashboard_runtime/structure_diagram.py": "4746a34f1a527faef08b957f049447bd1f69894ea568ce054f31b7d64381492b",
+        "skills/executive-charts/scripts/core/component_schemas.py": "8a0a10423b3b19162153a9cf68cffda2485e1ef0568def4b46ec662671178b54",
+        "skills/executive-charts/scripts/core/chart_catalog.py": "a681debbc906c8fdc8af9fdbb913da1042b55ae773124b727914598a8eab866a",
+        "skills/executive-charts/references/chart_catalog.json": "a03a3d1268b27bfca8ee3e5298b85429c137727b0677c1986d7437e2c5f0d86b"
+      }
+    },
+    "after": {
+      "results": {
+        "declarations_index": {
+          "firstCallMs": 12.14886699995077,
+          "warmMsPerCall": [
+            0.04426308999882167,
+            0.04465769000034925,
+            0.04323053999996773,
+            0.0433107599997129,
+            0.04297154999903796,
+            0.04546470000150293,
+            0.04572068000015861
+          ],
+          "medianMsPerCall": 0.04426308999882167,
+          "jsonBytes": 7078
+        },
+        "declarations_c02": {
+          "firstCallMs": 3.1590620001225034,
+          "warmMsPerCall": [
+            0.19033734999993612,
+            0.20090243999902668,
+            0.18703857999980755,
+            0.1817378100008682,
+            0.19304413000099885,
+            0.18733803999793963,
+            0.19776903000092716
+          ],
+          "medianMsPerCall": 0.19033734999993612,
+          "jsonBytes": 33641
+        },
+        "recommend_comparison": {
+          "firstCallMs": 0.8465739999792277,
+          "warmMsPerCall": [
+            0.14780125000015687,
+            0.1435006900010194,
+            0.13750146000120367,
+            0.13688994000176535,
+            0.1523604199996953,
+            0.13444497000136835,
+            0.16150797999898714
+          ],
+          "medianMsPerCall": 0.1435006900010194,
+          "jsonBytes": 4055
+        }
+      },
+      "delivery": {
+        "codes": [
+          "c02",
+          "t01",
+          "mc03",
+          "mc14"
+        ],
+        "individualJsonBytes": 124812,
+        "batchJsonBytes": 44639
+      },
+      "sourceSha256": {
+        "dashboard_runtime/declarations.py": "8129218e357f117fb3fdcd259465a62d5cc474addba6e26b1a03251c463ce7e6",
+        "dashboard_runtime/chart_examples.py": "ecde72914f35d546943edd2a5a9e2355e7f2d74e97221c8b291102553df72528",
+        "dashboard_runtime/recommend.py": "3d1034cbbadd660a48c42314a6244786845110868e37e58d2c8229d0573217c0",
+        "dashboard_runtime/encoding.py": "c1e94e705d9a87974b89dd7dd2458cb4b78acc28f42c09320a35f9d938d0bdfa",
+        "dashboard_runtime/bindings.py": "01b6158f749933b576b38e269922b4dcee970ef0aacbb6939b25ee101716d845",
+        "dashboard_runtime/kpi_cards.py": "abc624284c6428a9588f0c2910bf5d53cafb2d7e1528cdd5eea4d4ecf081328b",
+        "dashboard_runtime/model.py": "2b1b0a2fc9be4d9839fba86c7010e74c764a256d003a157bd27f95213bd3c0f5",
+        "dashboard_runtime/statistical.py": "18791878413c6f20c38d062d11bcddbee29cfa13c3806d72d032aefd65dfcded",
+        "dashboard_runtime/structure_diagram.py": "4746a34f1a527faef08b957f049447bd1f69894ea568ce054f31b7d64381492b",
+        "skills/executive-charts/scripts/core/component_schemas.py": "8a0a10423b3b19162153a9cf68cffda2485e1ef0568def4b46ec662671178b54",
+        "skills/executive-charts/scripts/core/chart_catalog.py": "a681debbc906c8fdc8af9fdbb913da1042b55ae773124b727914598a8eab866a",
+        "skills/executive-charts/references/chart_catalog.json": "cc5f3eb6389b85409d57ce052790c22ee346afbd66016274c4460a21a9ef67d1"
+      }
+    },
+    "speedups": {
+      "declarations_index": 38.16678569089062,
+      "declarations_c02": 11.072544143346265,
+      "recommend_comparison": 0.8209907562049078
+    }
+  }
+}
