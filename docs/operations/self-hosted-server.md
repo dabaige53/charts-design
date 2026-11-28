@@ -378,7 +378,7 @@ charts-design-runtime transfer \
 
 ### 更新已有看板的数据
 
-使用 `charts-design-runtime remote upload` 单独上传数据版本。它与首次迁移共用 原生传输客户端，完成后保存可用于 `put_dataset_ref` 的完整引用。页面的组件、指标、筛选和发布版本由后续编辑流程维护。
+自有服务器的 SQLite 工作区和已有 Neon 工作区都支持用 `charts-design-runtime remote upload` 单独上传数据版本。SQLite 在项目的私有运行目录暂存分片，校验完整数据版本后写入本地数据仓库。上传完成后，客户端保存可用于 `put_dataset_ref` 的完整引用。页面的组件、指标、筛选和发布版本由后续编辑流程维护。
 
 ```sh
 charts-design-runtime remote upload \
