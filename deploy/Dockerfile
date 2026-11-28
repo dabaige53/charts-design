@@ -1,9 +1,22 @@
 # One native service, shared by author, publication and scheduled-cleaner hosts.
-FROM rust:1.91.1-bookworm AS native
+FROM rust:1.91.1-bookworm AS chef
 WORKDIR /build/runtime-core
 ENV CARGO_BUILD_JOBS=2 CXXFLAGS=-g0
+COPY runtime-core/rust-toolchain.toml ./
+RUN rustup show && cargo install --locked --version 0.1.73 cargo-chef
+
+FROM chef AS native-plan
 COPY runtime-core/ ./
-RUN cargo build --release --locked
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS native
+COPY --from=native-plan /build/runtime-core/recipe.json recipe.json
+# Only dependency metadata invalidates this layer, including bundled DuckDB.
+# Keep cook and the real build in the same directory with the same toolchain.
+RUN cargo chef cook --release --locked --recipe-path recipe.json
+# Restore the real build.rs, source and embedded resources after the skeleton.
+COPY runtime-core/ ./
+RUN cargo build --release --locked --bin charts-design-core
 
 FROM oven/bun:1.3.8 AS ui
 WORKDIR /build/runtime-ui

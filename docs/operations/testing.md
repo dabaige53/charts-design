@@ -45,7 +45,22 @@ cargo fmt --manifest-path runtime-core/Cargo.toml -- --check
 
 ## CI 作业与产物
 
-工作流定义在 `.github/workflows/`。主 CI 用同一个 Ubuntu 作业构建共享 UI 和 Rust Runtime。Rust 预览测试与浏览器数据检查使用该作业的产物，协议与性能验收复用按提交上传的 UI 和原生程序。覆盖率检查与构建并行运行，使用独立的带覆盖率统计的原生产物。部署镜像从源码独立构建并验证。PR 从默认分支恢复 UI 依赖、Rust 编译和 Docker 构建缓存，缓存由默认分支更新。
+工作流定义在 `.github/workflows/`。主 CI 固定使用 Ubuntu 24.04；`Prepare reusable CI environment` 先通过 [共享环境动作](../../.github/actions/ci-environment/action.yml) 准备可直接运行的环境快照。后续作业恢复已安装好的工具与依赖，命中时不执行安装。首次使用、环境配置或锁文件变化、缓存被淘汰时，才重新准备缺失部分并立即保存；后续测试失败不影响已保存的环境。
+
+环境按职责分别缓存：
+
+| 快照 | 内容与失效条件 |
+| --- | --- |
+| JavaScript 工具 | 固定 Bun 与 Node 24；环境配置、操作系统或架构变化时更新 |
+| Rust 工具 | 固定编译器、rustfmt、Clippy、LLVM 工具及 cargo-llvm-cov；工具链或环境配置变化时更新 |
+| 根目录依赖 | production `node_modules`；根包声明、锁文件或 Bun 版本变化时更新 |
+| UI 依赖 | 完整 `runtime-ui/node_modules`；UI 包声明、锁文件或 Bun 版本变化时更新 |
+
+环境版本集中在 `.github/ci/environment.json`，Bun 和 Rust 分别沿用仓库版本文件。Node 24 的具体补丁版本由首次生成的快照固定；需要刷新工具时递增环境 `revision`。依赖快照只使用精确键，不把其他锁文件的安装结果当成有效环境。纯文档改动只恢复 JavaScript 工具和根目录依赖，不准备 Rust 或 UI 依赖。快照不包含令牌、业务数据或生产配置。
+
+共享 UI 由独立作业构建一次并按提交上传。Rust 预览测试、覆盖率和协议与性能验收下载同一份 UI；验收继续复用本次构建的原生程序。覆盖率与普通 Rust 构建并行运行，使用各自独立的编译缓存和原生产物，不混用插桩结果。
+
+Rust 编译依赖与 Docker 层继续使用独立缓存。PR 可恢复默认分支缓存，并保存自身运行范围内的缓存，重复推送不再必须等待合并后才能复用。部署镜像保留 Debian Bookworm 编译基线，通过固定版本 cargo-chef 将依赖预编译层与业务源码分开；只改源码时复用依赖层，最终镜像仍独立构建并执行真实冒烟检查。构建工具、依赖源码和环境文件不进入生产镜像。
 
 后端行覆盖率使用 `cargo-llvm-cov` 测量。Cargo 用例和使用同次构建的端到端用例共同生成报告，保留 84% 硬门槛。覆盖率报告包含所有运行时模块；单元测试正文统一放在 `runtime-core/tests/unit/`，由源模块通过 `#[cfg(test)]` 引用，避免把测试代码本身计入运行时覆盖率。更换实现后，用新版本重新测量，并继续检查行为用例。
 
