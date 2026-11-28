@@ -219,7 +219,13 @@ const accessHtml = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><met
 const p=new URLSearchParams(location.hash.slice(1)),f=document.querySelector('form');
 if(p.has('key')||p.has('feedback')){const field=p.has('feedback')?'feedbackToken':'accessKey';const input=document.createElement('input');input.type='hidden';input.name=field;input.value=p.get(field==='accessKey'?'key':'feedback');f.append(input);if(field==='accessKey')f.querySelector('[name="accessKey"]').remove();history.replaceState(null,'',location.pathname+location.search);f.submit();}
 </script></body></html>`;
-const readerHtml = base => `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Charts Design</title><link rel="stylesheet" href="${base}app.css"><body><div id="root"></div><script>window.__chartsBoot={mode:"static",assetBase:"${base}"};const p=new URLSearchParams(location.hash.slice(1));if(p.has('key')||p.has('feedback')){const form=document.createElement('form'),i=document.createElement('input');form.method='post';i.type='hidden';i.name=p.has('feedback')?'feedbackToken':'accessKey';i.value=p.get(p.has('feedback')?'feedback':'key');form.append(i);document.body.append(form);history.replaceState(null,'',location.pathname+location.search);form.submit();}else{const s=document.createElement('script');s.src='${base}app.js';document.body.append(s);}</script></body></html>`;
+const readerHtml = base => `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Charts Design</title>
+<script>window.__chartsBoot={mode:"static",assetBase:"${base}"};
+const p=new URLSearchParams(location.hash.slice(1));
+if(!p.has('key')&&!p.has('feedback'))window.__chartsBoot.documentRequest=fetch('document.json').catch(()=>null);
+</script><link rel="stylesheet" href="${base}app.css"><body><div id="root"></div><script>
+if(p.has('key')||p.has('feedback')){const form=document.createElement('form'),i=document.createElement('input');form.method='post';i.type='hidden';i.name=p.has('feedback')?'feedbackToken':'accessKey';i.value=p.get(p.has('feedback')?'feedback':'key');form.append(i);document.body.append(form);history.replaceState(null,'',location.pathname+location.search);form.submit();}else{const s=document.createElement('script');s.src='${base}app.js';document.body.append(s);}
+</script></body></html>`;
 const html = text => new Response(text, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 
 async function uiBuild(env, url) {

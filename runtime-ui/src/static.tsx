@@ -38,7 +38,10 @@ export function StaticSite() {
   useEffect(() => {
     let live = true,
       clients: ReturnType<typeof createStaticClient>[] = [];
-    void fetch(new URL("document.json", location.href))
+    const earlyDocument: Promise<Response | null> | undefined = window.__chartsBoot?.documentRequest;
+    if (earlyDocument) delete window.__chartsBoot.documentRequest;
+    void Promise.resolve(earlyDocument)
+      .then((response) => response ?? fetch(new URL("document.json", location.href)))
       .then(async (response) => {
         if (!response.ok) throw Error(`网页数据加载失败（${response.status}）`);
         const doc = (await response.json()) as Document;
