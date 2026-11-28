@@ -110,7 +110,13 @@ impl Service {
         })
     }
     pub fn call(&self, tool: &str, args: &Value) -> Result<Value> {
-        let id = Uuid::new_v4().simple().to_string();
+        let response_id = match tool {
+            "runtime_result_chunk" => args["requestId"]
+                .as_str()
+                .filter(|id| id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit())),
+            _ => None,
+        };
+        let id = response_id.map_or_else(|| Uuid::new_v4().simple().to_string(), String::from);
         let start = Instant::now();
         match self.execute(tool, args, None) {
             Ok(mut result) => {

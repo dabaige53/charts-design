@@ -419,7 +419,11 @@ impl Mcp {
     }
 }
 fn protocol_error(error: Error) -> ErrorData {
-    ErrorData::invalid_params(error.message, Some(json!({"code":error.code})))
+    let mut data = json!({"code":error.code});
+    if let Some(id) = error.request_id {
+        data["requestId"] = json!(id);
+    }
+    ErrorData::invalid_params(error.message, Some(data))
 }
 fn tool_result(result: Value) -> std::result::Result<CallToolResult, ErrorData> {
     let text = serde_json::to_string(&result)

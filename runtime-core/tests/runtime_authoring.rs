@@ -472,3 +472,44 @@ fn chunked_results_are_complete_and_live_results_are_ephemeral() {
         "RESULT_EXPIRED"
     );
 }
+
+// @wu-test type=integration | scope=MCP 大响应过期诊断 | protects=无法用原响应编号查出过期原因或诊断暴露业务内容
+#[test]
+fn expired_result_is_diagnosable_by_its_response_id() {
+    let temp = TempDir::new().unwrap();
+    let service = service(&temp);
+    let data = json!({"rows":["只用于合成测试的业务内容".repeat(5000)]});
+    let (encoded, _) = service.transport.encode(&data, "dashboard_get").unwrap();
+    let request_id = encoded["transport"]["requestId"].as_str().unwrap();
+    let db = rusqlite::Connection::open(&service.transport.cache_path).unwrap();
+    db.execute(
+        "UPDATE results SET expires = 0 WHERE request_id = ?",
+        [request_id],
+    )
+    .unwrap();
+
+    let error = service
+        .call(
+            "runtime_result_chunk",
+            &json!({"requestId":request_id,"index":0}),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "RESULT_EXPIRED");
+    assert_eq!(error.request_id.as_deref(), Some(request_id));
+
+    let error = service.transport.result_text(request_id).unwrap_err();
+    assert_eq!(error.code, "RESULT_EXPIRED");
+    assert_eq!(error.request_id.as_deref(), Some(request_id));
+
+    let diagnostics = service
+        .call("runtime_diagnostics", &json!({"requestId":request_id}))
+        .unwrap();
+    for tool in ["runtime_result_chunk", "resources/read"] {
+        assert!(diagnostics["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["tool"] == tool && event["code"] == "RESULT_EXPIRED"));
+    }
+    assert!(!diagnostics.to_string().contains("合成测试的业务内容"));
+}

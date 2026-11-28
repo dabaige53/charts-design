@@ -185,26 +185,31 @@ impl Transport {
         ))
     }
     pub fn result_text(&self, id: &str) -> Result<String> {
-        let mut state = self.lock()?;
-        Self::prune(&mut state, TRANSIENT_LIMIT);
-        let encoded = if let Some(v) = state.transient.iter().find(|v| v.id == id) {
-            Some(v.encoded.clone())
-        } else {
-            state
-                .results
-                .query_row(
-                    "SELECT encoded FROM results WHERE request_id=? AND expires>=?",
-                    params![id, now()],
-                    |r| r.get::<_, String>(0),
-                )
-                .optional()?
-        }
-        .ok_or_else(|| {
-            Error::new(
+        let encoded = {
+            let mut state = self.lock()?;
+            Self::prune(&mut state, TRANSIENT_LIMIT);
+            if let Some(v) = state.transient.iter().find(|v| v.id == id) {
+                Some(v.encoded.clone())
+            } else {
+                state
+                    .results
+                    .query_row(
+                        "SELECT encoded FROM results WHERE request_id=? AND expires>=?",
+                        params![id, now()],
+                        |r| r.get::<_, String>(0),
+                    )
+                    .optional()?
+            }
+        };
+        let Some(encoded) = encoded else {
+            let mut error = Error::new(
                 "RESULT_EXPIRED",
                 "Response unavailable; inspect current state before retrying.",
-            )
-        })?;
+            );
+            self.log(id, "resources/read", "failed", &error.code, 0, &Value::Null)?;
+            error.request_id = Some(id.to_owned());
+            return Err(error);
+        };
         String::from_utf8(
             STANDARD
                 .decode(encoded)
