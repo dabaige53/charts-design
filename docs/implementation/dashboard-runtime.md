@@ -74,11 +74,15 @@ bun /absolute/path/charts-design/bin/dashboard-runtime.js --runtime-root /absolu
 | --- | --- |
 | `tools/list` | 当前安装与传输实际提供的工具、参数、影响标记和 App 可见范围 |
 | `charts://contract` | 同一份传输适配后的工具定义、原子操作结构和编辑约定 |
-| `chart_catalog`、`chart_declarations` | 当前预设、指标卡、声明要求、示例和绑定能力 |
-| `generation_examples`、`charts://examples` | 明确标记为合成数据的案例；读取不创建资产 |
-| `layout_templates`、`charts://layouts` | 可选构图建议；显式布局继续可用 |
+| `charts://catalog`、`chart_declarations` | 当前预设、指标卡、声明要求、示例和绑定能力 |
+| `charts://examples`、`charts://examples/<caseId>` | 明确标记为合成数据的案例；读取不创建资产 |
+| `charts://layouts` | 可选构图建议；显式布局继续可用 |
 
 工具定义由 `tool_contract.py` 维护，输入结构说明参数来源、默认值和替换影响。修改定义时同步发现资源与调用方，不在文档手工复制工具枚举。
+
+`chart_declarations` 不带选择时返回索引；`code` 读取一个图表或 KPI，`codes` 一次读取 1–8 个唯一代码，两者互斥。批量结果只携带一份公共合同，具体图表和 KPI 的 `example` 提供各自可执行的合成操作，ID 互不覆盖。全部预设均有经过文档校验的例子；业务制作仍需替换数据、单位、阈值和叙述。声明发现按安装来源标识缓存不可变 JSON，返回值相互隔离，不缓存用户数据。
+
+`chart_recommend` 只按已知的数据形态排序，缺少 `measures` 不再默认单指标。需要筛选重算时传 `requiresFilterBinding: true`；返回的 `bindingMode` 区分普通预设和 `config.encoding` 的专用映射，不能把可分组热力图当成可重算相关系数。`requirements`、`cautions`、`fit` 和 `shapeMismatches` 说明缺少的证据、已知结构不匹配与阅读建议，`questions` 可先从已有数据和需求中补齐。`designGuidance` 优先保持比较关系与一致编码，页面已使用某图不自动降低其排名。
 
 同一连接提供编辑、查询、展示、导出、正式发布、创建分享和 COS 数据分片。图表目录、布局和案例可从资源直接读取；数据写入回执含引用版本和行数。核对组件时，在 `dashboard_view` 传 `includeEvidence: true`，一次取回计算结果、指标定义和来源。编辑器提供版本历史和分享管理。
 

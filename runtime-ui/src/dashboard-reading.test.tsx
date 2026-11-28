@@ -127,3 +127,56 @@ it("pins filter loading and HTML export to the displayed revision across refresh
     }
   }
 });
+
+// @wu-test type=boundary | scope=作者保存回读恢复 | protects=恢复新草稿后仍保留旧布局编辑器并在下一次点击覆盖新版本
+it("leaves the stale layout editor after reconciling a failed save read", async () => {
+  const descriptors = ["ResizeObserver", "NodeFilter", "location", "sessionStorage", "HTMLInputElement"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
+  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class {
+    observe() {} unobserve() {} disconnect() {}
+  } });
+  for (const key of ["NodeFilter", "location", "sessionStorage", "HTMLInputElement"] as const)
+    Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
+  try {
+    const initial: Document = {
+      id: "save-recovery", revision: 1, progressive: true,
+      manifest: { title: "初始标题", components: {}, datasets: {}, metrics: {}, layout: {}, filters: [] },
+      snapshot: { datasets: {} },
+    };
+    let remote = initial, failRead = false;
+    const submissions: Config[] = [];
+    const call = mock(async (name: string, args: Config = {}) => {
+      if (name === "dashboard_list") return { dashboards: [{ id: initial.id }] };
+      if (name === "dashboard_submit") {
+        submissions.push(args);
+        remote = { ...remote, revision: remote.revision + 1 };
+        failRead = submissions.length === 1;
+        return { ok: true, revision: remote.revision };
+      }
+      if (name === "dashboard_get") {
+        if (failRead) { failRead = false; throw Error("Temporary read failure"); }
+        return { document: remote };
+      }
+      return {};
+    });
+    render(<TooltipProvider><DashboardApp initial={initial} call={call}
+      annotationAccess={{ endpoint: "", canRead: false, canAnnotate: false, canManageAnnotations: false, scope: "test" }} /></TooltipProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "看板标题" }), { target: { value: "本次标题" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存布局" }));
+    await screen.findByText(/只重新读取最新草稿并结束当前编辑/);
+    remote = { ...remote, revision: 3, manifest: { ...remote.manifest, title: "另一作者的标题" } };
+    fireEvent.click(screen.getByRole("button", { name: "保存布局" }));
+    await screen.findByRole("button", { name: "编辑布局" });
+    expect(screen.queryByRole("textbox", { name: "看板标题" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "另一作者的标题" })).toBeTruthy();
+    expect(submissions).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
+    expect((await screen.findByRole<HTMLInputElement>("textbox", { name: "看板标题" })).value).toBe("另一作者的标题");
+  } finally {
+    cleanup();
+    for (const [key, descriptor] of descriptors) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
+});

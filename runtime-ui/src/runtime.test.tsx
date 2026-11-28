@@ -159,3 +159,128 @@ it("reloads live data at the same revision with the active linkage and table sta
   }
   expect(result.current.view.linkageSource).toBe("source");
 });
+
+// @wu-test type=integration | scope=作者工作区保存 | protects=一次保存拆成多次修改往返，或省略检查点和版本校验
+it("submits the author edit once and then reads its saved document", async () => {
+  const initial = { ...document(), progressive: true };
+  const saved = { ...initial, revision: 2 };
+  const call = mock(async (name: string) => name === "dashboard_submit"
+    ? { ok: true, revision: 2 }
+    : { document: saved });
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  const operations = [{ op: "set_title", value: "Updated" }];
+
+  await act(async () => { expect(await result.current.save(operations)).toBe(true); });
+
+  expect(call.mock.calls.map(([name]) => name)).toEqual(["dashboard_submit", "dashboard_get"]);
+  expect(call).toHaveBeenNthCalledWith(1, "dashboard_submit", {
+    dashboardId: initial.id, expectedRevision: 1, operations,
+  });
+  expect(result.current.document.revision).toBe(2);
+});
+
+// @wu-test type=boundary | scope=保存检查失败 | protects=检查失败后丢失已写入草稿或重试仍携带过期修订号
+it.each(["receipt", "mcp"])("keeps the failed draft revision for repair after %s validation errors", async (transport) => {
+  const initial = { ...document(), progressive: true };
+  let revision = 1, fail = true;
+  const submissions: number[] = [];
+  const call = mock(async (name: string, args: Config = {}) => {
+    if (name === "dashboard_submit") {
+      submissions.push(args.expectedRevision);
+      revision++;
+      if (fail && transport === "mcp") throw Object.assign(Error("Draft checks failed"), { code: "DOCTOR_FAILED" });
+      return { ok: !fail, revision };
+    }
+    return { document: { ...initial, revision } };
+  });
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+
+  await act(async () => { expect(await result.current.save([])).toBe(false); });
+  expect(result.current.document.revision).toBe(2);
+  expect(result.current.error).toContain("未通过检查");
+  fail = false;
+  await act(async () => { expect(await result.current.save([])).toBe(true); });
+  expect(submissions).toEqual([1, 2]);
+  expect(result.current.document.revision).toBe(3);
+});
+
+// @wu-test type=boundary | scope=保存期间版本切换 | protects=迟到的保存读取覆盖新打开的修订
+it.each(["success", "error"])("does not replace a newer document or retain recovery after a late save %s", async (outcome) => {
+  const initial = { ...document(), progressive: true };
+  let complete: ((value: Config) => void) | undefined;
+  let reject: ((error: Error) => void) | undefined;
+  let reads = 0;
+  const call = mock(async (name: string, args: Config = {}) => name === "dashboard_submit"
+    ? { ok: true, revision: args.expectedRevision + 1 }
+    : reads++ === 0
+      ? new Promise<Config>((resolve, fail) => { complete = resolve; reject = fail; })
+      : { document: { ...initial, revision: 4 } });
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  let saving: Promise<boolean>;
+  act(() => { saving = result.current.save([]); });
+  await waitFor(() => expect(complete).toBeDefined());
+  act(() => result.current.accept({ ...initial, revision: 3 }));
+  await act(async () => {
+    if (outcome === "error") reject!(Error("Late read failure"));
+    else complete!({ document: { ...initial, revision: 2 } });
+    expect(await saving).toBe(false);
+  });
+  expect(result.current.document.revision).toBe(3);
+  expect(result.current.error).toBe("");
+  await act(async () => { expect(await result.current.save([{ op: "set_title", value: "Fresh edit" }])).toBe(true); });
+  const submits = call.mock.calls.filter(([name]) => name === "dashboard_submit");
+  expect(submits.map(([, args]) => args?.expectedRevision)).toEqual([1, 3]);
+  expect(result.current.document.revision).toBe(4);
+  expect(result.current.saveRecoveryEpoch).toBe(0);
+});
+
+// @wu-test type=boundary | scope=已写入保存的回读恢复 | protects=回读失败后重放已提交修改，或抬高修订号覆盖另一作者的更新
+it.each(["saved", "receipt", "mcp"])("reconciles a lost document read after %s before allowing fresh edits", async (outcome) => {
+  const initial = { ...document(), progressive: true };
+  let remote = initial, readFails = true;
+  const submitted: Config[] = [];
+  const call = mock(async (name: string, args: Config = {}) => {
+    if (name === "dashboard_submit") {
+      submitted.push(args);
+      remote = { ...remote, revision: remote.revision + 1 };
+      if (outcome === "mcp") throw Object.assign(Error("Draft checks failed"), { code: "DOCTOR_FAILED" });
+      return { ok: outcome === "saved", revision: remote.revision };
+    }
+    if (readFails) { readFails = false; throw Error("Temporary read failure"); }
+    return { document: remote };
+  });
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  const original = [{ op: "set_title", value: "Original edit" }];
+  await act(async () => { expect(await result.current.save(original)).toBe(false); });
+  expect(result.current.document.revision).toBe(1);
+  expect(result.current.error).toContain("只重新读取最新草稿");
+
+  remote = { ...remote, revision: 3, manifest: { ...remote.manifest, title: "Concurrent author" } };
+  const retry = [{ op: "set_title", value: "Stale retry" }];
+  await act(async () => { expect(await result.current.save(retry)).toBe(false); });
+  expect(submitted).toHaveLength(1);
+  expect(call.mock.calls.map(([name]) => name)).toEqual(["dashboard_submit", "dashboard_get", "dashboard_get"]);
+  expect(result.current.document.revision).toBe(3);
+  expect(result.current.document.manifest.title).toBe("Concurrent author");
+  expect(result.current.saveRecoveryEpoch).toBe(1);
+  expect(result.current.error).toContain("核对内容后重新进入编辑");
+
+  // Only a later explicit edit may submit against the freshly reviewed version.
+  const fresh = [{ op: "set_title", value: "Reviewed edit" }];
+  await act(async () => { await result.current.save(fresh); });
+  expect(submitted).toHaveLength(2);
+  expect(submitted[1]).toMatchObject({ expectedRevision: 3, operations: fresh });
+});
+
+// @wu-test type=boundary | scope=保存明确拒绝 | protects=普通版本冲突或无效操作被当作已持久化保存并清空当前编辑
+it.each(["REVISION_CONFLICT", "INVALID_OPERATION"])("preserves the normal editor retry path after %s", async (code) => {
+  const initial = { ...document(), progressive: true };
+  const call = mock(async () => { throw Object.assign(Error("Explicit rejection"), { code }); });
+  const { result } = renderHook(() => useDashboardRuntime(initial, call));
+  await act(async () => { await result.current.save([]); });
+  await act(async () => { await result.current.save([]); });
+  expect(call.mock.calls).toHaveLength(2);
+  expect(result.current.document).toBe(initial);
+  expect(result.current.saveRecoveryEpoch).toBe(0);
+  expect(result.current.error).toBe("Error: Explicit rejection");
+});

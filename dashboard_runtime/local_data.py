@@ -18,6 +18,8 @@ import time
 from .model import DashboardError
 
 MAX_RESULT_ROWS = 100_000
+OPTION_PROBE_ROWS = 4096
+OPTION_PROBE_BYTES = 512 * 1024
 
 
 def _json(value):
@@ -378,9 +380,11 @@ class LocalData:
         with self._connect() as db:
             table, fields, where, params = self._grouped_query(db, ref, filters, group_by, sum_fields, search, calculated)
             keys, selected, order = self._selection(fields, columns, sort)
-            total = db.execute('SELECT COUNT(*) FROM ' + table + where, params).fetchone()[0]
-            rows = db.execute('SELECT ' + selected + ' FROM ' + table + where + order + ' LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
-            return {'rows': [self._decode(keys, row, fields) for row in rows], 'totalRows': total, 'durationMs': (time.perf_counter()-started)*1000}
+            # Count the filtered groups in the same scan that produces this page.
+            # A separate count would aggregate the complete source a second time.
+            records = db.execute('SELECT ' + selected + ', COUNT(*) OVER() FROM ' + table + where + order + ' LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
+            total = records[0][-1] if records else (db.execute('SELECT COUNT(*) FROM ' + table + where, params).fetchone()[0] if offset else 0)
+            return {'rows': [self._decode(keys, row[:-1], fields) for row in records], 'totalRows': total, 'durationMs': (time.perf_counter()-started)*1000}
 
     def rows(self, ref, filters=None, columns=None, sort=None, offset=0, limit=100, search=''):
         started = time.perf_counter()
@@ -563,7 +567,28 @@ class LocalData:
     def _page_option_values(db, source, kind, search, offset, limit):
         where = ' WHERE search_text(value, ?, ?)' if search else ''
         params = [search, kind] if search else []
-        query = f'SELECT value FROM {source}' + where + ' GROUP BY value'
+        # A bounded probe chooses only the query plan, never the returned rows
+        # or count. Grouping a mostly unique domain before a selective search
+        # wastes work; repeated labels benefit from searching after deduplication.
+        repeated = False
+        if search:
+            seen, count, retained = set(), 0, 0
+            with closing(db.execute(f'SELECT value FROM {source} LIMIT {OPTION_PROBE_ROWS}')) as probe:
+                for (value,) in probe:
+                    if value not in seen:
+                        size = len(value) * 4 + 64 if isinstance(value, str) else 32
+                        if retained + size > OPTION_PROBE_BYTES:
+                            break
+                        seen.add(value)
+                        retained += size
+                    count += 1
+            repeated = bool(count) and len(seen) * 2 <= count
+        if repeated:
+            # LIMIT -1 prevents SQLite from pushing search below GROUP BY.
+            domain = f'SELECT value FROM {source} GROUP BY value LIMIT -1'
+            query = f'SELECT value FROM ({domain})' + where
+        else:
+            query = f'SELECT value FROM {source}' + where + ' GROUP BY value'
         records = list(db.execute('SELECT value, COUNT(*) OVER() FROM (' + query + ') ORDER BY value LIMIT ? OFFSET ?', params + [limit, offset]))
         total = records[0][1] if records else (db.execute('SELECT COUNT(*) FROM (' + query + ')', params).fetchone()[0] if offset else 0)
         values = [bool(row[0]) if row[0] is not None and kind == 'boolean' else row[0] for row in records]

@@ -1,6 +1,19 @@
 # Local data for MCP dashboards
 
-SQLite holds the full data in `data.sqlite3`. `dashboards.sqlite3` stores configurations and revision history with immutable references to data versions.
+In a local snapshot project, SQLite holds full data in `data.sqlite3`; `dashboards.sqlite3` stores configurations and revision history with immutable references. A live SQL dataset instead stores a query definition and obtains rows from its configured source at read time.
+
+## Choose the data lifecycle
+
+| Need | Route | Behavior |
+| --- | --- | --- |
+| Small supplied rows or CSV | `dataset_import` | Save an immutable snapshot; review inferred types and metrics. |
+| An existing configured SQLite table | `dataset_attach` | Stream the table through a read-only connection into a snapshot. |
+| A bounded SQL result from SQLite, PostgreSQL or DuckDB | `query_execute` with `mode: "snapshot"` | Execute the source query and retain its result for reproducible editing, saved versions and independent delivery. |
+| Current upstream SQL values while viewing | `query_execute` with `mode: "live"` | Register the source query; subsequent reads execute it and do not store its rows as a data version. |
+
+Source aliases come from operator configuration. Use typed parameters and explicit result-column names; supply live `fields` for dates and booleans when inference is insufficient. SQL results are bounded by the connected runtime. Aggregate or narrow an oversized result without changing the intended analytical scope; do not add an arbitrary `LIMIT` and present it as a complete dataset.
+
+Live mode needs the source service online and does not make separate requests a shared database snapshot. Batch related components in one `dashboard_view` so that a request can reuse the same live dataset. For a reproducible report or independent share, use a deliberate snapshot. Static export/sharing of live definitions is rejected; preserve the live original when creating a requested fixed copy.
 
 ## Attach and inspect data
 
@@ -13,7 +26,9 @@ Follow [shared delivery](mcp-delivery.md) for project routing, revisions and edi
 
 ## Filters and table pages
 
-Use `dashboard_view` with temporary `filters`, `tableStates` and `granularities`. `tableStates` maps component IDs to `page`, `pageSize`, optional `sortCol`, `sortDir` and `keyword`. Reader changes preserve the saved design revision.
+Use `dashboard_view` with `responseMode: "patch"`, selected `componentIds`, temporary `filters`, `tableStates` and `granularities` when checking a subset. `tableStates` maps component IDs to `page`, `pageSize`, optional `sortCol`, `sortDir` and `keyword`. Reader changes preserve the saved design revision. Carry the revision and data version from the same displayed document to detect stale reads.
+
+Use `component_data` with explicit `offset` and a small `limit` for underlying row previews. Check field types, nulls and units from the sample; use full-scope calculations for totals and ratios. Do not fetch the full dataset merely to show the first ten rows.
 
 Large option lists use `dashboard_filter_options` with `filterId`, optional `search`, `offset` and `limit`. Load additional option pages when the required value is outside the current page.
 
@@ -21,7 +36,7 @@ Use `dataset_export` with `componentId` and active filters to stream all matchin
 
 ## Data versions and limits
 
-- Each dataset uses inline rows or an immutable local reference. Reuse returned references across configuration edits and compatible dataset aliases.
+- Snapshot datasets use inline rows or immutable local references. Reuse returned references across configuration edits and compatible dataset aliases. Live definitions have a different lifecycle described above.
 - Store display formatting in metric or column presentation. Bound tables derive rows from their dataset.
 - Title, layout and filter-default changes reuse existing data versions. Restoration uses the selected configuration's references.
 - Aggregates exceeding result bounds return an error. Use filtered aggregates for the visual or export all matching observations as CSV, according to the user's analytical scope.

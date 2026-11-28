@@ -158,6 +158,16 @@ export function DashboardApp({
     setTitle(doc.manifest.title);
   }, [doc.id, doc.manifest.title]);
   useEffect(() => {
+    if (!runtime.saveRecoveryEpoch) return;
+    // Reconciliation may read another author's revision. Discard the stale
+    // layout editor so a later click cannot replay it against that revision.
+    setEditing(false);
+    draft.current = {};
+    setTitle(doc.manifest.title);
+    setVersionSwitchOpen(false);
+    setLayoutKey((value) => value + 1);
+  }, [runtime.saveRecoveryEpoch]);
+  useEffect(() => {
     if (analytical) return;
     let live = true;
     call("dashboard_list")

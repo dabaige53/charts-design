@@ -401,7 +401,7 @@ class Service:
             from .generation import generation_examples
             return generation_examples(args.get('caseId'))
         if tool == 'chart_declarations':
-            return declaration_contract(chart_type=args.get('chartType'), legacy_code=args.get('code'), summary=not (args.get('chartType') or args.get('code')))
+            return declaration_contract(chart_type=args.get('chartType'), legacy_code=args.get('code'), legacy_codes=args.get('codes'), summary=not (args.get('chartType') or args.get('code') or 'codes' in args))
         if tool == 'layout_templates':
             from .layouts import templates_catalog
             return templates_catalog()

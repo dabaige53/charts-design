@@ -111,6 +111,113 @@ def test_discovery_is_detached_json_data(reference):
     assert declaration_contract(legacy_code='c01')['legacy']['families']['chart']['example']['operations']
 
 
+# @wu-test type=integration | scope=全部图表 MCP 声明示例 | protects=选择任一已注册图表后得到缺字段或不同图形的示例
+def test_every_registered_chart_has_an_own_code_runnable_example(reference):
+    assert len(reference['legacy']['chartCodes']) == 40
+    for code in reference['legacy']['chartCodes']:
+        selected = declaration_contract(legacy_code=code)
+        example = selected['legacy']['chartCodes'][code]['example']
+        assert example['status'] == 'fixture'
+        assert example == selected['legacy']['families']['chart']['example']
+        document = apply_operations(new_document('example', code), example['operations'])
+        assert document['manifest']['components'][example['componentId']]['config']['code'] == code
+
+
+# @wu-test type=integration | scope=批量声明发现 | protects=多个声明查询重复公共合同或示例组件 ID 冲突使图表被覆盖
+def test_bounded_batch_shares_common_schemas_and_composes_examples(tmp_path):
+    from dashboard_runtime.service import Service
+    selected = ['c02', 't01', 'mc03', 'mc14']
+    result = Service(tmp_path).call('chart_declarations', {'codes': selected})
+    assert list(result['legacy']['chartCodes']) == ['c02', 't01']
+    assert list(result['legacy']['kpiTypes']) == ['mc03', 'mc14']
+    assert [item['code'] for item in result['selections']] == selected
+    operations, ids = [], set()
+    for entries in (result['legacy']['chartCodes'], result['legacy']['kpiTypes']):
+        for entry in entries.values():
+            operations.extend(entry['example']['operations'])
+            ids.add(entry['example']['componentId'])
+    document = apply_operations(new_document('example', 'Batched declarations'), operations)
+    assert len(ids) == 4 and set(document['manifest']['components']) == ids
+    single_bytes = sum(len(json.dumps(declaration_contract(legacy_code=code))) for code in selected)
+    assert len(json.dumps(result)) < single_bytes / 2
+
+
+# @wu-test type=boundary | scope=批量声明输入 | protects=空批次超大批次重复选择或混合参数被接受
+@pytest.mark.parametrize('arguments', [
+    {'legacy_codes': []}, {'legacy_codes': ['c01'] * 2}, {'legacy_codes': ['c01'] * 9},
+    {'legacy_codes': ['unknown']}, {'legacy_codes': 'c01'}, {'legacy_codes': [None]},
+    {'legacy_code': 'c01', 'legacy_codes': ['c02']}, {'legacy_codes': ['c01'], 'summary': True},
+])
+def test_invalid_batches_fail_explicitly(arguments):
+    with pytest.raises(DashboardError):
+        declaration_contract(**arguments)
+
+
+# @wu-test type=performance | scope=声明缓存隔离与更新 | protects=每次发现重新执行注册模块或原资源更新后永久保留过时声明
+def test_discovery_reuses_registry_and_invalidates_replaced_catalog(tmp_path, monkeypatch):
+    import shutil
+    for path in (declarations.LEGACY_SCHEMA_SOURCE, declarations.LEGACY_CATALOG_SOURCE,
+                 declarations.LEGACY_ROOT / 'scripts/core/chart_catalog.py'):
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / path, destination)
+    monkeypatch.setattr(declarations, 'REPO', tmp_path)
+    first = declaration_contract(legacy_code='c02')
+    def no_reload(*args, **kwargs):
+        raise AssertionError('unchanged declaration registry re-executed')
+    monkeypatch.setattr(declarations.importlib.util, 'spec_from_file_location', no_reload)
+    first['legacy']['chartCodes']['c02']['example']['operations'].clear()
+    assert declaration_contract(legacy_code='c02')['legacy']['chartCodes']['c02']['example']['operations']
+    assert declaration_contract(legacy_code='t01')['selection']['code'] == 't01'
+    path = tmp_path / declarations.LEGACY_CATALOG_SOURCE
+    catalog = json.loads(path.read_text())
+    next(item for item in catalog if item['id'] == 'c02')['nameZh'] = '更新后的条形图名称'
+    path.write_text(json.dumps(catalog, ensure_ascii=False))
+    assert declaration_contract(legacy_code='c02')['legacy']['chartCodes']['c02']['catalogEntry']['nameZh'] == '更新后的条形图名称'
+
+
+# @wu-test type=integration | scope=MCP公开发现与批量声明 | protects=公开工具缺参数或推荐引导依赖不可发现入口
+def test_recommendation_and_batched_declarations_over_stdio(tmp_path):
+    pytest.importorskip('mcp')
+    import asyncio
+    import os
+    import sys
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    from mcp.types import TextResourceContents
+    from pydantic import AnyUrl
+
+    async def check():
+        params = StdioServerParameters(command=sys.executable,
+            args=['-m', 'dashboard_runtime', '--root', str(tmp_path / 'runtime'), 'mcp'],
+            env={**os.environ, 'PYTHONPATH': str(ROOT)})
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+            assert tools['chart_declarations'].inputSchema['properties']['codes']['maxItems'] == 8
+            assert 'requiresFilterBinding' in tools['chart_recommend'].inputSchema['properties']
+            result = await session.call_tool('chart_recommend', {'intent': 'composition', 'requiresFilterBinding': True})
+            assert not result.isError and result.structuredContent is not None
+            assert all(item['filterBinding'] == 'supported' for item in result.structuredContent['charts'])
+            selected = await session.call_tool('chart_declarations', {'codes': ['c02', 't01', 'mc03']})
+            assert not selected.isError and selected.structuredContent is not None
+            reference = selected.structuredContent
+            if 'transport' in reference:
+                resource = await session.read_resource(AnyUrl(reference['transport']['resourceUri']))
+                assert isinstance(resource.contents[0], TextResourceContents)
+                reference = json.loads(resource.contents[0].text)
+            assert len(reference['selections']) == 3
+            invalid = await session.call_tool('chart_declarations', {'code': 'c02', 'codes': ['t01']})
+            assert invalid.isError
+            index = await session.read_resource(AnyUrl('charts://examples'))
+            assert isinstance(index.contents[0], TextResourceContents)
+            workflow = json.loads(index.contents[0].text)['workflow']
+            assert any(item.startswith('charts://examples/') for item in workflow)
+            assert any(item.startswith('charts://layouts') for item in workflow)
+            assert not any(item.startswith(('generation_examples(', 'layout_templates(')) for item in workflow)
+    asyncio.run(check())
+
+
 # @wu-test type=boundary | scope=原组件缺失 | protects=缺原资源时错误提供其他图表系统
 def test_missing_original_sources_has_no_alternative_chart_system(tmp_path, monkeypatch):
     monkeypatch.setattr(declarations, 'REPO', tmp_path)

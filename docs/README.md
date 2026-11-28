@@ -46,6 +46,7 @@
 
 ## 历史记录与附件
 
+- [Dashboard 性能与生成引导](records/2026-11-28-dashboard-performance-and-guidance.md)：查看与数据预览、声明批量读取、Skills 选图判断、定向验证及[原始性能样本](records/2026-11-28-performance-samples.json)。
 - [一键验收实测](records/2026-11-27-one-command-acceptance.md) — 功能流程、百万行实测与性能判断。
 - [分析报告独立阅读页验收](records/2026-11-27-analytical-report-acceptance.md)：用户确认的第 4 版、论文版式和两端验证。
 - [本机编辑与独立分享批注](records/2026-11-27-local-sharing-annotations.md)：PR #23 基线、本机浏览器入口、固定版本发布、独立批注权限与反馈、双进程验证及真实云边界。

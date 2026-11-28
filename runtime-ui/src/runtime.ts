@@ -69,6 +69,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     [error, setError] = useState(""),
     [errors, setErrors] = useState<Record<string, string>>({}),
     [saving, setSaving] = useState(false),
+    [saveRecoveryEpoch, setSaveRecoveryEpoch] = useState(0),
     [dataEpoch, setDataEpoch] = useState(0);
   const current = useRef(initial),
     reader = useRef(view),
@@ -78,6 +79,11 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
   const pending = useRef(new Map<string, number>()),
     versions = useRef(new Map<string, number>()),
     live = useRef(true);
+  const pendingSave = useRef<{
+    dashboardId: string;
+    outcome: "saved" | "failed";
+    revision?: number;
+  } | null>(null);
   const queue = useRef(createRequestQueue(4));
   const request = useCallback(
     (ids: string[]) => {
@@ -358,28 +364,55 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
   const save = async (operations: Config[]) => {
     setSaving(true);
     setError("");
+    const doc = current.current;
+    const isCurrent = () => live.current && current.current.id === doc.id && current.current.revision === doc.revision;
+    let attempt: NonNullable<typeof pendingSave.current> | undefined;
     try {
-      const doc = current.current;
       if (doc.progressive) {
-        const batch = await call("dashboard_edit_begin", {
+        if (pendingSave.current?.dashboardId === doc.id) {
+          attempt = pendingSave.current;
+          // A retry first recovers a confirmed write whose document read failed.
+          // Never replay operations
+          // from an older editor against a newly read concurrent revision.
+          const result = await call("dashboard_get", { dashboardId: doc.id, dataMode: "local" });
+          if (!isCurrent()) return false;
+          pendingSave.current = null;
+          accept(result.document, true);
+          setSaveRecoveryEpoch((epoch) => epoch + 1);
+          setError(`已同步最新草稿（版本 ${result.document.revision}）。请核对内容后重新进入编辑。`);
+          return false;
+        }
+        let failed = false;
+        let submittedRevision: number | undefined;
+        try {
+          const submitted = await call("dashboard_submit", {
+            dashboardId: doc.id,
+            expectedRevision: doc.revision,
+            operations,
+          });
+          failed = !submitted.ok;
+          submittedRevision = submitted.revision;
+        } catch (e) {
+          // MCP reports failed checks as an error; HTTP returns the receipt.
+          // Both have already persisted the draft and need its new revision.
+          if ((e as { code?: string } | null)?.code !== "DOCTOR_FAILED") throw e;
+          failed = true;
+        }
+        if (!isCurrent()) return false;
+        attempt = { dashboardId: doc.id, outcome: failed ? "failed" : "saved", revision: submittedRevision };
+        pendingSave.current = attempt;
+        const result = await call("dashboard_get", {
           dashboardId: doc.id,
-          expectedRevision: doc.revision,
+          dataMode: "local",
         });
-        const patched = await call("dashboard_patch", {
-          dashboardId: doc.id,
-          expectedRevision: doc.revision,
-          operations,
-        });
-        current.current = patched.document;
-        const finished = await call("dashboard_edit_finish", {
-          dashboardId: doc.id,
-          expectedRevision: patched.document.revision,
-          batchId: batch.batch_id,
-        });
-        if (!finished.ok)
-          throw Error(
-            "保存的草稿未通过检查，尚未生成检查点。请查看指标定义与数据绑定。",
-          );
+        if (!isCurrent()) return false;
+        pendingSave.current = null;
+        accept(result.document, true);
+        if (failed) {
+          setError("保存的草稿未通过检查，尚未生成检查点。请查看指标定义与数据绑定。");
+          return false;
+        }
+        return true;
       } else {
         current.current = (
           await call("dashboard_patch", {
@@ -396,9 +429,17 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
       accept(result.document, true);
       return true;
     } catch (e) {
-      setError(String(e));
+      if (live.current && current.current.id === doc.id && (!doc.progressive || current.current.revision === doc.revision)) {
+        const recovery = pendingSave.current;
+        if (doc.progressive && recovery?.dashboardId === doc.id) {
+          const status = recovery.outcome === "saved" ? `提交已保存${recovery.revision ? `（版本 ${recovery.revision}）` : ""}，页面暂未同步。`
+            : "草稿已写入但未通过检查，页面暂未同步。";
+          setError(`${status}再次点击保存将只重新读取最新草稿并结束当前编辑，请核对后继续。${String(e)}`);
+        } else setError(String(e));
+      }
       return false;
     } finally {
+      if (attempt && pendingSave.current === attempt && !isCurrent()) pendingSave.current = null;
       setSaving(false);
     }
   };
@@ -435,6 +476,7 @@ export function useDashboardRuntime(initial: Document, call: ToolCall) {
     error,
     errors,
     saving,
+    saveRecoveryEpoch,
     dataEpoch,
     activate,
     setFilter,

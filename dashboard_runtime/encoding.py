@@ -1,12 +1,14 @@
 """Declarative dynamic bindings for existing scatter and comparison components."""
 from .model import require, field
 
+DYNAMIC_CODES = ('r02', 'c03', 'r03', 'k01', 'f02')
+
 
 def validate_encoding(component):
     e = component['config']['encoding']
     require(isinstance(e, dict), 'encoding must be an object')
     require(set(e) <= {'orientation', 'stacked', 'symbolSize', 'colors', 'tooltip', 'colorBy', 'sizeBy', 'showLabels', 'topSeries', 'pinnedSeries', 'visibleCount', 'barWidth', 'adjustableBarWidth', 'emptyText', 'otherSeriesLabel', 'seriesRanking', 'categoryOrder', 'seriesOrder'}, 'Unknown encoding option; consult chart_declarations')
-    require(component['config'].get('code') in ('r02', 'c03', 'r03', 'k01', 'f02'), 'Unsupported dynamic encoding code')
+    require(component['config'].get('code') in DYNAMIC_CODES, 'Unsupported dynamic encoding code')
     for key in ('categoryOrder', 'seriesOrder'):
         values = e.get(key, [])
         require(isinstance(values, list) and all(isinstance(v, str) for v in values) and len(values) == len(set(values)), f'{key} must contain unique strings')

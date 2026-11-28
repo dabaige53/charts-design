@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+from functools import lru_cache
 from pathlib import Path
 
 from .model import AGGREGATES, ID, MAX_COMPONENTS, MAX_ROWS, require
@@ -105,11 +106,20 @@ def common_declarations():
     }
 
 
-def _registry():
-    path = REPO / LEGACY_SCHEMA_SOURCE
+def _source_stamp(path):
+    try:
+        stat = path.stat()
+        return (str(path), stat.st_mtime_ns, stat.st_size)
+    except FileNotFoundError:
+        return (str(path), None, None)
+
+
+@lru_cache(maxsize=8)
+def _source_module(stamp):
+    path = Path(stamp[0])
     if not path.is_file():
         return None
-    spec = importlib.util.spec_from_file_location('_charts_declaration_schemas', path)
+    spec = importlib.util.spec_from_file_location('_charts_declaration_' + path.stem, path)
     if spec is None or spec.loader is None:
         return None
     module = importlib.util.module_from_spec(spec)
@@ -117,8 +127,18 @@ def _registry():
     return module
 
 
+def _registry():
+    return _source_module(_source_stamp(REPO / LEGACY_SCHEMA_SOURCE))
+
+
+def _chart_configs():
+    from .chart_examples import example_config
+    module = _source_module(_source_stamp(REPO / LEGACY_ROOT / 'scripts/core/chart_catalog.py'))
+    return {code: example_config(code, fixture) for code, fixture in module.CHART_COMPONENTS.items()} if module else {}
+
+
 def _legacy_example(family, config):
-    key = 'example-original-' + family
+    key = 'example-original-' + family + '-' + config.get('code', config.get('type', 'table'))
     return {'status': 'fixture', 'componentId': key, 'operations': [
         {'op': 'put_source', 'id': 'example-source', 'value': {
             'kind': 'fixture', 'name': 'Explicit synthetic original-component example'}},
@@ -145,10 +165,16 @@ def _advanced_configs():
 
 def _binding_capability(code, family='chart'):
     from .bindings import KPI_SNAPSHOT_ONLY, SERIES_TARGETS
-    supported = code in SERIES_TARGETS if family == 'chart' else code not in KPI_SNAPSHOT_ONLY
+    from .encoding import DYNAMIC_CODES
+    modes = ([mode for mode, enabled in [('preset', code in SERIES_TARGETS), ('encoding', code in DYNAMIC_CODES)] if enabled]
+             if family == 'chart' else (['preset'] if code not in KPI_SNAPSHOT_ONLY else []))
+    supported = bool(modes)
     return {'supported': supported, 'snapshotOnly': not supported,
+            'modes': modes,
             'requiresExplicitBinding': True,
-            'description': 'Explicit dataset/metric binding recomputes after scoped filters.' if supported else 'Snapshot rendering only; filter binding requires a dedicated reviewed transform.'}
+            'description': ('Explicit dataset/metric binding recomputes after scoped filters. Encoding requires config.encoding and its own field/measure mapping; it does not compute snapshot-only statistics.'
+                            if 'encoding' in modes else 'Explicit dataset/metric binding recomputes after scoped filters.' if supported
+                            else 'Snapshot rendering only; filter binding requires a dedicated reviewed transform.')}
 
 
 def _legacy(common):
@@ -158,13 +184,14 @@ def _legacy(common):
     codes = list(module.CHART_CODES) if module else []
     kpis = sorted(module.KPI_TYPES) if module else []
     entries = {entry['id']: entry for entry in catalog}
+    examples = {**_chart_configs(), **_advanced_configs()}
     chart_codes = {}
     for code in codes:
         assert module is not None
         chart_codes[code] = {
             'family': 'chart', 'configSelector': {'code': code},
             'filterBinding': _binding_capability(code),
-            **({'example': _legacy_example('chart', _advanced_configs()[code])} if code in _advanced_configs() else {}),
+            **({'example': _legacy_example('chart', examples[code])} if code in examples else {}),
             'catalogEntry': entries.get(code),
             'schemaId': module.CHART_SCHEMA_REGISTRY[code],
             'schemaSource': LEGACY_SCHEMA_SOURCE,
@@ -199,7 +226,7 @@ def _legacy(common):
             'fields': guide.get('fields', {}), 'bindableTargets': guide.get('bind', []),
             'filterBinding': _binding_capability(code, 'kpi'),
             'configSelector': {'type': code}, 'required': required,
-            'completeJsonSchema': False, 'exampleConfig': config,
+            'completeJsonSchema': False, 'exampleConfig': config, 'example': _legacy_example('kpi', config),
         }
         if code == 'mc03':
             kpi_configs[code]['requiredOneOf'] = [['sparkData'], ['sparkline']]
@@ -289,18 +316,12 @@ def _legacy(common):
     }
 
 
-def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
+def _build_declaration_contract(*, legacy_code=None, legacy_codes=None, summary=False):
     """Return a fresh reference, compact index, or one native/legacy declaration.
 
     The resource uses the complete no-argument form. Interactive tools should use
     summary=True until a type/code is chosen, so discovery stays bounded.
     """
-    require(not (chart_type is not None and legacy_code is not None),
-            'Choose chartType or code, not both')
-    require(not (summary and (chart_type is not None or legacy_code is not None)),
-            'A declaration summary cannot also select a chartType or code')
-    require(chart_type is None, 'Only original chart codes are supported; select code, not chartType', 'UNSUPPORTED_CHART_FAMILY')
-    require(legacy_code is None or isinstance(legacy_code, str), 'Legacy code must be a string')
     common = common_declarations()
     result = {
         'schemaVersion': 1,
@@ -364,28 +385,56 @@ def declaration_contract(*, chart_type=None, legacy_code=None, summary=False):
                 'limits': legacy['limits'][:2],
             },
         }
-    elif legacy_code is not None:
+    elif legacy_code is not None or legacy_codes is not None:
         legacy = result['legacy']
         require(legacy['available'], 'Original schema registry is not installed', 'LEGACY_UNAVAILABLE')
-        require(legacy_code in legacy['chartCodes'] or legacy_code in legacy['kpiTypes'],
+        selected = list(legacy_codes) if legacy_codes is not None else [legacy_code]
+        require(all(code in legacy['chartCodes'] or code in legacy['kpiTypes'] for code in selected),
                 'No preset declaration for this code; custom codes use renderer=echarts/html. Read chart_declarations without legacyCode for customRenderers.')
-        family = 'chart' if legacy_code in legacy['chartCodes'] else 'kpi'
-        result['selection'] = {'code': legacy_code, 'family': family}
-        legacy['chartCodes'] = {legacy_code: legacy['chartCodes'][legacy_code]} if family == 'chart' else {}
-        legacy['kpiTypes'] = {legacy_code: legacy['kpiTypes'][legacy_code]} if family == 'kpi' else {}
-        legacy['catalogEntries'] = [entry for entry in legacy['catalogEntries'] if entry['id'] == legacy_code]
-        legacy['families'] = {family: legacy['families'][family]}
-        selected_schema = legacy['families'][family]['componentSchema']['properties']['config']
-        selected_schema['properties']['code' if family == 'chart' else 'type'] = {'const': legacy_code}
-        if family == 'kpi':
-            selected_schema['required'].append('type')
-            legacy['families'][family]['example'] = _legacy_example('kpi', legacy['kpiTypes'][legacy_code]['exampleConfig'])
-        elif legacy_code in _advanced_configs():
-            legacy['families'][family]['example'] = _legacy_example('chart', _advanced_configs()[legacy_code])
-        elif legacy_code != 'c01':
-            # c01 demonstrates only its own shape. Never advertise it as a
-            # runnable config for a different code with different data paths.
-            legacy['families'][family].pop('example')
-            legacy['families'][family]['exampleNote'] = 'The complete resource includes a c01 example. This selected code uses its own registry requirements; supply reviewed business data and presentation, then validate.'
+        selections = [{'code': code, 'family': 'chart' if code in legacy['chartCodes'] else 'kpi'} for code in selected]
+        result['selection' if legacy_code is not None else 'selections'] = selections[0] if legacy_code is not None else selections
+        legacy['chartCodes'] = {code: legacy['chartCodes'][code] for code in selected if code in legacy['chartCodes']}
+        legacy['kpiTypes'] = {code: legacy['kpiTypes'][code] for code in selected if code in legacy['kpiTypes']}
+        legacy['catalogEntries'] = [entry for entry in legacy['catalogEntries'] if entry['id'] in selected]
+        legacy['families'] = {family: entry for family, entry in legacy['families'].items()
+                              if any(item['family'] == family for item in selections)}
+        for family, entry in legacy['families'].items():
+            family_codes = [item['code'] for item in selections if item['family'] == family]
+            selected_schema = entry['componentSchema']['properties']['config']
+            selected_schema['properties']['code' if family == 'chart' else 'type'] = (
+                {'const': family_codes[0]} if len(family_codes) == 1 else {'enum': family_codes})
+            if family == 'kpi':
+                selected_schema['required'].append('type')
+                entry['example'] = _legacy_example('kpi', legacy['kpiTypes'][family_codes[0]]['exampleConfig'])
+            else:
+                entry['example'] = legacy['chartCodes'][family_codes[0]]['example']
     # Normalize registry tuples and detach all nested values for JSON callers.
-    return json.loads(json.dumps(result, ensure_ascii=False, allow_nan=False))
+    return json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
+
+
+@lru_cache(maxsize=64)
+def _declaration_json(source_identity, legacy_code, legacy_codes, summary):
+    return _build_declaration_contract(legacy_code=legacy_code, legacy_codes=legacy_codes, summary=summary)
+
+
+def declaration_contract(*, chart_type=None, legacy_code=None, legacy_codes=None, summary=False):
+    """Return detached guidance; cache immutable JSON, never caller-owned objects.
+
+    A bounded batch shares common schemas once. File identity keeps the discovery
+    cache isolated by installation and invalidates replaced/missing source files.
+    """
+    require(not (chart_type is not None and (legacy_code is not None or legacy_codes is not None)),
+            'Choose chartType or code(s), not both')
+    require(not (summary and (chart_type is not None or legacy_code is not None or legacy_codes is not None)),
+            'A declaration summary cannot also select a chartType or code(s)')
+    require(chart_type is None, 'Only original chart codes are supported; select code, not chartType', 'UNSUPPORTED_CHART_FAMILY')
+    require(legacy_code is None or isinstance(legacy_code, str), 'Legacy code must be a string')
+    require(legacy_code is None or legacy_codes is None, 'Choose code or codes, not both')
+    if legacy_codes is not None:
+        require(isinstance(legacy_codes, list) and 1 <= len(legacy_codes) <= 8
+                and all(isinstance(code, str) for code in legacy_codes), 'codes must contain 1–8 chart/KPI code strings')
+        require(len(set(legacy_codes)) == len(legacy_codes), 'codes must be unique')
+    paths = (LEGACY_SCHEMA_SOURCE, LEGACY_CATALOG_SOURCE, LEGACY_ROOT / 'scripts/core/chart_catalog.py')
+    source_identity = tuple(_source_stamp(REPO / path) for path in paths)
+    return json.loads(_declaration_json(source_identity, legacy_code,
+                                       tuple(legacy_codes) if legacy_codes is not None else None, summary))

@@ -42,10 +42,10 @@ def case_operations(doc):
 def generation_examples(case_id=None):
     if case_id is None:
         return {'cases':[{'id':key, **value, 'uri':f'charts://examples/{key}'} for key,value in CASES.items()],
-                'presentationStatus':'unavailable',
+                'presentationStatus':'Requires installed shared React UI resources; open the saved version with dashboard_preview.',
                 'policy':'Examples are synthetic references, not user data. Select a case explicitly, replace data and recompute every narrative claim before real use.',
-                'workflow':['chart_recommend(intent, data shape)', 'chart_declarations(code)', 'charts://layouts', 'charts://examples', 'dashboard_submit(createTitle or expectedRevision, operations incl. apply_layout_template)', 'dashboard_preview'],
-                'variety':'The two dashboard cases share data but differ in layout template, KPI shapes and chart codes. Choose per question with chart_recommend and the kpiGuide; do not reuse one composition for every dashboard.'}
+                'workflow':['chart_recommend(intent, known data shape, requiresFilterBinding)', 'chart_declarations(codes for selected chart/KPI presets)', 'charts://layouts if composition guidance is needed', 'charts://examples/<caseId> only when a reference is useful', 'dashboard_submit(createTitle or expectedRevision, operations)', 'dashboard_view(componentIds, includeEvidence=true)', 'dashboard_preview'],
+                'variety':'Choose composition by the decision and metric relationships. Preserve the same encodings for direct comparisons; variation is not a quota. The synthetic cases illustrate alternatives, not mandatory layouts.'}
     require(case_id in CASES, 'Unknown generation case', 'UNKNOWN_EXAMPLE')
     doc = {'filtered-report': filtered_report_document, 'academic-report': report_document, 'operations-scorecard': operations_document}.get(case_id, executive_document)('example')
     return {'id':case_id, **CASES[case_id], 'synthetic':True, 'operations':case_operations(doc),
@@ -54,4 +54,4 @@ def generation_examples(case_id=None):
                 'Use the report master structure and restrained reading style, but include abstract/keywords only when authored.',
                 'Declare provenance, units, aggregation and uncertainty; do not reuse synthetic findings with new data.',
                 'Use chart fences for declarations already registered as components, not executable JavaScript.',
-                'Validate and inspect saved declarations with dashboard_get; UI rendering is unavailable during reconstruction. Narrative is not automatically recalculated by filters.']}
+                'Submit and check the saved revision, inspect computed values with dashboard_view, then open dashboard_preview when shared UI resources are installed. Narrative is not automatically recalculated by filters.']}

@@ -503,7 +503,7 @@
     "seriesType": "HTML Card + Badge",
     "legend": "none",
     "bestFor": "行业/区域排名、评级梯队与份额定位",
-    "axisRules": "徽章+名次文字 rankSub+排位标记 rankBadge；仅快照"
+    "axisRules": "主数值 value+排位标记 rankBadge；仅快照"
   },
   {
     "id": "mc08",
@@ -601,8 +601,8 @@
     "nameEn": "Hero Number Card",
     "seriesType": "HTML Card (typographic)",
     "legend": "none",
-    "bestFor": "页面北极星指标或一句话结论，配一行作者撰写的解读",
-    "axisRules": "大号数字+同比+note 解读（≤120 字）；可绑定 value/yoy/subVal"
+    "bestFor": "突出页面核心指标的规模与同比变化；业务解读放独立文字组件",
+    "axisRules": "大号数值+同比+基期数值；可绑定 value/yoy/subVal"
   },
   {
     "id": "tb01",
