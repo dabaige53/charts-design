@@ -1331,25 +1331,38 @@ impl Service {
                 })?;
             (self.store.data.clone(), reference.clone())
         };
+        let sort = array(args, "sort")?;
         let id = Uuid::new_v4().simple().to_string();
-        let path = if live {
-            None
-        } else {
-            let directory = self.store.root.join("exports").join(&id);
-            fs::create_dir_all(&directory)?;
-            Some(directory.join(format!("{board}.csv")))
-        };
-        let mut exported = data.export_csv(
-            &reference,
-            path.as_deref(),
-            &filters,
-            columns.as_deref(),
-            array(args, "sort")?,
-            args["search"].as_str().unwrap_or(""),
-            groups.as_deref(),
-            sums.as_deref(),
-            presentation.get("calculatedColumns"),
-        )?;
+        let directory = (!live).then(|| self.store.root.join("exports").join(&id));
+        let path = directory
+            .as_ref()
+            .map(|dir| dir.join(format!("{board}.csv")));
+        let result = (|| -> Result<Value> {
+            if let Some(directory) = &directory {
+                exports::private_directory(directory)?;
+            }
+            let exported = data.export_csv(
+                &reference,
+                path.as_deref(),
+                &filters,
+                columns.as_deref(),
+                sort,
+                args["search"].as_str().unwrap_or(""),
+                groups.as_deref(),
+                sums.as_deref(),
+                presentation.get("calculatedColumns"),
+            )?;
+            if let Some(path) = &path {
+                exports::private_file(path)?;
+            }
+            Ok(exported)
+        })();
+        if result.is_err() {
+            if let Some(directory) = &directory {
+                let _ = fs::remove_dir_all(directory);
+            }
+        }
+        let mut exported = result?;
         exported["filename"] = json!(format!("{board}.csv"));
         exported["format"] = json!("csv");
         exported["mimeType"] = json!("text/csv");

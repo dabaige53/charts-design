@@ -133,6 +133,76 @@ fn data_receipt_continues_to_preview_and_saved_computed_view() {
         .is_err());
 }
 
+// @wu-test type=integration | scope=SQLite 明细 CSV 导出 | protects=筛选结果导出错误、文件权限过宽或失败后留下半成品
+#[test]
+fn csv_export_is_private_and_failed_exports_leave_no_file() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let temp = TempDir::new().unwrap();
+    let service = service(&temp);
+    let saved = service
+        .call("dashboard_submit", &json!({
+            "dashboardId":"sales", "createTitle":"Sales", "operations":[
+                {"op":"put_source","id":"fixture","value":{"kind":"fixture","name":"Sales"}},
+                {"op":"put_dataset","id":"sales","meta":{"sourceId":"fixture","fields":{
+                    "region":{"type":"string"},"amount":{"type":"number"}
+                }},"rows":[{"region":"East","amount":10},{"region":"West","amount":20},{"region":"East","amount":30}]},
+                {"op":"put_component","id":"detail","value":{"kind":"table","title":"Sales","datasetId":"sales"}},
+                {"op":"set_filters","value":[{"id":"region","field":"region","op":"in","values":["East"],"componentIds":["detail"]}]}
+            ]
+        }))
+        .unwrap();
+    assert_eq!(saved["ok"], true);
+    let args = json!({"dashboardId":"sales","componentId":"detail","expectedRevision":saved["revision"],
+        "sort":[{"field":"amount","direction":"desc"}],"columns":["region","amount"]});
+    let result = service.call("dataset_export", &args).unwrap();
+    let export = &result["export"];
+    assert_eq!(export["rowCount"], 2);
+    let path = std::path::Path::new(export["path"].as_str().unwrap());
+    assert_eq!(
+        std::fs::read(path).unwrap(),
+        "\u{feff}region,amount\r\nEast,30\r\nEast,10\r\n".as_bytes()
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            std::fs::metadata(path.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+    }
+    let mut offset = 0;
+    let mut reconstructed = Vec::new();
+    loop {
+        let chunk = service
+            .call(
+                "dashboard_export_read",
+                &json!({"dashboardId":"sales",
+            "exportId":export["id"],"format":"csv","offset":offset,"limit":9}),
+            )
+            .unwrap();
+        reconstructed.extend(STANDARD.decode(chunk["content"].as_str().unwrap()).unwrap());
+        if chunk["hasMore"] == false {
+            break;
+        }
+        offset = chunk["nextOffset"].as_u64().unwrap();
+    }
+    assert_eq!(reconstructed, std::fs::read(path).unwrap());
+
+    let mut invalid = args;
+    invalid["columns"] = json!(["does-not-exist"]);
+    assert!(service.call("dataset_export", &invalid).is_err());
+    let exports = std::fs::read_dir(path.parent().unwrap().parent().unwrap()).unwrap();
+    assert_eq!(exports.count(), 1);
+}
+
 // @wu-test type=integration | scope=initial submission | protects=failed initialization leaves an empty dashboard that blocks a corrected request
 #[test]
 fn invalid_initial_submission_is_correctable_without_cleanup() {
