@@ -43,14 +43,23 @@ def generation_examples(case_id=None):
     if case_id is None:
         return {'cases':[{'id':key, **value, 'uri':f'charts://examples/{key}'} for key,value in CASES.items()],
                 'presentationStatus':'Requires installed shared React UI resources; open the saved version with dashboard_preview.',
-                'policy':'Examples are synthetic references, not user data. Select a case explicitly, replace data and recompute every narrative claim before real use.',
-                'workflow':['chart_recommend(intent, known data shape, requiresFilterBinding)', 'chart_declarations(codes for selected chart/KPI presets)', 'charts://layouts if composition guidance is needed', 'charts://examples/<caseId> only when a reference is useful', 'dashboard_submit(createTitle or expectedRevision, operations)', 'dashboard_view(componentIds, includeEvidence=true)', 'dashboard_preview'],
+                'policy':'Examples are synthetic references, not user data. Select a case explicitly, replace data and recompute every narrative claim before real use. Submit native MCP arguments directly; file-based authoring and scripts are optional.',
+                'workflow':['Inspect supplied data and source context; reuse existing dataset references. If importing first, create a container, import/attach/query, then follow receipt.nextCalls to dataset_preview without creating a component.',
+                            'chart_recommend(intent, known data shape, requiresFilterBinding)',
+                            'chart_declarations(codes for selected chart/KPI presets)',
+                            'charts://layouts if composition guidance is needed',
+                            'charts://examples/<caseId> only when a reference is useful',
+                            'dashboard_submit(createTitle or expectedRevision, operations); known small data and its components can be initialized together. Reports add set_report_markdown and set_view_mode in the same batch.',
+                            'dashboard_view(responseMode=patch, componentIds, includeEvidence=true)',
+                            'dashboard_preview'],
                 'variety':'Choose composition by the decision and metric relationships. Preserve the same encodings for direct comparisons; variation is not a quota. The synthetic cases illustrate alternatives, not mandatory layouts.'}
     require(case_id in CASES, 'Unknown generation case', 'UNKNOWN_EXAMPLE')
     doc = {'filtered-report': filtered_report_document, 'academic-report': report_document, 'operations-scorecard': operations_document}.get(case_id, executive_document)('example')
     return {'id':case_id, **CASES[case_id], 'synthetic':True, 'operations':case_operations(doc),
             'markdown':doc['manifest'].get('report',{}).get('markdown'),
-            'adaptationRules':['Keep stable component IDs and chart fences in sync.',
+            'adaptationRules':['Use these native operations as a reference, not an implicit initialization of real user data. No intermediate JSON file or script is required.',
+                'Inspect imported datasets with dataset_preview before authoring components; it does not apply component filters. Review inferred unverified metrics and obtain full-scope summaries for distribution claims.',
+                'Keep stable component IDs and chart fences in sync.',
                 'Use the report master structure and restrained reading style, but include abstract/keywords only when authored.',
                 'Declare provenance, units, aggregation and uncertainty; do not reuse synthetic findings with new data.',
                 'Use chart fences for declarations already registered as components, not executable JavaScript.',

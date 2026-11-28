@@ -13,6 +13,8 @@
 
 每次 MCP 项目调用都显式传入 `projectRoot`，值为报表资产目录的绝对路径；包括案例与声明发现、读取、编辑、诊断和分块读取。以下示例省略重复参数。旧启动默认项目仅用于兼容，不沿用上一次调用的项目。
 
+已经掌握数据与组件声明时，可直接一次提交初始 `operations`。需要先认识数据时，先创建空容器并调用 `dataset_import`、`dataset_attach` 或 `query_execute`，再使用回执 `nextCalls` 的 `dataset_preview` 检查字段和有界原始样本。该检查不需要临时组件，也不应用页面筛选；样本不代表全量统计。指标与来源沿用回执中的实际 ID，确认业务口径后再编排以下内容。
+
 1. 从 `charts://examples` 发现看板与报告案例。`charts://examples/academic-report` 提供母稿 Markdown、合成来源、数据、指标、图表声明及完整 `operations`。
 2. 按需要使用 `chart_recommend {"intent":"trend","measures":1}` 排列候选图表。通过 `chart_declarations {"code":"c01"}` 阅读所选声明要求与示例，从 `charts://layouts` 选择构图，从 `charts://contract` 阅读操作合同。
 3. 新报告选择 ID 与标题，已有报告用 `dashboard_get` 读取当前修订。
@@ -90,7 +92,9 @@ schema-v2 文档通过 `manifest.viewMode` 保存 `dashboard` 或 `report`；旧
 
 ### CLI 与 MCP 写入
 
-先读取最新版本，再将源文装入操作：
+MCP 原生路径直接把完整 Markdown 字符串传给 `set_report_markdown.value`，与相关组件操作一起交给 `dashboard_submit`；无需先写 `.md`、生成 patch 文件或执行脚本。[MCP 创作示例](../../skills/executive-charts/references/mcp-authoring.md#直接初始化小型看板)提供完整看板初始化和报告变体。
+
+需要文件审阅、离线写作或可重复批处理时，再使用 CLI 文件流程。先读取最新版本，再将源文装入操作：
 
 ```sh
 bun bin/python-runtime.js -m dashboard_runtime --root ./boards get report-demo

@@ -164,6 +164,34 @@ def test_filtered_report_over_stdio(tmp_path):
     asyncio.run(check())
 
 
+# @wu-test type=integration | scope=MCP初始化失败恢复 | protects=结构合法的初始请求语义错误后留下空页，导致修正原请求无法重试
+def test_invalid_initial_submit_can_be_corrected_over_stdio(tmp_path):
+    async def check():
+        params = StdioServerParameters(command=sys.executable, args=['-m', 'dashboard_runtime',
+            '--project-root', str(tmp_path / 'project'), '--runtime-root', str(tmp_path / 'state'), 'mcp'])
+        args = {'dashboardId': 'initial', 'createTitle': 'Initial report', 'operations': [
+            {'op': 'put_component', 'id': 'content', 'value': {
+                'kind': 'kpi', 'title': 'Revenue', 'datasetId': 'missing', 'measures': ['missing']}},
+        ]}
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+            from jsonschema import validate
+            validate(args, tools['dashboard_submit'].inputSchema)
+            failed = await session.call_tool('dashboard_submit', args)
+            assert failed.isError and failed.structuredContent['error']['code'] == 'INVALID_DOCUMENT'
+            missing = await session.call_tool('dashboard_get', {'dashboardId': 'initial'})
+            assert missing.isError and missing.structuredContent['error']['code'] == 'NOT_FOUND'
+            args['operations'][0]['value'] = {'kind': 'text', 'title': 'Scope', 'text': 'Synthetic protocol test.'}
+            saved = await session.call_tool('dashboard_submit', args)
+            assert not saved.isError and saved.structuredContent['ok']
+            assert saved.structuredContent['revision'] == saved.structuredContent['checkpoint']['revision'] == 2
+            loaded = await session.call_tool('dashboard_get', {'dashboardId': 'initial'})
+            assert not loaded.isError
+            assert loaded.structuredContent['document']['manifest']['components']['content'] == args['operations'][0]['value']
+    asyncio.run(check())
+
+
 # @wu-test type=integration | scope=dashboard_publish MCP | protects=正式发布隐式保存草稿、接受组合分享请求或覆盖过期预期版本
 def test_publish_only_saved_reports_over_stdio(tmp_path):
     async def check():

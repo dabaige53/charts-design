@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from threading import Barrier
+import copy
 import json
 import sqlite3
 
@@ -165,6 +166,102 @@ def test_submit_keeps_failed_draft_for_correction(tmp_path, monkeypatch):
     assert failed['revision'] == 2 and service.store.display_revision('review') == 1
     assert service.store.get('review')['manifest']['title'] == 'Updated'
     saved = service.call('dashboard_submit', {**board, 'expectedRevision': failed['revision']})
+    assert saved['ok'] and saved['checkpoint']['revision'] == 2
+
+
+@pytest.fixture
+def initial_submit_args():
+    return {'dashboardId': 'initial', 'createTitle': 'Synthetic sales', 'operations': [
+        {'op': 'put_source', 'id': 'fixture', 'value': {
+            'kind': 'fixture', 'name': 'Synthetic observations', 'verification': 'runtime-executed'}},
+        {'op': 'put_dataset', 'id': 'sales', 'meta': {
+            'sourceId': 'fixture', 'fields': {'amount': {'type': 'number'}}},
+            'rows': [{'amount': 10}, {'amount': 20}]},
+        {'op': 'put_metric', 'id': 'revenue', 'value': {
+            'datasetId': 'sales', 'field': 'amount', 'aggregation': 'sum', 'label': 'Revenue',
+            'unit': 'CNY', 'definition': 'Sum of synthetic amount values'}},
+        {'op': 'put_component', 'id': 'total', 'value': {
+            'kind': 'kpi', 'title': 'Revenue', 'datasetId': 'sales', 'measures': ['revenue']}},
+    ]}
+
+
+# @wu-test type=boundary | scope=dashboard_submit 初始化 | protects=非法初始组件或操作先留下已保存空页，或绕过图表和实时SQL边界
+@pytest.mark.parametrize(('operation', 'code'), [
+    ({'op': 'put_component', 'id': 'total', 'value': {
+        'kind': 'kpi', 'title': 'Revenue', 'datasetId': 'missing', 'measures': ['missing']}}, 'INVALID_DOCUMENT'),
+    ({'op': 'put_component', 'id': 'chart', 'value': {
+        'kind': 'chart', 'chartType': 'bar', 'title': 'Chart'}}, 'UNSUPPORTED_CHART_FAMILY'),
+    ({'op': 'set_chart', 'id': 'chart', 'chartType': 'bar'}, 'UNSUPPORTED_CHART_FAMILY'),
+    ({'op': 'put_live_dataset', 'id': 'live', 'meta': {}}, 'INVALID_OPERATION'),
+])
+def test_initial_submit_rejects_invalid_operations_before_creation(tmp_path, operation, code):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    with pytest.raises(DashboardError) as failure:
+        service.call('dashboard_submit', {'dashboardId': 'initial', 'createTitle': 'Initial',
+                                         'operations': [operation]})
+    assert failure.value.code == code
+    assert service.store.list() == [] and service.store.history('initial') == []
+    with pytest.raises(DashboardError) as missing:
+        service.store.get('initial')
+    assert missing.value.code == 'NOT_FOUND'
+    assert not (service.store.root / 'initial').exists()
+
+
+# @wu-test type=boundary | scope=dashboard_submit 数据引用 | protects=结构有效但不可用的数据版本在创建空页之后才失败
+def test_initial_submit_validates_immutable_references_before_creation(tmp_path):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    fields = {'amount': {'type': 'number'}}
+    ref = service.store.data.import_rows([{'amount': 10}], fields)
+    args = {'dashboardId': 'initial', 'createTitle': 'Referenced data', 'operations': [
+        {'op': 'put_source', 'id': 'fixture', 'value': {'kind': 'fixture', 'name': 'Synthetic data'}},
+        {'op': 'put_dataset_ref', 'id': 'sales', 'meta': {'sourceId': 'fixture', 'fields': fields},
+         'ref': {**ref, 'rowCount': ref['rowCount'] + 1}},
+    ]}
+    with pytest.raises(DashboardError, match='Local data reference does not match'):
+        service.call('dashboard_submit', args)
+    assert service.store.list() == [] and service.store.history('initial') == []
+    args['operations'][1]['ref'] = ref
+    saved = service.call('dashboard_submit', args)
+    assert saved['ok'] and saved['revision'] == 2
+    assert service.store.readable('initial')['snapshot']['datasetRefs']['sales'] == ref
+
+
+# @wu-test type=integration | scope=dashboard_submit 一次初始化 | protects=预检改变来源可信度边界、修订连续性或允许重复创建覆盖现有内容
+def test_initial_submit_preserves_authoring_boundaries_and_revisions(tmp_path, initial_submit_args):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+    original = copy.deepcopy(initial_submit_args)
+    saved = service.call('dashboard_submit', initial_submit_args)
+    assert saved['ok'] and saved['revision'] == saved['checkpoint']['revision'] == 2
+    assert initial_submit_args == original
+    doc = service.store.get('initial')
+    assert doc['manifest']['sources']['fixture']['verification'] == 'supplied'
+    view = service.call('dashboard_view', {'dashboardId': 'initial', 'responseMode': 'patch',
+                                         'componentIds': ['total']})
+    assert view['computed']['components']['total']['value'] == '30 CNY'
+    with pytest.raises(DashboardError) as duplicate:
+        service.call('dashboard_submit', initial_submit_args)
+    assert duplicate.value.code == 'ALREADY_EXISTS'
+    assert service.store.get('initial') == doc
+    revised = service.call('dashboard_submit', {'dashboardId': 'initial', 'expectedRevision': 2,
+                          'operations': [{'op': 'set_title', 'value': 'Reviewed sales'}]})
+    assert revised['ok'] and revised['revision'] == 3
+
+
+# @wu-test type=integration | scope=dashboard_submit 初始化Doctor | protects=把计算未通过的初始内容提前保存或丢弃可修正草稿
+def test_initial_submit_keeps_doctor_failure_as_unsaved_draft(tmp_path, monkeypatch, initial_submit_args):
+    service = Service(tmp_path / 'runtime', project_root=tmp_path / 'project')
+
+    def unavailable(*args, **kwargs):
+        raise DashboardError('ASSET_UNAVAILABLE', 'Data unavailable')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(service.views, 'aggregate', unavailable)
+        failed = service.call('dashboard_submit', initial_submit_args)
+    assert not failed['ok'] and failed['error']['code'] == 'DOCTOR_FAILED'
+    assert failed['revision'] == 2 and service.store.display_revision('initial') == 1
+    assert set(service.store.get('initial')['manifest']['components']) == {'total'}
+    assert [entry['revision'] for entry in service.store.history('initial')] == [1]
+    saved = service.call('dashboard_submit', {'dashboardId': 'initial', 'expectedRevision': failed['revision']})
     assert saved['ok'] and saved['checkpoint']['revision'] == 2
 
 

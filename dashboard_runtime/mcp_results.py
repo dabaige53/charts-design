@@ -1,4 +1,5 @@
 """Compact MCP write receipts; the shared Service keeps its document results."""
+from copy import deepcopy
 
 DOCUMENT_WRITES = frozenset({
     'dashboard_create', 'dashboard_patch', 'dashboard_restore',
@@ -10,6 +11,8 @@ WRITE_RESPONSE_HELP = (
     ' MCP defaults to a summary without document: dashboardId, revision, affectedComponentIds, '
     'counts and operation metadata. Use top-level revision for the next expectedRevision. '
     'Request responseMode=full or dashboard_get when the document is needed. '
+    'Data-write summaries also return dataset fields/sourceId/metrics and read-only nextCalls; '
+    'reuse the returned metric IDs rather than deriving them. '
     'A draft write is not a checked checkpoint; use dashboard_submit to check and save it.'
 )
 
@@ -42,9 +45,27 @@ def write_receipt(name, args, result):
                 affected.update(components)
     elif name in ('dataset_import', 'dataset_attach', 'query_execute'):
         dataset_id = args['datasetId']
+        metadata = manifest['datasets'][dataset_id]
         ref = doc['snapshot'].get('datasetRefs', {}).get(dataset_id)
+        dataset = {'id': dataset_id, 'mode': metadata.get('mode', 'snapshot'),
+                   'fields': deepcopy(metadata['fields']), 'sourceId': metadata['sourceId'],
+                   'metrics': {key: deepcopy(metric) for key, metric in manifest['metrics'].items()
+                               if metric.get('datasetId') == dataset_id}}
         if ref is not None:
-            receipt['dataset'] = {'id': dataset_id, 'rowCount': ref['rowCount'], 'version': ref['version']}
+            dataset.update(rowCount=ref['rowCount'], version=ref['version'])
+        elif dataset['mode'] != 'live':
+            dataset['rowCount'] = len(doc['snapshot']['datasets'].get(dataset_id, []))
+        receipt['dataset'] = dataset
+        context = {'dashboardId': doc['id']}
+        if result.get('projectRoot') is not None:
+            context['projectRoot'] = result['projectRoot']
+        preview = {**context, 'datasetId': dataset_id, 'expectedRevision': doc['revision'], 'limit': 20}
+        if doc.get('dataVersion') is not None:
+            preview['dataVersion'] = doc['dataVersion']
+        receipt['nextCalls'] = [
+            {'tool': 'dataset_preview', 'arguments': preview},
+            {'tool': 'dashboard_get', 'arguments': context},
+        ]
         affected = {key for key, component in components.items()
                     if component.get('datasetId') == args['datasetId']
                     or component.get('binding', {}).get('datasetId') == args['datasetId']}

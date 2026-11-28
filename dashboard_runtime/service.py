@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import time
 from typing import Any
-from .model import DashboardError, apply_operations, identifier, inferred_fields, json_bytes, live_datasets, require, validate
+from .model import DashboardError, apply_operations, identifier, json_bytes, live_datasets, new_document, require, validate
 from .query import QueryRunner
 from .store import Store
 from .declarations import declaration_contract
@@ -184,6 +184,26 @@ class Service:
         except ValidationError as error:
             raise DashboardError('INVALID_ARGUMENT', error.message) from error
 
+    @staticmethod
+    def _patch_operations(current, operations):
+        """Apply the same authoring boundaries before either initial or draft writes."""
+        ops = copy.deepcopy(operations)
+        require(isinstance(ops, list), 'operations must be an array')
+        live_sources = {meta['sourceId'] for meta in live_datasets(current).values()}
+        for op in ops:
+            if isinstance(op, dict):
+                require(op.get('op') != 'put_live_dataset' and
+                        not (op.get('op') == 'put_source' and op.get('id') in live_sources),
+                        'Use query_execute to configure live SQL', 'INVALID_OPERATION')
+            if isinstance(op, dict) and op.get('op') == 'set_chart':
+                require(False, 'Use set_original_chart with an original code', 'UNSUPPORTED_CHART_FAMILY')
+            if isinstance(op, dict) and op.get('op') == 'put_component' and isinstance(op.get('value'), dict) and op['value'].get('kind') == 'chart':
+                old = current['manifest']['components'].get(op.get('id'), {})
+                require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'Use kind=legacy, family=chart with a preset code or config.renderer=echarts/html for custom charts', 'UNSUPPORTED_CHART_FAMILY')
+            if isinstance(op, dict) and op.get('op') == 'put_source' and isinstance(op.get('value'), dict):
+                op['value']['verification'] = 'supplied'
+        return ops
+
     def _publish(self, args: dict) -> dict:
         from .versions import Versions
 
@@ -246,6 +266,12 @@ class Service:
                 require(not any(isinstance(op, dict) and op.get('op') == 'set_annotations' for op in operations),
                         'Use dashboard_annotations_update for independent comment edits')
                 if creating:
+                    initial = new_document(board, args['createTitle'])
+                    operations = self._patch_operations(initial, operations)
+                    # Validate the entire batch, including immutable references, before
+                    # create() persists its initial checkpoint. Keep Doctor-gated saving
+                    # and the existing revision/recovery contract after this preflight.
+                    self.store.compact(apply_operations(initial, operations))
                     self.store.create(board, args['createTitle'])
                 revision = self._call('dashboard_patch', {'dashboardId': board, 'expectedRevision': revision,
                                       'operations': operations})['document']['revision']
@@ -482,15 +508,23 @@ class Service:
         if tool == 'dashboard_migration_rollback':
             return {'document': self.store.rollback_migration(board, args.get('expectedRevision'), args.get('backupId'))}
         if tool == 'dataset_attach':
+            from .dataset_authoring import dataset_source_id
+            self._validate_tool_args(tool, args)
+            doc = self.store.get(board, hydrate=False)
+            require(doc['revision'] == args['expectedRevision'], 'Reload before attaching data', 'REVISION_CONFLICT')
             imported_at = time.perf_counter()
             path = self.queries.sqlite_path(args.get('connection'))
             ds = identifier(args.get('datasetId'))
             ref = self.store.data.import_sqlite(path, args.get('table'), args.get('fields'))
-            source = 'local-' + ds
+            source = dataset_source_id('local', ds)
             ops = [{'op': 'put_source', 'id': source, 'value': {'kind': 'file', 'name': args['connection'] + ':' + args['table'], 'verification': 'runtime-executed'}},
                    {'op': 'put_dataset_ref', 'id': ds, 'meta': {'fields': ref['fields'], 'sourceId': source}, 'ref': ref},
                    {'op': 'set_data_mode', 'value': 'local'}]
             return {'document': self.store.mutate(board, args.get('expectedRevision'), ops), 'import': {'rowCount': ref['rowCount'], 'logicalBytes': ref['bytes'], 'durationMs': (time.perf_counter()-imported_at)*1000}}
+        if tool == 'dataset_preview':
+            from .dataset_authoring import dataset_preview
+            self._validate_tool_args(tool, args)
+            return dataset_preview(self, args)
         if tool == 'component_data':
             doc = self.store.compact(self._reading_document(board, args))
             key = args.get('componentId')
@@ -594,22 +628,8 @@ class Service:
         if tool == 'dashboard_validate':
             return {'valid': bool(validate(args.get('document') or self.store.get(board, hydrate=False)))}
         if tool == 'dashboard_patch':
-            ops = copy.deepcopy(args.get('operations'))
             current = self.store.get(board, hydrate=False)
-            require(isinstance(ops, list), 'operations must be an array')
-            live_sources = {meta['sourceId'] for meta in live_datasets(current).values()}
-            for op in ops:
-                if isinstance(op, dict):
-                    require(op.get('op') != 'put_live_dataset' and
-                            not (op.get('op') == 'put_source' and op.get('id') in live_sources),
-                            'Use query_execute to configure live SQL', 'INVALID_OPERATION')
-                if isinstance(op, dict) and op.get('op') == 'set_chart':
-                    require(False, 'Use set_original_chart with an original code', 'UNSUPPORTED_CHART_FAMILY')
-                if isinstance(op, dict) and op.get('op') == 'put_component' and isinstance(op.get('value'), dict) and op['value'].get('kind') == 'chart':
-                    old = current['manifest']['components'].get(op.get('id'), {})
-                    require(old.get('kind') == 'chart' and old.get('chartType') == op['value'].get('chartType'), 'Use kind=legacy, family=chart with a preset code or config.renderer=echarts/html for custom charts', 'UNSUPPORTED_CHART_FAMILY')
-                if isinstance(op, dict) and op.get('op') == 'put_source' and isinstance(op.get('value'), dict):
-                    op['value']['verification'] = 'supplied'
+            ops = self._patch_operations(current, args.get('operations'))
             note_options = {}
             if 'expectedAnnotations' in args:
                 require(self.project_root is not None, 'Independent annotation saves require a project', 'PROJECT_REQUIRED')
@@ -662,25 +682,16 @@ class Service:
                 doc = self.views.prepare(self.store.compact(doc))
             return {'html': export_component(doc, key), 'scope': 'component', 'componentId': key}
         if tool == 'dataset_import':
-            import csv
-            import io
-            import re
+            from .dataset_authoring import dataset_source_id, parse_dataset_input
+            self._validate_tool_args(tool, args)
             ds = identifier(args.get('datasetId'))
-            require(('rows' in args) != ('csvText' in args),
-                    'Supply exactly one of rows or csvText', 'INVALID_ARGUMENT')
-            rows = args.get('rows')
-            if args.get('csvText') is not None:
-                rows = list(csv.DictReader(io.StringIO(args['csvText'])))
-                for row in rows:
-                    for key, value in row.items():
-                        if isinstance(value, str) and re.fullmatch(r'-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?', value):
-                            row[key] = float(value) if '.' in value else int(value)
-            fields = inferred_fields(rows)
-            source_id = 'import-' + ds
+            doc = self.store.get(board, hydrate=False)
+            require(doc['revision'] == args['expectedRevision'], 'Reload before importing data', 'REVISION_CONFLICT')
+            rows, fields = parse_dataset_input(args)
+            source_id = dataset_source_id('import', ds)
             ops = [{'op': 'put_source', 'id': source_id, 'value': {'kind': 'file', 'name': args.get('name', ds), 'verification': 'supplied'}},
                    {'op': 'put_dataset', 'id': ds, 'meta': {'fields': fields, 'sourceId': source_id}, 'rows': rows}]
-            doc = self.store.get(board)
-            for index, (key, info) in enumerate(fields.items()):
+            for key, info in fields.items():
                 import uuid
                 mid = 'metric-' + uuid.uuid5(uuid.NAMESPACE_URL, ds + ':' + key).hex[:20]
                 if info['type'] == 'number' and mid not in doc['manifest']['metrics']:

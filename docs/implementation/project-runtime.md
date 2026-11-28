@@ -74,6 +74,8 @@ bun bin/dashboard-runtime.js --runtime-root "$HOME/.cache/charts-design" mcp
 
 Agent 用 `dashboard_submit` 一次提交相关修改，服务端检查并保存同一修订。成功后按 `nextAction: dashboard_preview` 打开一次预览。旧客户端仍可使用 `dashboard_edit_begin`、`dashboard_patch`、`dashboard_edit_finish`；两条入口共享草稿、完整检查和检查点，不新增存储格式。
 
+新建时的 `createTitle + operations` 先完成声明、来源与数据引用校验，再创建容器并沿既有流程写入、检查和保存，非法初始声明不会先留下空页。数据写入回执保留项目与修订，返回字段和实际指标 ID；可直接执行其 `nextCalls` 中的 `dataset_preview`，在尚未创建组件时检查有界原始样本。样本不应用页面筛选，且不改变草稿或检查点；读取可固定当前草稿或最近保存版的 `expectedRevision` 和 `dataVersion`，不一致时沿用版本冲突规则。
+
 渐进编辑器同样使用 `dashboard_submit`，完成后只读取一次最新草稿，正常保存由四次工具往返缩为两次。检查失败仍读取已保留草稿的新修订，供下一次修正；迟到的保存响应不能覆盖页面已接受的新修订。已确认写入而回读暂时失败时，页面明确提示下一次点击只恢复最新草稿并结束旧编辑，不将原操作重放到可能已被其他作者修改的版本。普通明确拒绝继续保留编辑供修正。
 
 `dashboard_get` 读取可编辑草稿；项目预览与刷新读取最近完成的检查点。`dashboard_edit_finish` 和 `dashboard_checkpoint` 检查失败时返回 `DOCTOR_FAILED`，MCP 同时标记 `isError: true`；草稿与批次保留，不生成检查点。调用方检查 Doctor 问题、读取最新草稿并修复，再用最新版本完成。`REVISION_CONFLICT` 要求重新读取并合并当前修改，不能盲目重放写入。
