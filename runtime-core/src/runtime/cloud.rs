@@ -243,7 +243,10 @@ impl CloudDatabase {
         } else {
             client.query_one(&format!("SELECT public.{}($1,$2,$3)", self.function), &[&action,&project,payload])
         }.map_err(map_error)?;
-        row.try_get(0).map_err(map_error)
+        // Lookup RPCs use SQL NULL when a record has not been registered yet.
+        row.try_get::<_, Option<Value>>(0)
+            .map(|value| value.unwrap_or(Value::Null))
+            .map_err(map_error)
     }
 }
 
