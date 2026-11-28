@@ -70,6 +70,9 @@ test("publishes a fixed copy, serves trusted assets, and persists authorized ann
   const bytes = bundle();
   const publish = (extra = {}) => send("/api/v1/publications", { method: "POST", headers: { ...headers, ...extra }, body: bytes });
   assert.equal((await send("/mcp", { method: "POST" })).status, 404);
+  sqlite.run("ALTER TABLE pages_snapshots RENAME TO unavailable_snapshots");
+  assert.equal((await send("/health")).status, 503);
+  sqlite.run("ALTER TABLE unavailable_snapshots RENAME TO pages_snapshots");
   assert.deepEqual(await (await send("/health")).json(), { ok: true, role: "sharing", storage: "d1", uiBuildId: "test-runtime" });
   assert.equal((await publish({ Authorization: "Bearer unauthorized" })).status, 401);
   const created = await publish();

@@ -357,7 +357,8 @@ async function route(request, env) {
   }
   if (path === "/health" && method === "GET") {
     await storage(env);
-    await env.SHARE_DB.prepare("SELECT id FROM publications LIMIT 1").first();
+    await env.SHARE_DB.prepare("SELECT p.id, s.deployment_id, (SELECT count(*) FROM pages_deployment_lock) " +
+      "FROM publications p LEFT JOIN pages_snapshots s ON s.share_id=p.id LIMIT 1").first();
     const build = await uiBuild(env, url);
     return json({ ok: true, role: "sharing", storage: env.CHARTS_PAGES_PROJECT ? "pages+d1" : "d1", uiBuildId: build.id });
   }
