@@ -62,7 +62,8 @@ export function StaticSite() {
           let query = queries.get(id);
           if (!query) {
             const page = pages.find((item) => item.id === id)!;
-            query = createStaticClient(current, new URL(page.path, location.href).href, new URL("static-worker.js", location.href).href);
+            const assetBase = new URL(window.__chartsBoot?.assetBase ?? "", location.href);
+            query = createStaticClient(current, new URL(page.path, location.href).href, new URL("static-worker.js", assetBase).href);
             queries.set(id, query);
             clients.push(query);
           }

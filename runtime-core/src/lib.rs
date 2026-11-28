@@ -53,6 +53,7 @@ pub struct ExportOptions {
     pub partition_field: Option<String>,
     pub include_options: bool,
     pub single_file: bool,
+    pub grouped_files: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -135,6 +136,9 @@ pub fn export_parquet_with_options(
 ) -> Result<ExportReceipt> {
     if options.single_file && (options.partition_field.is_some() || options.include_options) {
         return Err("Single-file export cannot include separate partitions or option files".into());
+    }
+    if options.grouped_files && (options.partition_field.is_some() || options.include_options) {
+        return Err("Grouped exports cannot include separate partitions or option files".into());
     }
     if version.len() != 64
         || !version
@@ -259,9 +263,11 @@ pub fn export_parquet_with_options(
     let mut count = 0;
     let mut files = Vec::new();
     let mut single_writer = None;
+    let mut grouped_writer = None;
     let single_name = format!("{version}-0.parquet");
     let single_path = output.join(&single_name);
     let mut flush = |batch: &mut Vec<ExportRow>,
+                     batch_bytes: usize,
                      files: &mut Vec<ExportFile>,
                      partition_index: &mut Option<PartitionIndex>|
      -> Result<()> {
@@ -277,6 +283,35 @@ pub fn export_parquet_with_options(
                 return Err("The Parquet file exceeds the 24 MiB static hosting limit".into());
             }
             batch.clear();
+            Ok(())
+        } else if options.grouped_files {
+            if !batch.is_empty() {
+                let records = record_batch(&schema, batch, None)?;
+                if grouped_writer.as_ref().is_some_and(|file: &GroupedFile| {
+                    file.input_bytes + batch_bytes > MAX_BATCH_BYTES
+                        || file.schema != records.schema()
+                }) {
+                    files.push(grouped_writer.take().unwrap().finish(output)?);
+                }
+                if grouped_writer.is_none() {
+                    let name = format!("{version}-{}.parquet", files.len());
+                    let physical = records.schema();
+                    let writer = parquet_writer(&output.join(&name), &schema, physical.clone())?;
+                    grouped_writer = Some(GroupedFile {
+                        name,
+                        writer,
+                        schema: physical,
+                        input_bytes: 0,
+                        rows: 0,
+                    });
+                }
+                let file = grouped_writer.as_mut().unwrap();
+                file.writer.write(&records)?;
+                file.writer.flush()?;
+                file.input_bytes += batch_bytes;
+                file.rows += batch.len();
+                batch.clear();
+            }
             Ok(())
         } else {
             flush_main(output, version, &schema, batch, files, partition_index)
@@ -300,7 +335,7 @@ pub fn export_parquet_with_options(
                 || batch.len() >= MAX_BATCH_ROWS
                 || batch_bytes + bytes > MAX_BATCH_BYTES)
         {
-            flush(&mut batch, &mut files, &mut partition_index)?;
+            flush(&mut batch, batch_bytes, &mut files, &mut partition_index)?;
             batch_bytes = 0;
         }
         if partition_changed {
@@ -317,7 +352,7 @@ pub fn export_parquet_with_options(
         batch_bytes += bytes;
         count += 1;
     }
-    flush(&mut batch, &mut files, &mut partition_index)?;
+    flush(&mut batch, batch_bytes, &mut files, &mut partition_index)?;
     if count != metadata.row_count {
         return Err(format!(
             "Dataset row count mismatch: expected {}, read {count}",
@@ -332,6 +367,9 @@ pub fn export_parquet_with_options(
             single_name,
             usize::try_from(count)?,
         )?);
+    }
+    if let Some(file) = grouped_writer {
+        files.push(file.finish(output)?);
     }
     let option_files = options
         .include_options
@@ -348,6 +386,21 @@ pub fn export_parquet_with_options(
         partition_index,
         options: option_files,
     })
+}
+
+struct GroupedFile {
+    name: String,
+    writer: ArrowWriter<File>,
+    schema: Arc<Schema>,
+    input_bytes: usize,
+    rows: usize,
+}
+
+impl GroupedFile {
+    fn finish(self, output: &Path) -> Result<ExportFile> {
+        self.writer.close()?;
+        file_receipt(&output.join(&self.name), self.name, self.rows)
+    }
 }
 
 fn floating_columns(db: &Connection, table: &str, kinds: &[Kind]) -> Result<Vec<bool>> {

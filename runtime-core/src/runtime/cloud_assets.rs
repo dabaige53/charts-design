@@ -153,7 +153,7 @@ impl CloudAssets {
             &crate::ExportOptions {
                 partition_field: partition_field.map(str::to_owned),
                 include_options: true,
-                single_file: false,
+                ..Default::default()
             },
         )
         .map_err(|_| Error::new("PARQUET_EXPORT_FAILED", "Native Parquet export failed"))?;

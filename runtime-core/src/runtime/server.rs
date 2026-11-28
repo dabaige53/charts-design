@@ -1277,6 +1277,10 @@ impl HttpOutput {
         Self::json(&error.json()).unwrap().status(status)
     }
     fn response(self, gzip: bool, head: bool) -> Response {
+        let encoded = self
+            .headers
+            .iter()
+            .any(|(key, _)| key == "Content-Encoding");
         let mut builder = axum::http::Response::builder()
             .status(self.status)
             .header("Content-Type", self.kind)
@@ -1296,7 +1300,7 @@ impl HttpOutput {
         }
         let body = match self.payload {
             Payload::Bytes(mut bytes) => {
-                if gzip && bytes.len() > 1024 {
+                if gzip && !encoded && bytes.len() > 1024 {
                     let mut encoder =
                         flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(5));
                     if encoder.write_all(&bytes).is_ok() {
@@ -1332,6 +1336,53 @@ impl HttpOutput {
             .body(body)
             .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
     }
+}
+
+fn encoding_quality(headers: &HeaderMap, encoding: &str) -> f32 {
+    header(headers, "accept-encoding")
+        .split(',')
+        .find_map(|entry| {
+            let mut parts = entry.trim().split(';');
+            if !parts.next()?.trim().eq_ignore_ascii_case(encoding) {
+                return None;
+            }
+            Some(
+                parts
+                    .find_map(|part| part.trim().strip_prefix("q="))
+                    .map_or(1.0, |quality| quality.parse::<f32>().unwrap_or(0.0)),
+            )
+        })
+        .unwrap_or(0.0)
+}
+
+fn versioned_asset(input: &HttpInput, build: &str, name: &str) -> Result<HttpOutput> {
+    let (path, kind) = assets::web_asset(build, name)?;
+    let br = encoding_quality(&input.headers, "br");
+    let gzip = encoding_quality(&input.headers, "gzip");
+    let order = if br >= gzip {
+        [(br, "br", "br"), (gzip, "gzip", "gz")]
+    } else {
+        [(gzip, "gzip", "gz"), (br, "br", "br")]
+    };
+    let output = |bytes| {
+        HttpOutput::raw(bytes, kind)
+            .with_header("Cache-Control", "public, max-age=31536000, immutable")
+            .with_header("Vary", "Accept-Encoding")
+    };
+    for (quality, encoding, extension) in order {
+        if quality > 0.0 {
+            let compressed = path.with_extension(format!(
+                "{}.{extension}",
+                path.extension().unwrap().to_string_lossy()
+            ));
+            match fs::read(compressed) {
+                Ok(bytes) => return Ok(output(bytes).with_header("Content-Encoding", encoding)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    Ok(output(fs::read(path)?))
 }
 async fn read_input(request: Request<Body>, upload: bool) -> Result<HttpInput> {
     let verified = request.extensions().get::<ProjectPrincipal>().cloned();
@@ -1509,6 +1560,12 @@ impl LocalState {
             if path == "/health" {
                 return HttpOutput::json(&json!({"ok":true}));
             }
+            if let Some((build, name)) = path
+                .strip_prefix("/assets/")
+                .and_then(|path| path.split_once('/'))
+            {
+                return versioned_asset(input, build, name);
+            }
             if path == "/" || path.starts_with("/edit/") || path.starts_with("/view/") {
                 let board = path
                     .strip_prefix("/edit/")
@@ -1519,11 +1576,10 @@ impl LocalState {
                 let read_only = path.starts_with("/view/");
                 let project = &self.service.project_root;
                 let boot = json!({"projectRoot":project,"dashboardId":board,"readOnly":read_only,"annotationAccess":{"endpoint":"/api/annotations/{dashboardId}","canRead":project.is_some(),"canAnnotate":project.is_some(),"canManageAnnotations":project.is_some()&&!read_only,"scope":project.as_ref().map(|p|p.to_string_lossy().into_owned()).unwrap_or_else(||"legacy".into())},"browserLinksEndpoint":"/api/browser-links/{dashboardId}","publicationApiBase":"/api/publications/"});
-                return Ok(HttpOutput::html(assets::render_html(
-                    "web",
-                    None,
+                return Ok(HttpOutput::html(assets::render_web_html(
+                    "",
                     self.lifetime.seconds(),
-                    Some(&boot),
+                    &boot,
                 )?));
             }
             if let Some(board) = path.strip_prefix("/api/browser-links/") {
@@ -1661,9 +1717,7 @@ impl Drop for LocalPreview {
 }
 async fn local_http(State(state): State<Arc<LocalState>>, request: Request<Body>) -> Response {
     let head = request.method() == Method::HEAD;
-    let gzip = header(request.headers(), "accept-encoding")
-        .split(',')
-        .any(|v| v.trim() == "gzip");
+    let gzip = encoding_quality(request.headers(), "gzip") > 0.0;
     let result = match read_input(request, false).await {
         Ok(input) => tokio::task::spawn_blocking(move || state.handle(&input))
             .await
@@ -2209,7 +2263,9 @@ impl RemoteServer {
             }
         }
         match parts.as_slice() {
-            [""] | ["view", _, _] | ["edit", _, _] if input.method == Method::GET => {
+            [""] | ["view", _, _] | ["edit", _, _]
+                if matches!(input.method, Method::GET | Method::HEAD) =>
+            {
                 let project = if parts.len() == 3 {
                     parts[1]
                 } else {
@@ -2227,12 +2283,19 @@ impl RemoteServer {
                     None
                 };
                 let boot = json!({"mode":"web","projectRoot":project,"dashboardId":board,"apiBase":format!("{}/api/v1/p/{}/tools/",self.settings.base,encoded(project)),"readOnly":parts.first()==Some(&"view"),"idleTimeout":null,"annotationAccess":{"endpoint":format!("{}/api/v1/p/{}/annotations/{{dashboardId}}",self.settings.base,encoded(project)),"canRead":true,"canAnnotate":false,"canManageAnnotations":false,"scope":format!("workspace:{project}")},"publicationApiBase":format!("{}/api/v1/p/{}/publications/",self.settings.base,encoded(project))});
-                Ok(HttpOutput::html(assets::render_html(
-                    "web",
+                Ok(HttpOutput::html(assets::render_web_html(
+                    &self.settings.base,
                     None,
-                    None,
-                    Some(&boot),
+                    &boot,
                 )?))
+            }
+            ["assets", build, name] if matches!(input.method, Method::GET | Method::HEAD) => {
+                versioned_asset(input, build, name)
+            }
+            ["assets", build, "fonts", name]
+                if matches!(input.method, Method::GET | Method::HEAD) =>
+            {
+                versioned_asset(input, build, &format!("fonts/{name}"))
             }
             ["assets", name] if input.method == Method::GET => {
                 require(
@@ -2240,9 +2303,7 @@ impl RemoteServer {
                     "Unknown asset",
                     "NOT_FOUND",
                 )?;
-                let bytes = assets::bundle_assets()?
-                    .remove(*name)
-                    .ok_or_else(|| Error::new("NOT_FOUND", "Missing asset"))?;
+                let bytes = fs::read(assets::dist().join(name))?;
                 Ok(HttpOutput::raw(
                     bytes,
                     if name.ends_with(".js") {
@@ -2507,9 +2568,7 @@ async fn guard(
     response
 }
 async fn remote_http(State(server): State<Arc<RemoteServer>>, request: Request<Body>) -> Response {
-    let gzip = header(request.headers(), "accept-encoding")
-        .split(',')
-        .any(|v| v.trim() == "gzip");
+    let gzip = encoding_quality(request.headers(), "gzip") > 0.0;
     let head = request.method() == Method::HEAD;
     let upload = server.settings.role == "sharing"
         && request.method() == Method::POST

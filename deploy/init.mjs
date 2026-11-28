@@ -128,7 +128,8 @@ async function pages() {
       await request("PATCH", projectPath, { deployment_configs: { production: {
         fail_open: false, d1_databases: { SHARE_DB: { id: db.uuid } }, env_vars: { ...config, ...secrets },
       } } });
-      const names = ["/runtime/app.js", "/runtime/app.css", "/runtime/static-worker.js", "/runtime/build.json", bundlePath, releasePath];
+      const release = await Bun.file(output + releasePath).json();
+      const names = [...Object.keys(release), releasePath];
       const assets = await Promise.all(names.map(async path => pagesAsset(path, new Uint8Array(await Bun.file(output + path).arrayBuffer()))));
       const runtime = assetManifest(assets);
       await pagesClient({ account, project: name, branch, token: snapshotToken }).deploy({

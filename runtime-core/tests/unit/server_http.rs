@@ -732,7 +732,7 @@ async fn signed_downloads_allow_only_existing_project_exports() {
     }
 }
 
-// @wu-test type=integration | scope=workspace HTTP routing and access boundary | protects=catalogs, annotations and static resources preserve author scope while malformed paths and publication identities are rejected
+// @wu-test type=integration | scope=workspace HTTP routing and access boundary | protects=only versioned UI resources become public, author scope is enforced, and malformed paths are rejected
 #[test]
 fn workspace_routes_and_publication_identity_validate_explicit_scope() {
     let (_root, server) = remote();
@@ -782,12 +782,23 @@ fn workspace_routes_and_publication_identity_validate_explicit_scope() {
     );
     assert_eq!(server.handle(&wrong).err().unwrap().code, "FORBIDDEN");
     for path in ["/", "/edit/project/main", "/view/project/main"] {
-        assert!(text_output(
+        let html = text_output(
             server
                 .handle(&input(Method::GET, path, "", json!({})))
-                .unwrap()
-        )
-        .contains("window.__chartsBoot="));
+                .unwrap(),
+        );
+        assert!(html.contains("window.__chartsBoot="));
+        assert!(html.len() < 4096, "The HTML embeds the UI bundle again");
+        let (_, asset_path) = html.split_once("<script defer src=\"").unwrap();
+        let (asset_path, _) = asset_path.split_once('"').unwrap();
+        let asset = server
+            .handle(&input(Method::GET, asset_path, "", json!({})))
+            .unwrap();
+        assert!(asset
+            .headers
+            .iter()
+            .any(|(name, value)| name == "Cache-Control"
+                && value == "public, max-age=31536000, immutable"));
     }
     for name in assets::UI_RESOURCES {
         let asset = server

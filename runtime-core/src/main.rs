@@ -78,6 +78,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|_| "Invalid partition field")?,
         include_options,
         single_file,
+        ..Default::default()
     };
     let receipt = export_parquet_with_options(&database, &version, &output, &options)?;
     println!("{}", serde_json::to_string(&receipt)?);

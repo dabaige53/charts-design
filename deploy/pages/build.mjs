@@ -19,14 +19,20 @@ await Bun.write(resolve(output, "_worker.js"), bundle.outputs[0]);
 if (withD1) {
   const source = resolve(here, "../../runtime-ui/dist");
   const target = resolve(output, "runtime");
-  const { id } = JSON.parse(await readFile(resolve(source, "build.json"), "utf8"));
+  const { id, webId, fonts } = JSON.parse(await readFile(resolve(source, "build.json"), "utf8"));
   if (!id) throw Error("Missing UI build version. Run bun run ui:prepare.");
   await mkdir(target, { recursive: true });
   const names = ["app.js", "app.css", "static-worker.js", "build.json"];
   for (const name of names)
     await copyFile(resolve(source, name), resolve(target, name));
+  const web = webId ? [...names.slice(0, 3), ...fonts] : [];
+  for (const name of web) {
+    const destination = resolve(target, webId, name);
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(resolve(source, "web", name), destination);
+  }
   await writeFile(resolve(output, "." + bundlePath), await workerBundle(await readFile(resolve(output, "_worker.js"))));
-  const runtime = await Promise.all([...names.map(name => "/runtime/" + name), bundlePath].map(async name =>
+  const runtime = await Promise.all([...names.map(name => "/runtime/" + name), ...web.map(name => "/runtime/" + webId + "/" + name), bundlePath].map(async name =>
     pagesAsset(name, await readFile(resolve(output, "." + name)))));
   await writeFile(resolve(output, "." + releasePath), JSON.stringify(assetManifest(runtime)));
 }

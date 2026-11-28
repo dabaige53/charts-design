@@ -57,11 +57,13 @@ function bundle() {
   return Buffer.concat([...body, central, end]);
 }
 
-// @wu-test type=integration | scope=Cloudflare Pages + D1 固定分享 | protects=同请求重复发布、筛选候选项丢失、匿名读取数据和越权或无效位置批注
+// @wu-test type=integration | scope=Cloudflare Pages + D1 固定分享 | protects=重复发布、公开缓存分享数据、引用错误的应用版本或越权批注
 test("publishes a fixed copy, serves trusted assets, and persists authorized annotations", async () => {
   const { sqlite, db } = d1();
+  const webId = "a".repeat(16);
+  const app = `/runtime/${webId}/app.js`;
   const env = { SHARE_DB: db, CHARTS_SHARE_SERVICE_TOKEN: token, CHARTS_SHARE_SIGNING_SECRET: "test-cookie-signing-secret-at-least-32-characters",
-    ASSETS: { fetch: request => new URL(request.url).pathname === "/runtime/app.js" ? new Response("trusted app") : Response.json({ id: "test-runtime" }) } };
+    ASSETS: { fetch: request => new URL(request.url).pathname.endsWith("/app.js") ? new Response("trusted app") : Response.json({ id: "test-runtime", webId }) } };
   const send = (path, args) => worker.fetch(new Request(origin + path, args), env);
   const headers = { "Authorization": "Bearer " + token, "Content-Type": "application/zip",
     "X-Charts-Source": owner, "X-Charts-Project": "project", "X-Charts-Request": requestId, "X-Charts-Annotation-Mode": "annotate" };
@@ -78,13 +80,20 @@ test("publishes a fixed copy, serves trusted assets, and persists authorized ann
   assert.equal(sqlite.query("SELECT count(*) AS n FROM publications").get().n, 1);
   const page = "/s/" + share.shareId + "/";
   assert.equal((await send(page + "data/sales-0.parquet")).status, 401);
+  const shared = await send(app);
+  assert.equal(await shared.text(), "trusted app");
+  assert.equal(shared.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  assert.equal((await send(app.replace(webId, "b".repeat(16)))).status, 404);
   const login = (form, site = origin) => send(page, { method: "POST", body: new URLSearchParams(form), headers: { Origin: site } });
   assert.equal((await login({ accessKey: share.accessKey }, "https://other.example")).status, 403);
   const accepted = await login({ accessKey: share.accessKey });
   assert.equal(accepted.status, 303);
   const cookie = accepted.headers.get("set-cookie").split(";")[0];
   const reader = { Cookie: cookie };
-  const document = await (await send(page + "document.json", { headers: reader })).json();
+  assert((await (await send(page, { headers: reader })).text()).includes(app));
+  const content = await send(page + "document.json", { headers: reader });
+  assert.equal(content.headers.get("cache-control"), "private, no-store");
+  const document = await content.json();
   assert.deepEqual(document.staticFilterOptions.month, ["2026-07", "2026-08"]);
   assert.equal(document.browserLinks, undefined);
   assert.equal(document.manifest.annotations, undefined);

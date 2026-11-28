@@ -7,7 +7,8 @@ const utf8 = new TextEncoder();
 const mime = pathname =>
   pathname.endsWith(".json") ? "application/json" :
   pathname.endsWith(".js") ? "text/javascript" :
-  pathname.endsWith(".css") ? "text/css" : "application/octet-stream";
+  pathname.endsWith(".css") ? "text/css" :
+  pathname.endsWith(".woff2") ? "font/woff2" : "application/octet-stream";
 
 export const releasePath = "/runtime/deployment.json";
 export const bundlePath = "/runtime/redeploy.bin";

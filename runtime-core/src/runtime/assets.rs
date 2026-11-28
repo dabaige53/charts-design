@@ -28,11 +28,16 @@ pub fn dist() -> PathBuf {
         .unwrap_or_else(|| package_root().join("runtime-ui/dist"))
 }
 pub fn ui_build_id() -> String {
+    build_manifest()["id"]
+        .as_str()
+        .map(String::from)
+        .unwrap_or_else(|| "unavailable".into())
+}
+fn build_manifest() -> Value {
     fs::read(dist().join("build.json"))
         .ok()
-        .and_then(|raw| serde_json::from_slice::<Value>(&raw).ok())
-        .and_then(|v| v["id"].as_str().map(String::from))
-        .unwrap_or_else(|| "unavailable".into())
+        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .unwrap_or(Value::Null)
 }
 pub fn ui_resource_uri() -> String {
     format!("ui://charts-design/dashboard-{}.html", ui_build_id())
@@ -55,7 +60,7 @@ pub fn favicon_link() -> String {
         STANDARD.encode(svg)
     )
 }
-pub fn render_html(
+fn boot_json(
     mode: &str,
     document: Option<&Value>,
     idle_timeout: Option<f64>,
@@ -69,16 +74,74 @@ pub fn render_html(
             .ok_or_else(|| Error::new("INVALID_ARGUMENT", "Boot state must be an object"))?;
         boot.as_object_mut().unwrap().extend(state.clone());
     }
-    let boot = serde_json::to_string(&boot)?.replace('<', "\\u003c");
+    Ok(serde_json::to_string(&boot)?.replace('<', "\\u003c"))
+}
+pub fn render_html(
+    mode: &str,
+    document: Option<&Value>,
+    idle_timeout: Option<f64>,
+    boot_state: Option<&Value>,
+) -> Result<String> {
+    let boot = boot_json(mode, document, idle_timeout, boot_state)?;
     let css = fs::read_to_string(dist().join("app.css"))?.replace("</style", "<\\/style");
     let js = fs::read_to_string(dist().join("app.js"))?.replace("</script", "<\\/script");
     Ok(format!("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Charts Design</title>{}<style>{css}</style></head><body><div id=\"root\"></div><script>window.__chartsBoot={boot};</script><script>{js}</script></body></html>",favicon_link()))
 }
+pub fn render_web_html(base: &str, idle_timeout: Option<f64>, state: &Value) -> Result<String> {
+    let boot = boot_json("web", None, idle_timeout, Some(state))?;
+    let manifest = build_manifest();
+    let id = manifest["webId"]
+        .as_str()
+        .or(manifest["id"].as_str())
+        .ok_or_else(|| Error::new("UI_UNAVAILABLE", "Missing UI build"))?;
+    let prefix = format!("{base}/assets/{id}")
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;");
+    let preload = r#"(()=>{const b=window.__chartsBoot;const token=new URLSearchParams(location.hash.slice(1)).get('token');if(!token||!b.readOnly||!b.dashboardId)return;window.__chartsInitialPreview=fetch((b.apiBase||'/api/tools/')+'dashboard_preview',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({dashboardId:b.dashboardId})}).then(r=>r.ok?r.json():null).catch(()=>null);})();"#;
+    Ok(format!("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Charts Design</title>{}<link rel=\"stylesheet\" href=\"{prefix}/app.css\"><script defer src=\"{prefix}/app.js\"></script></head><body><div id=\"root\"></div><script>window.__chartsBoot={boot};</script><script>{preload}</script></body></html>", favicon_link()))
+}
+
+pub fn web_asset(build: &str, name: &str) -> Result<(PathBuf, &'static str)> {
+    let manifest = build_manifest();
+    let web = manifest["webId"].as_str();
+    require(
+        web.or(manifest["id"].as_str()) == Some(build),
+        "Unknown asset build",
+        "NOT_FOUND",
+    )?;
+    let registered_font = web.is_some()
+        && manifest["fonts"]
+            .as_array()
+            .is_some_and(|fonts| fonts.iter().any(|font| font.as_str() == Some(name)));
+    let mime = match name {
+        "app.css" => "text/css; charset=utf-8",
+        "app.js" | "static-worker.js" => "text/javascript; charset=utf-8",
+        name if registered_font && name.ends_with(".woff2") => "font/woff2",
+        name if registered_font && name.ends_with(".woff") => "font/woff",
+        name if registered_font && name.ends_with(".ttf") => "font/ttf",
+        _ => return Err(Error::new("NOT_FOUND", "Unknown asset")),
+    };
+    let root = if web.is_some() {
+        dist().join("web")
+    } else {
+        dist()
+    };
+    Ok((root.join(name), mime))
+}
 pub fn bundle_assets() -> Result<BTreeMap<String, Vec<u8>>> {
     require_preview()?;
+    let build = build_manifest();
     UI_RESOURCES
         .into_iter()
-        .map(|name| Ok((name.to_owned(), fs::read(dist().join(name))?)))
+        .map(|name| {
+            let path = if name == "app.js" && build["webId"].is_string() {
+                dist().join("web/app.js")
+            } else {
+                dist().join(name)
+            };
+            Ok((name.to_owned(), fs::read(path)?))
+        })
         .collect()
 }
 pub fn export_document(document: &Value) -> Result<String> {

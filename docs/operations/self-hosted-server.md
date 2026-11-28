@@ -127,7 +127,7 @@ claude mcp add --transport http charts-design https://charts.example.com/mcp \
 
 签名链接默认只包含签发时的看板；调用 `dashboard_share` 时可通过 `dashboardIds` 指定同一项目的其他页面。页面切换只列出获准页面，访问其他页面返回 403。撤销其中任一页面的签名分享会使包含它的链接失效。导入数据、执行查询、新建看板等操作只通过 MCP 完成。报告在浏览器中按学术单栏排版，图表滚动到可见区域时加载。
 
-页面以内容哈希引用 `app.<构建号>.js/css`，设置长期不可变缓存并以 gzip 压缩。响应头包含 CSP（仅允许本站脚本与经哈希固定的启动脚本）、`Referrer-Policy: no-referrer`、`X-Frame-Options: DENY`。
+预览与编辑页从 `/assets/<构建号>/` 取脚本、样式和当前文字所需的字体。浏览器可以缓存这些版本固定的界面资源。服务器按客户端支持的格式返回预压缩的 Brotli 或 gzip 文件。页面和项目数据仍使用 `private, no-store`。Cloudflare Pages 的读者页面通过 `/runtime/<构建号>/` 复用同一套界面资源，读取分享文档和数据时继续核验会话与撤销状态。
 
 ## 签名预览服务的边界
 

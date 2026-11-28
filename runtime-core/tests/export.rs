@@ -348,6 +348,69 @@ fn single_file_keeps_multiple_row_groups_and_shared_schema() {
     assert_eq!(last_position.value(0), 8192.5);
 }
 
+// @wu-test type=integration | scope=static Parquet grouped export | protects=small compatible row groups require separate requests or grouping changes integer precision
+#[test]
+fn grouped_files_merge_compatible_row_groups_without_promoting_integers() {
+    let mut fixture = Fixture::new(&[("amount", "number")]);
+    let first = 9_007_199_254_740_993_i64;
+    for index in 0..16384_i64 {
+        fixture.insert(vec![SqlValue::Integer(first + index)], None);
+    }
+    fixture.insert(vec![SqlValue::Real(2.5)], None);
+    fixture.seal(true);
+    let output = fixture.root.join("grouped");
+    let receipt = export_parquet_with_options(
+        &fixture.database,
+        &fixture.version,
+        &output,
+        &ExportOptions {
+            grouped_files: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        receipt
+            .files
+            .iter()
+            .map(|file| file.row_count)
+            .collect::<Vec<_>>(),
+        [16384, 1]
+    );
+    let input = fs::File::open(output.join(&receipt.files[0].path)).unwrap();
+    let reader = ParquetRecordBatchReaderBuilder::try_new(input).unwrap();
+    assert_eq!(reader.metadata().num_row_groups(), 2);
+    let values = reader
+        .with_batch_size(16384)
+        .build()
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    let values = values
+        .column(0)
+        .as_any()
+        .downcast_ref::<Int64Array>()
+        .unwrap();
+    assert!(values.values().iter().copied().eq(first..first + 16384));
+    let last = fs::File::open(output.join(&receipt.files[1].path)).unwrap();
+    let tail = ParquetRecordBatchReaderBuilder::try_new(last)
+        .unwrap()
+        .build()
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        tail.column(0)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .unwrap()
+            .value(0),
+        2.5
+    );
+}
+
 // @wu-test type=integration | scope=runtime-core version validation | protects=Unknown or malformed versions cannot read other tables or produce a successful export
 #[test]
 fn rejects_unknown_versions_and_nonempty_destinations() {

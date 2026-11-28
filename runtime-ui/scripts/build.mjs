@@ -3,6 +3,7 @@ import postcss from "postcss";
 import tailwindcss from "@tailwindcss/postcss";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -150,7 +151,7 @@ await build({
   target: "es2022",
   minify: true,
 });
-const app = await build({
+const appOptions = {
   entryPoints: [path.join(root, "src/main.tsx")],
   metafile: true,
   bundle: true,
@@ -159,8 +160,9 @@ const app = await build({
   target: "es2022",
   minify: true,
   legalComments: "inline",
-  define: { "process.env.NODE_ENV": '"production"' },
-});
+  define: { "process.env.NODE_ENV": '"production"', WEB_BUILD: "false" },
+};
+const app = await build(appOptions);
 const previewInputs = Object.keys(app.metafile.inputs).filter((file) =>
   /(?:^|\/)(?:fixtures|docs)\//.test(file),
 );
@@ -182,6 +184,28 @@ await build({
   minify: true,
 });
 const worker = await readFile(path.join(out, "static-worker.js"));
+const web = await build({ ...appOptions, define: { ...appOptions.define, WEB_BUILD: "true" } });
+const webJs = web.outputFiles[0].contents;
+const fonts = new Map();
+const webCss = css.css.replace(/data:font\/(woff2?|ttf);base64,([A-Za-z0-9+/=]+)/g, (_, extension, data) => {
+  const bytes = Buffer.from(data, "base64");
+  const digest = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+  const name = `fonts/${digest}.${extension}`;
+  fonts.set(name, bytes);
+  return name;
+});
+const webEntries = new Map([["app.js", webJs], ["app.css", webCss], ["static-worker.js", worker]]);
+const webId = createHash("sha256").update(webJs).update(webCss).update(worker).digest("hex").slice(0, 16);
+await mkdir(path.join(out, "web/fonts"), { recursive: true });
+await Promise.all([...webEntries, ...fonts].map(([name, bytes]) => writeFile(path.join(out, "web", name), bytes)));
+for (const [name, bytes] of webEntries) {
+  const file = path.join(out, "web", name);
+  const input = typeof bytes === "string" ? Buffer.from(bytes) : bytes;
+  await Promise.all([
+    writeFile(file + ".br", brotliCompressSync(input, { params: { [constants.BROTLI_PARAM_QUALITY]: 9 } })),
+    writeFile(file + ".gz", gzipSync(input, { level: 9 })),
+  ]);
+}
 const id = createHash("sha256")
   .update(js)
   .update(css.css)
@@ -192,6 +216,8 @@ await writeFile(
   path.join(out, "build.json"),
   JSON.stringify({
     id,
+    webId,
+    fonts: [...fonts.keys()],
     format: 1,
     entries: ["app.js", "app.css", "static-worker.js"],
     staticDataFormats: ["json-gzip", "parquet-v1"],

@@ -53,6 +53,7 @@
     "runtime-ui/dist/app.css",
     "runtime-ui/dist/static-worker.js",
     "runtime-ui/dist/build.json",
+    "runtime-ui/dist/web/",
     "mcp.json",
     "README.md",
     "AGENTS.md",

@@ -1,6 +1,6 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "@modelcontextprotocol/ext-apps";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { Toaster } from "sonner";
 import { DashboardApp } from "./dashboard";
 import { SnapshotApp, StaticSite } from "./static";
@@ -13,6 +13,7 @@ import { browserDownload, type Download } from "./host";
 import { WebAccess } from "./web-access";
 import { createCosTools } from "./cos-client";
 import type { AnnotationAccess, Config, Document, ToolCall } from "./types";
+declare const WEB_BUILD: boolean;
 const boot = window.__chartsBoot || { mode: "mcp" };
 let app: App | undefined;
 const webTokenKey = `charts-design-token:${boot.apiBase || "/api/tools/"}:${boot.projectRoot || ""}:${boot.dashboardId || ""}`;
@@ -159,62 +160,51 @@ function Root() {
         }
       }
     };
-    if (boot.mode === "mcp") {
-      app = new App(
-        { name: "charts-design UI", version: "0.1.0" },
-        { availableDisplayModes: ["inline", "fullscreen"] },
-      );
-      app.ontoolresult = receive;
-      app.onteardown = async () => {
-        live = false;
-        return {};
-      };
-      app.onhostcontextchanged = () => {
-        setHostFullscreen(app?.getHostContext()?.displayMode === "fullscreen");
-        setFullscreen(
-          !!app
-            ?.getHostContext()
-            ?.availableDisplayModes?.includes("fullscreen"),
+    if (!WEB_BUILD && boot.mode === "mcp") {
+      void import("@modelcontextprotocol/ext-apps").then(async ({ App }) => {
+        if (!live) return;
+        const connection = new App(
+          { name: "charts-design UI", version: "0.1.0" },
+          { availableDisplayModes: ["inline", "fullscreen"] },
         );
-      };
-      void app
-        .connect()
-        .then(() => {
-          if (live) {
-            setHostFullscreen(app?.getHostContext()?.displayMode === "fullscreen");
-            setFullscreen(
-              !!app
-                ?.getHostContext()
-                ?.availableDisplayModes?.includes("fullscreen"),
-            );
-          }
-        })
-        .catch((e) => {
-          if (live) setError(String(e));
-        });
+        app = connection;
+        const updateDisplays = () => {
+          const host = connection.getHostContext();
+          setHostFullscreen(host?.displayMode === "fullscreen");
+          setFullscreen(!!host?.availableDisplayModes?.includes("fullscreen"));
+        };
+        connection.ontoolresult = receive;
+        connection.onteardown = async () => {
+          live = false;
+          return {};
+        };
+        connection.onhostcontextchanged = updateDisplays;
+        await connection.connect();
+        if (live) updateDisplays();
+      }).catch((e) => {
+        if (live) setError(String(e));
+      });
     } else {
       context.accept({ projectRoot: boot.projectRoot ?? null });
       setFullscreen(document.fullscreenEnabled);
       if (!boot.document)
-        void call("dashboard_list")
-          .then(async (result: Config) => {
-            const id =
-              boot.dashboardId ||
-              new URLSearchParams(location.search).get("dashboardId") ||
-              result.dashboards[0]?.id;
-            if (id)
-              await receive(
-                await call(boot.readOnly ? "dashboard_preview" : "dashboard_get", { dashboardId: id }),
-              );
-            else if (live)
-              setError("尚无已保存的看板，请通过本项目 MCP 创建。");
-          })
-          .catch((e) => {
-            if (live) {
-              if (e instanceof WebAuthError) setAccessRequired(true);
-              else setError(String(e));
-            }
-          });
+        void (async () => {
+          const id = boot.dashboardId || new URLSearchParams(location.search).get("dashboardId") ||
+            (await call("dashboard_list")).dashboards[0]?.id;
+          if (id) {
+            const earlyPreview = window.__chartsInitialPreview;
+            delete window.__chartsInitialPreview;
+            const preview = earlyPreview && id === boot.dashboardId ? await earlyPreview : null;
+            await receive(preview ?? await call(boot.readOnly ? "dashboard_preview" : "dashboard_get", { dashboardId: id }));
+          }
+          else if (live)
+            setError("尚无已保存的看板，请通过本项目 MCP 创建。");
+        })().catch((e) => {
+          if (live) {
+            if (e instanceof WebAuthError) setAccessRequired(true);
+            else setError(String(e));
+          }
+        });
     }
     return () => {
       live = false;

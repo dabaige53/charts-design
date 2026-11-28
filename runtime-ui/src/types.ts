@@ -10,6 +10,7 @@ export type AnnotationAccess = {
 declare global {
   interface Window {
     __chartsBoot: Config;
+    __chartsInitialPreview?: Promise<Config | null>;
     __chartsReady: () => Promise<void>;
   }
 }

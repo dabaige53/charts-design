@@ -14,6 +14,7 @@ const secure = {
   "Content-Security-Policy": "frame-ancestors 'self'; object-src 'none'; base-uri 'none'",
 };
 const ui = new Set(["app.js", "app.css", "static-worker.js"]);
+const sharedUi = /^\/runtime\/([0-9a-f]{16})\/(app\.(?:js|css)|static-worker\.js|fonts\/[0-9a-f]{16}\.(?:woff2?|ttf))$/;
 const name = "访客";
 const author = { name, verified: false };
 const life = { "7d": 604800, "30d": 2592000, never: null };
@@ -218,8 +219,14 @@ const accessHtml = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><met
 const p=new URLSearchParams(location.hash.slice(1)),f=document.querySelector('form');
 if(p.has('key')||p.has('feedback')){const field=p.has('feedback')?'feedbackToken':'accessKey';const input=document.createElement('input');input.type='hidden';input.name=field;input.value=p.get(field==='accessKey'?'key':'feedback');f.append(input);if(field==='accessKey')f.querySelector('[name="accessKey"]').remove();history.replaceState(null,'',location.pathname+location.search);f.submit();}
 </script></body></html>`;
-const readerHtml = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Charts Design</title><link rel="stylesheet" href="app.css"><body><div id="root"></div><script>window.__chartsBoot={mode:"static"};const p=new URLSearchParams(location.hash.slice(1));if(p.has('key')||p.has('feedback')){const form=document.createElement('form'),i=document.createElement('input');form.method='post';i.type='hidden';i.name=p.has('feedback')?'feedbackToken':'accessKey';i.value=p.get(p.has('feedback')?'feedback':'key');form.append(i);document.body.append(form);history.replaceState(null,'',location.pathname+location.search);form.submit();}else{const s=document.createElement('script');s.src='app.js';document.body.append(s);}</script></body></html>`;
+const readerHtml = base => `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Charts Design</title><link rel="stylesheet" href="${base}app.css"><body><div id="root"></div><script>window.__chartsBoot={mode:"static",assetBase:"${base}"};const p=new URLSearchParams(location.hash.slice(1));if(p.has('key')||p.has('feedback')){const form=document.createElement('form'),i=document.createElement('input');form.method='post';i.type='hidden';i.name=p.has('feedback')?'feedbackToken':'accessKey';i.value=p.get(p.has('feedback')?'feedback':'key');form.append(i);document.body.append(form);history.replaceState(null,'',location.pathname+location.search);form.submit();}else{const s=document.createElement('script');s.src='${base}app.js';document.body.append(s);}</script></body></html>`;
 const html = text => new Response(text, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+
+async function uiBuild(env, url) {
+  const response = await env.ASSETS.fetch(new Request(new URL("/runtime/build.json", url)));
+  check(response.ok, 503, "UI_UNAVAILABLE", "Runtime assets are unavailable");
+  return response.json();
+}
 
 async function getSession(request, id, key) {
   const cookie = request.headers.get("Cookie")?.split(";").map(value => value.trim()).find(value => value.startsWith("charts-share-" + id + "="));
@@ -342,12 +349,17 @@ async function annotations(request, url, share, session, { db, env }) {
 
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname, method = request.method;
+  const shared = sharedUi.exec(path);
+  if (shared && method === "GET") {
+    const build = await uiBuild(env, url);
+    check(shared[1] === build.webId && (ui.has(shared[2]) || build.fonts?.includes(shared[2])), 404, "NOT_FOUND", "Not found");
+    return env.ASSETS.fetch(new Request(new URL(path, url)));
+  }
   if (path === "/health" && method === "GET") {
     await storage(env);
     await env.SHARE_DB.prepare("SELECT id FROM publications LIMIT 1").first();
-    const ui = await env.ASSETS.fetch(new Request(new URL("/runtime/build.json", url)));
-    check(ui.ok, 503, "UI_UNAVAILABLE", "Sharing UI is unavailable");
-    return json({ ok: true, role: "sharing", storage: env.CHARTS_PAGES_PROJECT ? "pages+d1" : "d1", uiBuildId: (await ui.json()).id });
+    const build = await uiBuild(env, url);
+    return json({ ok: true, role: "sharing", storage: env.CHARTS_PAGES_PROJECT ? "pages+d1" : "d1", uiBuildId: build.id });
   }
   const managed = /^\/api\/v1\/publications\/([0-9a-f]{32})$/.exec(path);
   if (path === "/api/v1/publications" && method === "POST" || managed && ["GET", "DELETE"].includes(method)) {
@@ -364,7 +376,11 @@ async function route(request, env) {
     resource.startsWith("data/") ? ",files,s.assets AS snapshot_assets" : ""));
   if (!resource && method === "POST") return login(request, url, share, context);
   const session = await getSession(request, id, key);
-  if (resource === "" || resource === "index.html") return html(session ? readerHtml : accessHtml);
+  if (resource === "" || resource === "index.html") {
+    if (!session) return html(accessHtml);
+    const { webId } = await uiBuild(env, url);
+    return html(readerHtml(/^[0-9a-f]{16}$/.test(webId ?? "") ? `/runtime/${webId}/` : ""));
+  }
   check(session, 401, "INVALID_ACCESS_KEY", "请先输入访问密钥");
   if (resource === "api/annotations") return annotations(request, url, share, session, context);
   if (resource === "document.json") return json(selectDocument(await readDocument(env, url, share), share, session));
@@ -383,6 +399,9 @@ export async function sharing(request, env) {
     const response = await route(request, env);
     const headers = new Headers(response.headers);
     for (const [key, value] of Object.entries(secure)) headers.set(key, value);
+    if (response.ok && sharedUi.test(new URL(request.url).pathname)) {
+      headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    }
     return new Response(response.body, { status: response.status, headers });
   } catch (error) {
     if (!(error instanceof ShareError)) console.error("Pages sharing failed", error.name, error.message);

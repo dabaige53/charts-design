@@ -266,6 +266,7 @@ pub fn copy_parquet_package(
     let cache = cache_root.join("parquet-v1");
     private_directory(&cache)?;
     let mut key = version.to_owned();
+    let grouped = !single && partition.is_none() && !options;
     if partition.is_some() || options {
         let layout = python_json(&json!([partition, options]), false, true)?;
         key.push_str(&format!(
@@ -275,6 +276,8 @@ pub fn copy_parquet_package(
     }
     if single {
         key.push_str("-single");
+    } else if grouped {
+        key.push_str("-grouped");
     }
     let directory = cache.join(&key);
     let lock = OpenOptions::new()
@@ -306,6 +309,7 @@ pub fn copy_parquet_package(
                     partition_field: partition.map(String::from),
                     include_options: options,
                     single_file: single,
+                    grouped_files: grouped,
                 },
             )
             .map_err(|e| Error::new("PARQUET_EXPORT_FAILED", e.to_string()))?;

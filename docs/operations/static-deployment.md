@@ -12,7 +12,7 @@
 | `app.js`、`app.css` | 已构建的应用与样式 |
 | `static-worker.js` | 筛选、汇总、表格搜索、排序和分页 |
 | `document.json` | 组件、布局、指标、数据分片相对路径和可直接读取的筛选候选值 |
-| `data/*.parquet` | 原生导出的使用中数据；SNAPPY 压缩，每批最多 8192 条或约 8 MiB 行数据，单文件不超过 24 MiB |
+| `data/*.parquet` | 原生导出的使用中数据。每个行组最多 8192 条或约 8 MiB 行数据。普通 ZIP 把相邻且物理字段类型一致的行组合入同一个文件，减少浏览器请求。单文件不超过 24 MiB |
 | `data/*.json.gz` | 兼容格式，每片最多 5000 条，解压后的 JSON 不超过 16 MiB |
 | `export-manifest.json` | 看板 revision、前后端构建标识、实际数据格式、数据集记录数及编码回执 |
 | `README.txt` | 使用方式和数据范围 |
