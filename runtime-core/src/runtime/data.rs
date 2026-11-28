@@ -417,6 +417,25 @@ impl LocalData {
         rows: I,
         fields: &Value,
     ) -> Result<Value> {
+        self.import_checked(rows, fields, None)
+    }
+    pub(crate) fn import_verified<I: IntoIterator<Item = Result<Value>>>(
+        &self,
+        rows: I,
+        reference: &Value,
+    ) -> Result<Value> {
+        self.import_checked(
+            rows,
+            &super::cloud_data::ordered_fields(reference)?,
+            Some(reference),
+        )
+    }
+    fn import_checked<I: IntoIterator<Item = Result<Value>>>(
+        &self,
+        rows: I,
+        fields: &Value,
+        expected: Option<&Value>,
+    ) -> Result<Value> {
         let map = fields.as_object().ok_or_else(|| {
             Error::new(
                 "INVALID_ARGUMENT",
@@ -499,13 +518,15 @@ impl LocalData {
             if has_missing {
                 reference["hasMissingFields"] = json!(true);
             }
-            let existing: Option<String> = tx.query_row(
-                "SELECT metadata FROM versions WHERE version=?", [&version], |row| row.get(0),
-            ).optional()?;
-            if let Some(raw) = existing {
+            require(
+                expected.is_none_or(|expected| *expected == reference),
+                "Transferred data checksum mismatch",
+                "DATA_CONFLICT",
+            )?;
+            if let Some(saved) = local_reference(&tx, &version)? {
                 tx.execute_batch("DROP TABLE staging")?;
                 tx.commit()?;
-                return metadata(&raw);
+                return Ok(saved);
             }
             tx.execute_batch(&format!("ALTER TABLE staging RENAME TO d_{version}"))?;
             tx.execute("INSERT INTO versions VALUES (?,?)", rusqlite::params![version, canonical_json(&reference)?])?;
@@ -584,15 +605,8 @@ impl LocalData {
                 self.mount_version(version, &path)?;
             }
         }
-        let found: Option<String> = db
-            .query_row(
-                "SELECT metadata FROM versions WHERE version=?",
-                [version],
-                |r| r.get(0),
-            )
-            .optional()?;
-        if let Some(raw) = found {
-            return Ok((format!("d_{version}"), metadata(&raw)?));
+        if let Some(reference) = local_reference(db, version)? {
+            return Ok((format!("d_{version}"), reference));
         }
         let mounted = self
             .mounts
@@ -624,6 +638,9 @@ impl LocalData {
             return Ok((format!("{alias}.d_{version}"), metadata(&raw)?));
         }
         Err(Error::new("INVALID_ARGUMENT", "Unknown data version"))
+    }
+    pub(crate) fn find_local_reference(&self, version: &str) -> Result<Option<Value>> {
+        self.with_connection(|db| local_reference(db, version))
     }
     pub fn describe(&self, version: &str) -> Result<Value> {
         if let Some(cloud) = &self.cloud {
@@ -1184,6 +1201,16 @@ impl LocalData {
         }
         Ok(result)
     }
+}
+fn local_reference(db: &Connection, version: &str) -> Result<Option<Value>> {
+    let raw: Option<String> = db
+        .query_row(
+            "SELECT metadata FROM versions WHERE version=?",
+            [version],
+            |row| row.get(0),
+        )
+        .optional()?;
+    raw.as_deref().map(metadata).transpose()
 }
 fn setup(db: &Connection) -> Result<()> {
     db.busy_timeout(Duration::from_secs(30))?;

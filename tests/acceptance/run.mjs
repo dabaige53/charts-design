@@ -2,7 +2,7 @@
 /** Synthetic end-to-end acceptance through the shipped native CLI, MCP and HTTP contracts. */
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
-import {randomUUID} from 'node:crypto';
+import {randomBytes, randomUUID} from 'node:crypto';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {createServer} from 'node:net';
 import {tmpdir} from 'node:os';
@@ -364,7 +364,52 @@ async function serverPages(url, token, project, fixture, samples, expected, loop
   const [pages] = await authorPages(links, fixture, samples, expected);
   return {pages, discovery: {project, boards: boards.length}};
 }
-async function ciServer(root, fixture, samples, expected) {
+// @wu-test type=integration | scope=SQLite 作者服务器分块上传 | protects=新数据无法通过 MCP 按块上传、恢复后内容变化或完成前出现可用引用
+async function checkSqliteUpload(origin, token) {
+  const dashboardId = 'chunked-upload';
+  const datasetId = 'sales';
+  const rows = Array.from({length: 5001}, (_, index) => ({amount: index}));
+  const fields = {amount: {type: 'number'}};
+  const source = new Mcp(origin, token, 'upload-source');
+  const destination = new Mcp(origin, token, 'upload-destination');
+  await source.initialize();
+  await destination.initialize();
+  await source.tool('dashboard_create', {dashboardId, title: 'Upload source'});
+  await source.tool('dataset_import', {dashboardId, datasetId, expectedRevision: 1, rows, fields});
+  const sourceDocument = await source.tool('dashboard_get', {dashboardId});
+  const ref = sourceDocument.document.snapshot.datasetRefs[datasetId];
+  const upload = {uploadId: randomBytes(32).toString('hex'), ref, encoding: 'gzip-json-v1'};
+  const uploadPart = (part, values) => destination.tool('dataset_transfer_chunk', {
+    ...upload, part, payload: Buffer.from(Bun.gzipSync(Buffer.from(JSON.stringify(values)))).toString('base64'),
+  });
+  const first = await uploadPart(0, rows.slice(0, 5000));
+  assert.equal(first.complete, false);
+  assert.deepEqual(await uploadPart(0, rows.slice(0, 5000)), first);
+  const staged = await destination.tool('dataset_transfer_status', {...upload, parts: [0, 1]});
+  assert.deepEqual(Object.keys(staged.receivedParts), ['0']);
+  assert.equal(staged.ref, undefined);
+  await uploadPart(1, rows.slice(5000));
+  let state = await destination.tool('dataset_transfer_finish', upload);
+  const deadline = Date.now() + 30000;
+  while (state.state === 'running' && Date.now() < deadline) {
+    await wait(50);
+    state = await destination.tool('dataset_transfer_status', upload);
+  }
+  assert.equal(state.state, 'complete', JSON.stringify(state));
+  assert.deepEqual(state.ref, ref);
+  await destination.tool('dashboard_submit', {dashboardId, createTitle: 'Upload destination', operations: [
+    {op: 'put_source', id: 'fixture', value: {kind: 'fixture', name: 'Synthetic chunked upload'}},
+    {op: 'put_dataset_ref', id: datasetId, meta: {sourceId: 'fixture', fields}, ref},
+    {op: 'put_component', id: 'details', value: {kind: 'table', title: 'Details', datasetId}},
+  ]});
+  const preview = await destination.tool('dataset_preview', {dashboardId, datasetId, offset: 4999, limit: 2});
+  assert.equal(preview.totalRows, rows.length);
+  assert.equal(preview.datasetVersion, ref.version);
+  assert.deepEqual(preview.rows, rows.slice(4999));
+  return {rows: rows.length, chunks: 2};
+}
+
+async function ciServer(root, fixture, samples, expected, verify) {
   const port = await freePort(), origin = `http://127.0.0.1:${port}`, token = randomUUID();
   const run = launch(root, ['server', '--workspace', root, '--runtime-root', join(root, 'remote'),
     '--default-project', 'project', '--host', '127.0.0.1', '--port', String(port), '--public-url', origin, '--token', token]);
@@ -376,7 +421,9 @@ async function ciServer(root, fixture, samples, expected) {
       await wait(100);
     }
     assert(ready, `Author server startup timed out: ${run.error()}`);
-    return await serverPages(origin + '/mcp', token, 'project', fixture, samples, expected, true);
+    const result = await serverPages(origin + '/mcp', token, 'project', fixture, samples, expected, true);
+    if (verify) result.sqliteUpload = await checkSqliteUpload(origin, token);
+    return result;
   } finally { await stop(run.child); }
 }
 
@@ -477,8 +524,12 @@ async function main() {
       assert.equal(measuredWorker.nextPage.dataRequests, 0, 'Paging must reuse decoded data');
       report.localShare = {parquetShards: shards.length, html: loading.html, assets: loading.assets, ...measuredWorker};
     } finally { await server.stop(true); }
-    if (args['ci-server']) { phase('ci-author-server'); const remote = await ciServer(root, fixture, args.samples, expected);
-      report.ciAuthorServer = remote.pages; report.checks.ciMcp = remote.discovery; }
+    if (args['ci-server']) {
+      phase('ci-author-server');
+      const remote = await ciServer(root, fixture, args.samples, expected, args.mode === 'verify');
+      report.ciAuthorServer = remote.pages; report.checks.ciMcp = remote.discovery;
+      if (remote.sqliteUpload) report.checks.sqliteUpload = remote.sqliteUpload;
+    }
     if (env.CHARTS_TEST_MCP_URL) { phase('remote-author-server'); const remote = await serverPages(env.CHARTS_TEST_MCP_URL,
       env.CHARTS_TEST_MCP_TOKEN, env.CHARTS_TEST_MCP_PROJECT, fixture, args.samples, expected);
     report.serverAuthor = remote.pages; report.checks.remoteMcp = remote.discovery; }

@@ -2,7 +2,8 @@
 #[path = "transfer_client.rs"]
 mod client;
 use super::{
-    cloud_data::{ordered_fields, ChunkRows, CloudData},
+    cloud_data::{ChunkRows, CloudData},
+    data::LocalData,
     error::{require, Error, Result},
     object_storage::Storage,
     serialization::json_bytes,
@@ -16,6 +17,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     io::{Cursor, Read, Write},
+    path::PathBuf,
     sync::{Arc, Mutex, OnceLock, Weak},
 };
 
@@ -191,15 +193,7 @@ impl TransferBackend for CloudBackend {
             .restore
             .lock()
             .map_err(|_| Error::new("INTERNAL_ERROR", "Dataset restore lock failed"))?;
-        let checked = self
-            .0
-            .local
-            .import_iter(rows, &ordered_fields(reference)?)?;
-        require(
-            checked == *reference,
-            "Transferred data checksum mismatch",
-            "DATA_CONFLICT",
-        )?;
+        let checked = self.0.local.import_verified(rows, reference)?;
         let saved = self
             .0
             .persist_cached_progress(&checked, progress.as_ref())?;
@@ -208,6 +202,31 @@ impl TransferBackend for CloudBackend {
             "Remote data metadata differs",
             "DATA_CONFLICT",
         )?;
+        Ok(saved)
+    }
+}
+struct LocalBackend {
+    data: LocalData,
+    staging: PathBuf,
+}
+impl TransferBackend for LocalBackend {
+    fn metadata(&self, version: &str) -> Result<Value> {
+        Ok(self
+            .data
+            .find_local_reference(version)?
+            .unwrap_or(Value::Null))
+    }
+    fn storage(&self) -> Result<Storage> {
+        Storage::private(self.staging.clone(), "workspace")
+    }
+    fn save(
+        &self,
+        rows: ChunkRows,
+        reference: &Value,
+        progress: Arc<dyn Fn(u64) + Send + Sync>,
+    ) -> Result<Value> {
+        let saved = self.data.import_verified(rows, reference)?;
+        progress(reference["rowCount"].as_u64().unwrap_or(0).div_ceil(500));
         Ok(saved)
     }
 }
@@ -224,17 +243,26 @@ struct Transfers {
     project: String,
 }
 impl Transfers {
-    fn cloud(data: Arc<CloudData>) -> Result<Self> {
+    fn new(service: &Service) -> Result<Self> {
         static PROJECTS: OnceLock<Mutex<HashMap<String, Arc<Registry>>>> = OnceLock::new();
+        let store = &service.store;
+        require(
+            store.project_root.is_some(),
+            "Dataset transfers require a named project",
+            "PROJECT_REQUIRED",
+        )?;
+        let backend: Arc<dyn TransferBackend> = match &store.data.cloud {
+            Some(data) => Arc::new(CloudBackend(data.clone())),
+            None => Arc::new(LocalBackend {
+                data: store.data.clone(),
+                staging: store.runtime_root.join("dataset-transfers"),
+            }),
+        };
         let identity = format!(
             "{}\0{}\0{}",
-            data.project,
-            data.database.backend,
-            data.local
-                .path
-                .as_ref()
-                .map(|p| p.to_string_lossy())
-                .unwrap_or_default()
+            store.project,
+            store.root.display(),
+            store.runtime_root.display()
         );
         let registry = PROJECTS
             .get_or_init(Mutex::default)
@@ -244,8 +272,8 @@ impl Transfers {
             .or_default()
             .clone();
         Ok(Self {
-            project: data.project.clone(),
-            backend: Arc::new(CloudBackend(data)),
+            project: store.project.clone(),
+            backend,
             registry,
         })
     }
@@ -591,19 +619,16 @@ impl Transfers {
 }
 
 pub fn call(service: &Service, tool: &str, args: &Value) -> Result<Value> {
-    let data = service
-        .store
-        .data
-        .cloud
-        .as_ref()
-        .ok_or_else(|| {
+    let cloud_data = || {
+        service.store.data.cloud.as_ref().ok_or_else(|| {
             Error::new(
                 "UNSUPPORTED_OPERATION",
                 "Dataset cloud operations require cloud project storage",
             )
-        })?
-        .clone();
+        })
+    };
     if tool == "dataset_storage_inventory" {
+        let data = cloud_data()?;
         let database = service
             .store
             .database
@@ -619,6 +644,7 @@ pub fn call(service: &Service, tool: &str, args: &Value) -> Result<Value> {
         return Ok(result);
     }
     if tool == "dataset_repartition" {
+        let data = cloud_data()?;
         require(
             data.cos_enabled,
             "Repartitioning requires COS project storage",
@@ -651,7 +677,7 @@ pub fn call(service: &Service, tool: &str, args: &Value) -> Result<Value> {
             ))
         }
     };
-    let manager = Transfers::cloud(data)?;
+    let manager = Transfers::new(service)?;
     let upload = string(args, "uploadId")?;
     match tool {
         "dataset_transfer_chunk" => manager.chunk(
@@ -683,45 +709,7 @@ mod tests {
     use crate::runtime::data::LocalData;
     use std::time::{Duration, Instant};
 
-    struct Backend {
-        local: LocalData,
-        storage: Storage,
-        references: Mutex<HashMap<String, Value>>,
-    }
-    impl TransferBackend for Backend {
-        fn metadata(&self, version: &str) -> Result<Value> {
-            Ok(self
-                .references
-                .lock()
-                .unwrap()
-                .get(version)
-                .cloned()
-                .unwrap_or(Value::Null))
-        }
-        fn storage(&self) -> Result<Storage> {
-            Ok(self.storage.clone())
-        }
-        fn save(
-            &self,
-            rows: ChunkRows,
-            reference: &Value,
-            progress: Arc<dyn Fn(u64) + Send + Sync>,
-        ) -> Result<Value> {
-            let imported = self.local.import_iter(rows, &ordered_fields(reference)?)?;
-            require(
-                imported == *reference,
-                "Transfer checksum mismatch",
-                "DATA_CONFLICT",
-            )?;
-            self.references.lock().unwrap().insert(
-                reference["version"].as_str().unwrap().into(),
-                imported.clone(),
-            );
-            progress(reference["rowCount"].as_u64().unwrap().div_ceil(500));
-            Ok(imported)
-        }
-    }
-    fn setup(path: &std::path::Path) -> (Transfers, Arc<Backend>, Value, Vec<Value>) {
+    fn setup(path: &std::path::Path) -> (Transfers, Arc<LocalBackend>, Value, Vec<Value>) {
         let rows = (0..501)
             .map(|index| {
                 if index % 5 == 0 {
@@ -733,10 +721,9 @@ mod tests {
             .collect::<Vec<_>>();
         let source = LocalData::new(None).unwrap();
         let reference = source.import_rows(&rows, &json!({"label":{"type":"string"},"value":{"type":"number"},"enabled":{"type":"boolean"}})).unwrap();
-        let backend = Arc::new(Backend {
-            local: LocalData::new(Some(&path.join("data"))).unwrap(),
-            storage: Storage::private(path.join("objects"), "test").unwrap(),
-            references: Mutex::new(HashMap::new()),
+        let backend = Arc::new(LocalBackend {
+            data: LocalData::new(Some(&path.join("data"))).unwrap(),
+            staging: path.join("objects"),
         });
         let manager = Transfers {
             backend: backend.clone(),
@@ -838,9 +825,10 @@ mod tests {
         );
         let result = completed(&manager, &upload, &reference, false);
         assert_eq!(result, json!({"state":"complete","ref":reference}));
-        assert_eq!(backend.local.all_rows(&reference).unwrap(), rows);
+        assert_eq!(backend.data.all_rows(&reference).unwrap(), rows);
         assert!(backend
-            .storage
+            .storage()
+            .unwrap()
             .list(&manager.prefix(&upload, false))
             .unwrap()
             .is_empty());
@@ -875,7 +863,18 @@ mod tests {
             completed(&manager, &upload, &wrong, true)["code"],
             "DATA_CONFLICT"
         );
-        assert!(backend.references.lock().unwrap().is_empty());
+        let version = reference["version"].as_str().unwrap();
+        assert!(backend
+            .data
+            .find_local_reference(version)
+            .unwrap()
+            .is_none());
+        let wrong_version = wrong["version"].as_str().unwrap();
+        assert!(backend
+            .data
+            .find_local_reference(wrong_version)
+            .unwrap()
+            .is_none());
         assert!(manager
             .status(&upload, &wrong, Some(&json!([0, 0])), true)
             .is_err());

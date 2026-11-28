@@ -51,13 +51,13 @@ charts-design-runtime --runtime-root /absolute/path/cache mcp
 
 同一构建的声明可以复用。批量声明只携带一份公共合同，各预设附带完整示例；业务使用必须替换数据、单位、阈值和叙述。工具定义以打包合同为准，不在文档维护第二份枚举。
 
-`chart_recommend` 按已知数据形态排序。未知指标数、时间字段和类别数量保持未知。需要筛选重算时传 `requiresFilterBinding: true`，核对候选的 `bindingMode`、`requirements`、`cautions`、`fit` 和 `shapeMismatches`。动态编码需要显式映射；可分组热力图不等于可重算相关系数。推荐保持跨图的可比性，不因页面已经使用某图而自动降低其排名。
+`chart_recommend` 按已知数据形态排序。未知指标数、时间字段和类别数量保持未知。需要筛选重算时传 `requiresFilterBinding: true`，核对候选的 `bindingMode`、`requirements`、`cautions`、`fit` 和 `shapeMismatches`。动态编码需要显式映射。涉及相关系数重算时，核对推荐的计算条件。已有图形继续按分析问题和数据形态参与排序。
 
 ## 编辑与结果确认
 
 新成果已有初始内容时，使用 `dashboard_submit` 的 `dashboardId + createTitle + operations`。JSON 对象直接作为工具参数。服务创建前检查整批声明、来源和数据引用，非法初始内容不留下空文档。已有 ID 返回冲突。
 
-修改已有成果先读 `dashboard_get`，用返回的 `revision` 作为 `expectedRevision`。`dashboard_submit` 写入相关修改、检查完整草稿并保存一个检查点；可省略 `operations`，只检查和保存导入后的草稿。检查失败返回 `DOCTOR_FAILED`，保留草稿供修正。该操作不构成跨数据库、计算与对象存储的整体事务，未知回执先读取实际状态。
+修改已有成果先读 `dashboard_get`，用返回的 `revision` 作为 `expectedRevision`。`dashboard_submit` 写入相关修改、检查完整草稿并保存一个检查点；可省略 `operations`，只检查和保存导入后的草稿。检查失败返回 `DOCTOR_FAILED`，保留草稿供修正。数据库、计算和对象存储分阶段执行。回执不明确时，先读取实际状态。
 
 `dashboard_get` 读取可编辑草稿，`dashboard_view` 读取计算结果。用 `responseMode: "patch"`、必要的 `componentIds` 和 `includeEvidence: true` 一次核对结果、口径与来源；完成后打开 `dashboard_preview` 查看保存版。逐项设计规则见[共享交付](../../skills/executive-charts/references/mcp-delivery.md)。
 
@@ -91,11 +91,11 @@ MCP 文档写入默认 `responseMode: "summary"`，返回看板 ID、顶层修�
 | 已配置 SQLite 表 | `dataset_attach`，流式导入不可变数据版本，先检查目标修订 |
 | SQL | `query_execute`，使用管理员配置的 SQLite、PostgreSQL 或 DuckDB 只读连接 |
 | 已有数据版本 | `put_dataset_ref`，字段、版本、行数与内容元信息必须匹配且目标项目可读 |
-| 大型远程数据 | 受控分块上传与完成校验，不塞入单条 MCP 参数 |
+| 大型远程数据 | 分块上传，完成后校验数据版本。自有服务器的 SQLite 工作区将暂存分块保存在私有运行目录 |
 
 CSV 支持 UTF-8 BOM、带引号的单元格、空值和显式字段类型。重复/空表头、错列数、不完整引号与非法数值会被拒绝。默认推断保护前导零标识符；空数据必须提供字段声明。单位、百分比比例、主键和聚合口径需要按来源确认，不从名称自动认证。
 
-`dataset_preview` 在没有组件时也能读取字段、完整行数和默认 20 行样本，最多 100 行，支持 offset。它不应用组件筛选，也不扫描其他数据集；不要把样本的类别、缺失比例或时间范围当成全量统计。需要完整统计时，在来源执行明确的聚合查询。数据引用和预览可固定 `expectedRevision` 与 `dataVersion`，不一致返回冲突。
+`dataset_preview` 在没有组件时也能读取字段、完整行数和默认 20 行样本，最多 100 行，支持 offset。样本来自所选数据集的未筛选数据。需要完整统计时，在来源执行明确的聚合查询。数据引用和预览可固定 `expectedRevision` 与 `dataVersion`，不一致返回冲突。
 
 `--sources FILE` 是操作员提供的连接别名配置。工具只接收别名、只读 SQL 和绑定参数，不接受任意数据库路径或新的凭据。查询只允许单条只读语句，执行时间与行数有上限；参数不拼接进 SQL。
 
