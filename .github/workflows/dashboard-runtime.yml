@@ -22,7 +22,7 @@ env:
 jobs:
   changes:
     name: Select checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       tests: ${{ steps.scope.outputs.tests }}
@@ -31,9 +31,6 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
       - id: scope
         env:
           EVENT: ${{ github.event_name }}
@@ -42,28 +39,61 @@ jobs:
           if [ "$EVENT" = workflow_dispatch ] || [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
             echo 'tests=true' >> "$GITHUB_OUTPUT"
           else
-            git diff --name-only -z "$BASE" HEAD | bun bin/ci-scope.mjs >> "$GITHUB_OUTPUT"
+            git diff --name-only -z "$BASE" HEAD | node bin/ci-scope.mjs >> "$GITHUB_OUTPUT"
           fi
+
+  environment:
+    name: Prepare reusable CI environment
+    needs: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/ci-environment
+        with:
+          rust: ${{ needs.changes.outputs.tests }}
+          ui: ${{ needs.changes.outputs.tests }}
 
   checks:
     name: Static checks
+    needs: environment
     if: ${{ !inputs.acceptance_only }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile --production --ignore-scripts
+      - uses: ./.github/actions/ci-environment
       - name: Syntax, skill links and documentation links
         run: bun run check
       - name: Development and deployment contracts
         run: bun test ./tests/development ./tests/deploy
 
+  ui:
+    name: Build shared UI once
+    needs: [changes, environment]
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/ci-environment
+        with:
+          ui: 'true'
+      - run: bun run ui:typecheck
+        if: ${{ !inputs.acceptance_only }}
+      - run: bun run ui:build
+      - name: Verify the single distributable UI
+        run: bun run ui:package
+      - uses: actions/upload-artifact@v5
+        with:
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
+          if-no-files-found: error
+          retention-days: 14
+
   build:
     name: Build Rust runtime and shared UI
-    needs: changes
+    needs: [changes, environment, ui]
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -80,34 +110,20 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
+      - uses: ./.github/actions/ci-environment
         with:
-          bun-version-file: .bun-version
-      - uses: actions/cache/restore@v4
-        id: ui-cache
+          rust: 'true'
+          ui: 'true'
+      - uses: actions/download-artifact@v5
         with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-1.3.8-${{ hashFiles('runtime-ui/bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-1.3.8-
-      - run: bun run ui:install
-      - uses: actions/cache/save@v4
-        if: ${{ github.ref == 'refs/heads/main' && steps.ui-cache.outputs.cache-hit != 'true' }}
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ steps.ui-cache.outputs.cache-primary-key }}
-      - run: bun run ui:typecheck
-        if: ${{ !inputs.acceptance_only }}
-      - run: bun run ui:build
-      - name: Verify the single distributable UI
-        run: bun run ui:package
-      - name: Install pinned Rust toolchain
-        working-directory: runtime-core
-        run: rustup show
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-core
           shared-key: native-runtime
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
+          cache-on-failure: true
       - name: Formatting, native behavior and Clippy
         working-directory: runtime-core
         if: ${{ !inputs.acceptance_only }}
@@ -122,12 +138,6 @@ jobs:
         with:
           name: native-${{ github.sha }}
           path: runtime-core/target/release/charts-design-core
-          if-no-files-found: error
-          retention-days: 14
-      - uses: actions/upload-artifact@v5
-        with:
-          name: shared-ui-${{ github.sha }}
-          path: runtime-ui/dist/
           if-no-files-found: error
           retention-days: 14
       - name: React component and interaction tests
@@ -152,7 +162,7 @@ jobs:
 
   coverage:
     name: Rust coverage gate (84%)
-    needs: changes
+    needs: [changes, environment, ui]
     if: ${{ needs.changes.outputs.tests == 'true' && !inputs.acceptance_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -169,30 +179,18 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
+      - uses: ./.github/actions/ci-environment
         with:
-          bun-version-file: .bun-version
-      - uses: actions/setup-node@v5
+          rust: 'true'
+      - uses: actions/download-artifact@v5
         with:
-          node-version: '24'
-      - run: bun install --frozen-lockfile --production --ignore-scripts
-      - name: Prepare UI for native preview tests
-        run: |
-          bun run ui:install
-          bun run ui:prepare
-      - name: Install the pinned compiler and coverage tools
-        working-directory: runtime-core
-        run: |
-          rustup show
-          rustup component add llvm-tools-preview
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov@0.6.21
+          name: shared-ui-${{ github.sha }}
+          path: runtime-ui/dist/
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-core
           shared-key: native-coverage
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
           cache-on-failure: true
       - name: Measure the actual native implementation
         working-directory: runtime-core
@@ -225,18 +223,13 @@ jobs:
 
   container:
     name: Container image smoke test
-    needs: changes
+    needs: [changes, environment]
     if: ${{ needs.changes.outputs.tests == 'true' && !inputs.acceptance_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
+      - uses: ./.github/actions/ci-environment
       - name: Add fake environment files to detect image leaks
         run: |
           bun -e 'for (const path of ["deploy/charts.env", ".env", "runtime-core/.env"]) await Bun.write(path, "CHARTS_SERVER_TOKENS=build-context-canary-not-a-real-token\n")'
@@ -250,32 +243,26 @@ jobs:
           tags: charts-design:ci
           load: true
           cache-from: type=gha,scope=charts-ci-image
-          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=charts-ci-image,mode=max' || '' }}
+          cache-to: type=gha,scope=charts-ci-image,mode=max
       - name: MCP, scoped access, Parquet downloads and non-root isolation
         run: bun tests/deploy/container-smoke.mjs --image charts-design:ci --commit "$GITHUB_SHA"
 
   acceptance:
     name: Dashboard and static-share acceptance
-    needs: [changes, build]
+    needs: [changes, environment, ui, build]
     if: needs.changes.outputs.tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       CHARTS_CORE_BIN: ${{ github.workspace }}/runtime-core/native/charts-design-core
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
+      - uses: ./.github/actions/ci-environment
       - uses: actions/download-artifact@v5
         with:
           name: native-${{ github.sha }}
           path: runtime-core/native/
       - run: chmod +x runtime-core/native/charts-design-core
-      - run: bun install --frozen-lockfile --production --ignore-scripts
       - uses: actions/download-artifact@v5
         with:
           name: shared-ui-${{ github.sha }}

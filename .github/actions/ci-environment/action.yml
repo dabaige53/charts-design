@@ -1,0 +1,160 @@
+name: Restore the prebuilt CI environment
+description: Reuse complete tools and installed dependencies; materialize only missing snapshots.
+inputs:
+  rust:
+    description: Restore the pinned Rust compiler, components and coverage tool.
+    default: 'false'
+  ui:
+    description: Restore the installed UI dependencies.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Read environment versions
+      id: versions
+      shell: bash
+      run: |
+        node --input-type=module <<'NODE'
+        import { appendFileSync, readFileSync } from 'node:fs';
+        const config = JSON.parse(readFileSync('.github/ci/environment.json', 'utf8'));
+        const bun = readFileSync('.bun-version', 'utf8').trim();
+        const rust = readFileSync('runtime-core/rust-toolchain.toml', 'utf8').match(/^channel\s*=\s*"([^"]+)"/m)?.[1];
+        if (!/^\d+\.\d+\.\d+$/.test(bun) || !/^\d+\.\d+\.\d+$/.test(rust ?? '') ||
+            !/^\d+(?:\.\d+\.\d+)?$/.test(config.node) || !/^\d+\.\d+\.\d+$/.test(config.cargoLlvmCov) ||
+            !Number.isSafeInteger(config.revision) || config.revision < 1) {
+          throw new Error('Invalid CI environment versions');
+        }
+        const os = Object.fromEntries(readFileSync('/etc/os-release', 'utf8').trim().split('\n')
+          .map(line => { const at = line.indexOf('='); return [line.slice(0, at), line.slice(at + 1).replaceAll('"', '')]; }));
+        if (os.ID !== 'ubuntu' || os.VERSION_ID !== '24.04') throw new Error('The CI environment requires Ubuntu 24.04');
+        appendFileSync(process.env.GITHUB_OUTPUT,
+          `bun=${bun}\nrust=${rust}\nnode=${config.node}\ncov=${config.cargoLlvmCov}\nrevision=${config.revision}\n`);
+        NODE
+
+    - name: Restore prebuilt JavaScript tools
+      id: js
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/charts-ci-js
+        key: ci-js-ubuntu24-${{ runner.os }}-${{ runner.arch }}-r${{ steps.versions.outputs.revision }}-node${{ steps.versions.outputs.node }}-bun${{ steps.versions.outputs.bun }}-${{ hashFiles('.github/actions/ci-environment/action.yml') }}
+    - uses: actions/setup-node@v5
+      if: steps.js.outputs.cache-hit != 'true'
+      with:
+        node-version: ${{ steps.versions.outputs.node }}
+    - uses: oven-sh/setup-bun@v2
+      if: steps.js.outputs.cache-hit != 'true'
+      with:
+        bun-version-file: .bun-version
+    - name: Materialize JavaScript tools once
+      if: steps.js.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/charts-ci-js/bun"
+        cp "$(command -v bun)" "$RUNNER_TEMP/charts-ci-js/bun/bun"
+        node_root=$(dirname "$(dirname "$(readlink -f "$(command -v node)")")")
+        cp -a "$node_root" "$RUNNER_TEMP/charts-ci-js/node"
+    - name: Activate prebuilt JavaScript tools
+      shell: bash
+      env:
+        BUN_VERSION: ${{ steps.versions.outputs.bun }}
+        NODE_VERSION: ${{ steps.versions.outputs.node }}
+      run: |
+        test "$("$RUNNER_TEMP/charts-ci-js/bun/bun" --version)" = "$BUN_VERSION"
+        actual_node=$("$RUNNER_TEMP/charts-ci-js/node/bin/node" -p 'process.versions.node')
+        case "$actual_node" in "$NODE_VERSION"|"$NODE_VERSION".*) ;; *) exit 1 ;; esac
+        echo "$RUNNER_TEMP/charts-ci-js/node/bin" >> "$GITHUB_PATH"
+        echo "$RUNNER_TEMP/charts-ci-js/bun" >> "$GITHUB_PATH"
+        echo "Using prebuilt Node $actual_node and Bun $BUN_VERSION"
+    - name: Save prepared JavaScript tools
+      if: steps.js.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/charts-ci-js
+        key: ${{ steps.js.outputs.cache-primary-key }}
+
+    - name: Restore prebuilt Rust tools
+      id: rust
+      if: inputs.rust == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/charts-ci-rust
+        key: ci-rust-ubuntu24-${{ runner.os }}-${{ runner.arch }}-r${{ steps.versions.outputs.revision }}-llvm-cov${{ steps.versions.outputs.cov }}-${{ hashFiles('runtime-core/rust-toolchain.toml', '.github/actions/ci-environment/action.yml') }}
+    - name: Materialize the Rust toolchain once
+      if: inputs.rust == 'true' && steps.rust.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        RUST_VERSION: ${{ steps.versions.outputs.rust }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/charts-ci-rust/bin"
+        cp "$(command -v rustup)" "$RUNNER_TEMP/charts-ci-rust/bin/rustup"
+        RUSTUP_HOME="$RUNNER_TEMP/charts-ci-rust/rustup" \
+          "$RUNNER_TEMP/charts-ci-rust/bin/rustup" toolchain install "$RUST_VERSION" \
+          --profile minimal --component rustfmt,clippy,llvm-tools-preview --no-self-update
+        for command in cargo rustc rustdoc rustfmt cargo-fmt cargo-clippy clippy-driver; do
+          ln -sf rustup "$RUNNER_TEMP/charts-ci-rust/bin/$command"
+        done
+    - uses: taiki-e/install-action@v2
+      if: inputs.rust == 'true' && steps.rust.outputs.cache-hit != 'true'
+      with:
+        tool: cargo-llvm-cov@${{ steps.versions.outputs.cov }}
+    - name: Add the prebuilt coverage tool
+      if: inputs.rust == 'true' && steps.rust.outputs.cache-hit != 'true'
+      shell: bash
+      run: cp "$(command -v cargo-llvm-cov)" "$RUNNER_TEMP/charts-ci-rust/bin/cargo-llvm-cov"
+    - name: Activate prebuilt Rust tools
+      if: inputs.rust == 'true'
+      shell: bash
+      env:
+        RUST_VERSION: ${{ steps.versions.outputs.rust }}
+        COVERAGE_VERSION: ${{ steps.versions.outputs.cov }}
+      run: |
+        export RUSTUP_HOME="$RUNNER_TEMP/charts-ci-rust/rustup"
+        export RUSTUP_TOOLCHAIN="$RUST_VERSION"
+        export PATH="$RUNNER_TEMP/charts-ci-rust/bin:$PATH"
+        test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_VERSION"
+        test "$(cargo llvm-cov --version | cut -d ' ' -f 2)" = "$COVERAGE_VERSION"
+        echo "$RUNNER_TEMP/charts-ci-rust/bin" >> "$GITHUB_PATH"
+        echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
+        echo "RUSTUP_TOOLCHAIN=$RUSTUP_TOOLCHAIN" >> "$GITHUB_ENV"
+        echo "Using prebuilt Rust $RUST_VERSION with cargo-llvm-cov $COVERAGE_VERSION"
+    - name: Save prepared Rust tools
+      if: inputs.rust == 'true' && steps.rust.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/charts-ci-rust
+        key: ${{ steps.rust.outputs.cache-primary-key }}
+
+    - name: Restore installed runtime dependencies
+      id: root
+      uses: actions/cache/restore@v4
+      with:
+        path: node_modules
+        key: ci-root-ubuntu24-${{ runner.os }}-${{ runner.arch }}-r${{ steps.versions.outputs.revision }}-node${{ steps.versions.outputs.node }}-bun${{ steps.versions.outputs.bun }}-${{ hashFiles('package.json', 'bun.lock', 'bunfig.toml', '.github/actions/ci-environment/action.yml') }}
+    - name: Materialize runtime dependencies once
+      if: steps.root.outputs.cache-hit != 'true'
+      shell: bash
+      run: bun install --frozen-lockfile --production --ignore-scripts
+    - name: Save installed runtime dependencies
+      if: steps.root.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: node_modules
+        key: ${{ steps.root.outputs.cache-primary-key }}
+
+    - name: Restore installed UI dependencies
+      id: ui
+      if: inputs.ui == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: runtime-ui/node_modules
+        key: ci-ui-ubuntu24-${{ runner.os }}-${{ runner.arch }}-r${{ steps.versions.outputs.revision }}-node${{ steps.versions.outputs.node }}-bun${{ steps.versions.outputs.bun }}-${{ hashFiles('package.json', 'bunfig.toml', 'runtime-ui/package.json', 'runtime-ui/bun.lock', 'runtime-ui/bunfig.toml', '.github/actions/ci-environment/action.yml') }}
+    - name: Materialize UI dependencies once
+      if: inputs.ui == 'true' && steps.ui.outputs.cache-hit != 'true'
+      shell: bash
+      run: bun run ui:install
+    - name: Save installed UI dependencies
+      if: inputs.ui == 'true' && steps.ui.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: runtime-ui/node_modules
+        key: ${{ steps.ui.outputs.cache-primary-key }}

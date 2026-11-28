@@ -185,15 +185,17 @@ process.stdout.write(JSON.stringify(restored));
   } finally { rmSync(directory, {recursive: true, force: true}); }
 }
 
-// @wu-test type=boundary | scope=Docker镜像内容 | protects=令牌配置或本地业务目录被带入运行镜像
+// @wu-test type=boundary | scope=Docker镜像内容 | protects=令牌配置、本地业务目录或预构建工具链被带入运行镜像
 function checkImageFiles(container) {
   const forbidden = ['deploy/charts.env', '.env', 'runtime-core/.env', 'runtime-ui/local.env',
-    '.git', '.codex', '.aws', 'boards'];
+    '.git', '.codex', '.aws', 'boards', 'runtime-core/src', 'runtime-core/target',
+    'runtime-ui/node_modules', 'recipe.json'].map(file => `/app/${file}`);
+  forbidden.push('/build', '/usr/local/cargo', '/usr/local/rustup');
   const found = execFileSync('docker', ['exec', container, 'sh', '-c',
-    'for p do if [ -e "/app/$p" ]; then printf "%s\\n" "$p"; fi; done', 'private-input-probe', ...forbidden],
+    'for p do if [ -e "$p" ]; then printf "%s\\n" "$p"; fi; done', 'private-input-probe', ...forbidden],
     {encoding: 'utf8'}).trim();
   assert.equal(found, '', `Runtime image contains private build inputs: ${found}`);
-  console.log('ok  image excludes environment files and local workspaces');
+  console.log('ok  image excludes environment files, local workspaces and build tools');
 }
 
 async function freePort() {
