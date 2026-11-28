@@ -38,7 +38,7 @@ fn immutable_version_matches_existing_python_bytes() {
     assert_eq!(data.import_rows(&rows, &fields).unwrap(), reference);
 }
 
-// @wu-test type=unit | scope=native filters and paging | protects=missing keys are distinct from null and sequential pages stay stable
+// @wu-test type=behavior | scope=native filters and paging | protects=missing keys stay distinct from null and mixed-case sort directions cannot skip or repeat rows
 #[test]
 fn filters_null_missing_and_seek_pages() {
     let data = LocalData::new(None).unwrap();
@@ -72,20 +72,29 @@ fn filters_null_missing_and_seek_pages() {
         .rows(&reference, &[], None, &[], 0, 100, "null")
         .unwrap();
     assert_eq!(result["totalRows"], 2);
-    let sort = vec![json!({"field":"n","direction":"desc"})];
-    let one = data.rows(&reference, &[], None, &sort, 0, 2, "").unwrap();
-    let two = data.rows(&reference, &[], None, &sort, 2, 2, "").unwrap();
-    let three = data.rows(&reference, &[], None, &sort, 4, 2, "").unwrap();
-    let mut combined = one["rows"].as_array().unwrap().clone();
-    combined.extend(two["rows"].as_array().unwrap().clone());
-    combined.extend(three["rows"].as_array().unwrap().clone());
-    assert_eq!(
-        combined,
-        data.rows(&reference, &[], None, &sort, 0, 100, "").unwrap()["rows"]
-            .as_array()
-            .unwrap()
-            .clone()
-    );
+    for (direction, expected) in [
+        ("desc", ["Delta", "Alpha", "Echo", "Bravo", "Charlie"]),
+        ("DESC", ["Delta", "Alpha", "Echo", "Bravo", "Charlie"]),
+        ("ASC", ["Bravo", "Charlie", "Alpha", "Echo", "Delta"]),
+    ] {
+        let sort = [json!({"field":"n","direction":direction})];
+        let mut pages = Vec::new();
+        for offset in [0, 2, 4] {
+            let page = data
+                .rows(&reference, &[], None, &sort, offset, 2, "")
+                .unwrap();
+            assert_eq!(page["totalRows"], 5);
+            pages.extend(page["rows"].as_array().unwrap().clone());
+        }
+        let labels = pages
+            .iter()
+            .map(|row| row["label"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            labels, expected,
+            "{direction} must keep the same order on every page"
+        );
+    }
     assert_eq!(
         data.rows(&reference, &[], None, &[], 0, 100, "true")
             .unwrap()["totalRows"],
