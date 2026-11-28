@@ -160,7 +160,7 @@ function Root() {
         }
       }
     };
-    if (!WEB_BUILD && boot.mode === "mcp") {
+    if (boot.mode === "mcp" && !WEB_BUILD) {
       void import("@modelcontextprotocol/ext-apps").then(async ({ App }) => {
         if (!live) return;
         const connection = new App(

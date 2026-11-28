@@ -7,14 +7,9 @@
       "dependencies": {
         "@noble/hashes": "1.8.0",
       },
-      "devDependencies": {
-        "@cloudbase/cli": "3.9.1",
-      },
     },
   },
   "packages": {
-    "@cloudbase/cli": ["@cloudbase/cli@3.9.1", "", { "bin": { "tcb": "bin/tcb", "cloudbase": "bin/cloudbase", "cloudbase-mcp": "bin/cloudbase-mcp" } }, "sha512-uk4AMWYR6CBjMu5XwDCkez1+DaMFLt3QsYvlZyCRvFK5OSJNkvIJiVoUDqglpEPOEBLRazwf6yBDooKqT52Glg=="],
-
     "@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
   }
 }

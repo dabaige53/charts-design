@@ -21,7 +21,7 @@ afterEach(() => {
   });
 });
 
-// @wu-test type=integration | scope=在线访问令牌恢复 | protects=跳转丢失令牌后无法加载报告，页面卸载后监听器和请求污染后续页面
+// @wu-test type=integration | scope=在线访问令牌恢复 | protects=跳转丢失令牌后无法恢复报告或用已知看板 ID 仍查询看板列表
 it("retries report loading with the pasted token after unauthorized", async () => {
   for (const key of webGlobals)
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: window[key] });
@@ -33,13 +33,11 @@ it("retries report loading with the pasted token after unauthorized", async () =
       components: {}, filters: [], layout: {}, metrics: {}, datasets: {} },
     snapshot: { datasets: {} },
   };
-  const fetchMock = mock(async (url: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = mock(async (_url: RequestInfo | URL, init?: RequestInit) => {
     const authorization = new Headers(init?.headers).get("Authorization");
     if (authorization !== "Bearer restored-token")
       return new Response(JSON.stringify({ error: { code: "UNAUTHORIZED" } }), { status: 401 });
-    return Response.json(String(url).endsWith("/dashboard_list")
-      ? { dashboards: [{ id: "board" }], projectRoot: "test" }
-      : { document: dashboard, projectRoot: "test" });
+    return Response.json({ document: dashboard, projectRoot: "test" });
   });
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   await act(async () => { applicationRoot = (await import("./main")).applicationRoot; });
@@ -47,5 +45,12 @@ it("retries report loading with the pasted token after unauthorized", async () =
   fireEvent.change(input, { target: { value: `${window.location.origin}${window.location.pathname}#token=restored-token` } });
   fireEvent.click(screen.getByRole("button", { name: "打开看板" }));
   await screen.findByRole("heading", { name: "已恢复的报告" });
-  expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/dashboard_preview"))).toHaveLength(1);
+  const requests = fetchMock.mock.calls.map(([url, init]) => ({
+    url: String(url),
+    restored: new Headers(init?.headers).get("Authorization") === "Bearer restored-token",
+  }));
+  expect(requests).toEqual([
+    { url: "/api/v1/p/test/tools/dashboard_preview", restored: false },
+    { url: "/api/v1/p/test/tools/dashboard_preview", restored: true },
+  ]);
 });

@@ -11,8 +11,6 @@
     "native:install": "bun bin/install-native.mjs",
     "native:build": "bun bin/build-native.mjs",
     "release": "bun bin/release.mjs",
-    "deploy:cloudbase": "bun bin/cloudbase-deploy.mjs",
-    "deploy:cloudflare": "bunx --package wrangler@4.166.0 wrangler deploy --config deploy/cloudflare/wrangler.json",
     "ui:install": "bun install --cwd runtime-ui --frozen-lockfile --ignore-scripts",
     "ui:build": "bun run --cwd runtime-ui --bun build",
     "ui:prepare": "bun runtime-ui/scripts/prepare.mjs",
@@ -87,9 +85,6 @@
   "packageManager": "bun@1.3.8",
   "engines": {
     "node": ">=22"
-  },
-  "devDependencies": {
-    "@cloudbase/cli": "3.9.1"
   },
   "dependencies": {
     "@noble/hashes": "1.8.0"

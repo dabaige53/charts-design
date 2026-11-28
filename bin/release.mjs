@@ -37,15 +37,19 @@ export function release(root, args) {
     throw new Error('package.json、Cargo.toml 和 Cargo.lock 必须使用同一产品版本。');
   }
   const tag = `v${version}`;
+  const tags = [tag, `server-${tag}`];
+  const refs = tags.map(name => `refs/tags/${name}`);
   if (git('status', '--porcelain')) throw new Error('请先提交全部待发布代码；发布脚本不会代为提交工作区改动。');
   git('symbolic-ref', '--quiet', 'HEAD');
-  if (git('tag', '--list', tag) || git('ls-remote', '--tags', 'origin', `refs/tags/${tag}`)) {
-    throw new Error(`标签 ${tag} 已存在；请使用新版本号。`);
+  if (git('tag', '--list', ...tags) || git('ls-remote', '--tags', 'origin', ...refs)) {
+    throw new Error(`标签 ${tags.join(' 或 ')} 已存在。请使用新版本号。`);
   }
-  if (!git('ls-files', '.github/workflows/cloudbase-release.yml')) {
-    throw new Error('请先提交 CloudBase 发布工作流。');
+  for (const workflow of ['native-release.yml', 'server-release.yml']) {
+    if (!git('ls-files', `.github/workflows/${workflow}`)) {
+      throw new Error(`请先提交发布工作流 ${workflow}。`);
+    }
   }
-  console.log(`${dryRun ? '预览' : '发布'} ${tag}：更新 npm/Rust 产品版本 → 创建提交与标签 → 推送标签 → GitHub CI 发布。`);
+  console.log(`${dryRun ? '预览' : '发布'} ${tags.join('、')}。GitHub Actions 将构建原生安装包和自有服务器镜像。`);
   if (dryRun) return;
   pkg.version = version;
   writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -54,14 +58,14 @@ export function release(root, args) {
   const files = ['package.json', 'runtime-core/Cargo.toml', 'runtime-core/Cargo.lock'];
   git('add', '--', ...files);
   git('commit', '-m', `release: ${tag}`, '--', ...files);
-  git('tag', '-a', tag, '-m', `Release ${tag}`);
+  for (const name of tags) git('tag', '-a', name, '-m', `Release ${name}`);
   try {
-    // Only the tag is pushed: a branch push would also trigger the general test workflow.
-    git('push', 'origin', `refs/tags/${tag}`);
+    // Publish both tags together without triggering the branch workflow.
+    git('push', '--atomic', 'origin', ...refs);
   } catch {
-    throw new Error(`标签已在本地创建，推送未确认成功。检查远端后重试：git push origin refs/tags/${tag}`);
+    throw new Error(`标签已在本地创建。检查远端后重试：git push --atomic origin ${refs.join(' ')}`);
   }
-  console.log(`已推送 ${tag}。请在 GitHub Actions 的 CloudBase release 查看部署结果。`);
+  console.log(`已推送 ${tags.join('、')}。请在 GitHub Actions 查看原生安装包和自有服务器镜像的构建结果。`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: charts-design:latest
+    image: ${CHARTS_AUTHOR_IMAGE:-charts-design:latest}
     restart: unless-stopped
     env_file: ${CHARTS_AUTHOR_ENV_FILE:-charts.env}
     ports:

@@ -1,4 +1,4 @@
-name: Server and Pages release
+name: Self-hosted server release
 on:
   push:
     tags: ['server-v*.*.*']
@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
@@ -23,6 +23,7 @@ jobs:
       - run: bun install --frozen-lockfile --production --ignore-scripts
       - run: bun test ./tests/deploy/pages.test.mjs
       - name: Package the author server and optional Pages share proxy
+        shell: bash
         run: |
           mkdir release
           bun deploy/pages/build.mjs "$RUNNER_TEMP/pages"
@@ -33,18 +34,18 @@ jobs:
           docker save "charts-design-api:$GITHUB_REF_NAME" | gzip -1 > release/server-image.tar.gz
           cp deploy/mcp.example.json release/
           (cd release && sha256sum pages.zip server-image.tar.gz mcp.example.json > SHA256SUMS)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: server-release
           path: release/
           if-no-files-found: error
   publish:
     needs: package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: server-release
           path: release
@@ -53,4 +54,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           (cd release && sha256sum -c SHA256SUMS)
-          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Charts Design $GITHUB_REF_NAME" --notes "SQLite 作者服务器镜像，附可选 Cloudflare Pages 分享代理和 MCP 客户端配置。"
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --title "Charts Design $GITHUB_REF_NAME" --notes "自有服务器安装镜像，附可选 Cloudflare Pages 分享代理和 MCP 客户端配置。"

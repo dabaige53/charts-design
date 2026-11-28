@@ -246,6 +246,25 @@ jobs:
           cache-to: type=gha,scope=charts-ci-image,mode=max
       - name: MCP, scoped access, Parquet downloads and non-root isolation
         run: bun tests/deploy/container-smoke.mjs --image charts-design:ci --commit "$GITHUB_SHA"
+      - name: Package the verified image for self-hosting
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: ${{ runner.temp }}
+        shell: bash
+        run: |
+          image="charts-design-api:main-$GITHUB_SHA"
+          docker tag charts-design:ci "$image"
+          docker save "$image" | gzip -1 > server-image.tar.gz
+          sha256sum server-image.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v5
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: server-image-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/server-image.tar.gz
+            ${{ runner.temp }}/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
 
   acceptance:
     name: Dashboard and static-share acceptance

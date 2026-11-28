@@ -202,11 +202,11 @@ Pages 只转发 `/s/…`、发布管理接口和健康检查。工作区页面�
 
 ### Cloudflare Pages 与 D1 直接分享
 
-在源码目录用 `bun run deploy:init -- author|pages|all` 初始化。加 `--plan` 查看目标。
+在源码目录用 `bun run deploy:init -- author` 安装自有服务器。需要启用 Pages 独立分享时，单独初始化分享环境。加 `--plan` 查看目标。
 
 ```sh
-bun run deploy:init -- all --plan
-bun run deploy:init -- all
+bun run deploy:init -- pages --plan
+bun run deploy:init -- pages
 ```
 
 - `author` 需要 Docker Compose。复制 `deploy/environment.example` 到 `deploy/charts.env`，设置作者 HTTPS 地址和 MCP 令牌。在启用分享时配置 `CHARTS_SHARE_SERVICE_URL` 及发布令牌。可设置 `CHARTS_AUTHOR_ENV_FILE` 和 `CHARTS_AUTHOR_PORT` 指定配置文件和回环端口。由现有 HTTPS 反向代理暴露 MCP 地址。
@@ -219,54 +219,36 @@ bun run deploy:init -- all
 
 撤销或到期会立即阻止读取。后续部署从当前部署清单移除失效快照。作者可在分享记录里检查清理状态，确认当前部署已移除资源。历史部署仍受同一访问检查，保留期由 Cloudflare 管理。既有 D1 分享撤销时会立即删除数据分片和批注。使用 `deploy:init` 升级时会把有效快照加入新部署清单。
 
-## Cloudflare 独立部署
+## 自有服务器版本发布
 
-Cloudflare Worker 将发布、读者访问和批注请求送入 `sharing` 角色的 Container。Durable Object SQLite 保存副本、签名状态与批注的恢复数据。作者使用自有服务器或本机工作区。
+提交待发布源码后，运行 `bun run release -- 1.2.43`，版本号须高于当前版本。脚本更新 npm 和 Rust 的版本声明，创建版本提交，并一起推送两个指向该提交的标签。使用 `--dry-run` 检查发布条件。
 
-在 GitHub 仓库的 Actions 配置中选择部署平台：
-
-| 仓库变量 `CHARTS_DEPLOY_PROVIDER` | 发布标签时执行 |
+| 标签 | GitHub Actions 产物 |
 | --- | --- |
-| 不设置或 `cloudbase` | CloudBase 任务 |
-| `cloudflare` | 仅 Cloudflare 任务 |
+| `vX.Y.Z` | 各平台原生安装包与校验文件 |
+| `server-vX.Y.Z` | 自有服务器镜像 `server-image.tar.gz`、MCP 客户端配置、可选的 Pages 分享代理与校验文件 |
 
-Cloudflare 账号须能使用 Workers、Containers 和 SQLite Durable Objects。配置仓库变量 `CLOUDFLARE_ACCOUNT_ID`、`CHARTS_PUBLIC_URL`（此 Worker 的 HTTPS 根地址，不带路径或末尾斜杠）。设置两个独立的 Actions Secret：`CLOUDFLARE_API_TOKEN` 用于部署，`CHARTS_SERVER_TOKENS` 用于发布管理，不能复用。默认 Worker 名为 `charts-design`，可使用其 `workers.dev` 地址；自定义域名需先绑定。
-
-按下节的版本标签流程发布，或在 **Cloudflare release** 中选择已有版本标签。工作流构建镜像，配置 Worker 与每六小时一次的 Cron，并以 `/health` 返回的 Git 提交号检查发布结果。首次成功清理前不允许创建独立分享。发布、访问密钥、有效期和撤销使用分享服务接口。
-
-本地部署入口是 `bun run deploy:cloudflare`，需要可用的 Docker 构建器、已注入的 Cloudflare 账号和部署凭据，以及 Worker 的 `CHARTS_SERVER_TOKENS` secret。用 `--var "CHARTS_PUBLIC_URL:$CHARTS_PUBLIC_URL"` 指定已绑定的地址。不要删除或更名已投入使用的 Durable Object 命名空间或 `workspace` 实例；新实例使用独立的分享存储。
-
-此路径使用一个分享存储实例。请求按顺序执行。创建、撤销分享和定时清理在返回前保存分享存储的完整归档。`/s/<shareId>/api/annotations` 的成功写入只保存该分享批注 SQLite 的增量归档，冷启动先恢复内容，再恢复批注增量；下一次完整 checkpoint 成功后原子清除已包含的增量。恢复或保存失败时请求失败，不以空工作区继续。归档大小会影响完整保存的耗时，暂存新归档时还需要容纳上一份归档；不提供跨实例横向写入。清理移除当前工作区中的副本，平台灾备保留期不等同于在线访问期。
-
-## 按版本自动发布到 CloudBase
-
-GitHub Actions 工作流 `.github/workflows/cloudbase-release.yml` 监听 `vX.Y.Z` 标签。根目录 `package.json.version` 是服务发布号，原生版本由 Cargo 声明。先提交需要上线的源码和工作流，再运行：
+在自有服务器上，从对应的 GitHub Release 下载镜像和 `SHA256SUMS`。先在下载目录检查镜像并导入 Docker。
 
 ```sh
-bun run release -- 1.2.1
+sha256sum --ignore-missing --check SHA256SUMS
+docker load -i server-image.tar.gz
 ```
 
-替换为高于当前版本的新版本号。脚本要求工作区干净，更新 `package.json`，创建版本提交和附注标签，然后只推送该标签。其他改动须提前提交；脚本只推送标签，分支与原有全量测试流程保持原状。版本提交仍留在当前本地分支，后续按正常流程合并。加 `--dry-run` 只检查条件和展示步骤，不写文件或推送。
+在服务器上的源码目录使用已配置的环境文件启动镜像。
 
-发布任务使用项目固定版本的 Bun 和固定版本的 CloudBase CLI。GitHub 运行发布脚本的局部测试，CloudBase 根据 `deploy/Dockerfile` 构建 React 与 Rust 运行镜像，并完成完整发布；不在本机重复构建。工作流中的并发组禁止打断正在执行的部署。推送标签须使用用户或发布机器的 Git 凭据，不使用另一个工作流的默认 `GITHUB_TOKEN`，以免无法触发后续工作流。
+```sh
+CHARTS_AUTHOR_IMAGE=charts-design-api:server-v1.2.43 \
+  docker compose -f deploy/docker-compose.yml up -d --no-build --wait
+```
 
-仓库 Settings → Secrets and variables → Actions 需要以下配置：
+镜像标签使用刚导入的版本。启动后对照 `/health` 返回的 `release.commit` 和 `release.version`。更新已有部署时沿用该部署的数据卷与运行配置。
 
-| 类型 | 名称 | 用途 |
-| --- | --- | --- |
-| Secret | `CLOUDBASE_API_KEY` | 当前 CloudBase 环境的服务端 API Key |
-| Variable | `CLOUDBASE_ENV_ID` | 目标环境 ID |
-| Variable | `CLOUDBASE_SERVICE` | 已部署的云托管服务名 |
-| Variable | `CLOUDBASE_REGION` | 服务所在区域 |
-| Variable | `CLOUDBASE_SERVICE_URL` | 服务的 HTTPS 根地址 |
+`main` 的容器冒烟检查通过后，还会提供 `server-image-<提交号>` Actions 产物。该产物包含同一次检查的镜像和校验文件，导入后的镜像标签为 `charts-design-api:main-<提交号>`。
 
-本机复用部署入口时，使用 `bun install --frozen-lockfile` 安装项目锁定的 `@cloudbase/cli`，通过项目凭据入口注入上述通用环境变量，并检出目标标签，执行 `bun run deploy:cloudbase -- v1.2.1`。脚本用于更新已有 CloudBase 服务，不负责首次创建 PostgreSQL、COS、API Key 或清理函数。
+## 已有 Cloudflare Worker 分享
 
-部署前读取现有环境变量并保留，只更新 `CHARTS_RELEASE_VERSION` 和 `CHARTS_RELEASE_COMMIT`。源码包排除环境文件、密钥文件、依赖缓存、构建产物和设计归档。密钥不写入镜像、仓库、日志或工作流摘要。
-
-若已有云端发布任务未结束，脚本停止，避免 CLI 取消其他任务。已构建完成、健康检查通过并承接 100% 流量的灰度版本会先完成发布状态，再提交新版本；部分流量灰度需要先由维护者完成或撤回。部署命令等待云端任务结束，随后检查 `/health` 的版本号与 Git 提交号，旧实例返回成功不算本次发布通过。
-
-成功结果显示在 GitHub Actions 的 `CloudBase release` 摘要。失败或超时会使任务失败；超时后云端任务可能仍在执行，应先看云托管构建记录再重试。需要重跑已有标签时，在 Actions 中重新运行该任务；工作流合入默认分支后，也可通过 `Run workflow` 输入已有标签。数据库回滚、SQL 迁移、SCF 清理函数更新和已分享的 COS 静态快照更新须按对应章节单独处理。
+旧版 Cloudflare Worker 将发布、读者访问和批注请求送入 `sharing` 角色的容器。Durable Object SQLite 保存副本、签名状态与批注的恢复数据。创建、撤销分享和定时清理在返回前保存完整归档。批注写入只保存对应分享的 SQLite 增量归档。冷启动先恢复内容，再恢复批注增量。下一次完整归档成功后清理已归档的增量。不要删除或更名仍承载分享的 Durable Object 命名空间或 `workspace` 实例。
 
 ## 部署确认
 
